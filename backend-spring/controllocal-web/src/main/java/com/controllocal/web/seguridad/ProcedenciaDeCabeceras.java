@@ -27,6 +27,7 @@ import java.util.Base64;
  *   X-Turno                 de que turno exacto
  *   X-Mensaje               el mensaje del canal: el puntero a la evidencia
  *   X-Peticion-B64          lo que la persona escribio o dicto, en base64
+ *   X-Herramienta            que operacion del asistente produjo la escritura
  * </pre>
  *
  * <h2>Por que la peticion viaja en base64</h2>
@@ -56,6 +57,7 @@ public class ProcedenciaDeCabeceras {
     public static final String TURNO = "X-Turno";
     public static final String MENSAJE = "X-Mensaje";
     public static final String PETICION = "X-Peticion-B64";
+    public static final String HERRAMIENTA = "X-Herramienta";
 
     public Procedencia de(HttpServletRequest peticion) {
         if (peticion == null) {
@@ -63,17 +65,19 @@ public class ProcedenciaDeCabeceras {
         }
         String canal = primero(peticion.getHeader(CANAL), peticion.getHeader(CANAL_HEREDADO));
         String agente = peticion.getHeader(AGENTE);
+        String herramienta = peticion.getHeader(HERRAMIENTA);
 
         if (agente == null || agente.isBlank()) {
             // Sin agente declarado lo pidio una persona directamente, que es el
             // caso de todo el cable actual. No lleva conversacion ni turno, y no
             // es una carencia: una pantalla no tiene turnos.
-            return Procedencia.deCabecera(canal);
+            return Procedencia.deCabecera(canal).invocando(herramienta);
         }
         return Procedencia.deAgente(canal, agente,
                 peticion.getHeader(AGENTE_MODELO), peticion.getHeader(AGENTE_VERSION),
                 peticion.getHeader(CONVERSACION), peticion.getHeader(TURNO),
-                peticion.getHeader(MENSAJE), textoDe(peticion.getHeader(PETICION)));
+                peticion.getHeader(MENSAJE), textoDe(peticion.getHeader(PETICION)))
+                .invocando(herramienta);
     }
 
     private static String primero(String preferido, String alternativo) {

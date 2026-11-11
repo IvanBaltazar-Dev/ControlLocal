@@ -27,9 +27,6 @@ public interface FocoDelBrokerService {
     /** Firmar la evaluación es «la más sensible de las 18» (matriz operación-rol). */
     String SOLICITUD_POR_EVALUAR = "SOLICITUD_POR_EVALUAR";
 
-    /** Registrar el cobro es BROKER; en E2.2 este hecho vivía sin dueño. */
-    String COMISION_SIN_COBRAR = "COMISION_SIN_COBRAR";
-
     /**
      * Revisar y conformar documentos es BROKER, y va <b>antes</b> de evaluar.
      *
@@ -64,7 +61,9 @@ public interface FocoDelBrokerService {
      */
     record AsuntoDelBroker(String id, String tipo, String entidadTipo, Long entidadId,
                            String entidadCodigo, String destino, int diasEsperando,
-                           String lado, String paso, Interpretacion interpretacion) {
+                           String lado, String paso, Interpretacion interpretacion,
+                           @com.fasterxml.jackson.annotation.JsonIgnore com.controllocal.service.soporte.PoliticaDeDespacho.Asunto fuenteOrden,
+                           com.controllocal.service.soporte.PoliticaDeDespacho.Clasificacion orden) {
 
         /** Lo que queda parado, leído de la interpretación. */
         public String freno() {
@@ -85,5 +84,5 @@ public interface FocoDelBrokerService {
      * asuntos para quien no puede resolverlos es la definición de un tablero de
      * control.
      */
-    List<AsuntoDelBroker> de(Actor actor);
+    List<AsuntoDelBroker> de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta consulta,Actor actor);
 }

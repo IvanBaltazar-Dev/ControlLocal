@@ -1,636 +1,190 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.auditoria.HistorialEstado;
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.ReasignacionCaptacion;
-import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleBroker;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
+import com.controllocal.domain.auditoria.ComandoIdempotente;
+import com.controllocal.domain.comercial.*;
+import com.controllocal.domain.inmueble.*;
+import com.controllocal.domain.persona.*;
 import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository;
-import com.controllocal.persistence.repositorio.CaptacionRepository;
-import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
-import com.controllocal.persistence.repositorio.FotoPropiedadRepository;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
-import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.ReasignacionCaptacionRepository;
-import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresGobernados;
-import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService;
-import com.controllocal.service.CaptacionService.DatosCaptacion;
-import com.controllocal.service.CaptacionService.FichaCaptacion;
-import com.controllocal.service.CaptacionService.FiltrosCaptacion;
-import com.controllocal.service.CaptacionService.FiltrosPendientes;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.Alcances.Alcance;
-import com.controllocal.service.soporte.AutoridadDePropiedad;
-import com.controllocal.service.soporte.ElegibilidadDeResponsable;
-import com.controllocal.service.soporte.Transiciones;
+import com.controllocal.domain.seguridad.CuentaAcceso;
+import com.controllocal.persistence.query.EncargoParaReasignacion;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.service.*;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.encargo.*;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.service.soporte.*;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
-
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda la revision del broker (MEJ-03: observacion obligatoria en O/R),
- * el invariante <b>un encargo vivo por (local, OPERACION)</b>, el reenvio O-&gt;P
- * y la reasignacion como EVENTO de actor (sin transicion de estado).
- *
- * <p><b>El invariante cambio en D-E4-1</b>, y no por comodidad. Era "una sola
- * captacion ACTIVA por local", y tenia sentido mientras una propiedad solo
- * pudiera alquilarse. Con la venta dentro del modelo, esa regla prohibe
- * justamente el caso que el modelo universal existe para admitir: la misma casa
- * en venta y en alquiler a la vez, cada una con su precio y su historico. Lo
- * que sigue prohibido —y ahora tambien en PENDIENTE y OBSERVADA, no solo en
- * ACTIVA— es un segundo encargo de la MISMA operacion.
- */
+/** C2 conserva lectura/aislamiento y prueba el único CAS de gobierno; el ciclo se prueba en EncargoService. */
 class CaptacionServiceImplTest {
+    private static final long ORG=1;
+    private final Actor broker=new Actor(ORG,2,23,Actor.BROKER);
+    private final Actor agente=new Actor(ORG,3,30,Actor.AGENTE);
+    private final Actor admin=new Actor(ORG,4,40,Actor.TENANT_ADMIN);
+    private final CaptacionRepository caps=mock(CaptacionRepository.class);
+    private final ReasignacionCaptacionRepository cambios=mock(ReasignacionCaptacionRepository.class);
+    private final DetalleAgenteRepository agentes=mock(DetalleAgenteRepository.class);
+    private final DetalleBrokerRepository brokers=mock(DetalleBrokerRepository.class);
+    private final FotoPropiedadRepository fotos=mock(FotoPropiedadRepository.class);
+    private final SupervisionAgenteRepository supervisiones=mock(SupervisionAgenteRepository.class);
+    private final Alcances alcances=new Alcances(supervisiones);
+    private final DocumentoEncargoRepository documentos=mock(DocumentoEncargoRepository.class);
+    private final ReglasDeResponsableEncargo reglas=new ReglasDeResponsableEncargo(documentos);
+    private final OrganizacionRepository organizaciones=mock(OrganizacionRepository.class);
+    private final UsuarioOrganizacionRepository miembros=mock(UsuarioOrganizacionRepository.class);
+    private final CuentaAccesoRepository cuentas=mock(CuentaAccesoRepository.class);
+    private final ContextosService contextos=mock(ContextosService.class);
+    private final AccesoEncargo acceso=new AccesoEncargo(caps,alcances,organizaciones,miembros,cuentas,contextos);
+    private final ComandoIdempotenteRepository registros=mock(ComandoIdempotenteRepository.class);
+    private final ComandosIdempotentes comandos=new ComandosIdempotentes(registros);
+    private final EventoDominioRepository eventos=mock(EventoDominioRepository.class);
+    private final LectorPorAutoridad lector=mock(LectorPorAutoridad.class);
+    private final EntityManager em=mock(EntityManager.class);
+    private final org.springframework.context.ApplicationEventPublisher publicadorCambios=mock(org.springframework.context.ApplicationEventPublisher.class);
+    private final Documentos json=new Documentos(JsonMapper.builder().findAndAddModules().build());
+    private final Map<String,ComandoIdempotente> resultados=new HashMap<>();
+    private final Map<Long,DetalleAgente> equipo=new HashMap<>();
+    private final CaptacionServiceImpl servicio=new CaptacionServiceImpl(caps,cambios,agentes,brokers,fotos,
+            alcances,lector,new ElegibilidadDeResponsable(agentes),acceso,reglas,comandos,registros,eventos,json,em,publicadorCambios);
+    private Captacion cap;
 
-    private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final ReasignacionCaptacionRepository reasignaciones = mock(ReasignacionCaptacionRepository.class);
-    private final PropiedadRepository propiedades = mock(PropiedadRepository.class);
-    private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
-    private final DetalleBrokerRepository brokers = mock(DetalleBrokerRepository.class);
-    private final FotoPropiedadRepository fotos = mock(FotoPropiedadRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
-    private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
-
-    /**
-     * La autoridad <b>de verdad</b>, no un mock.
-     *
-     * <p>Un {@code mock(AutoridadDePropiedad.class)} no lanzaria nunca, asi que
-     * la guarda que P0-4 exige en {@code actualizar} quedaria declarada y no
-     * ejercida: estas pruebas seguirian verdes con la comprobacion borrada. Sus
-     * dependencias si son mocks porque {@code exigirEdicionDelEncargo} no las
-     * usa — decide con el actor y con el agente del encargo, y nada mas.
-     */
-    /**
-     * La elegibilidad <b>de verdad</b>, no un mock, y compartida por la
-     * autoridad y el servicio.
-     *
-     * <p>Un mock permisivo dejaria pasar la reasignacion hacia un agente que no
-     * puede recibir, que es exactamente la guarda que este corte anade: la
-     * comprobacion quedaria escrita y no ejercida. Su repositorio si es un mock
-     * —es el mismo {@code agentes} de arriba—, asi que cada prueba declara si el
-     * destino esta en condiciones.
-     */
-    private final ElegibilidadDeResponsable elegibilidad = new ElegibilidadDeResponsable(agentes);
-
-    private final AutoridadDePropiedad autoridad = new AutoridadDePropiedad(
-            agentes, mock(AsignacionResponsablePropiedadRepository.class), alcances,
-            elegibilidad,
-            // Y el repositorio del compare-and-set del responsable (D-P0-9),
-            // tambien mockeado: `exigirEdicionDelEncargo` no lo toca, y el CAS
-            // solo se puede probar de verdad con dos transacciones reales
-            // (CausalidadDelTraspasoIntegrationTest).
-            propiedades);
-
-    private final CaptacionServiceImpl service = new CaptacionServiceImpl(
-            captaciones, reasignaciones, propiedades, agentes, brokers, fotos,
-            alcances, new Transiciones(historial), mock(AlertaService.class),
-            lectorSinGobernados(), titularConocido(), autoridad, elegibilidad);
-
-    /**
-     * Un inmueble con titular conocido. Estas pruebas blindan las reglas del
-     * ENCARGO, no la de titularidad, que tiene la suya contra PostgreSQL.
-     */
-    private static com.controllocal.service.soporte.TitularParaEncargar titularConocido() {
-        var repositorio = mock(
-                com.controllocal.persistence.repositorio.TitularidadPropiedadRepository.class);
-        org.mockito.Mockito.lenient()
-                .when(repositorio.vigentesDe(org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(java.util.List.of(
-                        new com.controllocal.domain.inmueble.TitularidadPropiedad()));
-        return new com.controllocal.service.soporte.TitularParaEncargar(repositorio);
+    @BeforeEach void preparar() {
+        equipo.put(30L,agente(30));equipo.put(31L,agente(31));
+        when(supervisiones.agentesSupervisados(ORG,23)).thenReturn(List.of(30L,31L));
+        when(miembros.cuentasActivasDePersona(anyLong(),anyLong())).thenAnswer(i->List.of(100L+i.getArgument(1,Long.class)));
+        when(cuentas.bloquearCambioAcceso(anyLong())).thenReturn(Optional.of(new CuentaAcceso()));
+        when(contextos.exigirContexto(anyString(),anyLong(),any())).thenAnswer(i->sesion(i.getArgument(2)));
+        when(agentes.findById(anyLong())).thenAnswer(i->Optional.ofNullable(equipo.get(i.getArgument(0))));
+        when(agentes.bloquearParaGobierno(eq(ORG),anyLong())).thenAnswer(i->Optional.ofNullable(equipo.get(i.getArgument(1))));
+        when(agentes.esCandidatoAResponsable(anyLong(),anyBoolean(),anyLong(),anyLong(),any(),anyLong())).thenReturn(true);
+        when(caps.cuentaDelRol(eq(ORG),anyLong())).thenAnswer(i->Optional.of(100L+i.getArgument(1,Long.class)));
+        when(registros.findByOrganizacionIdAndClaveIdempotencia(eq(ORG),anyString())).thenAnswer(i->Optional.ofNullable(resultados.get(i.getArgument(1))));
+        when(registros.save(any())).thenAnswer(i->{ComandoIdempotente c=i.getArgument(0);resultados.put(c.getClaveIdempotencia(),c);return c;});
+        when(lector.de(anyLong(),any())).thenReturn(ValoresGobernados.vacio());
+        when(lector.deVarias(anyLong(),any())).thenReturn(Map.of());
+        when(lector.gobernadosDeVarias(any())).thenReturn(Map.of());
+        when(fotos.deLaPropiedad(anyLong(),anyLong())).thenReturn(List.of());
+        var p=new Propiedad();p.setOrganizacionId(ORG);p.setCodigo("P-C2");p.setDireccion("Calle de prueba 123");
+        p.setDistrito("Surco");p.setMetraje(new BigDecimal("80"));ReflectionTestUtils.setField(p,"id",7L);
+        cap=new Captacion();cap.setOrganizacionId(ORG);cap.setCodigoCaptacion("C2-LECTURA");
+        cap.setFechaCaptacion(LocalDate.of(2026,10,28));cap.setMotivoOperacion("A");cap.setPropiedad(p);cap.setAgente(equipo.get(30L));
+        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(cap,Captacion.EN_PREPARACION);
+        ReflectionTestUtils.setField(cap,"id",9L);
+        when(caps.buscarFicha(ORG,9)).thenReturn(Optional.of(cap));
+        when(caps.bloquearParaEscritura(ORG,9)).thenReturn(Optional.of(cap));
+        var actual=mock(CaptacionRepository.ContextoActualEncargo.class);
+        when(actual.getResponsable()).thenAnswer(i->cap.getAgente().getId());
+        when(actual.getCuenta()).thenAnswer(i->100L+cap.getAgente().getId());
+        when(actual.getVersion()).thenAnswer(i->cap.getVersion());
+        when(caps.contextoActual(ORG,9)).thenReturn(Optional.of(actual));
+        when(caps.cambiarAgenteSi(eq(ORG),eq(9L),anyLong(),anyLong(),anyLong())).thenAnswer(i->{
+            cap.setAgente(equipo.get(i.getArgument(3)));ReflectionTestUtils.setField(cap,"version",cap.getVersion()+1);return 1;
+        });
+        when(cambios.saveAndFlush(any())).thenAnswer(i->{var c=i.getArgument(0,ReasignacionCaptacion.class);ReflectionTestUtils.setField(c,"id",55L);return c;});
+        var b=new DetalleBroker();ReflectionTestUtils.setField(b,"id",23L);when(brokers.findById(23L)).thenReturn(Optional.of(b));
     }
-
-    /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
-    private static final long ORG = 1L;
-
-    /** rsalas: organizacion 1, persona 2, rol operativo (persona_rol) 23. */
-    private final Actor broker = new Actor(ORG, 2L, 23L, "BROKER");
-    /** vmora: persona 3, rol operativo 30 (duena de la captacion del fixture). */
-    private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
-
-    // ------------------------------------------------------------------
-    // Filtros aditivos de la bandeja Angular
-    // ------------------------------------------------------------------
-
-    @Test
-    void listarBajaEstadoAgenteYBusquedaAlWhereSinCargaMasiva() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, true, List.of()));
-        when(captaciones.buscar(anyLong(), anyBoolean(), anyCollection(), any(), any(), any(),
-                any(Pageable.class))).thenReturn(Page.empty());
-
-        service.listar(new FiltrosCaptacion("A", 30L, "larco", 2, 25), broker);
-
-        ArgumentCaptor<Pageable> paginacion = ArgumentCaptor.forClass(Pageable.class);
-        verify(captaciones).buscar(eq(ORG), eq(true), anyCollection(), eq("A"), eq(30L),
-                eq("larco"), paginacion.capture());
-        assertEquals(1, paginacion.getValue().getPageNumber());
-        assertEquals(25, paginacion.getValue().getPageSize());
+    @Test void portadaEntregaUuidYRechazaUnaFotoSinReferencia() {
+        var foto=new FotoPropiedad();foto.setClave("privado/portada.jpg");when(fotos.deLaPropiedad(ORG,7)).thenReturn(List.of(foto));
+        assertEquals(foto.getArchivoRef().toString(),servicio.obtener(9,agente).fotoPortadaClave());
+        ReflectionTestUtils.setField(foto,"archivoRef",null);
+        assertThrows(NullPointerException.class,()->servicio.obtener(9,agente));
     }
-
-    @Test
-    void pendientesBajaEstadoAgenteBusquedaYPaginaAlWhere() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, true, List.of()));
-        when(captaciones.pendientes(anyLong(), anyBoolean(), anyCollection(), any(), any(), any(),
-                any(Pageable.class))).thenReturn(Page.empty());
-
-        service.pendientes(new FiltrosPendientes("O", 30L, "miraflores", 3, 15), broker);
-
-        ArgumentCaptor<Pageable> paginacion = ArgumentCaptor.forClass(Pageable.class);
-        verify(captaciones).pendientes(eq(ORG), eq(true), anyCollection(), eq("O"), eq(30L),
-                eq("miraflores"), paginacion.capture());
-        assertEquals(2, paginacion.getValue().getPageNumber());
-        assertEquals(15, paginacion.getValue().getPageSize());
+    @Test void gobiernoNoConsultaFichaComercialAntesDeDenegar() {
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.obtener(9,admin));
+        verify(caps,never()).buscarFicha(anyLong(),anyLong());verifyNoInteractions(fotos,lector);
     }
-
-    // ------------------------------------------------------------------
-    // Decision del broker (MEJ-03)
-    // ------------------------------------------------------------------
-
-    @Test
-    void observarSinObservacionRespondeElMensajeMej03() {
-        captacionEnEstado(Captacion.PENDIENTE_REVISION);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.decidir(9L, "O", "  ", broker));
-        assertEquals("La observacion de revision es obligatorio.", error.getMessage());
-        verifyNoInteractions(historial);
+    @Test void listadosPaginanYFiltranAntesDeHidratar() {
+        when(caps.buscar(anyLong(),anyBoolean(),anyCollection(),any(),any(),any(),any())).thenReturn(Page.empty());
+        servicio.listar(new CaptacionService.FiltrosCaptacion("A",30L,"Surco",2,25),broker);
+        var pagina=org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(caps).buscar(eq(ORG),eq(false),eq(List.of(30L,31L)),eq("A"),eq(30L),eq("Surco"),pagina.capture());
+        assertEquals(1,pagina.getValue().getPageNumber());assertEquals(25,pagina.getValue().getPageSize());
     }
-
-    @Test
-    void aprobarActivaLaCaptacionYAuditaConElBroker() {
-        captacionEnEstado(Captacion.PENDIENTE_REVISION);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        // Sin otro encargo de ALQUILER vivo sobre el mismo local. Que exista
-        // uno de VENTA no estorbaria: la exclusion es POR OPERACION (D-E4-1).
-        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.empty());
-
-        FichaCaptacion ficha = service.decidir(9L, "A", "Sin observaciones", broker);
-
-        assertEquals("A", ficha.estado());
-        assertEquals(23L, ficha.idBrokerRevisor());
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("CAPTACION", evento.getEntidadTipo());
-        assertEquals("P", evento.getEstadoAnterior());
-        assertEquals("A", evento.getEstadoNuevo());
-        assertEquals(2L, evento.getIdActor());
-        assertEquals("BROKER", evento.getTipoRolActor());
-        assertEquals("Captacion aprobada por el broker.", evento.getMotivo());
+    @Test void pendientesUsaEstadoDePeticionYPaginaDeclarados() {
+        when(caps.pendientes(anyLong(),anyBoolean(),anyCollection(),any(),any(),any(),any())).thenReturn(Page.empty());
+        servicio.pendientes(new CaptacionService.FiltrosPendientes("O",30L,"revisión",3,15),broker);
+        verify(caps).pendientes(eq(ORG),eq(false),eq(List.of(30L,31L)),eq("O"),eq(30L),eq("revisión"),any());
     }
-
-    @Test
-    void aprobarConOtroEncargoVivoDeLaMismaOperacionSeRechaza() {
-        captacionEnEstado(Captacion.PENDIENTE_REVISION);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.of(otroEncargo(99L, "A")));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.decidir(9L, "A", null, broker));
-
-        assertTrue(error.getMessage().contains("ALQUILER"), error.getMessage());
-        assertTrue(error.getMessage().contains("CAP-0099"),
-                "el mensaje dice CUAL es el encargo que estorba: " + error.getMessage());
+    @Test void gobiernoObtieneProyeccionMinimaConVersionSinPrecioNiFicha() {
+        var p=mock(EncargoParaReasignacion.class);when(p.getId()).thenReturn(9L);when(p.getEstado()).thenReturn("P");
+        when(p.getIdAgente()).thenReturn(30L);when(p.getVersion()).thenReturn(4L);
+        when(caps.proyeccionDeReasignacion(ORG,9)).thenReturn(Optional.of(p));
+        assertEquals(4,servicio.consultarReasignable(9,admin).version());
+        verify(caps,never()).buscarFicha(anyLong(),anyLong());verifyNoInteractions(fotos,lector);
     }
-
-    @Test
-    void soloSeDecideUnaCaptacionPendienteUObservada() {
-        captacionEnEstado(Captacion.ACTIVA);
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.decidir(9L, "A", null, broker));
-        assertEquals("La captacion debe estar pendiente de revision u observada.", error.getMessage());
+    @Test void reasignarEsUnEventoVersionadoSinCambiarEstadoNiOtrosEncargos() {
+        var r=reasignar(broker,0,30,"asignacion-c2");
+        assertEquals(30,r.idAgenteAnterior());assertEquals(31,r.idAgente());assertEquals(1,r.version());
+        assertEquals(Captacion.EN_PREPARACION,cap.estadoActual());verify(cambios).saveAndFlush(any());
+        verify(caps).cambiarAgenteSi(ORG,9,30,31,0);verify(em).refresh(cap);verify(eventos).save(any());
     }
-
-    @Test
-    void unaDecisionDesconocidaRespondeElMensajeV1() {
-        captacionEnEstado(Captacion.OBSERVADA);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.decidir(9L, "X", "obs", broker));
-        assertEquals("Decision no valida.", error.getMessage());
+    @Test void repetirDevuelveSnapshotOriginalYNoVuelveAReasignar() {
+        var uno=reasignar(admin,0,30,"reintento-c2");var dos=reasignar(admin,0,30,"reintento-c2");
+        assertEquals(uno,dos);verify(caps,times(1)).cambiarAgenteSi(anyLong(),anyLong(),anyLong(),anyLong(),anyLong());
+        verify(cambios,times(1)).saveAndFlush(any());
     }
-
-    // ------------------------------------------------------------------
-    // Alta y edicion del agente
-    // ------------------------------------------------------------------
-
-    @Test
-    void registrarSinCodigoRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos(null), agente));
-        assertEquals("El codigo de captacion es obligatorio.", error.getMessage());
+    @Test void mismaClaveConOtraEntradaNoReinterpretaLaDecision() {
+        reasignar(admin,0,30,"clave-c2");
+        assertThrows(ConflictoException.class,()->reasignar(admin,1,31,"clave-c2"));
+        verify(cambios,times(1)).saveAndFlush(any());
     }
-
-    @Test
-    void registrarConOtroEncargoVivoDeLaMismaOperacionSeRechaza() {
-        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
-        when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad(7L)));
-        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.of(otroEncargo(99L, "A")));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos("CAP-0100"), agente));
-
-        assertTrue(error.getMessage().contains("ALQUILER"), error.getMessage());
-        assertTrue(error.getMessage().contains("OTRA operacion si es posible"),
-                "el mensaje tiene que ensenar que venta y alquiler pueden convivir: "
-                        + error.getMessage());
+    @Test void perderSupervisionDeniegaInclusoLaConsultaDelResultadoPrevio() {
+        reasignar(broker,0,30,"alcance-c2");when(supervisiones.agentesSupervisados(ORG,23)).thenReturn(List.of());
+        assertThrows(AccesoNoAutorizadoException.class,()->reasignar(broker,0,30,"alcance-c2"));
     }
-
-    @Test
-    void unEncargoSinOperacionNoSePuedeRegistrar() {
-        // D-E4-1: se acabo el defecto silencioso a alquiler. Sin operacion
-        // declarada, el encargo no se abre -- no se sabe si el titular quiere
-        // vender o alquilar, que es lo primero que hay que saber.
-        DatosCaptacion sinOperacion = new DatosCaptacion("CAP-0100", LocalDate.of(2026, 7, 10),
-                LocalDate.of(2026, 7, 10), LocalDate.of(2027, 7, 10), new BigDecimal("100.00"),
-                "Encargo sin operacion", 7L, 30L, null, 3, Boolean.TRUE);
-
-        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
-        when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad(7L)));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(sinOperacion, agente));
-        assertTrue(error.getMessage().contains("VENTA o ALQUILER"), error.getMessage());
+    @Test void agenteYBandaDesconocidaNoReasignanNiEscribenRastro() {
+        assertThrows(AccesoNoAutorizadoException.class,()->reasignar(agente,0,30,"agente-c2"));
+        var identidad=new Actor(ORG,3,30,"IDENTIDAD");
+        assertThrows(AccesoNoAutorizadoException.class,()->reasignar(identidad,0,30,"identidad-c2"));
+        verifyNoInteractions(cambios,eventos);
     }
-
-    @Test
-    void editarUnaObservadaLaReenviaAPendienteYLoAudita() {
-        captacionEnEstado(Captacion.OBSERVADA, agente);
-
-        FichaCaptacion ficha = service.actualizar(9L, datos("CAP-0009"), agente);
-
-        assertEquals("P", ficha.estado());
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("O", evento.getEstadoAnterior());
-        assertEquals("P", evento.getEstadoNuevo());
-        assertEquals("Reenvio a revision tras corregir observaciones.", evento.getMotivo());
+    @Test void versionOResponsableObsoletosSonConflictoAntesDelCas() {
+        assertThrows(ConflictoException.class,()->reasignar(admin,1,30,"version-c2"));
+        assertThrows(ConflictoException.class,()->reasignar(admin,0,99,"observado-c2"));
+        verify(caps,never()).cambiarAgenteSi(anyLong(),anyLong(),anyLong(),anyLong(),anyLong());
     }
-
-    /**
-     * <b>La operacion es la identidad del encargo</b>, no uno de sus campos
-     * (V76). Cambiarla convertiria el encargo de venta de un inmueble en el de
-     * alquiler del mismo inmueble conservando su historico, con lo que un
-     * precio de venta pasaria a leerse como renta mensual.
-     */
-    @Test
-    void laOperacionDeUnEncargoNoSeEdita() {
-        Captacion cap = captacionEnEstado(Captacion.OBSERVADA, agente);
-        cap.setMotivoOperacion("V");
-
-        DatosCaptacion aAlquiler = datos("CAP-0009");
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.actualizar(9L, aAlquiler, agente));
-        assertTrue(error.getMessage().contains("no se edita"), error.getMessage());
-        assertEquals("V", cap.getMotivoOperacion());
+    @Test void perderCasNoProduceHistorialNiResultadoDurable() {
+        when(caps.cambiarAgenteSi(ORG,9,30,31,0)).thenReturn(0);
+        assertThrows(ConflictoException.class,()->reasignar(admin,0,30,"cas-c2"));
+        verifyNoInteractions(cambios,eventos);assertTrue(resultados.isEmpty());
     }
-
-    @Test
-    void noSeEditaUnaCaptacionActiva() {
-        captacionEnEstado(Captacion.ACTIVA, agente);
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.actualizar(9L, datos("CAP-0009"), agente));
-        assertEquals("Solo se puede editar una captacion pendiente u observada.", error.getMessage());
+    @Test void destinoInelegibleNoEscribeNadaConGuardaReal() {
+        when(agentes.esCandidatoAResponsable(anyLong(),anyBoolean(),anyLong(),anyLong(),any(),eq(31L))).thenReturn(false);
+        assertThrows(AccesoNoAutorizadoException.class,()->reasignar(admin,0,30,"elegible-c2"));
+        verifyNoInteractions(cambios,eventos);assertTrue(resultados.isEmpty());
     }
-
-    // ------------------------------------------------------------------
-    // Reasignacion: evento de actor, NO transicion
-    // ------------------------------------------------------------------
-
-    @Test
-    void reasignarCambiaElResponsableSinTransicionarEstado() {
-        Captacion cap = captacionEnEstado(Captacion.ACTIVA);
-        DetalleAgente nuevo = detalleAgente(31L, "Javier Ruiz");
-        when(agentes.findById(31L)).thenReturn(Optional.of(nuevo));
-        when(alcances.alcanza(broker, 31L)).thenReturn(true);
-        destinoElegible(31L);
-        // La escritura de la autoridad es el compare-and-set, no el flush: si
-        // devolviera 0 no habria reasignacion, y por eso se declara aqui el
-        // camino en el que el agente observado seguia siendo el de la fila.
-        when(captaciones.cambiarAgenteSi(ORG, 9L, 30L, 31L)).thenReturn(1);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-
-        FichaCaptacion ficha = service.reasignar(9L, 31L, "Balance de cartera", 30L, broker);
-
-        assertEquals("A", ficha.estado());
-        assertEquals(31L, ficha.idAgente());
-        assertEquals(nuevo, cap.getAgente());
-        verify(captaciones).cambiarAgenteSi(ORG, 9L, 30L, 31L);
-        ArgumentCaptor<ReasignacionCaptacion> evento = ArgumentCaptor.forClass(ReasignacionCaptacion.class);
-        verify(reasignaciones).save(evento.capture());
-        assertEquals(30L, evento.getValue().getAgenteAnterior().getId());
-        assertEquals(31L, evento.getValue().getAgenteNuevo().getId());
-        assertEquals(23L, evento.getValue().getBroker().getId());
-        assertEquals("Balance de cartera", evento.getValue().getMotivo());
-        // El evento hereda el tenant de la captacion reasignada.
-        assertEquals(ORG, evento.getValue().getOrganizacionId());
-        // La reasignacion NO es una transicion: historial_estado queda intacto.
-        verifyNoInteractions(historial);
+    @Test void profesionalQueIntegraLoFirmadoExigeAdenda() {
+        ReflectionTestUtils.setField(cap,"terminosAceptados",true);ReflectionTestUtils.setField(cap,"idDocumentoActual",8L);
+        var cobertura=mock(DocumentoEncargoRepository.CoberturaResponsable.class);when(cobertura.getDefinida()).thenReturn(true);
+        when(cobertura.getResponsableFirmado()).thenReturn(30L);when(documentos.coberturaResponsable(ORG,8,9)).thenReturn(Optional.of(cobertura));
+        assertThrows(ReglaNegocioException.class,()->reasignar(admin,0,30,"firmado-c2"));
+        verifyNoInteractions(cambios,eventos);
     }
-
-    @Test
-    void reasignarAUnAgenteFueraDeSuCarteraRespondeElMensajeV1() {
-        captacionEnEstado(Captacion.ACTIVA);
-        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Lucia Torres")));
-        when(alcances.alcanza(broker, 31L)).thenReturn(false);
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(9L, 31L, "Cambio de zona", 30L, broker));
-        assertEquals("El broker no supervisa al agente responsable de esta operacion.", error.getMessage());
+    private CaptacionService.ResultadoReasignacion reasignar(Actor actor,long version,long observado,String clave) {
+        return servicio.reasignar(9,new CaptacionService.DatosReasignacion(31,observado,version,"Reasignación explícita del fixture C2"),
+                actor,ContextoSesion.de(sesion(actor)),clave,Procedencia.deCabecera("API"));
     }
-
-    @Test
-    void reasignarAlMismoAgenteRespondeElMensajeV1() {
-        captacionEnEstado(Captacion.ACTIVA);
-        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(9L, 30L, "Sin cambio real", 30L, broker));
-        assertEquals("La captacion ya esta asignada a ese agente.", error.getMessage());
+    private static DetalleAgente agente(long id) {
+        var p=new Persona();p.setOrganizacionId(ORG);p.setNombresORazonSocial("Profesional "+id);ReflectionTestUtils.setField(p,"id",id+100);
+        var r=new PersonaRol();r.setOrganizacionId(ORG);r.setPersona(p);r.setTipoRol(TipoRol.AGENTE);ReflectionTestUtils.setField(r,"id",id);
+        var a=new DetalleAgente();a.setOrganizacionId(ORG);a.setRol(r);a.setCodigoAgente("AGT-"+id);ReflectionTestUtils.setField(a,"id",id);return a;
     }
-
-    /**
-     * <b>Un agente de OTRA corredora se comporta como inexistente</b>.
-     *
-     * <p>{@code findById} no filtra por organizacion, asi que hasta el
-     * 2026-09-01 un id de otro tenant llegaba a la comprobacion de alcance y
-     * salia por «el broker no supervisa a ese agente» — un mensaje que habla de
-     * supervision sobre alguien que no existe en esta organizacion, y que de
-     * paso confirma que el id existe en alguna parte.
-     */
-    @Test
-    void reasignarAUnAgenteDeOtraCorredoraNoLoDistingueDeUnoInexistente() {
-        captacionEnEstado(Captacion.ACTIVA);
-        DetalleAgente ajeno = detalleAgente(31L, "Agente de otra corredora");
-        ajeno.setOrganizacionId(99L);
-        when(agentes.findById(31L)).thenReturn(Optional.of(ajeno));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(9L, 31L, "Cambio de zona", 30L, broker));
-        assertEquals("Agente no encontrado.", error.getMessage());
-        verify(captaciones, org.mockito.Mockito.never())
-                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
-        verifyNoInteractions(reasignaciones);
-    }
-
-    /**
-     * <b>D-P0-7 en toda reasignacion de autoridad</b>: alcanzar a un agente no
-     * es que ese agente pueda operar.
-     *
-     * <p>El destino esta supervisado por el broker —pasa {@code alcanza}— y aun
-     * asi no puede recibir el encargo. Sin esta guarda, un encargo se podia
-     * entregar a alguien suspendido, de baja o fuera de la organizacion.
-     */
-    @Test
-    void reasignarAUnDestinoNoElegibleNoEscribeNada() {
-        captacionEnEstado(Captacion.ACTIVA);
-        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
-        when(alcances.alcanza(broker, 31L)).thenReturn(true);
-        // Bloqueo tomado -- el agente existe-- pero la elegibilidad dice que no.
-        when(agentes.bloquearParaGobierno(ORG, 31L))
-                .thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
-        when(agentes.esCandidatoAResponsable(anyLong(), anyBoolean(), anyLong(), anyLong(),
-                any(), eq(31L))).thenReturn(false);
-
-        assertThrows(com.controllocal.service.excepcion.AccesoNoAutorizadoException.class,
-                () -> service.reasignar(9L, 31L, "Balance de cartera", 30L, broker));
-        verify(captaciones, org.mockito.Mockito.never())
-                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
-        verifyNoInteractions(reasignaciones);
-    }
-
-    /**
-     * <b>D-P0-9 en el ENCARGO: el comando que perdio la carrera es 409</b>.
-     *
-     * <p>La precondicion en memoria pasa —el agente cargado sigue siendo el
-     * observado— y aun asi el compare-and-set afecta cero filas, que es lo que
-     * ocurre cuando otra transaccion comiteo su reasignacion en medio. No se
-     * reinterpreta: no se escribe fila ninguna.
-     */
-    @Test
-    void reasignarQuePierdeElCompareAndSetEs409YNoDejaRastro() {
-        captacionEnEstado(Captacion.ACTIVA);
-        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
-        when(alcances.alcanza(broker, 31L)).thenReturn(true);
-        destinoElegible(31L);
-        when(captaciones.cambiarAgenteSi(ORG, 9L, 30L, 31L)).thenReturn(0);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-
-        com.controllocal.service.excepcion.ConflictoException error = assertThrows(
-                com.controllocal.service.excepcion.ConflictoException.class,
-                () -> service.reasignar(9L, 31L, "Balance de cartera", 30L, broker));
-        assertTrue(error.getMessage().contains("NO se reinterpreta"), error.getMessage());
-        verifyNoInteractions(reasignaciones);
-    }
-
-    /**
-     * <b>Y el comando que declara un agente que no es el actual tampoco entra</b>.
-     *
-     * <p>Aqui no hay carrera: el comando simplemente sale de un estado que no
-     * es. Se corta ANTES de tocar la base —el compare-and-set ni se ejecuta— y
-     * el mensaje nombra a quien lo lleva hoy, que es lo unico que permite volver
-     * a decidir.
-     */
-    @Test
-    void reasignarDeclarandoOtroAgenteEs409YNiSiquieraIntentaEscribir() {
-        captacionEnEstado(Captacion.ACTIVA);
-        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
-        when(alcances.alcanza(broker, 31L)).thenReturn(true);
-        destinoElegible(31L);
-        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-
-        com.controllocal.service.excepcion.ConflictoException error = assertThrows(
-                com.controllocal.service.excepcion.ConflictoException.class,
-                () -> service.reasignar(9L, 31L, "Balance de cartera", 999L, broker));
-        assertTrue(error.getMessage().contains("30"),
-                "el 409 tiene que nombrar al agente actual: " + error.getMessage());
-        verify(captaciones, org.mockito.Mockito.never())
-                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
-        verifyNoInteractions(reasignaciones);
-    }
-
-    /** El destino pasa las cinco condiciones de D-P0-7, con su fila ya tomada. */
-    private void destinoElegible(long idRolDestino) {
-        when(agentes.bloquearParaGobierno(ORG, idRolDestino))
-                .thenReturn(Optional.of(detalleAgente(idRolDestino, "Destino elegible")));
-        when(agentes.esCandidatoAResponsable(anyLong(), anyBoolean(), anyLong(), anyLong(),
-                any(), eq(idRolDestino))).thenReturn(true);
-    }
-
-    // ------------------------------------------------------------------
-    // Cierre
-    // ------------------------------------------------------------------
-
-    @Test
-    void cerrarExigeUnaCaptacionActiva() {
-        captacionEnEstado(Captacion.PENDIENTE_REVISION);
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.cerrar(9L, "Contrato firmado", broker));
-        assertEquals("La captacion debe estar ACTIVA.", error.getMessage());
-    }
-
-    @Test
-    void cerrarRegistraLaFechaYMotivoSinAlterarElFinDelEncargo() {
-        Captacion cap = captacionEnEstado(Captacion.ACTIVA);
-        LocalDate finEncargo = cap.getFechaFinVigencia();
-
-        FichaCaptacion ficha = service.cerrar(9L, "Contrato firmado", broker);
-
-        assertEquals("C", ficha.estado());
-        assertEquals(finEncargo, cap.getFechaFinVigencia());
-        assertEquals(LocalDate.now(), ficha.fechaCierre());
-        assertEquals("M", ficha.motivoCierre());
-        assertEquals("Contrato firmado", ficha.detalleMotivoCierre());
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("A", evento.getEstadoAnterior());
-        assertEquals("C", evento.getEstadoNuevo());
-        assertEquals("Contrato firmado", evento.getMotivo());
-    }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    private Captacion captacionEnEstado(String estado) {
-        return captacionEnEstado(estado, broker);
-    }
-
-    /** Captacion id 9 del agente 30 sobre el local 7, visible para el actor dado. */
-    private Captacion captacionEnEstado(String estado, Actor actor) {
-        Captacion cap = new Captacion();
-        cap.setOrganizacionId(ORG);
-        cap.setCodigoCaptacion("CAP-0009");
-        cap.setFechaCaptacion(LocalDate.of(2026, 7, 1));
-        cap.setFechaInicioVigencia(LocalDate.of(2026, 7, 1));
-        cap.setFechaFinVigencia(LocalDate.of(2027, 7, 1));
-        cap.setComisionPactada(new BigDecimal("4250.00"));
-        cap.setExclusividad(Boolean.TRUE);
-        // La operacion ya no tiene defecto en la entidad (D-E4-1): un encargo
-        // de prueba sin declararla seria un encargo que la BD no admitiria.
-        cap.setMotivoOperacion("A");
-        cap.setPropiedad(propiedad(7L));
-        cap.setAgente(detalleAgente(30L, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(cap, estado);
-        ReflectionTestUtils.setField(cap, "id", 9L);
-        when(captaciones.buscarFicha(ORG, 9L)).thenReturn(Optional.of(cap));
-        // La MISMA fila, cargada con el candado (F2.10). `actualizar` la pide
-        // asi porque escribe hechos del trato; el resto de los casos de uso
-        // sigue con `buscarFicha`. Son dos consultas y una sola fila: si el
-        // montaje solo respondiera a una, la mitad de las pruebas mediria un
-        // encargo inexistente.
-        when(captaciones.bloquearParaEscritura(ORG, 9L)).thenReturn(Optional.of(cap));
-        when(alcances.alcanza(actor, 30L)).thenReturn(true);
-        when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
-        return cap;
-    }
-
-    /** Otro encargo vivo sobre el mismo local, para probar la exclusion por operacion. */
-    private static Captacion otroEncargo(long id, String operacion) {
-        Captacion otro = new Captacion();
-        otro.setOrganizacionId(ORG);
-        otro.setCodigoCaptacion("CAP-%04d".formatted(id));
-        otro.setMotivoOperacion(operacion);
-        otro.setPropiedad(propiedad(7L));
-        ReflectionTestUtils.setField(otro, "id", id);
-        return otro;
-    }
-
-    private static DatosCaptacion datos(String codigo) {
-        return new DatosCaptacion(codigo, LocalDate.of(2026, 7, 10),
-                LocalDate.of(2026, 7, 10), LocalDate.of(2027, 7, 10),
-                new BigDecimal("100.00"), "Encargo de alquiler", 7L, 30L, "A", 3, Boolean.TRUE);
-    }
-
-    private static Propiedad propiedad(long id) {
-        Propiedad propiedad = new Propiedad();
-        propiedad.setOrganizacionId(ORG);
-        propiedad.setCodigo("LOC-0100");
-        propiedad.setDireccion("Av. Prueba 123");
-        propiedad.setDistrito("Miraflores");
-        propiedad.setMetraje(new BigDecimal("120.00"));
-        propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
-        propiedad.setMonedaReferencial("PEN");
-        propiedad.iniciarDisponible();
-        ReflectionTestUtils.setField(propiedad, "id", id);
-        return propiedad;
-    }
-
-    private static DetalleAgente detalleAgente(long idRol, String nombre) {
-        DetalleAgente detalle = new DetalleAgente();
-        // El tenant, que antes no se ponia: desde el 2026-09-01 `reasignar`
-        // filtra el destino por organizacion -- `findById` no lo hace-- asi que
-        // un agente de fixture sin tenant se comportaria como uno de otra
-        // corredora, que es justo lo que la guarda nueva rechaza.
-        detalle.setOrganizacionId(ORG);
-        detalle.setRol(rolConPersona(nombre, TipoRol.AGENTE));
-        detalle.setCodigoAgente("AGE-001");
-        ReflectionTestUtils.setField(detalle, "id", idRol);
-        return detalle;
-    }
-
-    private static DetalleBroker detalleBroker(long idRol) {
-        DetalleBroker detalle = new DetalleBroker();
-        detalle.setRol(rolConPersona("Ricardo Salas", TipoRol.BROKER));
-        ReflectionTestUtils.setField(detalle, "id", idRol);
-        return detalle;
-    }
-
-    private static PersonaRol rolConPersona(String nombre, TipoRol tipo) {
-        Persona persona = new Persona();
-        persona.setNombresORazonSocial(nombre);
-        PersonaRol rol = new PersonaRol();
-        rol.setPersona(persona);
-        rol.setTipoRol(tipo);
-        return rol;
-    }
-
-    private HistorialEstado eventoAuditado() {
-        ArgumentCaptor<HistorialEstado> evento = ArgumentCaptor.forClass(HistorialEstado.class);
-        verify(historial).save(evento.capture());
-        return evento.getValue();
-    }
-
-    /**
-     * Un lector que no encuentra ningun valor gobernado.
-     *
-     * <p>Estas pruebas no afirman nada sobre el rubro; solo necesitan que el
-     * servicio pueda construir su ficha. Devolver lotes vacios —y no un mock
-     * sin respuestas— es lo correcto: {@code ValoresGobernados.vacio()}
-     * significa "no se sabe nada de esta propiedad", que es un estado legitimo
-     * del dominio, mientras que un null seria un fallo del andamiaje
-     * disfrazado de dato.
-     */
-    private static LectorPorAutoridad lectorSinGobernados() {
-        LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
-        lenient().when(lector.de(anyLong(), any())).thenReturn(ValoresGobernados.vacio());
-        lenient().when(lector.deVarias(anyLong(), any())).thenReturn(Map.of());
-        lenient().when(lector.gobernadosDeVarias(any())).thenReturn(Map.of());
-        return lector;
+    private static ContextosService.SesionAccesoDTO sesion(Actor actor) {
+        var c=new ContextosService.Contexto("ctx-c2",ORG,actor.idPersona(),actor.idRolOperativo(),actor.rolEfectivo(),"EMPRESARIAL","Organización fixture");
+        return new ContextosService.SesionAccesoDTO("sesion-"+actor.idPersona(),1,
+                new ContextosService.IdentidadAutenticada(100+actor.idPersona(),"fixture","fixture@example.test","Fixture"),c,
+                Instant.parse("2026-10-28T00:00:00Z"),Instant.parse("2026-10-29T00:00:00Z"),EstadoDeAcceso.SIN_RESTRICCIONES);
     }
 }

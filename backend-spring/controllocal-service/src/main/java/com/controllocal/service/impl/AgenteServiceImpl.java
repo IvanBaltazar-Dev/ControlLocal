@@ -9,7 +9,7 @@ import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
 import com.controllocal.domain.comun.EstadosDominio.EstadoOportunidad;
 import com.controllocal.domain.comun.EstadosDominio.EstadoSolicitud;
 import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.persona.CredencialUsuario;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.DetalleCliente;
@@ -23,7 +23,6 @@ import com.controllocal.persistence.query.MovimientoComisionPorMoneda;
 import com.controllocal.persistence.query.RepartoComisionPorMoneda;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.CredencialUsuarioRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
@@ -59,7 +58,6 @@ public class AgenteServiceImpl implements AgenteService {
     private final DetalleAgenteRepository agentes;
     private final DetalleBrokerRepository brokers;
     private final SupervisionAgenteRepository supervisiones;
-    private final CredencialUsuarioRepository credenciales;
     private final PersonaRepository personas;
     private final CaptacionRepository captaciones;
     private final OportunidadComercialRepository oportunidades;
@@ -73,7 +71,6 @@ public class AgenteServiceImpl implements AgenteService {
     public AgenteServiceImpl(DetalleAgenteRepository agentes,
                              DetalleBrokerRepository brokers,
                              SupervisionAgenteRepository supervisiones,
-                             CredencialUsuarioRepository credenciales,
                              PersonaRepository personas,
                              CaptacionRepository captaciones,
                              OportunidadComercialRepository oportunidades,
@@ -83,7 +80,6 @@ public class AgenteServiceImpl implements AgenteService {
         this.agentes = agentes;
         this.brokers = brokers;
         this.supervisiones = supervisiones;
-        this.credenciales = credenciales;
         this.personas = personas;
         this.captaciones = captaciones;
         this.oportunidades = oportunidades;
@@ -109,7 +105,7 @@ public class AgenteServiceImpl implements AgenteService {
                 actor.idRolOperativo(), limpiar(filtros.texto()), codigo(filtros.estado()),
                 codigo(filtros.estadoOperativo()), limpiar(filtros.zona()),
                 PageRequest.of(paginaValida - 1, tamanoValido));
-        return new Pagina<>(fichas(page.getContent(), actor.idOrganizacion()),
+        return new Pagina<>(fichas(page.getContent(), actor.idOrganizacion(), actor.esBroker()),
                 page.getTotalElements());
     }
 
@@ -170,34 +166,37 @@ public class AgenteServiceImpl implements AgenteService {
      * no de la cadena solicitud→agente: un agente que cambió de equipo conserva
      * sus cierres, que es justo lo que una ficha de persona tiene que mostrar.
      *
-     * <p>El alcance se comprueba <b>aquí y una sola vez</b>: el BROKER llega a
-     * los agentes que supervisa hoy y el ADMIN a todos. Las consultas de abajo
+     * <p>El alcance se comprueba aquí: el BROKER llega a los agentes que supervisa
+     * actualmente. TENANT_ADMIN dispone del padrón de gobierno, sin esta ficha.
+     * Las consultas de abajo
      * no vuelven a filtrar por rol; si lo hicieran, la ficha mostraría números
      * distintos de los que el propio agente ve en sus bandejas.
      */
     @Override
     @Transactional(readOnly = true)
     public FichaCompletaAgente ficha(long id, Actor actor) {
-        exigirBrokerOAdmin(actor);
+        // CAT-E01/R19: el padrón de gobierno no concede el expediente comercial.
+        if (!actor.esBroker()) {
+            throw new AccesoNoAutorizadoException();
+        }
         validarActorOperativo(actor);
         long org = actor.idOrganizacion();
         DetalleAgente agente = agentes.buscarFicha(org, id)
                 .orElseThrow(() -> new NoEncontradoException("Agente"));
 
         Optional<SupervisionAgente> supervision = supervisiones.buscarActivaPorAgente(org, id);
-        if (!actor.esTenantAdmin()
-                && supervision.filter(s -> s.getIdRolBroker().equals(actor.idRolOperativo()))
+        if (supervision.filter(s -> s.getIdRolBroker().equals(actor.idRolOperativo()))
                         .isEmpty()) {
             throw new AccesoNoAutorizadoException();
         }
 
-        CredencialUsuario credencial = usuarios.credencial(
+        CuentaAcceso credencial = usuarios.cuenta(
                 org, agente.getRol().getPersona().getId());
         int caps = conteosCaptacion(List.of(id), org).getOrDefault(id, 0);
         int ops = conteosOportunidad(List.of(id), org).getOrDefault(id, 0);
 
         return new FichaCompletaAgente(
-                ficha(agente, credencial, caps, ops),
+                ficha(agente, credencial, caps, ops,usuarios.estadoLocalDelRol(org,agente.getRol().getPersona().getId(),"AGENTE")),
                 supervision.map(this::supervisionVigente).orElse(null),
                 conteos(captaciones.contarPorEstadoDeAgente(org, id), EstadoCaptacion::desde),
                 conteos(oportunidades.contarPorEstadoDeAgente(org, id), EstadoOportunidad::desde),
@@ -242,28 +241,24 @@ public class AgenteServiceImpl implements AgenteService {
         }
     }
 
-    /**
-     * Las cuatro magnitudes del dinero, por moneda y sin mezclarlas. Los dos
-     * saldos son diferencias derivadas y nunca negativas: un cobro de más no se
-     * publica como "pendiente negativo".
-     */
+    /** Hechos y cálculo separados. Los saldos se calculan por comisión antes de agrupar. */
     private ComisionesAgente comisionesDe(long org, long idAgente) {
-        Map<String, BigDecimal> generada = porMoneda(
-                contratos.comisionesGeneradasDeAgente(org, idAgente),
-                ComisionGeneradaPorMoneda::getMoneda, ComisionGeneradaPorMoneda::getMonto);
-        Map<String, BigDecimal> asignada = porMoneda(
-                contratos.repartosDeAgente(org, idAgente),
-                RepartoComisionPorMoneda::getMoneda, RepartoComisionPorMoneda::getParteAgente);
+        var generada=contratos.comisionesGeneradasDeAgente(org,idAgente);
+        var asignada=contratos.repartosDeAgente(org,idAgente);
         List<MovimientoComisionPorMoneda> evidencia = contratos.movimientosDeAgente(org, idAgente);
-        Map<String, BigDecimal> cobrada = porMoneda(evidencia,
-                MovimientoComisionPorMoneda::getMoneda,
-                m -> maximoCero(m.getMontoCobrado()));
-        Map<String, BigDecimal> pagada = porMoneda(evidencia,
-                MovimientoComisionPorMoneda::getMoneda,
-                m -> maximoCero(m.getMontoPagadoAgente()));
+        if(evidencia.stream().anyMatch(f->!Boolean.FALSE.equals(f.getAnomalia())))
+            throw new IllegalStateException("El agregado de movimientos no acredita su integridad.");
         return new ComisionesAgente(
-                importes(generada), importes(cobrada), diferencia(generada, cobrada),
-                importes(asignada), importes(pagada), diferencia(asignada, pagada));
+                importes(generada,ComisionGeneradaPorMoneda::getMoneda,ComisionGeneradaPorMoneda::getMonto,
+                        ComisionGeneradaPorMoneda::getDeterminados,ComisionGeneradaPorMoneda::getPendientes),
+                fondos(evidencia,MovimientoComisionPorMoneda::getMontoCobrado),
+                importes(generada,ComisionGeneradaPorMoneda::getMoneda,ComisionGeneradaPorMoneda::getSaldoInformativoSobreCalculo,
+                        ComisionGeneradaPorMoneda::getSaldoDeterminados,ComisionGeneradaPorMoneda::getSaldoPendientes),
+                importes(asignada,RepartoComisionPorMoneda::getMoneda,RepartoComisionPorMoneda::getParteAgente,
+                        RepartoComisionPorMoneda::getDeterminados,RepartoComisionPorMoneda::getPendientes),
+                fondos(evidencia,MovimientoComisionPorMoneda::getMontoPagadoAgente),
+                importes(asignada,RepartoComisionPorMoneda::getMoneda,RepartoComisionPorMoneda::getSaldoPagoAgente,
+                        RepartoComisionPorMoneda::getSaldoDeterminados,RepartoComisionPorMoneda::getSaldoPendientes));
     }
 
     private List<CierreDeAgente> ultimosCierres(long org, long idAgente) {
@@ -292,105 +287,25 @@ public class AgenteServiceImpl implements AgenteService {
                 c.getRentaContractual(), c.getMoneda());
     }
 
-    private static <T> Map<String, BigDecimal> porMoneda(
-            List<T> filas, java.util.function.Function<T, String> moneda,
-            java.util.function.Function<T, BigDecimal> monto) {
-        Map<String, BigDecimal> resultado = new HashMap<>();
-        for (T fila : filas) {
-            String clave = moneda.apply(fila);
-            if (clave != null) {
-                resultado.merge(clave, cero(monto.apply(fila)), BigDecimal::add);
-            }
-        }
-        return resultado;
+    private static <T> List<ImportePorMoneda> importes(List<T> filas,
+            java.util.function.Function<T,String> moneda,java.util.function.Function<T,BigDecimal> monto,
+            java.util.function.Function<T,Long> determinados,java.util.function.Function<T,Long> pendientes) {
+        return filas.stream().map(f->{
+            Long conocidos=determinados.apply(f),faltantes=pendientes.apply(f);BigDecimal valor=monto.apply(f);
+            if(conocidos==null||faltantes==null||conocidos<0||faltantes<0
+                    ||(valor==null&&conocidos>0)||(valor!=null&&(valor.signum()<0||moneda.apply(f)==null)))
+                throw new IllegalStateException("El agregado económico no conserva su cobertura.");
+            return new ImportePorMoneda(moneda.apply(f),valor,conocidos,faltantes);
+        }).sorted(java.util.Comparator.comparing(ImportePorMoneda::moneda,
+                java.util.Comparator.nullsLast(String::compareTo))).toList();
     }
-
-    private static List<ImportePorMoneda> importes(Map<String, BigDecimal> valores) {
-        return valores.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .map(e -> new ImportePorMoneda(e.getKey(), e.getValue()))
-                .toList();
-    }
-
-    private static List<ImportePorMoneda> diferencia(Map<String, BigDecimal> total,
-                                                      Map<String, BigDecimal> hecho) {
-        return total.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .map(e -> new ImportePorMoneda(e.getKey(),
-                        cero(e.getValue()).subtract(cero(hecho.get(e.getKey())))
-                                .max(BigDecimal.ZERO)))
-                .toList();
-    }
-
-    private static BigDecimal cero(BigDecimal valor) {
-        return valor == null ? BigDecimal.ZERO : valor;
-    }
-
-    private static BigDecimal maximoCero(BigDecimal valor) {
-        return cero(valor).max(BigDecimal.ZERO);
-    }
-
-    @Override
-    @Transactional
-    public FichaAgente registrar(DatosAgente datos, Actor actor) {
-        exigirGobierno(actor);
-        if (datos == null || UsuariosInternos.vacio(datos.nombre())
-                || UsuariosInternos.vacio(datos.usuario())
-                || UsuariosInternos.vacio(datos.contrasena())) {
-            throw new ReglaNegocioException(
-                    "Nombre, usuario y contrasena del agente son obligatorios.");
-        }
-
-        String tipoPersona = UsuariosInternos.tipoPersonaO(datos.tipoPersona(), "N");
-        String tipoDocumento = UsuariosInternos.tipoDocumentoO(datos.tipoDocumento(), "D");
-        String estado = UsuariosInternos.estadoAdministrativoO(datos.estado(), "A");
-        String estadoOperativo =
-                UsuariosInternos.estadoOperativoO(datos.estadoOperativo(), "D");
-
-        // Fila 17 de D-S0-17, invertida respecto a como estaba. Antes el
-        // supervisor era el broker de la sesion y el administrador quedaba
-        // EXPRESAMENTE excluido con una excepcion; ahora el alta es gobierno
-        // del tenant (D-S0-18: un broker no crea cuentas) y el equipo de
-        // destino viaja en la peticion, porque quien gobierna no supervisa a
-        // nadie de quien deducirlo.
-        //
-        // Se valida DESPUES de los codigos del cuerpo para no adelantarse a los
-        // mensajes de validacion del cable v1: el campo es nuestro, y sus
-        // errores no deberian tapar los suyos.
-        if (datos.idBrokerSupervisor() == null) {
-            throw new ReglaNegocioException(
-                    "Debe indicar el broker que supervisara al agente.");
-        }
-        DetalleBroker supervisor = validarBrokerActivo(
-                datos.idBrokerSupervisor(), actor.idOrganizacion());
-
-        String codigo = UsuariosInternos.vacio(datos.codigoAgente())
-                ? String.format("AGE-%03d",
-                        agentes.countByOrganizacionId(actor.idOrganizacion()) + 1)
-                : datos.codigoAgente().trim();
-
-        UsuariosInternos.Alta alta = usuarios.registrar(actor.idOrganizacion(),
-                TipoRol.AGENTE, tipoPersona, tipoDocumento, datos.numeroDocumento(),
-                datos.nombre(), datos.telefono(), datos.correo(), datos.usuario(),
-                datos.contrasena(), estado);
-
-        DetalleAgente agente = new DetalleAgente();
-        agente.setOrganizacionId(actor.idOrganizacion());
-        agente.setRol(alta.rolOperativo());
-        agente.setCodigoAgente(codigo);
-        agente.setZonaAsignada(datos.zona());
-        agente.setFechaIngreso(LocalDate.now());
-        agente.setEstadoOperativo(estadoOperativo);
-        agentes.save(agente);
-
-        SupervisionAgente supervision = new SupervisionAgente();
-        supervision.setOrganizacionId(actor.idOrganizacion());
-        supervision.setIdRolBroker(supervisor.getId());
-        supervision.setIdRolAgente(alta.rolOperativo().getId());
-        supervision.setFechaAsignacion(LocalDate.now());
-        supervision.setMotivo("Asignacion inicial por registro de agente.");
-        supervisiones.save(supervision);
-        return ficha(agente, alta.credencial(), 0, 0);
+    private static List<ImportePorMoneda> fondos(List<MovimientoComisionPorMoneda> filas,
+            java.util.function.Function<MovimientoComisionPorMoneda,BigDecimal> importe) {
+        return filas.stream().map(f->{BigDecimal valor=importe.apply(f);
+            if(valor==null||valor.signum()<0||f.getMoneda()==null||f.getMoneda().isBlank())
+                throw new IllegalStateException("Los fondos recibidos no conservan importe y moneda.");
+            return new ImportePorMoneda(f.getMoneda(),valor,null,null);
+        }).sorted(java.util.Comparator.comparing(ImportePorMoneda::moneda)).toList();
     }
 
     @Override
@@ -400,9 +315,7 @@ public class AgenteServiceImpl implements AgenteService {
         // filtro de supervision que habia aqui protegia al BROKER de tocar
         // agentes ajenos y ya no aplica — el broker no llega a esta operacion,
         // y el TENANT_ADMIN alcanza a todo su tenant por definicion.
-        exigirGobierno(actor);
-        DetalleAgente agente = agentes.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Agente"));
+        DetalleAgente agente = buscarParaGobierno(id,actor);
         // D-P0-13. Si este cuerpo cambia la ELEGIBILIDAD del agente -su cuenta o
         // su disponibilidad-, esta operacion se serializa con los traspasos que
         // esten mirandola: toma la MISMA fila que `exigirElegible` bloquea.
@@ -418,13 +331,12 @@ public class AgenteServiceImpl implements AgenteService {
         // Solo cuando el cuerpo los trae: cambiar el telefono o la zona no mueve
         // la elegibilidad, y bloquear siempre convertiria una edicion inocua en
         // un punto de espera de los traspasos en curso.
-        if (datos != null && (!UsuariosInternos.vacio(datos.estado())
-                || !UsuariosInternos.vacio(datos.estadoOperativo()))) {
+        if (datos != null && !UsuariosInternos.vacio(datos.estadoOperativo())) {
             agentes.bloquearParaGobierno(actor.idOrganizacion(), id)
                     .orElseThrow(() -> new NoEncontradoException("Agente"));
         }
 
-        CredencialUsuario credencial = usuarios.credencial(actor.idOrganizacion(),
+        CuentaAcceso credencial = usuarios.cuenta(actor.idOrganizacion(),
                 agente.getRol().getPersona().getId());
         if (datos != null) {
             Persona persona = agente.getRol().getPersona();
@@ -434,13 +346,8 @@ public class AgenteServiceImpl implements AgenteService {
             if (datos.telefono() != null) {
                 persona.setTelefono(datos.telefono());
             }
-            if (datos.correo() != null) {
-                persona.setCorreo(datos.correo());
-            }
-            if (!UsuariosInternos.vacio(datos.estado())) {
-                credencial.setEstadoAdministrativo(
-                        UsuariosInternos.estadoAdministrativoO(datos.estado(), "A"));
-                credenciales.save(credencial);
+            if (datos.correoLaboral() != null) {
+                persona.setCorreo(datos.correoLaboral());
             }
             if (!UsuariosInternos.vacio(datos.estadoOperativo())) {
                 agente.setEstadoOperativo(
@@ -452,24 +359,41 @@ public class AgenteServiceImpl implements AgenteService {
             personas.save(persona);
             agentes.save(agente);
         }
-        return ficha(agente, credencial, 0, 0);
+        return ficha(agente, credencial, null, null,usuarios.estadoLocalDelRol(actor.idOrganizacion(),agente.getRol().getPersona().getId(),"AGENTE"));
     }
 
-    private List<FichaAgente> fichas(List<DetalleAgente> filas, long idOrganizacion) {
+    @Override
+    @Transactional(readOnly = true)
+    public FichaAgente consultarParaGobierno(long id, Actor actor) {
+        DetalleAgente agente=buscarParaGobierno(id,actor);
+        long persona=agente.getRol().getPersona().getId();
+        return ficha(agente,usuarios.cuenta(actor.idOrganizacion(),persona),null,null,
+                usuarios.estadoLocalDelRol(actor.idOrganizacion(),persona,"AGENTE"));
+    }
+
+    private DetalleAgente buscarParaGobierno(long id,Actor actor) {
+        exigirGobierno(actor);
+        return agentes.buscarFicha(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Agente"));
+    }
+
+    private List<FichaAgente> fichas(List<DetalleAgente> filas, long idOrganizacion,
+                                    boolean incluirActividadComercial) {
         List<Long> idsPersona = filas.stream()
                 .map(a -> a.getRol().getPersona().getId())
                 .filter(Objects::nonNull)
                 .toList();
-        Map<Long, CredencialUsuario> usuariosPorPersona =
-                usuarios.credencialesPorPersona(idOrganizacion, idsPersona);
+        Map<Long, CuentaAcceso> usuariosPorPersona =
+                usuarios.cuentasPorPersona(idOrganizacion, idsPersona);
+        var estados=usuarios.estadosLocalesDelRol(idOrganizacion,idsPersona,"AGENTE");
         List<Long> idsAgente = filas.stream().map(DetalleAgente::getId).toList();
-        Map<Long, Integer> caps = conteosCaptacion(idsAgente, idOrganizacion);
-        Map<Long, Integer> ops = conteosOportunidad(idsAgente, idOrganizacion);
+        Map<Long, Integer> caps = incluirActividadComercial ? conteosCaptacion(idsAgente, idOrganizacion) : Map.of();
+        Map<Long, Integer> ops = incluirActividadComercial ? conteosOportunidad(idsAgente, idOrganizacion) : Map.of();
         return filas.stream()
                 .map(a -> ficha(a,
                         usuariosPorPersona.get(a.getRol().getPersona().getId()),
-                        caps.getOrDefault(a.getId(), 0),
-                        ops.getOrDefault(a.getId(), 0)))
+                        incluirActividadComercial ? caps.getOrDefault(a.getId(), 0) : null,
+                        incluirActividadComercial ? ops.getOrDefault(a.getId(), 0) : null,
+                        estados.get(a.getRol().getPersona().getId())))
                 .toList();
     }
 
@@ -502,9 +426,9 @@ public class AgenteServiceImpl implements AgenteService {
     private DetalleBroker validarBrokerActivo(long id, long idOrganizacion) {
         DetalleBroker broker = brokers.buscarFicha(idOrganizacion, id)
                 .orElseThrow(() -> new ReglaNegocioException("Broker no encontrado."));
-        CredencialUsuario credencial = usuarios.credencial(
+        CuentaAcceso credencial = usuarios.cuenta(
                 idOrganizacion, broker.getRol().getPersona().getId());
-        if (!"A".equals(credencial.getEstadoAdministrativo())) {
+        if (!"A".equals(credencial.getEstado()) || !"A".equals(usuarios.estadoLocalDelRol(idOrganizacion,broker.getRol().getPersona().getId(),"BROKER"))) {
             throw new ReglaNegocioException("El broker no esta activo.");
         }
         return broker;
@@ -512,19 +436,19 @@ public class AgenteServiceImpl implements AgenteService {
 
     /** Lectura del catalogo (filas 14-16): supervision del broker o del admin. */
     private static void exigirBrokerOAdmin(Actor actor) {
-        if (actor.esAgente()) {
+        if (actor == null || (!actor.esBroker() && !actor.esTenantAdmin())) {
             throw new AccesoNoAutorizadoException();
         }
     }
 
     /**
-     * Alta y edicion de agentes (filas 17-18): <b>solo gobierno</b>. Duplica en
+     * Edición local de agentes: sólo gobierno. Duplica en
      * el service el gate de {@code @PreAuthorize} a proposito — es la regla de
      * negocio, no una comprobacion de transporte, y un caso de uso no deberia
      * depender de que nadie olvide la anotacion.
      */
     private static void exigirGobierno(Actor actor) {
-        if (!actor.esTenantAdmin()) {
+        if (actor == null || !actor.esTenantAdmin()) {
             throw new AccesoNoAutorizadoException();
         }
     }
@@ -542,9 +466,9 @@ public class AgenteServiceImpl implements AgenteService {
     }
 
     private static FichaAgente ficha(DetalleAgente agente,
-                                     CredencialUsuario credencial,
-                                     int captacionesActivas,
-                                     int operacionesActivas) {
+                                     CuentaAcceso credencial,
+                                     Integer captacionesActivas,
+                                     Integer operacionesActivas,String estadoLocal) {
         Persona persona = agente.getRol().getPersona();
         return new FichaAgente(agente.getId(), agente.getCodigoAgente(),
                 persona.getNombresORazonSocial(), persona.getTipoPersona(),
@@ -552,7 +476,7 @@ public class AgenteServiceImpl implements AgenteService {
                 persona.getTelefono(), persona.getCorreo(),
                 credencial != null ? credencial.getNombreUsuario() : null,
                 agente.getZonaAsignada(), agente.getFechaIngreso(),
-                credencial != null ? credencial.getEstadoAdministrativo() : null,
+                estadoLocal,
                 agente.getEstadoOperativo(), captacionesActivas, operacionesActivas);
     }
 

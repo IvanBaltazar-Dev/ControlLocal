@@ -79,8 +79,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class SueloYParametrosUrbanisticosIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
+    @Autowired com.controllocal.service.encargo.EncargoService encargos;
+    @Autowired com.controllocal.service.ContextosService contextos;
+    @Autowired com.controllocal.service.CuentaService cuentas;
+    @Autowired com.controllocal.persistence.repositorio.FactorAutenticacionRepository factores;
+    @Autowired com.controllocal.service.soporte.CifradoSecretos cifrado;
+    @Autowired com.controllocal.service.GobiernoCatalogoCapturaService catalogos;
+    @Autowired org.springframework.transaction.PlatformTransactionManager gestor;
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacion;
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -416,14 +429,17 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 "`atributosQueFaltan` responde a que impide el ALTA, y PUB no lo impide (D-3)");
 
         ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                () -> preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()),
                 "500 m² habilitados y 500 m² rusticos no son la misma oferta");
-        assertTrue(rechazo.getMessage().contains("Condición del terreno"),
-                "el rechazo dice QUE falta, con su rotulo: " + rechazo.getMessage());
+        assertNotNull(rechazo.getMessage());
+        assertFalse(encargos.consultar(encargoDe(id),actor()).vigencia().habilitado(),
+                "CAT18 exige condición conocida para habilitar; el faltante estructurado conserva el rótulo PUB");
 
         editar(id, new ValorAtributo("condicion_terreno", "RUSTICO_ERIAZO"));
         assertEquals(List.of(), bloqueantesDe(id));
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+        preparacion().prepararTerreno(id,actor());
+        preparacion().habilitar(encargoDe(id),actor());
+        assertNotNull(preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()),
                 "declarada la condicion, el anuncio entra");
     }
 
@@ -448,7 +464,9 @@ class SueloYParametrosUrbanisticosIntegrationTest {
         assertEquals(List.of("condicion_terreno"), bloqueantesDe(callado), "callar no desbloquea");
         assertEquals(List.of(), bloqueantesDe(malo), "declarar la peor condicion si");
         assertEquals(List.of(), bloqueantesDe(bueno));
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(malo), publicacionDePrueba(), actor()));
+        preparacion().prepararTerreno(malo,actor());
+        preparacion().habilitar(encargoDe(malo),actor());
+        assertNotNull(preparacion().publicar(publicaciones,encargoDe(malo), publicacionDePrueba(malo), actor()));
     }
 
     /**
@@ -756,7 +774,9 @@ class SueloYParametrosUrbanisticosIntegrationTest {
 
         // (2) Y se puede QUITAR, que es la unica forma de resolver el desacuerdo.
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                null, null, List.of("area_terreno")), actor());
+                null, null, List.of("area_terreno"))
+                .conVersion(propiedades.consultar(id,actor()).versionFisica())
+                .conMotivoRetiro("Retirar la medida conservada que ya no aplica al tipo"), actor());
         assertNull(valorDe(id, "area_terreno"), "retirar una clave que ya no aplica tiene que "
                 + "funcionar: si no, el desacuerdo quedaria escrito para siempre");
         assertEquals(1L, contar("""
@@ -849,7 +869,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 () -> propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
                         List.of(new ValorAtributo("topografia", "PLANO"),
                                 new ValorAtributo("area_terreno", "777")),
-                        null, null), actor()),
+                        null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()), actor()),
                 "reenviar la ficha entera con el conservado dentro tiene que dar una respuesta "
                         + "dicha, no un comportamiento sin medir");
         assertTrue(reenvio.getMessage()
@@ -884,7 +904,9 @@ class SueloYParametrosUrbanisticosIntegrationTest {
         //     concreta, que es el defecto que D0 vino a pagar. El universo de esa
         //     comprobacion lo fabrica su control positivo, no este caso.
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                null, null, List.of("area_terreno")), actor());
+                null, null, List.of("area_terreno"))
+                .conVersion(propiedades.consultar(id,actor()).versionFisica())
+                .conMotivoRetiro("Retirar la medida discrepante conservando su antecedente"), actor());
         assertNull(valorDe(id, "area_terreno"),
                 "el caso tiene que dejar la base como la encontro: el conservado se retira");
     }
@@ -1013,7 +1035,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
         List<String> sinVocabulario = new ArrayList<>();
         for (String[] clave : LAS_DIECIOCHO) {
             MotorDeCaptura.Pregunta pregunta = captura
-                    .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", actor())
+                    .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor())
                     .todas().stream()
                     .filter(p -> clave[0].equals(p.clave()))
                     .findFirst().orElse(null);
@@ -1040,10 +1062,10 @@ class SueloYParametrosUrbanisticosIntegrationTest {
 
         // Y `area_terreno` YA NO se pregunta para un terreno, que es la mitad
         // retirada del corte vista desde el motor.
-        assertFalse(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", actor())
+        assertFalse(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor())
                         .todas().stream().anyMatch(p -> "area_terreno".equals(p.clave())),
                 "el guion del terreno no puede seguir preguntando la superficie dos veces");
-        assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "CASA", "VENTA", actor())
+        assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "CASA", "VENTA", null, actor())
                         .todas().stream().anyMatch(p -> "area_terreno".equals(p.clave())),
                 "y a una CASA si se le sigue preguntando: ahi no duplica nada");
     }
@@ -1152,7 +1174,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
 
     private void editar(long id, ValorAtributo valor) {
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                List.of(valor), null, null), actor());
+                List.of(valor), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()), actor());
     }
 
     private String valorDe(long id, String clave) {
@@ -1189,11 +1211,11 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, tipo, null,
+        return propiedades.registrar(new ComandoRegistro(UUID.randomUUID().toString(), null, null, tipo, "VIVIENDA",
                 "Caso 5B " + tipo,
                 new Ubicacion("Av. Suelo " + UUID.randomUUID(), "Lurin",
                         null, null, null, null, null, null, null),
-                List.of(new Titular(idPropietario, null, Boolean.TRUE)),
+                List.of(new Titular(idPropietario, new BigDecimal("100"), Boolean.TRUE)),
                 atributos, List.of(operacion), null), actor).idPropiedad();
     }
 
@@ -1202,10 +1224,15 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 "select min(id_captacion) from captacion where id_propiedad = ?",
                 Long.class, idPropiedad);
     }
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacion(){
+        if(preparacion==null)preparacion=new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba(jdbc,propiedades,encargos,catalogos,contextos,cuentas,factores,cifrado,gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);
+        return preparacion;
+    }
 
-    private PublicacionService.DatosPublicacion publicacionDePrueba() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null, new BigDecimal("2500"),
-                "PEN", "Anuncio de prueba", null, null);
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio publicacionDePrueba(long idPropiedad) {
+        var pacto=encargos.consultar(encargoDe(idPropiedad),actor()).condiciones();
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio("WEB_PROPIA", null,pacto.precioPedido(),
+                pacto.monedaPrecio(), "Anuncio de prueba", null, null);
     }
 
     private Actor actor() {

@@ -113,6 +113,30 @@ describe('InteraccionForm', () => {
     expect(enviado.idProspeccion).toBeUndefined();
   });
 
+  it('envía el snapshot opcional del interlocutor sin cambiar la atribución', async () => {
+    const fixture = await montar('AGENTE', { contexto: 'PROSPECCION', prospeccion: '7' });
+    const acceso = acceder(fixture);
+
+    acceso.formulario.patchValue({
+      canalContacto: 'L',
+      resultado: 'CONTACTADO',
+      contactoTipo: 'Administrador',
+      contactoNombre: 'Lucía Quispe',
+      contactoTelefono: '+51 999 111 222',
+    });
+    await acceso.guardar();
+
+    expect(api.registrar).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        contexto: 'PROSPECCION',
+        idProspeccion: 7,
+        contactoTipo: 'Administrador',
+        contactoNombre: 'Lucía Quispe',
+        contactoTelefono: '+51 999 111 222',
+      }),
+    );
+  });
+
   it('canal y resultado son obligatorios antes de enviar', async () => {
     const fixture = await montar('AGENTE', { contexto: 'CLIENTE', cliente: '5' });
     const acceso = acceder(fixture);
@@ -164,6 +188,8 @@ describe('InteraccionForm', () => {
   ): Promise<ComponentFixture<InteraccionForm>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

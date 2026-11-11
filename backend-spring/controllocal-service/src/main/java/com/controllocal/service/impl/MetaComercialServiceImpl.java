@@ -1,417 +1,146 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.comercial.MetaComercial;
-import com.controllocal.domain.comercial.MetaRevision;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
-import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.MetaComercialRepository;
-import com.controllocal.persistence.repositorio.MetaRevisionRepository;
-import com.controllocal.persistence.repositorio.PersonaRolRepository;
-import com.controllocal.persistence.repositorio.RendimientoRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.MetaComercialService;
-import com.controllocal.service.excepcion.NoEncontradoException;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.KpiCanonico;
-import com.controllocal.service.soporte.PeriodoCalendario;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.persistence.presupuesto.PresupuestoIaRepository;
+import com.controllocal.service.*;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.service.soporte.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.*;
+import java.util.*;
+import static com.controllocal.service.soporte.IndicadorMetaComercial.VERSION;
 
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-/**
- * Fijar, proponer y revisar metas.
- *
- * <h2>Las tres comprobaciones que no se pueden saltar</h2>
- *
- * <ol>
- *   <li><b>Un broker solo toca las de sus agentes.</b> Sin esto, conocer un id
- *       bastaría para ponerle objetivos a alguien de otro equipo, y el semáforo
- *       de esa persona pasaría a depender de un extraño.</li>
- *   <li><b>Un agente solo propone sobre la suya.</b> Proponer la de otro sería
- *       fijar la de otro con un paso intermedio.</li>
- *   <li><b>Toda escritura deja revisión.</b> No hay ningún camino que cambie
- *       {@code meta_comercial} sin escribir en la serie: es lo que impide que el
- *       valor vigente y su historia diverjan.</li>
- * </ol>
- */
+/** CAT-E30/RF074–077: una propuesta no decide; las mutaciones reservadas usan Actuaciones. */
 @Service
 public class MetaComercialServiceImpl implements MetaComercialService {
-
-    private final MetaComercialRepository metas;
-    private final MetaRevisionRepository revisiones;
-    private final DetalleAgenteRepository agentes;
-    private final PersonaRolRepository roles;
-    private final RendimientoRepository rendimiento;
-    private final Alcances alcances;
-
-    public MetaComercialServiceImpl(MetaComercialRepository metas,
-                                    MetaRevisionRepository revisiones,
-                                    DetalleAgenteRepository agentes,
-                                    PersonaRolRepository roles,
-                                    RendimientoRepository rendimiento,
-                                    Alcances alcances) {
-        this.metas = metas;
-        this.revisiones = revisiones;
-        this.agentes = agentes;
-        this.roles = roles;
-        this.rendimiento = rendimiento;
-        this.alcances = alcances;
+    public static final String FIJAR="establecer_meta",DECIDIR="decidir_propuesta_meta",PROPONER="proponer_meta";
+    private final MetaComercialRepository metas;private final ContextosDeActividad contexto;private final Alcances alcances;
+    private final PresupuestoIaRepository organizaciones;private final IdentidadColaboracionRepository identidades;
+    private final Documentos json;private final ComandoIdempotenteRepository locks;private final ComandosIdempotentes comandos;
+    public MetaComercialServiceImpl(MetaComercialRepository r,ContextosDeActividad c,Alcances a,PresupuestoIaRepository o,
+            IdentidadColaboracionRepository i,Documentos j,ComandoIdempotenteRepository l,ComandosIdempotentes co){metas=r;contexto=c;alcances=a;organizaciones=o;identidades=i;json=j;locks=l;comandos=co;}
+    private PeriodoCalendario periodo(String mes){return PeriodoCalendario.desde(mes,contexto.hoy());}
+    private List<Long> alcance(Actor a){contexto.exigirOperador(a);return alcances.de(a).rolesAgente().stream().distinct().sorted().toList();}
+    @Override @Transactional(readOnly=true) public void exigirLecturaEstablecimiento(Establecer d,Actor a){var roles=alcance(a);if(d==null||d.asignaciones()==null||d.asignaciones().stream().anyMatch(x->x==null||!roles.contains(x.idRolAgente())))throw new NoEncontradoException("Actuación de metas");}
+    @Override @Transactional(readOnly=true) public Definicion definicion(Actor a){contexto.exigirMetadata(a);return new Definicion(VERSION,Arrays.stream(IndicadorMetaComercial.values()).map(k->new Categoria(k.name(),k.rotulo(),k.unidad(),k.porOperacion()?List.of("VENTA","ALQUILER"):List.of("GENERAL"))).toList(),"C/P/S/F históricos se conservan sin conversión; las nuevas metas usan exclusivamente estas categorías.");}
+    private boolean independiente(Actor a){return a.esAgente()&&organizaciones.organizacionActual(a.idOrganizacion()).filter(x->x.activa()&&"INDIVIDUAL".equals(x.modalidad())).isPresent();}
+    @Override @Transactional(readOnly=true) public boolean puedeDecidir(Actor a){contexto.exigirOperador(a);return a.esBroker()||independiente(a);}
+    @Override @Transactional(readOnly=true) public CapacidadMeta capacidadSobrePropuesta(long id,Actor a){var roles=alcance(a);var h=metas.cabecera(a.idOrganizacion(),id,false).filter(x->roles.contains(x.agente())).orElseThrow(()->new NoEncontradoException("Propuesta de meta"));return new CapacidadMeta(h.id(),h.version(),h.agente(),h.estado(),h.reemplazadaPor(),VERSION.equals(h.definicion())&&(a.esBroker()||independiente(a)&&h.agente()==a.idRolOperativo()));}
+    private void decidirSobre(long rol,Actor a){if(!alcance(a).contains(rol)||(!a.esBroker()&&!(independiente(a)&&rol==a.idRolOperativo())))throw new AccesoNoAutorizadoException();}
+    private static void version(Long v){if(v==null||v<0)throw new ReglaNegocioException("Indica la versión observada; ausencia de meta usa versión0, no objetivo0.");}
+    private static String motivo(String v){if(v==null||v.trim().length()<PoliticaComercial.MOTIVO_REASIGNACION.valor()||v.trim().length()>300)throw new ReglaNegocioException("Conserva un motivo de 10 a 300 caracteres.");return v.trim();}
+    private static int valor(Integer v){if(v==null||v<0)throw new ReglaNegocioException("La meta necesita un conteo entero no negativo.");return v;}
+    private static List<LocalDate> calendario(List<LocalDate> c,PeriodoCalendario p){
+        if(c==null)return null;var s=new TreeSet<LocalDate>();
+        for(var d:c)if(d==null||d.isBefore(p.desde())||d.isAfter(p.hasta())||!s.add(d))throw new ReglaNegocioException("El calendario declara fechas distintas del período; no se completan días automáticamente.");
+        return List.copyOf(s);
     }
-
-    // ------------------------------------------------------------------
-    // Lectura
-    // ------------------------------------------------------------------
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<MetaDeAgente> del(String mes, Actor actor) {
-        Alcances.Alcance alcance = alcances.de(actor);
-        PeriodoCalendario periodo = PeriodoCalendario.desde(mes, LocalDate.now());
-        return filas(alcance.idOrganizacion(), periodo, agentesDelAlcance(alcance));
+    private static String calendarioArray(List<LocalDate> c){return c==null?null:c.stream().map(d->"\""+d+"\"").collect(java.util.stream.Collectors.joining(",","[","]"));}
+    private List<LocalDate> fechas(String c){if(c==null)return null;var m=json.comoMapa("{\"fechas\":"+c+"}");return ((List<?>)m.get("fechas")).stream().map(x->LocalDate.parse(x.toString())).toList();}
+    private Asignacion forma(Asignacion d,PeriodoCalendario p,Actor a){
+        if(d==null||d.idRolAgente()==null)throw new ReglaNegocioException("Identifica al profesional de la meta.");
+        decidirSobre(d.idRolAgente(),a);var k=IndicadorMetaComercial.exigir(d.kpi());version(d.versionEsperada());
+        return new Asignacion(d.idRolAgente(),k.name(),k.operacion(d.operacion()),d.versionEsperada(),valor(d.valor()),calendario(d.calendario(),p),motivo(d.motivo()));
     }
-
-    // ------------------------------------------------------------------
-    // El broker fija
-    // ------------------------------------------------------------------
-
-    @Override
-    @Transactional
-    public List<MetaDeAgente> fijar(String mes, List<Asignacion> asignaciones, Actor actor) {
-        exigirBroker(actor, "fijar metas");
-        Alcances.Alcance alcance = alcances.de(actor);
-        long organizacion = alcance.idOrganizacion();
-        PeriodoCalendario periodo = PeriodoCalendario.desde(mes, LocalDate.now());
-        List<Long> visibles = agentesDelAlcance(alcance);
-
-        for (Asignacion asignacion : asignaciones == null ? List.<Asignacion>of() : asignaciones) {
-            if (!visibles.contains(asignacion.idRolAgente())) {
-                throw new ReglaNegocioException(
-                        "No puedes fijar la meta de un agente que no supervisas.");
-            }
-            KpiCanonico kpi = KpiCanonico.porCodigo(asignacion.kpi());
-            aplicar(organizacion, periodo, asignacion.idRolAgente(), kpi, asignacion.valor(),
-                    asignacion.motivo(), actor.idRolOperativo(), MetaRevision.ORIGEN_BROKER, null);
-        }
-        return filas(organizacion, periodo, visibles);
+    private Establecer normalizar(Establecer d,Actor a){
+        if(d==null||d.mes()==null||d.asignaciones()==null||d.asignaciones().isEmpty())throw new ReglaNegocioException("Selecciona las metas que vas a establecer.");
+        var p=periodo(d.mes());var result=new ArrayList<Asignacion>();var claves=new HashSet<String>();
+        for(var x:d.asignaciones()){var n=forma(x,p,a);if(!claves.add(clave(n.idRolAgente(),n.kpi(),n.operacion())))throw new ReglaNegocioException("La misma meta aparece dos veces en la decisión.");result.add(n);}
+        result.sort(Comparator.comparing((Asignacion x)->clave(x.idRolAgente(),x.kpi(),x.operacion())));return new Establecer(p.codigo(),List.copyOf(result));
     }
-
-    // ------------------------------------------------------------------
-    // El agente propone
-    // ------------------------------------------------------------------
-
-    @Override
-    @Transactional
-    public List<MetaDeAgente> proponer(String mes, Propuesta propuesta, Actor actor) {
-        if (!actor.esAgente()) {
-            throw new ReglaNegocioException(
-                    "Solo un agente propone un ajuste de su propia meta. Un broker la fija "
-                            + "directamente.");
-        }
-        if (propuesta == null) {
-            throw new ReglaNegocioException("Falta la propuesta.");
-        }
-        Alcances.Alcance alcance = alcances.de(actor);
-        long organizacion = alcance.idOrganizacion();
-        long agente = actor.idRolOperativo();
-        PeriodoCalendario periodo = PeriodoCalendario.desde(mes, LocalDate.now());
-        KpiCanonico kpi = KpiCanonico.porCodigo(propuesta.kpi());
-
-        // Una sola propuesta viva por KPI y mes. La segunda REEMPLAZA a la
-        // primera en vez de acumularse: el broker tiene que ver lo que el agente
-        // pide ahora, no la lista de todo lo que fue pidiendo.
-        revisiones.findByOrganizacionIdAndIdRolAgenteAndKpiAndAnioAndMesAndEstado(
-                        organizacion, agente, kpi.codigo(), periodo.anio(), periodo.mes(),
-                        MetaRevision.ESTADO_EN_ESPERA)
-                .ifPresent(viva -> {
-                    viva.resolver(MetaRevision.ESTADO_RECHAZADA, agente,
-                            "Reemplazada por una propuesta posterior del propio agente.");
-                    revisiones.save(viva);
-                });
-
-        MetaRevision nueva = revision(organizacion, periodo, agente, kpi,
-                valorVigente(organizacion, periodo, agente, kpi), propuesta.valor(),
-                propuesta.motivo(), agente, MetaRevision.ORIGEN_PROPUESTA,
-                MetaRevision.ESTADO_EN_ESPERA);
-        revisiones.save(nueva);
-
-        return filas(organizacion, periodo, List.of(agente));
+    private MetaComercialRepository.Meta observada(long agente,String kpi,String op,long esperada,PeriodoCalendario p,Actor a,boolean lock){
+        var m=metas.actual(a.idOrganizacion(),agente,kpi,op,p.anio(),p.mes(),lock).orElse(null);
+        if((m==null?0:m.version())!=esperada)throw new ConflictoException("Cambió la meta; vuelve a revisar su versión.");return m;
     }
-
-    // ------------------------------------------------------------------
-    // El broker decide
-    // ------------------------------------------------------------------
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<PropuestaPendiente> propuestasPendientes(Actor actor) {
-        Alcances.Alcance alcance = alcances.de(actor);
-        List<Long> visibles = agentesDelAlcance(alcance);
-        if (visibles.isEmpty()) {
-            return List.of();
-        }
-        Map<Long, String> nombres = nombresDe(alcance.idOrganizacion(), visibles);
-        List<PropuestaPendiente> pendientes = new ArrayList<>();
-        for (MetaRevision revision : revisiones
-                .findByOrganizacionIdAndEstadoAndIdRolAgenteInOrderByIdAsc(
-                        alcance.idOrganizacion(), MetaRevision.ESTADO_EN_ESPERA, visibles)) {
-            pendientes.add(pendiente(revision, nombres));
-        }
-        return pendientes;
+    @Override @Transactional(readOnly=true) public Establecer validarEstablecimiento(Establecer d,Actor a){
+        var n=normalizar(d,a);var p=periodo(n.mes());for(var x:n.asignaciones())observada(x.idRolAgente(),x.kpi(),x.operacion(),x.versionEsperada(),p,a,false);return n;
     }
-
-    @Override
-    @Transactional
-    public List<MetaDeAgente> resolver(long idRevision, boolean acepta, String motivo,
-                                       Actor actor) {
-        exigirBroker(actor, "decidir sobre una propuesta de meta");
-        Alcances.Alcance alcance = alcances.de(actor);
-        long organizacion = alcance.idOrganizacion();
-        List<Long> visibles = agentesDelAlcance(alcance);
-
-        MetaRevision revision = revisiones.findById(idRevision)
-                .filter(r -> organizacion == r.getOrganizacionId())
-                .orElseThrow(() -> new NoEncontradoException(
-                        "No existe esa propuesta de meta."));
-        if (!visibles.contains(revision.getIdRolAgente())) {
-            throw new ReglaNegocioException(
-                    "No puedes decidir sobre la meta de un agente que no supervisas.");
+    @Override @Transactional public Resultado fijar(Establecer d,Actor a,ContextoSesion s,String clave,Procedencia proc){
+        contexto.iniciarOperador(a,s);var n=normalizar(d,a);var viejo=previo(FIJAR,n,clave,a);if(viejo.isPresent())return viejo.get();
+        var p=periodo(n.mes());for(var x:n.asignaciones())bloquearMeta(p,x.idRolAgente(),x.kpi(),x.operacion(),a);
+        var actuales=new ArrayList<MetaComercialRepository.Meta>();for(var x:n.asignaciones())actuales.add(observada(x.idRolAgente(),x.kpi(),x.operacion(),x.versionEsperada(),p,a,true));
+        var salida=new ArrayList<MetaDeAgente>();var ahora=contexto.ahora();
+        for(int i=0;i<n.asignaciones().size();i++){
+            var x=n.asignaciones().get(i);var anterior=actuales.get(i);long id=aplicar(x,p,anterior,a,ahora);
+            metas.insertarRevision(metas.siguienteRevision(),a.idOrganizacion(),x.idRolAgente(),x.kpi(),x.operacion(),VERSION,p.anio(),p.mes(),"B","A",anterior==null?null:anterior.valor(),x.valor(),calendarioArray(x.calendario()),x.motivo(),a.idRolOperativo(),ahora,x.versionEsperada(),x.versionEsperada()+1,id,x.valor());
+            salida.add(fila(p,x.idRolAgente(),x.kpi(),x.operacion(),a));
         }
-        if (!revision.enEspera()) {
-            throw new ReglaNegocioException(
-                    "Esa propuesta ya se resolvio: reabrirla seria reescribir la historia.");
-        }
-
-        String explicacion = exigirMotivo(motivo);
-        revision.resolver(acepta ? MetaRevision.ESTADO_APLICADA : MetaRevision.ESTADO_RECHAZADA,
-                actor.idRolOperativo(), explicacion);
-        revisiones.save(revision);
-
-        PeriodoCalendario periodo = PeriodoCalendario.de(
-                java.time.YearMonth.of(revision.getAnio(), revision.getMes()), LocalDate.now());
-        if (acepta) {
-            // Solo el valor vigente: la revision YA quedo escrita arriba, y
-            // escribir otra aqui contaria dos veces la misma decision.
-            escribirVigente(organizacion, periodo, revision.getIdRolAgente(),
-                    KpiCanonico.porCodigo(revision.getKpi()), revision.getValorPropuesto(),
-                    actor.idRolOperativo());
-        }
-        return filas(organizacion, periodo, visibles);
+        return guardar(FIJAR,n,clave,new Resultado(salida),a,proc);
     }
-
-    // ------------------------------------------------------------------
-    // Escritura, en un solo sitio
-    // ------------------------------------------------------------------
-
-    /**
-     * Aplica un valor y deja su revisión. Es el <b>único</b> camino por el que el
-     * broker cambia una meta, y por eso el valor vigente nunca puede quedar sin
-     * historia que lo explique.
-     */
-    private void aplicar(long organizacion, PeriodoCalendario periodo, long agente,
-                         KpiCanonico kpi, int valor, String motivo, long autor,
-                         String origen, String ignorado) {
-        Integer anterior = valorVigente(organizacion, periodo, agente, kpi);
-        if (anterior != null && anterior == valor) {
-            // Nada que revisar: escribir una revision «de 8 a 8» ensuciaria el
-            // historial con ruido y haria mas dificil leer los cambios reales.
-            return;
-        }
-        revisiones.save(revision(organizacion, periodo, agente, kpi, anterior, valor,
-                motivo, autor, origen, MetaRevision.ESTADO_APLICADA));
-        escribirVigente(organizacion, periodo, agente, kpi, valor, autor);
+    private long aplicar(Asignacion x,PeriodoCalendario p,MetaComercialRepository.Meta anterior,Actor a,Instant ahora){
+        if(anterior==null)return metas.insertar(a.idOrganizacion(),x.idRolAgente(),x.kpi(),x.operacion(),VERSION,p.anio(),p.mes(),x.valor(),calendarioArray(x.calendario()),a.idRolOperativo(),ahora);
+        if(metas.actualizar(a.idOrganizacion(),anterior.id(),x.versionEsperada(),x.valor(),calendarioArray(x.calendario()),a.idRolOperativo(),ahora)!=1)throw new ConflictoException("Cambió la meta.");return anterior.id();
     }
-
-    private void escribirVigente(long organizacion, PeriodoCalendario periodo, long agente,
-                                 KpiCanonico kpi, int valor, long autor) {
-        MetaComercial meta = metas
-                .findByOrganizacionIdAndIdRolAgenteAndKpiAndAnioAndMes(
-                        organizacion, agente, kpi.codigo(), periodo.anio(), periodo.mes())
-                .orElseGet(MetaComercial::new);
-        boolean existia = meta.getId() != null;
-
-        meta.setOrganizacionId(organizacion);
-        meta.setIdRolAgente(agente);
-        meta.setKpi(kpi.codigo());
-        meta.setAnio(periodo.anio());
-        meta.setMes(periodo.mes());
-        meta.setValor(valor);
-        meta.setIdRolAutor(autor);
-        if (existia) {
-            meta.setFechaActualizacion(OffsetDateTime.now());
-        }
-        metas.save(meta);
+    @Override @Transactional public Resultado proponer(String mes,Propuesta d,Actor a,ContextoSesion s,String clave,Procedencia proc){
+        contexto.iniciarOperador(a,s);if(!a.esAgente()||independiente(a))throw new AccesoNoAutorizadoException();
+        if(d==null||mes==null)throw new ReglaNegocioException("Declara el período y la propuesta.");var p=periodo(mes);var k=IndicadorMetaComercial.exigir(d.kpi());var op=k.operacion(d.operacion());version(d.versionMetaEsperada());valor(d.valor());motivo(d.motivo());var cal=calendario(d.calendario(),p);
+        if((d.propuestaAnterior()==null)!=(d.versionPropuestaAnterior()==null))throw new ReglaNegocioException("Identifica propuesta y versión anteriores juntas.");
+        var n=new Propuesta(k.name(),op,d.versionMetaEsperada(),d.propuestaAnterior(),d.versionPropuestaAnterior(),d.valor(),cal,d.motivo().trim());var entrada=Map.of("mes",p.codigo(),"propuesta",n);
+        var viejo=previo(PROPONER,entrada,clave,a);if(viejo.isPresent())return viejo.get();bloquearMeta(p,a.idRolOperativo(),k.name(),op,a);
+        var actual=observada(a.idRolOperativo(),k.name(),op,n.versionMetaEsperada(),p,a,true);
+        var viva=metas.historia(a.idOrganizacion(),p.anio(),p.mes(),List.of(a.idRolOperativo())).stream().filter(r->k.name().equals(r.kpi())&&op.equals(r.operacion())&&"E".equals(r.estado())&&r.reemplazadaPor()==null).findFirst().orElse(null);
+        if(viva!=null&&(n.propuestaAnterior()==null||viva.id()!=n.propuestaAnterior()||viva.version()!=n.versionPropuestaAnterior()))throw new ConflictoException("Revisa la propuesta vigente antes de sustituirla.");
+        if(viva==null&&n.propuestaAnterior()!=null)throw new ConflictoException("La propuesta anterior ya no está pendiente.");
+        long id=metas.siguienteRevision();if(viva!=null&&metas.sustituir(a.idOrganizacion(),viva.id(),viva.version(),id)!=1)throw new ConflictoException("Cambió la propuesta.");
+        metas.insertarRevision(id,a.idOrganizacion(),a.idRolOperativo(),k.name(),op,VERSION,p.anio(),p.mes(),"P","E",actual==null?null:actual.valor(),n.valor(),calendarioArray(cal),n.motivo(),a.idRolOperativo(),contexto.ahora(),n.versionMetaEsperada(),null,actual==null?null:actual.id(),null);
+        return guardar(PROPONER,entrada,clave,new Resultado(List.of(fila(p,a.idRolOperativo(),k.name(),op,a))),a,proc);
     }
-
-    private MetaRevision revision(long organizacion, PeriodoCalendario periodo, long agente,
-                                  KpiCanonico kpi, Integer anterior, int valor, String motivo,
-                                  long autor, String origen, String estado) {
-        MetaRevision revision = new MetaRevision();
-        revision.setOrganizacionId(organizacion);
-        revision.setIdRolAgente(agente);
-        revision.setKpi(kpi.codigo());
-        revision.setAnio(periodo.anio());
-        revision.setMes(periodo.mes());
-        revision.setOrigen(origen);
-        revision.setEstado(estado);
-        revision.setValorAnterior(anterior);
-        revision.setValorPropuesto(valor);
-        revision.setMotivo(exigirMotivo(motivo));
-        revision.setIdRolAutor(autor);
-        return revision;
+    private MetaComercialRepository.Revision cargar(long id,Actor a,boolean lock){
+        var scope=alcance(a);var h=metas.cabecera(a.idOrganizacion(),id,lock).filter(x->scope.contains(x.agente())).orElseThrow(()->new NoEncontradoException("Propuesta de meta"));
+        var r=metas.revision(a.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Propuesta de meta"));if(h.version()!=r.version())throw new ConflictoException("Cambió la propuesta.");return r;
     }
-
-    /**
-     * El motivo es obligatorio en los dos sentidos: al fijar y al decidir.
-     *
-     * <p>Es lo único que quedará para entender el cambio dentro de seis meses, y
-     * un «ok» no explica nada — el mismo criterio que la política aplica al
-     * motivo de una reasignación.
-     */
-    private static String exigirMotivo(String motivo) {
-        String texto = motivo == null ? "" : motivo.trim();
-        if (texto.length() < MetaRevision.MOTIVO_MINIMO) {
-            throw new ReglaNegocioException(
-                    "Explica el cambio de meta con al menos " + MetaRevision.MOTIVO_MINIMO
-                            + " caracteres: queda en el historial y tiene que entenderse dentro "
-                            + "de unos meses.");
-        }
-        return texto;
+    @Override @Transactional(readOnly=true) public Decision validarDecision(Decision d,Actor a){
+        if(d==null||d.propuesta()==null||d.decision()==null)throw new ReglaNegocioException("Identifica la propuesta y su decisión.");version(d.versionEsperada());motivo(d.motivo());var r=cargar(d.propuesta(),a,false);decidirSobre(r.agente(),a);
+        if(!VERSION.equals(r.definicion()))throw new ReglaNegocioException("La propuesta histórica conserva su definición; no se convierte en una meta nueva.");
+        if(r.version()!=d.versionEsperada()||!"E".equals(r.estado())||r.reemplazadaPor()!=null)throw new ConflictoException("La propuesta cambió o ya tiene desenlace.");
+        if(d.decision()!=TipoDecision.APROBAR&&d.valorAprobado()!=null)throw new ReglaNegocioException("Observar o rechazar no aprueba un importe objetivo.");
+        if(d.valorAprobado()!=null)valor(d.valorAprobado());var p=periodo(YearMonth.of(r.anio(),r.mes()).toString());if(d.decision()==TipoDecision.APROBAR)observada(r.agente(),r.kpi(),r.operacion(),r.versionMeta(),p,a,false);
+        return new Decision(r.id(),r.version(),d.decision(),d.valorAprobado(),d.motivo().trim());
     }
-
-    private static void exigirBroker(Actor actor, String queIntenta) {
-        if (!actor.esBroker()) {
-            throw new ReglaNegocioException(
-                    "Solo un broker puede " + queIntenta + ". Administrar usuarios no es dirigir "
-                            + "produccion: un administrador que ademas dirija comercialmente lo "
-                            + "hace con su rol de broker.");
-        }
+    @Override @Transactional public Resultado resolver(Decision d,Actor a,ContextoSesion s,String clave,Procedencia proc){
+        contexto.iniciarOperador(a,s);if(d==null||d.propuesta()==null)throw new ReglaNegocioException("Identifica la propuesta.");
+        var h=cargar(d.propuesta(),a,false);decidirSobre(h.agente(),a);var viejo=previo(DECIDIR,d,clave,a);if(viejo.isPresent())return viejo.get();
+        var n=validarDecision(d,a);var p=periodo(YearMonth.of(h.anio(),h.mes()).toString());bloquearMeta(p,h.agente(),h.kpi(),h.operacion(),a);var r=cargar(h.id(),a,true);validarDecision(n,a);
+        var anterior=n.decision()==TipoDecision.APROBAR?observada(r.agente(),r.kpi(),r.operacion(),r.versionMeta(),p,a,true):null;Long id=r.meta();Long nuevaVersion=null;Integer aprobado=null;
+        if(n.decision()==TipoDecision.APROBAR){aprobado=n.valorAprobado()==null?r.propuesto():n.valorAprobado();id=aplicar(new Asignacion(r.agente(),r.kpi(),r.operacion(),r.versionMeta(),aprobado,fechas(r.calendario()),n.motivo()),p,anterior,a,contexto.ahora());nuevaVersion=r.versionMeta()+1;}
+        String estado=switch(n.decision()){case APROBAR->"A";case OBSERVAR->"O";case RECHAZAR->"R";};
+        if(metas.decidir(a.idOrganizacion(),r.id(),n.versionEsperada(),estado,aprobado,a.idRolOperativo(),n.motivo(),contexto.ahora(),nuevaVersion,id)!=1)throw new ConflictoException("Cambió la decisión de meta.");
+        return guardar(DECIDIR,d,clave,new Resultado(List.of(fila(p,r.agente(),r.kpi(),r.operacion(),a))),a,proc);
     }
-
-    // ------------------------------------------------------------------
-    // Composición de la respuesta
-    // ------------------------------------------------------------------
-
-    private List<Long> agentesDelAlcance(Alcances.Alcance alcance) {
-        if (alcance.global()) {
-            // El administrador LEE los de su organizacion; fijar es otra cosa y
-            // se le niega en exigirBroker.
-            return rendimiento.agentesVigentes(alcance.idOrganizacion(), LocalDate.now());
-        }
-        return alcance.rolesAgente();
+    @Override @Transactional(readOnly=true) public List<MetaDeAgente> del(String mes,Actor a){var p=periodo(mes);return filas(p,alcance(a),a);}
+    private List<MetaDeAgente> filas(PeriodoCalendario p,List<Long> scope,Actor a){
+        var actuales=metas.del(a.idOrganizacion(),p.anio(),p.mes(),scope);var historia=metas.historia(a.idOrganizacion(),p.anio(),p.mes(),scope);var out=new ArrayList<MetaDeAgente>();
+        for(long rol:scope){String nombreProfesional=nombre(rol,a);for(var k:IndicadorMetaComercial.values())for(String op:k.porOperacion()?List.of("VENTA","ALQUILER"):List.of("GENERAL"))out.add(componer(rol,k.name(),op,actuales,historia,nombreProfesional));
+            var historicas=new TreeSet<String>();actuales.stream().filter(x->x.agente()==rol&&x.definicion()==null).forEach(x->historicas.add(x.kpi()));historia.stream().filter(x->x.agente()==rol&&x.definicion()==null).forEach(x->historicas.add(x.kpi()));
+            for(var k:historicas)out.add(componer(rol,k,null,actuales,historia,nombreProfesional));}
+        contexto.exigirOperador(a);if(!new HashSet<>(scope).equals(new HashSet<>(alcances.de(a).rolesAgente())))throw new ConflictoException("Cambió el ámbito de metas.");return List.copyOf(out);
     }
-
-    private Integer valorVigente(long organizacion, PeriodoCalendario periodo, long agente,
-                                 KpiCanonico kpi) {
-        return metas.findByOrganizacionIdAndIdRolAgenteAndKpiAndAnioAndMes(
-                        organizacion, agente, kpi.codigo(), periodo.anio(), periodo.mes())
-                .map(MetaComercial::getValor)
-                .orElse(null);
+    private MetaDeAgente fila(PeriodoCalendario p,long rol,String k,String op,Actor a){return componer(rol,k,op,metas.del(a.idOrganizacion(),p.anio(),p.mes(),List.of(rol)),metas.historia(a.idOrganizacion(),p.anio(),p.mes(),List.of(rol)),nombre(rol,a));}
+    private MetaDeAgente componer(long rol,String k,String op,List<MetaComercialRepository.Meta> actuales,List<MetaComercialRepository.Revision> historia,String nombreProfesional){
+        var m=actuales.stream().filter(x->x.agente()==rol&&x.kpi().equals(k)&&Objects.equals(x.operacion(),op)).findFirst().orElse(null);
+        var rs=historia.stream().filter(x->x.agente()==rol&&x.kpi().equals(k)&&Objects.equals(x.operacion(),op)).toList();
+        boolean historica=op==null;var indicador=historica?null:IndicadorMetaComercial.exigir(k);var pendiente=rs.stream().filter(x->"E".equals(x.estado())&&x.reemplazadaPor()==null).findFirst().map(x->pendiente(x,m,nombreProfesional)).orElse(null);
+        return new MetaDeAgente(rol,nombreProfesional,k,op,historica?KpiCanonico.porCodigo(k).rotulo():indicador.rotulo(),historica?KpiCanonico.porCodigo(k).unidad(2):indicador.unidad(),historica?"HISTORICA_CPSF":VERSION,m==null?null:m.id(),historica?null:m==null?0:m.version(),m==null?null:m.valor(),m==null?null:fechas(m.calendario()),historica,pendiente,rs.stream().map(this::revision).toList());
     }
-
-    /**
-     * Una fila por agente y KPI, <b>incluidas las que no tienen meta</b>.
-     *
-     * <p>Devolver solo las fijadas dejaría la pantalla sin saber a quién le
-     * falta, que es justo lo que hay que ver para poder fijarla, y haría
-     * invisible la cobertura incompleta que deja al equipo sin semáforo.
-     */
-    private List<MetaDeAgente> filas(long organizacion, PeriodoCalendario periodo,
-                                     List<Long> visibles) {
-        if (visibles.isEmpty()) {
-            return List.of();
-        }
-        Map<String, Integer> fijadas = new HashMap<>();
-        for (MetaComercial meta : metas.findByOrganizacionIdAndAnioAndMesAndIdRolAgenteIn(
-                organizacion, periodo.anio(), periodo.mes(), visibles)) {
-            fijadas.put(clave(meta.getIdRolAgente(), meta.getKpi()), meta.getValor());
-        }
-
-        Map<Long, String> nombres = nombresDe(organizacion, visibles);
-        Map<String, List<Revision>> historial = new HashMap<>();
-        Map<String, PropuestaPendiente> propuestas = new HashMap<>();
-        for (MetaRevision revision : revisiones
-                .findByOrganizacionIdAndAnioAndMesAndIdRolAgenteInOrderByIdAsc(
-                        organizacion, periodo.anio(), periodo.mes(), visibles)) {
-            String clave = clave(revision.getIdRolAgente(), revision.getKpi());
-            historial.computeIfAbsent(clave, k -> new ArrayList<>())
-                    .add(comoRevision(revision, nombres));
-            if (revision.enEspera()) {
-                propuestas.put(clave, pendiente(revision, nombres));
-            }
-        }
-
-        List<MetaDeAgente> filas = new ArrayList<>();
-        for (Long agente : visibles) {
-            for (KpiCanonico kpi : KpiCanonico.TODOS) {
-                String clave = clave(agente, kpi.codigo());
-                filas.add(new MetaDeAgente(agente, nombres.getOrDefault(agente, "—"),
-                        kpi.codigo(), kpi.rotulo(), fijadas.get(clave),
-                        propuestas.get(clave),
-                        List.copyOf(historial.getOrDefault(clave, List.of()))));
-            }
-        }
-        return filas;
+    private Revision revision(MetaComercialRepository.Revision r){return new Revision(r.id(),r.definicion()==null?null:r.version(),r.origen(),r.estado(),r.anterior(),r.propuesto(),r.motivo(),r.autor(),r.fecha(),r.decisor(),r.motivoDecision(),r.decidida(),r.reemplazadaPor(),r.versionMeta(),fechas(r.calendario()),r.aprobado());}
+    private String nombre(long rol,Actor a){return identidades.deResponsable(a.idOrganizacion(),rol,contexto.hoy()).map(x->x.getNombreProfesional()).orElse(null);}
+    private PropuestaMeta pendiente(MetaComercialRepository.Revision r,Actor a){return pendiente(r,metas.actual(a.idOrganizacion(),r.agente(),r.kpi(),r.operacion(),r.anio(),r.mes(),false).orElse(null),nombre(r.agente(),a));}
+    private PropuestaMeta pendiente(MetaComercialRepository.Revision r,MetaComercialRepository.Meta actual,String nombreProfesional){return new PropuestaMeta(r.id(),r.definicion()==null?null:r.version(),r.agente(),nombreProfesional,r.kpi(),r.operacion(),r.definicion()==null?KpiCanonico.porCodigo(r.kpi()).rotulo():IndicadorMetaComercial.exigir(r.kpi()).rotulo(),actual==null?null:actual.valor(),r.propuesto(),r.versionMeta(),fechas(r.calendario()),r.motivo(),r.fecha(),r.definicion()==null?"HISTORICA_CPSF":r.definicion(),actual==null?null:actual.definicion()==null?null:actual.version(),revision(r));}
+    @Override @Transactional(readOnly=true) public List<PropuestaMeta> propuestasPendientes(Actor a){return metas.pendientes(a.idOrganizacion(),alcance(a)).stream().map(r->pendiente(r,a)).toList();}
+    @Override @Transactional(readOnly=true) public PropuestaMeta consultarPropuesta(long id,Actor a){return pendiente(cargar(id,a,false),a);}
+    private static String clave(long rol,String k,String op){return rol+"|"+k+"|"+op;}
+    private void bloquear(String s){var h=Idempotencia.huellaExacta(s);locks.bloquearIdentidad(Long.parseUnsignedLong(h.substring(0,16),16));}
+    private void bloquearMeta(PeriodoCalendario p,long rol,String k,String op,Actor a){bloquear("META|"+a.idOrganizacion()+"|"+p.codigo()+"|"+clave(rol,k,op));}
+    private record Recibo(List<Long> responsables,Resultado resultado) { }
+    private static Long referenciaRecibo(MetaDeAgente m){if(m.idMeta()!=null)return m.idMeta();if(m.propuesta()!=null)return m.propuesta().idRevision();if(!m.historial().isEmpty())return m.historial().getLast().id();throw new IllegalStateException("El resultado de metas no identifica su hecho conservado.");}
+    private Optional<Resultado> previo(String tipo,Object d,String key,Actor a){var k=Idempotencia.exigirClave(key);bloquear("COMANDO_META|"+a.idOrganizacion()+"|"+k);return comandos.buscar(a,k,tipo,Idempotencia.huellaExacta(json.objetoCanonico(d))).map(c->recuperar(c.getResultado(),a));}
+    private Resultado guardar(String tipo,Object d,String key,Resultado result,Actor a,Procedencia proc){
+        var roles=result.metas().stream().map(MetaDeAgente::idRolAgente).distinct().sorted().toList();var rec=new Recibo(roles,result);contexto.exigirOperador(a);if(!alcances.de(a).rolesAgente().containsAll(roles))throw new AccesoNoAutorizadoException();
+        comandos.registrar(a,Idempotencia.exigirClave(key),tipo,Idempotencia.huellaExacta(json.objetoCanonico(d)),result.metas().getFirst().idMeta()==null?"PROPUESTA_META":"META",referenciaRecibo(result.metas().getFirst()),Procedencia.oPantalla(proc),json.objetoCanonico(rec));return result;
     }
-
-    private Revision comoRevision(MetaRevision revision, Map<Long, String> nombres) {
-        return new Revision(revision.getId(), revision.getOrigen(), revision.getEstado(),
-                revision.getValorAnterior(), revision.getValorPropuesto(), revision.getMotivo(),
-                nombreDe(revision.getIdRolAutor(), nombres), revision.getFechaCreacion(),
-                revision.getIdRolDecisor() == null ? null
-                        : nombreDe(revision.getIdRolDecisor(), nombres),
-                revision.getMotivoDecision());
-    }
-
-    private PropuestaPendiente pendiente(MetaRevision revision, Map<Long, String> nombres) {
-        KpiCanonico kpi = KpiCanonico.porCodigo(revision.getKpi());
-        return new PropuestaPendiente(revision.getId(), revision.getIdRolAgente(),
-                nombres.getOrDefault(revision.getIdRolAgente(), "—"),
-                kpi.codigo(), kpi.rotulo(), revision.getValorAnterior(),
-                revision.getValorPropuesto(), revision.getMotivo(), revision.getFechaCreacion());
-    }
-
-    private static String clave(Long agente, String kpi) {
-        return agente + "|" + kpi;
-    }
-
-    /**
-     * El nombre de quien firmó una revisión.
-     *
-     * <p>Se resuelve fuera del mapa de agentes porque el autor puede ser un
-     * broker, y un broker no está en la lista de agentes supervisados.
-     */
-    private String nombreDe(Long idRol, Map<Long, String> nombres) {
-        String conocido = nombres.get(idRol);
-        if (conocido != null) {
-            return conocido;
-        }
-        return roles.findById(idRol)
-                .map(PersonaRol::getPersona)
-                .map(Persona::getNombresORazonSocial)
-                .filter(n -> !n.isBlank())
-                .orElse("—");
-    }
-
-    private Map<Long, String> nombresDe(long organizacion, List<Long> visibles) {
-        Map<Long, String> nombres = new HashMap<>();
-        for (DetalleAgente ficha : agentes.listarFichas(organizacion)) {
-            PersonaRol rol = ficha.getRol();
-            if (rol == null || !visibles.contains(rol.getId())) {
-                continue;
-            }
-            Persona persona = rol.getPersona();
-            String nombre = persona != null ? persona.getNombresORazonSocial() : null;
-            nombres.put(rol.getId(), nombre == null || nombre.isBlank() ? "—" : nombre);
-        }
-        return nombres;
-    }
+    private Resultado recuperar(String contenido,Actor a){var h=json.comoMapa(contenido);var ids=(List<?>)h.get("responsables");if(ids==null||!alcance(a).containsAll(ids.stream().map(x->Long.valueOf(x.toString())).toList()))throw new AccesoNoAutorizadoException();return json.comoObjeto(contenido,Recibo.class).resultado();}
+    @Override @Transactional(readOnly=true) public Optional<Resultado> resultado(String capacidad,String key,Actor a){alcance(a);if(!Set.of(FIJAR,DECIDIR,PROPONER).contains(capacidad))throw new IllegalArgumentException("Capacidad de metas desconocida.");return comandos.consultarResultado(a,Idempotencia.exigirClave(key),capacidad).map(c->recuperar(c.getResultado(),a));}
 }

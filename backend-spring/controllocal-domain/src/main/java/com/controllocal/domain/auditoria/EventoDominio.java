@@ -325,3 +325,40 @@ public class EventoDominio extends EntidadDeOrganizacion {
         return fechaCreacion;
     }
 }
+
+
+/*
+ * Pseudocódigo preexistente conservado como antecedente, sin efecto ejecutable.
+ * No define un contrato de pagos ni pertenece a EventoDominio (C0, A09).
+class Pago {
+
+    Estado estado;
+
+    void confirmar() {
+        if (estado == PENDIENTE) {
+            ...
+        } else if (estado == REQUIERE_ACCION) {
+            ...
+        } else if (estado == PROCESANDO) {
+            ...
+        } else if (estado == COMPLETADO) {
+            ...
+        }
+    }
+
+    void cancelar() {
+        if (estado == PENDIENTE) {
+            ...
+        } else if (estado == REQUIERE_ACCION) {
+            ...
+        } else if (estado == PROCESANDO) {
+            ...
+        }
+    }
+
+    void autenticar() {
+        if (...)
+        ...
+    }
+}
+*/

@@ -265,7 +265,7 @@ public class SolicitudServiceImpl implements SolicitudService {
         if (captacion == null) {
             throw new ReglaNegocioException("Captacion no encontrada para solicitud.");
         }
-        if (!Captacion.ACTIVA.equals(captacion.estadoActual())) {
+        if (!Captacion.APROBADO.equals(captacion.estadoActual())) {
             throw new ReglaNegocioException("La captacion debe estar ACTIVA.");
         }
         if (!oportunidad.estaAbierta()) {
@@ -339,7 +339,8 @@ public class SolicitudServiceImpl implements SolicitudService {
         alertas.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_REENVIADA, Alerta.MEDIA,
                 "SOLICITUD_ALQUILER", id, responsable.getId(),
                 "La solicitud " + solicitud.getCodigoSolicitud()
-                        + " fue enviada a evaluacion del broker supervisor."), actor);
+                        + " fue enviada a evaluacion del broker supervisor.",
+                com.controllocal.service.soporte.FuentesAsuntos.Origen.de("ESTADO_SOLICITUD",id)), actor);
         return ficha(solicitudes.save(solicitud),
                 entregadosPorSolicitud(actor.idOrganizacion(), List.of(id)));
     }

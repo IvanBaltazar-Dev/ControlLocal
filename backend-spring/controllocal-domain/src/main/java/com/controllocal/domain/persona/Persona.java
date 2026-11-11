@@ -13,10 +13,11 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
- * Party del modelo Party-Role: identidad UNICA del actor en todo el sistema
- * (auditoria, alcance por rol y trazabilidad cuelgan de este id).
+ * Persona contextual del modelo Party-Role: datos y relaciones del mismo tenant.
+ * No es la identidad global de CuentaAcceso ni permite fusionar organizaciones.
  * Los roles que acumula viven en {@link PersonaRol}.
  */
 @Entity
@@ -29,17 +30,19 @@ public class Persona extends EntidadDeOrganizacion {
     private Long id;
 
     /** 'N' natural, 'J' juridica (vocabulario heredado del cable congelado). */
-    @Column(name = "tipo_persona", nullable = false, length = 1)
+    @Column(name = "tipo_persona", length = 1)
     private String tipoPersona;
 
     /** 'D' DNI, 'R' RUC, 'C' carnet de extranjeria, 'P' pasaporte. */
-    @Column(name = "tipo_documento", nullable = false, length = 1)
+    @Column(name = "tipo_documento", length = 1)
     private String tipoDocumento;
 
-    @Column(name = "numero_documento", nullable = false, length = 30)
+    @Column(name = "numero_documento", length = 30)
     private String numeroDocumento;
 
-    @Column(name = "nombres_o_razon_social", nullable = false, length = 150)
+    // RF-003/CAT-E01: el contacto y el miembro pueden comenzar con datos desconocidos.
+    // Sus casos de propietario/cliente conservan la suficiencia propia antes de cada actuación.
+    @Column(name = "nombres_o_razon_social", length = 150)
     private String nombresORazonSocial;
 
     @Column(name = "telefono", length = 20)
@@ -58,6 +61,9 @@ public class Persona extends EntidadDeOrganizacion {
     /** Clave opaca de la foto de perfil en el almacen (S3/disco). */
     @Column(name = "foto_clave", length = 200)
     private String fotoClave;
+
+    @Column(name = "foto_ref")
+    private UUID fotoRef;
 
     @Column(name = "fecha_creacion", updatable = false)
     private OffsetDateTime fechaCreacion;
@@ -159,8 +165,13 @@ public class Persona extends EntidadDeOrganizacion {
     }
 
     public void setFotoClave(String fotoClave) {
+        if (!java.util.Objects.equals(this.fotoClave, fotoClave)) {
+            this.fotoRef = fotoClave == null || fotoClave.isBlank() ? null : UUID.randomUUID();
+        }
         this.fotoClave = fotoClave;
     }
+
+    public UUID getFotoRef() { return fotoRef; }
 
     public OffsetDateTime getFechaCreacion() {
         return fechaCreacion;

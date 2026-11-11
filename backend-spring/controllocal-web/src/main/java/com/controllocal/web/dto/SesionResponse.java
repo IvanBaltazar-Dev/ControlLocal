@@ -11,5 +11,8 @@ package com.controllocal.web.dto;
  * @param idDominio {@code persona_rol} con el que firma lo que haga; en un
  *                  TENANT_ADMIN es su rol de gobierno, no uno de broker
  */
-public record SesionResponse(String rol, String usuario, long idPersona, long idDominio) {
+public record SesionResponse(String rol, String usuario, long idPersona, long idDominio,
+                             long idOrganizacion, long idCuenta, String referenciaSesion,
+                             long revisionContexto, String contextoRef, String modalidad,
+                             boolean contextoRequerido, boolean debeCambiarContrasena, boolean debeEnrolarMfa) {
 }

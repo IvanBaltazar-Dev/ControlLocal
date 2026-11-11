@@ -15,7 +15,9 @@ import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
+import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.SeguimientoComercialService.Fila;
 import com.controllocal.service.SeguimientoComercialService.Filtros;
 import com.controllocal.service.SeguimientoComercialService.Resultado;
@@ -36,11 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Blinda E4-seguimiento: la forma de las cinco filas, las rutas y los aliases,
@@ -61,7 +66,8 @@ class SeguimientoComercialServiceImplTest {
             mock(OportunidadComercialRepository.class);
     private final SolicitudAlquilerRepository solicitudes = mock(SolicitudAlquilerRepository.class);
     private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
+    private final SupervisionAgenteRepository supervisiones = mock(SupervisionAgenteRepository.class);
+    private final Alcances alcances = new Alcances(supervisiones);
 
     private final SeguimientoComercialServiceImpl service = new SeguimientoComercialServiceImpl(
             prospecciones, captaciones, oportunidades, solicitudes, contratos, alcances);
@@ -69,12 +75,14 @@ class SeguimientoComercialServiceImplTest {
     private final Actor admin = new Actor(ORG, 1L, 2L, "TENANT_ADMIN");
     private final Actor broker = new Actor(ORG, 3L, BROKER, "BROKER");
     private final Actor agente = new Actor(ORG, 4L, AGENTE, "AGENTE");
+    /** Los casos de formato usan supervisión explícita de los dos agentes del montaje. */
+    private final Actor brokerDelMontaje = new Actor(ORG, 5L, 21L, "BROKER");
 
     @BeforeEach
     void vacio() {
-        when(alcances.de(admin)).thenReturn(new Alcances.Alcance(ORG, true, List.of()));
-        when(alcances.de(broker)).thenReturn(new Alcances.Alcance(ORG, false, List.of(AGENTE)));
-        when(alcances.de(agente)).thenReturn(new Alcances.Alcance(ORG, false, List.of(AGENTE)));
+        when(supervisiones.agentesSupervisados(ORG, BROKER)).thenReturn(List.of(AGENTE));
+        when(supervisiones.agentesSupervisados(ORG, brokerDelMontaje.idRolOperativo()))
+                .thenReturn(List.of(AGENTE, OTRO_AGENTE));
         when(prospecciones.listarSeguimiento(anyLong(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of());
         when(captaciones.listarSeguimiento(anyLong())).thenReturn(List.of());
@@ -82,16 +90,23 @@ class SeguimientoComercialServiceImplTest {
                 .thenReturn(List.of());
         when(solicitudes.listarSeguimiento(anyLong(), anyBoolean(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of());
-        when(contratos.listarSeguimiento(anyLong())).thenReturn(List.of());
+        when(contratos.listarSeguimiento(anyLong(),anyBoolean(),anyBoolean(),anyCollection())).thenReturn(List.of());
     }
 
     // ---------- forma de las filas ----------
 
     @Test
+    void gobiernoNoRecibeSeguimientoComercialAunqueLaCarteraEsteVacia() {
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> service.listar(filtros("Todos", 1, 8), admin));
+        verifyNoInteractions(prospecciones, captaciones, oportunidades, solicitudes, contratos, supervisiones);
+    }
+
+    @Test
     void lasCincoEtapasLlevanSuIconoTonoYRuta() {
         escenarioCompleto();
 
-        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), admin).items().stream()
+        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items().stream()
                 .collect(Collectors.toMap(Fila::proceso, Function.identity()));
 
         assertEquals("store", porProceso.get("Prospeccion").icono());
@@ -126,7 +141,7 @@ class SeguimientoComercialServiceImplTest {
         when(solicitudes.listarSeguimiento(anyLong(), anyBoolean(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of(enRevision));
 
-        Map<String, Fila> porCodigo = service.listar(filtros("Todos", 1, 8), admin).items().stream()
+        Map<String, Fila> porCodigo = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items().stream()
                 .collect(Collectors.toMap(Fila::codigo, Function.identity()));
 
         assertEquals("captacion-review/CAP-400", porCodigo.get("CAP-400").rutaRevision());
@@ -138,7 +153,7 @@ class SeguimientoComercialServiceImplTest {
     void elClienteYElMontoSoloViajanDondeElCableLosLleva() {
         escenarioCompleto();
 
-        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), admin).items().stream()
+        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items().stream()
                 .collect(Collectors.toMap(Fila::proceso, Function.identity()));
 
         assertEquals("-", porProceso.get("Prospeccion").cliente());
@@ -161,7 +176,7 @@ class SeguimientoComercialServiceImplTest {
         Captacion sinVigencia = captacion(401L, local, responsable, "A");
         when(captaciones.listarSeguimiento(ORG)).thenReturn(List.of(conVigencia, sinVigencia));
 
-        Map<String, Fila> porCodigo = service.listar(filtros("Captacion", 1, 8), admin).items()
+        Map<String, Fila> porCodigo = service.listar(filtros("Captacion", 1, 8), brokerDelMontaje).items()
                 .stream().collect(Collectors.toMap(Fila::codigo, Function.identity()));
 
         assertEquals("Vigente hasta 31 Dec 2026", porCodigo.get("CAP-400").ultimoHito());
@@ -184,7 +199,7 @@ class SeguimientoComercialServiceImplTest {
         when(prospecciones.listarSeguimiento(anyLong(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of(sinNada, conContacto, conPropuesta, captada));
 
-        Map<String, Fila> porCodigo = service.listar(filtros("Prospeccion", 1, 8), admin).items()
+        Map<String, Fila> porCodigo = service.listar(filtros("Prospeccion", 1, 8), brokerDelMontaje).items()
                 .stream().collect(Collectors.toMap(Fila::codigo, Function.identity()));
 
         assertEquals("Prospecto", porCodigo.get("PRO-500").ultimoHito());
@@ -199,7 +214,7 @@ class SeguimientoComercialServiceImplTest {
     void elPropietarioDeOportunidadYCierreSaleDelMapaDeCaptaciones() {
         escenarioCompleto();
 
-        List<Fila> items = service.listar(filtros("Todos", 1, 8), admin).items();
+        List<Fila> items = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items();
 
         assertTrue(items.stream().allMatch(f -> "Propietaria Uno".equals(f.propietario())),
                 "las cinco filas resuelven el mismo propietario");
@@ -217,7 +232,7 @@ class SeguimientoComercialServiceImplTest {
                 .thenReturn(List.of(oportunidad(700L, cliente(600L, "Cliente Uno"),
                         responsable, captacion)));
 
-        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), admin).items().stream()
+        Map<String, Fila> porProceso = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items().stream()
                 .collect(Collectors.toMap(Fila::proceso, Function.identity()));
 
         assertEquals("-", porProceso.get("Oportunidad").propietario());
@@ -264,10 +279,34 @@ class SeguimientoComercialServiceImplTest {
         Captacion ajena = captacion(400L, local, ajeno, "A");
         SolicitudAlquiler solicitud = solicitud(800L,
                 oportunidad(700L, cliente(600L, "Cliente"), ajeno, ajena), ajeno, "C");
-        when(contratos.listarSeguimiento(ORG)).thenReturn(List.of(contrato(900L, solicitud, "V")));
+        when(contratos.listarSeguimiento(eq(ORG),eq(false),eq(false),anyCollection())).thenReturn(List.of(contrato(900L, solicitud, "V")));
 
         assertEquals(0, service.listar(filtros("Todos", 1, 8), agente).counts().cierre());
-        assertEquals(1, service.listar(filtros("Todos", 1, 8), admin).counts().cierre());
+        assertEquals(1, service.listar(filtros("Todos", 1, 8), brokerDelMontaje).counts().cierre());
+    }
+
+    @Test void contratoSinSolicitudConservaContextoRentaMonedaYNoInventaCliente() {
+        var responsable=agente(AGENTE,"Responsable");var inmueble=local(300L,propietario(200L,"Titular del contrato"));
+        var cap=captacion(400L,inmueble,responsable,"A");
+        var sol=solicitud(800L,oportunidad(700L,null,responsable,cap),responsable,"C");
+        var firmado=contrato(900L,sol,"V");firmado.setSolicitud(null);
+        firmado.setRentaContractual(new BigDecimal("2750.50"));firmado.setMoneda("USD");
+        when(contratos.listarSeguimiento(ORG,false,true,List.of(AGENTE))).thenReturn(List.of(firmado));
+        var filas=service.listar(filtros("Cierre",1,8),agente).items();assertEquals(1,filas.size());var f=filas.getFirst();
+        assertEquals("OP-700",f.codigo());assertEquals("2750.50",f.monto());assertEquals("USD",f.moneda());
+        assertEquals("Titular del contrato",f.propietario());assertNull(f.clienteId());
+        assertEquals("propiedades-alquiladas",f.ruta());assertEquals("2026-07-29",f.ultimoHito());
+        org.mockito.Mockito.verify(contratos).listarSeguimiento(ORG,false,true,List.of(AGENTE));
+    }
+
+    @Test void cierreUsaRentaFirmadaSinReescribirLaPropuestaDeSolicitud() {
+        var responsable=agente(AGENTE,"Responsable");var cap=captacion(400L,local(300L,null),responsable,"A");
+        var sol=solicitud(800L,oportunidad(700L,null,responsable,cap),responsable,"C");
+        var firmado=contrato(900L,sol,"V");firmado.setRentaContractual(new BigDecimal("2700"));firmado.setMoneda("PEN");
+        when(contratos.listarSeguimiento(ORG,false,true,List.of(AGENTE))).thenReturn(List.of(firmado));
+        var f=service.listar(filtros("Cierre",1,8),agente).items().getFirst();
+        assertEquals("2700",f.monto());assertEquals("PEN",f.moneda());
+        assertEquals(new BigDecimal("2500.00"),sol.getMontoPropuesto());
     }
 
     // ---------- filtros, conteos y opciones ----------
@@ -276,7 +315,7 @@ class SeguimientoComercialServiceImplTest {
     void losConteosIgnoranElFiltroDeProcesoPeroAplicanLosDemas() {
         escenarioCompleto();
 
-        Resultado resultado = service.listar(filtros("Solicitud", 1, 8), admin);
+        Resultado resultado = service.listar(filtros("Solicitud", 1, 8), brokerDelMontaje);
 
         assertEquals(1, resultado.items().size(), "items si respeta el proceso");
         assertEquals(5, resultado.counts().todos(), "counts no");
@@ -289,7 +328,7 @@ class SeguimientoComercialServiceImplTest {
         escenarioCompleto();
 
         Resultado resultado = service.listar(new Filtros("Todos", "", "inexistente", "", "", "", 1, 8),
-                admin);
+                brokerDelMontaje);
 
         assertEquals(0, resultado.items().size());
         assertEquals(0, resultado.counts().todos());
@@ -307,7 +346,7 @@ class SeguimientoComercialServiceImplTest {
                 captacion(401L, local, unoA, "A"),
                 captacion(402L, local, unoA, "A")));
 
-        Resultado resultado = service.listar(filtros("Todos", 1, 8), admin);
+        Resultado resultado = service.listar(filtros("Todos", 1, 8), brokerDelMontaje);
 
         assertEquals(List.of("alberto", "Beatriz"), resultado.options().agentes());
         assertEquals(List.of("Activa"), resultado.options().estados());
@@ -320,7 +359,7 @@ class SeguimientoComercialServiceImplTest {
 
         for (String termino : List.of("PRO-500", "Cliente Uno", "Av. 300", "Miraflores",
                 "Valeria", "Propietaria", "Activa", "oportunidad")) {
-            assertFalse(service.listar(new Filtros("Todos", termino, "", "", "", "", 1, 8), admin)
+            assertFalse(service.listar(new Filtros("Todos", termino, "", "", "", "", 1, 8), brokerDelMontaje)
                             .items().isEmpty(),
                     "la busqueda deberia encontrar '" + termino + "'");
         }
@@ -330,10 +369,10 @@ class SeguimientoComercialServiceImplTest {
     void elTamanoDePaginaTieneTechoDeOchoYLaPaginaMinimoUno() {
         escenarioCompleto();
 
-        Resultado grande = service.listar(filtros("Todos", 1, 50), admin);
+        Resultado grande = service.listar(filtros("Todos", 1, 50), brokerDelMontaje);
         assertEquals(8, grande.pageSize(), "8 es techo, no solo defecto");
 
-        Resultado negativa = service.listar(filtros("Todos", -3, 8), admin);
+        Resultado negativa = service.listar(filtros("Todos", -3, 8), brokerDelMontaje);
         assertEquals(1, negativa.page());
     }
 
@@ -341,7 +380,7 @@ class SeguimientoComercialServiceImplTest {
     void unaPaginaFueraDeRangoDevuelveVacioSinRomperElTotal() {
         escenarioCompleto();
 
-        Resultado resultado = service.listar(filtros("Todos", 9, 8), admin);
+        Resultado resultado = service.listar(filtros("Todos", 9, 8), brokerDelMontaje);
 
         assertTrue(resultado.items().isEmpty());
         assertEquals(5, resultado.totalRecords());
@@ -365,7 +404,7 @@ class SeguimientoComercialServiceImplTest {
         sinFecha.setFechaCaptacion(null);
         when(captaciones.listarSeguimiento(ORG)).thenReturn(List.of(antigua, sinFecha, reciente));
 
-        List<String> codigos = service.listar(filtros("Todos", 1, 8), admin).items().stream()
+        List<String> codigos = service.listar(filtros("Todos", 1, 8), brokerDelMontaje).items().stream()
                 .map(Fila::codigo).toList();
 
         assertEquals(List.of("CAP-402", "CAP-400", "CAP-401"), codigos);
@@ -389,7 +428,7 @@ class SeguimientoComercialServiceImplTest {
                 .thenReturn(List.of(oportunidad));
         when(solicitudes.listarSeguimiento(anyLong(), anyBoolean(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of(solicitud));
-        when(contratos.listarSeguimiento(ORG))
+        when(contratos.listarSeguimiento(eq(ORG),eq(false),eq(false),anyCollection()))
                 .thenReturn(List.of(contrato(900L, solicitud, "V")));
     }
 
@@ -487,6 +526,8 @@ class SeguimientoComercialServiceImplTest {
         ReflectionTestUtils.setField(contrato, "estadoContrato", estado);
         contrato.setSolicitud(solicitud);
         contrato.setOportunidad(solicitud.getOportunidad());
+        ReflectionTestUtils.setField(contrato,"agenteCierre",solicitud.getAgente());
+        contrato.setRentaContractual(solicitud.getMontoPropuesto());contrato.setMoneda(solicitud.getMoneda());
         contrato.setFechaCierre(LocalDate.of(2026, 7, 29));
         return contrato;
     }

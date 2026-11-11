@@ -4,7 +4,8 @@ import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.ContratoAlquiler;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.Prospeccion;
-import com.controllocal.domain.comercial.RequerimientoCliente;
+import com.controllocal.service.RequerimientoService;
+import com.controllocal.service.RequerimientoService.FichaRequerimiento;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
@@ -15,13 +16,20 @@ import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleClienteRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.InteraccionService.FichaInteraccion;
+import com.controllocal.service.InteraccionService.FinalidadLectura;
+import com.controllocal.service.actividad.CatalogoInteracciones;
+import com.controllocal.service.actividad.CatalogoInteracciones.CanalComunicacion;
+import com.controllocal.service.actividad.CatalogoInteracciones.TipoActividad;
+import com.controllocal.service.actividad.CatalogoInteracciones.ResultadoInteraccion;
+import com.controllocal.service.actividad.CatalogoInteracciones.EventoComunicacion;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
-import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
+import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.Actor;
@@ -40,22 +48,25 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class FichaComercialServiceImplTest {
@@ -67,15 +78,15 @@ class FichaComercialServiceImplTest {
 
     @Mock private DetalleClienteRepository clientes;
     @Mock private PersonaRolRepository roles;
-    @Mock private RequerimientoClienteRepository requerimientos;
+    @Mock private RequerimientoService requerimientos;
     @Mock private ProspeccionRepository prospecciones;
     @Mock private CaptacionRepository captaciones;
     @Mock private OportunidadComercialRepository oportunidades;
-    @Mock private InteraccionComercialRepository interacciones;
+    @Mock private InteraccionService interacciones;
     @Mock private VisitaRepository visitas;
     @Mock private SolicitudAlquilerRepository solicitudes;
     @Mock private ContratoAlquilerRepository contratos;
-    @Mock private Alcances alcances;
+    @Mock private SupervisionAgenteRepository supervisiones;
 
     private FichaComercialServiceImpl servicio;
 
@@ -83,19 +94,32 @@ class FichaComercialServiceImplTest {
     void preparar() {
         servicio = new FichaComercialServiceImpl(
                 clientes, roles, requerimientos, prospecciones, captaciones,
-                oportunidades, interacciones, visitas, solicitudes, contratos, alcances,
+                oportunidades, interacciones, visitas, solicitudes, contratos, new Alcances(supervisiones),
                 lectorSinGobernados());
-        lenient().when(alcances.de(ADMIN)).thenReturn(new Alcances.Alcance(ORG, true, List.of()));
-        lenient().when(alcances.de(AGENTE)).thenReturn(new Alcances.Alcance(ORG, false, List.of(10L)));
-        lenient().when(alcances.de(BROKER)).thenReturn(new Alcances.Alcance(ORG, false, List.of(31L)));
+        lenient().when(supervisiones.agentesSupervisados(ORG, BROKER.idRolOperativo())).thenReturn(List.of(31L));
+    }
+
+    @Test
+    void gobiernoNoAccedeAFichasNiSeccionesComerciales() {
+        assertAll(
+                () -> assertThrows(AccesoNoAutorizadoException.class,
+                        () -> servicio.fichaCliente(101L, 8, ADMIN)),
+                () -> assertThrows(AccesoNoAutorizadoException.class,
+                        () -> servicio.fichaPropietario(201L, 8, ADMIN)),
+                () -> assertThrows(AccesoNoAutorizadoException.class,
+                        () -> servicio.seccionCliente(101L, "requerimientos", 1, 8, ADMIN)),
+                () -> assertThrows(AccesoNoAutorizadoException.class,
+                        () -> servicio.seccionPropietario(201L, "captaciones", 1, 8, ADMIN)));
+        verifyNoInteractions(clientes, roles, requerimientos, prospecciones, captaciones,
+                oportunidades, interacciones, visitas, solicitudes, contratos, supervisiones);
     }
 
     @Test
     void fichaClienteCargaRequerimientosYDejaElRestoPendiente() {
         DetalleCliente cliente = cliente(101L, "Comercial Andina");
-        RequerimientoCliente requerimiento = requerimiento(501L, cliente, "Retail", RequerimientoCliente.ACTIVO);
+        FichaRequerimiento requerimiento = requerimiento(501L, cliente, "Retail", "A", null);
         stubCliente(cliente);
-        when(requerimientos.listarPorCliente(ORG, 101L)).thenReturn(List.of(requerimiento));
+        when(requerimientos.listarPorCliente(101L, AGENTE)).thenReturn(List.of(requerimiento));
 
         FichaComercialService.FichaCliente ficha =
                 servicio.fichaCliente(101L, 99, AGENTE);
@@ -113,17 +137,42 @@ class FichaComercialServiceImplTest {
     @Test
     void fichaClienteNoOfreceCtaAlBroker() {
         DetalleCliente cliente = cliente(101L, "Cliente");
-        RequerimientoCliente requerimiento = requerimiento(501L, cliente, "Retail", RequerimientoCliente.ACTIVO);
         OportunidadComercial oportunidad = oportunidad(701L, cliente, agente(31L, "Equipo"), null);
         stubCliente(cliente);
-        when(requerimientos.listarPorCliente(ORG, 101L)).thenReturn(List.of(requerimiento));
         when(oportunidades.listarFichaPorCliente(ORG, 101L)).thenReturn(List.of(oportunidad));
 
         FichaComercialService.FichaCliente ficha =
                 servicio.fichaCliente(101L, 8, BROKER);
 
-        assertTrue(ficha.requerimientoActivo());
+        assertNull(ficha.requerimientoActivo());
+        assertFalse(ficha.sections().containsKey("requerimientos"));
+        verifyNoInteractions(requerimientos);
         assertEquals("", ficha.ctaRuta());
+    }
+
+    @Test
+    void seccionDeDemandasNoConviertePermisoDenegadoDelBrokerEnAusencia() {
+        assertThrows(AccesoNoAutorizadoException.class,
+                ()->servicio.seccionCliente(101L,"requerimientos",1,8,BROKER));
+        verifyNoInteractions(requerimientos,clientes,oportunidades,interacciones,visitas,solicitudes,contratos);
+    }
+
+    @Test
+    void laFichaUsaElLectorCanonicoConElActorRealDelMismoCliente() {
+        var cliente=cliente(101L,"Cliente compartido TEST");stubCliente(cliente);
+        var propia=requerimiento(501L,cliente,"Demanda propia","A",null);
+        when(requerimientos.listarPorCliente(101L,AGENTE)).thenReturn(List.of(propia));
+        var ficha=servicio.fichaCliente(101L,8,AGENTE);
+        assertEquals(List.of("501"),ficha.sections().get("requerimientos").items().stream()
+                .map(FichaComercialService.FilaFicha::id).toList());
+        verify(requerimientos).listarPorCliente(101L,AGENTE);
+    }
+
+    @Test
+    void unaNegativaDelLectorCanonicoNoSeDisfrazaDeClienteSinDemanda() {
+        stubCliente(cliente(101L,"Cliente TEST"));
+        when(requerimientos.listarPorCliente(101L,AGENTE)).thenThrow(new AccesoNoAutorizadoException());
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.fichaCliente(101L,8,AGENTE));
     }
 
     @Test
@@ -199,12 +248,12 @@ class FichaComercialServiceImplTest {
         when(solicitudes.listarFichaPorCliente(ORG, 101L)).thenReturn(List.of(solicitud));
 
         FichaComercialService.FilaFicha conMoneda =
-                servicio.seccionCliente(101L, "solicitudes", 1, 8, ADMIN).items().getFirst();
+                servicio.seccionCliente(101L, "solicitudes", 1, 8, AGENTE).items().getFirst();
         assertEquals("Oferta PEN 7000", conMoneda.subtitulo());
 
         solicitud.setMoneda(null);
         FichaComercialService.FilaFicha sinMoneda =
-                servicio.seccionCliente(101L, "solicitudes", 1, 8, ADMIN).items().getFirst();
+                servicio.seccionCliente(101L, "solicitudes", 1, 8, AGENTE).items().getFirst();
         assertEquals("Oferta Moneda no definida 7000", sinMoneda.subtitulo());
     }
 
@@ -234,11 +283,75 @@ class FichaComercialServiceImplTest {
     }
 
     @Test
+    void interaccionesSePaginanDespuesDeRecibirLaPoblacionAutorizada() {
+        stubCliente(cliente(101, "Contacto autorizado"));
+        when(interacciones.porCliente(101, AGENTE, FinalidadLectura.FICHA_CONTACTO))
+                .thenReturn(List.of(interaccion(701, LocalDate.of(2026, 7, 1)),
+                        interaccion(702, LocalDate.of(2026, 7, 2))));
+
+        var seccion = servicio.seccionCliente(101, "interacciones", 2, 1, AGENTE);
+
+        assertEquals(2, seccion.totalRecords());
+        assertEquals(1, seccion.items().size());
+        assertEquals("701", seccion.items().getFirst().id());
+        assertEquals("Llamada perdida", seccion.items().getFirst().estado());
+        assertNull(seccion.items().getFirst().propietarioId());
+        verify(interacciones).porCliente(101, AGENTE, FinalidadLectura.FICHA_CONTACTO);
+        verifyNoInteractions(roles, prospecciones, captaciones);
+    }
+
+    @Test
+    void elResponsableSePresentaDesdeLaEtiquetaAutorizadaSinReleerSuEntidad() {
+        stubCliente(cliente(101, "Contacto autorizado"));
+        when(interacciones.porCliente(101, BROKER, FinalidadLectura.FICHA_CONTACTO))
+                .thenReturn(List.of(interaccion(701, LocalDate.of(2026, 7, 1))));
+
+        var seccion = servicio.seccionCliente(101, "agentes", 1, 8, BROKER);
+
+        assertEquals(1, seccion.totalRecords());
+        assertEquals("31", seccion.items().getFirst().id());
+        assertEquals("Agente autorizado", seccion.items().getFirst().agente());
+        verifyNoInteractions(roles, prospecciones, captaciones);
+    }
+
+    @Test
+    void laRevocacionDelContactoNoSeConvierteEnUnaSeccionSinInteracciones() {
+        stubCliente(cliente(101, "Contacto"));
+        when(interacciones.porCliente(101, AGENTE, FinalidadLectura.FICHA_CONTACTO))
+                .thenThrow(new AccesoNoAutorizadoException());
+
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> servicio.seccionCliente(101, "interacciones", 1, 8, AGENTE));
+    }
+
+    @Test
+    void unFalloTecnicoNoSePublicaComoSeccionVacia() {
+        stubCliente(cliente(101, "Contacto"));
+        when(interacciones.porCliente(101, AGENTE, FinalidadLectura.FICHA_CONTACTO))
+                .thenThrow(new IllegalStateException("fallo técnico"));
+
+        assertThrows(IllegalStateException.class,
+                () -> servicio.seccionCliente(101, "interacciones", 1, 8, AGENTE));
+    }
+
+    @Test
+    void unaFechaEfectivaDesconocidaNoSeRellenaConElRegistro() {
+        stubCliente(cliente(101, "Contacto"));
+        when(interacciones.porCliente(101, AGENTE, FinalidadLectura.FICHA_CONTACTO))
+                .thenReturn(List.of(interaccion(701, null)));
+
+        var fila = servicio.seccionCliente(101, "interacciones", 1, 8, AGENTE).items().getFirst();
+
+        assertNull(fila.fechaOrden());
+        assertEquals("-", fila.fecha());
+    }
+
+    @Test
     void idDeOtroTenantSeComportaComo404YNoConsultaHistoria() {
         when(clientes.buscarFicha(ORG, 999L)).thenReturn(Optional.empty());
 
         assertThrows(NoEncontradoException.class,
-                () -> servicio.fichaCliente(999L, 8, ADMIN));
+                () -> servicio.fichaCliente(999L, 8, AGENTE));
         verifyNoInteractions(requerimientos, interacciones, visitas, solicitudes, contratos);
     }
 
@@ -261,20 +374,19 @@ class FichaComercialServiceImplTest {
     @Test
     void paginaYTamanoSeNormalizanYOrdenanPorFechaDescendente() {
         DetalleCliente cliente = cliente(101L, "Cliente");
-        List<RequerimientoCliente> filas = new ArrayList<>();
+        List<FichaRequerimiento> filas = new ArrayList<>();
         for (long id = 1; id <= 10; id++) {
-            RequerimientoCliente r = requerimiento(id, cliente, "R" + id, RequerimientoCliente.PAUSADO);
-            ReflectionTestUtils.setField(r, "fechaActualizacion",
-                    OffsetDateTime.parse("2026-07-%02dT10:00:00Z".formatted(id)));
+            FichaRequerimiento r = requerimiento(id, cliente, "R" + id, "R",
+                    LocalDateTime.parse("2026-07-%02dT10:00:00".formatted(id)));
             filas.add(r);
         }
         stubCliente(cliente);
-        when(requerimientos.listarPorCliente(ORG, 101L)).thenReturn(filas);
+        when(requerimientos.listarPorCliente(101L, AGENTE)).thenReturn(filas);
 
         FichaComercialService.SeccionFicha primera =
-                servicio.seccionCliente(101L, "requerimientos", 0, 100, ADMIN);
+                servicio.seccionCliente(101L, "requerimientos", 0, 100, AGENTE);
         FichaComercialService.SeccionFicha segunda =
-                servicio.seccionCliente(101L, "requerimientos", 2, 3, ADMIN);
+                servicio.seccionCliente(101L, "requerimientos", 2, 3, AGENTE);
 
         assertEquals(1, primera.page());
         assertEquals(8, primera.pageSize());
@@ -322,17 +434,30 @@ class FichaComercialServiceImplTest {
         for (String seccion : List.of("requerimientos", "propiedades", "oportunidades",
                 "interacciones", "visitas", "solicitudes", "cierres", "agentes")) {
             assertEquals(seccion,
-                    servicio.seccionCliente(101L, seccion, 1, 8, ADMIN).section());
+                    servicio.seccionCliente(101L, seccion, 1, 8, AGENTE).section());
         }
         for (String seccion : List.of("locales", "prospecciones", "captaciones",
                 "oportunidades", "solicitudes", "cierres", "agentes")) {
             assertEquals(seccion,
-                    servicio.seccionPropietario(201L, seccion, 1, 8, ADMIN).section());
+                    servicio.seccionPropietario(201L, seccion, 1, 8, AGENTE).section());
         }
     }
 
     private void stubCliente(DetalleCliente cliente) {
         when(clientes.buscarFicha(ORG, cliente.getId())).thenReturn(Optional.of(cliente));
+    }
+
+    private static FichaInteraccion interaccion(long id, LocalDate fecha) {
+        var vinculo = new InteraccionService.VinculoActividad(
+                InteraccionService.TipoContexto.CLIENTE, 101L, null, null);
+        var datos = new InteraccionService.DatosInteraccion(List.of(vinculo), null, null,
+                TipoActividad.LLAMADA, CanalComunicacion.TELEFONO, null,
+                List.of(new InteraccionService.EventoDeclarado("llamada", EventoComunicacion.LLAMADA_ENTRANTE, null)),
+                ResultadoInteraccion.SIN_RESPUESTA, null, "Resumen autorizado", List.of(), null,
+                null, "Declarado en prueba", null);
+        return new FichaInteraccion(id, 2, 31, fecha, java.time.Instant.parse("2026-07-10T16:00:00Z"),
+                datos, List.of(new InteraccionService.VinculoFicha("CLIENTE", 101, null)),
+                CatalogoInteracciones.VERSION, null, null, null, "Agente autorizado", List.of(), "Llamada perdida",null);
     }
 
     private void stubPropietario(PersonaRol propietario) {
@@ -378,14 +503,14 @@ class FichaComercialServiceImplTest {
         return broker;
     }
 
-    private static RequerimientoCliente requerimiento(
-            long id, DetalleCliente cliente, String rubro, String estado) {
-        RequerimientoCliente requerimiento = new RequerimientoCliente();
-        ReflectionTestUtils.setField(requerimiento, "id", id);
-        requerimiento.setCliente(cliente);
-        requerimiento.setRubro(rubro);
-        requerimiento.setEstado(estado);
-        return requerimiento;
+    private static FichaRequerimiento requerimiento(
+            long id, DetalleCliente cliente, String rubro, String estado,LocalDateTime actualizada) {
+        return new FichaRequerimiento(id,cliente.getId(),rubro,null,null,null,null,"ALQUILER",List.of(),
+                null,null,null,null,null,null,null,estado,null,List.of(),List.of(),
+                LocalDateTime.parse("2026-07-01T10:00:00"),actualizada,0L,AGENTE.idRolOperativo(),
+                cliente.getRol().getPersona().getId(),null,null,null,null,Map.of(),
+                "R".equals(estado)?new RequerimientoService.FinDeclarado("R",LocalDate.of(2026,7,1),
+                        "Retiro explícito TEST de la ficha paginada",java.time.Instant.parse("2026-07-01T10:00:00Z")):null);
     }
 
     private static Propiedad local(long id, PersonaRol propietario, String codigo) {

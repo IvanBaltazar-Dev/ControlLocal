@@ -3,6 +3,8 @@ package com.controllocal.service.soporte;
 import com.controllocal.persistence.repositorio.UsuarioOrganizacionRepository;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 /**
  * Guarda del invariante «una organizacion nunca se queda sin administrador
@@ -43,11 +45,11 @@ public class GobiernoOperativo {
      * operativa?
      */
     public boolean quedaOtroOperativo(long idOrganizacion, long idCredencialAfectada) {
-        return membresias.contarAdministradoresOperativos(idOrganizacion, idCredencialAfectada) > 0;
+        return membresias.contarAdministradoresOperativos(idOrganizacion, idCredencialAfectada,LocalDate.now(ZoneId.of("America/Lima"))) > 0;
     }
 
     public boolean hayAlgunoOperativo(long idOrganizacion) {
-        return membresias.contarAdministradoresOperativos(idOrganizacion, SIN_EXCLUIR) > 0;
+        return membresias.contarAdministradoresOperativos(idOrganizacion, SIN_EXCLUIR,LocalDate.now(ZoneId.of("America/Lima"))) > 0;
     }
 
     /**

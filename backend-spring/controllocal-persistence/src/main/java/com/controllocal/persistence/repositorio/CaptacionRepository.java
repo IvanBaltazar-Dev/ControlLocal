@@ -9,6 +9,8 @@ import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.IndicadorCaptacion;
 import com.controllocal.persistence.query.PropiedadDeEquipo;
 import com.controllocal.persistence.query.ResumenPropiedadesEquipo;
+import com.controllocal.persistence.query.EncargoParaReasignacion;
+import com.controllocal.persistence.query.AlquilerLocalParaLectura;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +33,91 @@ import java.util.Optional;
  * el scope por rol se aplica dentro del tenant, nunca al reves.
  */
 public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
+    interface ContextoOrigenProspeccion {Long getPropiedad();Long getResponsable();String getEstado();}
+    @Query(value="select id_propiedad as propiedad,id_rol_agente as responsable,estado from prospeccion where organizacion_id=:org and id_prospeccion=:id for share",nativeQuery=true)
+    Optional<ContextoOrigenProspeccion> origenProspeccion(@Param("org")long org,@Param("id")long id);
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+        insert into encargo_primera_habilitacion(organizacion_id,id_captacion,id_revision_encargo,
+          fecha_habilitacion,registrada_en,id_prospeccion_origen,id_rol_responsable_prospeccion)
+        select c.organizacion_id,c.id_captacion,:revision,:fecha,:ahora,c.id_prospeccion_origen,
+          coalesce((select (e.carga_util::jsonb->>'anterior')::bigint from evento_dominio e
+             where e.organizacion_id=c.organizacion_id and e.entidad_tipo='PROSPECCION'
+               and e.entidad_id=p.id_prospeccion and e.tipo='PROSPECCION_REASIGNADA'
+               and e.ocurrido_en>case when r.snapshot::jsonb->'inicioFuturoAcreditado' is not null
+                   and r.snapshot::jsonb->'inicioFuturoAcreditado'<>'null'::jsonb
+                 then cast(:fecha as timestamp) at time zone 'America/Lima' else cast(:ahora as timestamptz) end
+             order by e.ocurrido_en,e.id_evento limit 1),p.id_rol_agente)
+        from captacion c join revision_encargo r on r.organizacion_id=c.organizacion_id and r.id_revision_encargo=:revision
+        left join prospeccion p on p.organizacion_id=c.organizacion_id and p.id_prospeccion=c.id_prospeccion_origen
+        where c.organizacion_id=:org and c.id_captacion=:id
+        on conflict(organizacion_id,id_captacion) do nothing
+        """,nativeQuery=true)
+    int registrarPrimeraHabilitacion(@Param("org")long org,@Param("id")long id,@Param("revision")long revision,
+        @Param("fecha")java.time.LocalDate fecha,@Param("ahora")java.time.OffsetDateTime ahora);
+    @Modifying
+    @Query(value="""
+        insert into encargo_antecedente_prospeccion(organizacion_id,id_captacion,id_prospeccion,id_rol_actor,registrada_en)
+        values(:org,:encargo,:prospeccion,:actor,:ahora) on conflict(organizacion_id,id_captacion,id_prospeccion) do nothing
+        """,nativeQuery=true)
+    int conservarAntecedenteProspeccion(@Param("org")long org,@Param("encargo")long encargo,@Param("prospeccion")long prospeccion,
+        @Param("actor")long actor,@Param("ahora")java.time.OffsetDateTime ahora);
+    /** Misma identidad que uq_captacion_viva_por_operacion; no hidrata cartera ajena. */
+    @Query(value="""
+        select exists(select 1 from captacion where organizacion_id=:org and id_propiedad=:propiedad
+          and motivo_operacion=:operacion and estado in ('P','A'))
+        """,nativeQuery=true)
+    boolean existeEpisodioVivo(@Param("org") long org,@Param("propiedad") long propiedad,@Param("operacion") String operacion);
+
+    /** Orden común de la revisión: inmueble → supervisor del responsable → episodio. */
+    @Query(value="select id_propiedad from propiedad where organizacion_id=:org and id_propiedad=:id for share",nativeQuery=true)
+    Optional<Long> bloquearInmuebleParaRevision(@Param("org") long org,@Param("id") long id);
+
+    /** Asignación de supervisión toma WRITE sobre la misma fila. */
+    @Query(value="select id_persona_rol from detalle_agente where organizacion_id=:org and id_persona_rol=:id for share",nativeQuery=true)
+    Optional<Long> bloquearResponsableParaRevision(@Param("org") long org,@Param("id") long id);
+    interface ContextoActualEncargo {
+        Long getRevisionAplicable();
+        Long getResponsable(); Long getPersona(); Long getCuenta(); long getVersion();
+        long getVersionContenido(); String getEstado(); Long getPropiedad();
+        String getNombreProfesional(); String getNombreOrganizacion(); String getModalidadOrganizacion();
+    }
+    @Query(value="""
+       select c.id_revision_aplicable as "revisionAplicable",c.id_rol_agente as responsable,r.id_persona as persona,u.id_usuario as cuenta,
+              c.version as version,c.version_contenido as versionContenido,c.estado as estado,c.id_propiedad as propiedad,
+              p.nombres_o_razon_social as nombreProfesional,o.nombre as nombreOrganizacion,o.modalidad as modalidadOrganizacion
+         from captacion c join persona_rol r on r.id_persona_rol=c.id_rol_agente
+              and r.organizacion_id=c.organizacion_id
+         join persona p on p.organizacion_id=r.organizacion_id and p.id_persona=r.id_persona
+         join organizacion o on o.id_organizacion=c.organizacion_id
+         left join usuario_organizacion u on u.organizacion_id=r.organizacion_id and u.id_persona=r.id_persona
+        where c.organizacion_id=:org and c.id_captacion=:id
+       """,nativeQuery=true)
+    Optional<ContextoActualEncargo> contextoActual(@Param("org") long org,@Param("id") long id);
+    @Query("select c.id from Captacion c where c.organizacionId=:org and c.codigoCaptacion=:codigo")
+    Optional<Long> idPorCodigo(@Param("org") long org,@Param("codigo") String codigo);
+    @Query(value="""
+       select u.id_usuario from persona_rol r join usuario_organizacion u
+         on u.organizacion_id=r.organizacion_id and u.id_persona=r.id_persona
+        where r.organizacion_id=:org and r.id_persona_rol=:rol
+       """,nativeQuery=true)
+    Optional<Long> cuentaDelRol(@Param("org") long org,@Param("rol") long rol);
+
+    @Query(value = """
+            select c.id_propiedad as idPropiedad, e.importe_referencia as importe,
+                   e.moneda_referencia as moneda,
+                   coalesce((select a.estado from publicacion a
+                              where a.organizacion_id=c.organizacion_id and a.id_captacion=c.id_captacion
+                              order by a.fecha_publicacion desc, a.id_publicacion desc limit 1), 'B') as estadoPublicacion
+              from captacion c
+              left join condicion_economica_captacion e on e.id_condicion_economica=c.id_condicion_economica
+                                                       and e.organizacion_id=c.organizacion_id
+             where c.organizacion_id=:idOrganizacion and c.id_propiedad in :idsPropiedad
+               and c.id_rol_agente=any(cast(:rolesLectura as bigint[]))
+               and c.motivo_operacion='A' and c.estado in ('P','A')
+            """, nativeQuery = true)
+    List<AlquilerLocalParaLectura> alquileresParaLectura(@Param("idOrganizacion") long idOrganizacion,
+            @Param("idsPropiedad") Collection<Long> idsPropiedad, @Param("rolesLectura") String rolesLectura);
 
     String DESDE = """
             from Captacion cap
@@ -60,16 +147,33 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                            @Param("q") String q,
                            Pageable pageable);
 
+    String PROYECCION_REASIGNACION="select cap.id as id, cap.codigoCaptacion as codigoCaptacion, cap.estado as estado,"
+            + " cap.version as version,cap.terminosAceptados as terminosAceptados,cap.idDocumentoActual as idDocumentoActual,"
+            + " prop.direccion as direccionLocal, ag.id as idAgente, agp.nombresORazonSocial as agenteNombre ";
+    @Query(value = PROYECCION_REASIGNACION
+            + DESDE + " and cap.estado in ('P','A') order by cap.id desc", countQuery = "select count(cap) " + DESDE+" and cap.estado in ('P','A')")
+    Page<EncargoParaReasignacion> buscarParaReasignacion(@Param("idOrganizacion") long idOrganizacion,
+            @Param("sinScope") boolean sinScope, @Param("rolesAgente") Collection<Long> rolesAgente,
+            @Param("estado") String estado, @Param("idAgente") Long idAgente,
+            @Param("q") String q, Pageable pageable);
+    @Query(PROYECCION_REASIGNACION+"""
+            from Captacion cap join cap.propiedad prop join cap.agente ag
+              join ag.rol agr join agr.persona agp
+             where cap.organizacionId=:org and cap.id=:id
+            """)
+    Optional<EncargoParaReasignacion> proyeccionDeReasignacion(@Param("org") long org,@Param("id") long id);
+
     String DESDE_PENDIENTES = """
             from Captacion cap
               join cap.propiedad prop
               join cap.agente ag
               join ag.rol agr
               join agr.persona agp
+              join PeticionRevisionEncargo pet on pet.id=cap.idPeticionActual and pet.organizacionId=cap.organizacionId
             where cap.organizacionId = :idOrganizacion
               and (:sinScope = true or ag.id in :rolesAgente)
-              and cap.estado in ('P', 'O')
-              and (:estado is null or cap.estado = :estado)
+              and cap.estado in ('P', 'A') and pet.estado in ('P','O')
+              and (:estado is null or pet.estado = :estado)
               and (:idAgente is null or ag.id = :idAgente)
               and (:q is null
                    or lower(cap.codigoCaptacion) like lower(concat('%', cast(:q as string), '%'))
@@ -79,7 +183,7 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                    or lower(agp.nombresORazonSocial) like lower(concat('%', cast(:q as string), '%')))
             """;
 
-    /** Bandeja de revision del cable v1: pendientes (P) u observadas (O) en el alcance. */
+    /** Bandeja de peticiones pendientes u observadas; preparación sin presentación no crea revisión. */
     @Query(value = "select cap " + DESDE_PENDIENTES + " order by cap.id desc",
             countQuery = "select count(cap) " + DESDE_PENDIENTES)
     Page<Captacion> pendientes(@Param("idOrganizacion") long idOrganizacion,
@@ -283,6 +387,13 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     Optional<Captacion> bloquearParaEscritura(@Param("idOrganizacion") long idOrganizacion,
                                               @Param("id") long id);
 
+    /** C6 no modifica el Encargo: conserva su autoridad frente al escritor hasta el commit de la pieza. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select cap from Captacion cap"
+            + " where cap.organizacionId = :idOrganizacion and cap.id = :id")
+    Optional<Captacion> bloquearParaLecturaContextual(@Param("idOrganizacion") long idOrganizacion,
+                                                    @Param("id") long id);
+
     /**
      * <b>Los encargos VIVOS de una propiedad, ya tomados para escribir</b>
      * (F2.10).
@@ -309,7 +420,7 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
             select cap from Captacion cap
             where cap.organizacionId = :idOrganizacion
               and cap.propiedad.id = :idPropiedad
-              and cap.estado in ('P', 'O', 'A')
+              and cap.estado in ('P', 'A')
             order by cap.id
             """)
     List<Captacion> bloquearEncargosVivosParaEscritura(
@@ -356,15 +467,16 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
      * @return 1 si el agente seguia siendo el observado; 0 si cambio.
      */
     @Modifying(flushAutomatically = true)
-    @Query(value = "update captacion set id_rol_agente = :nuevo"
+    @Query(value = "update captacion set id_rol_agente = :nuevo, version=version+1, fecha_actualizacion=now()"
             + " where organizacion_id = :idOrganizacion"
             + "   and id_captacion = :idCaptacion"
-            + "   and id_rol_agente = :esperado",
+            + "   and id_rol_agente = :esperado and version=:versionEsperada",
             nativeQuery = true)
     int cambiarAgenteSi(@Param("idOrganizacion") long idOrganizacion,
                         @Param("idCaptacion") long idCaptacion,
                         @Param("esperado") long esperado,
-                        @Param("nuevo") long nuevo);
+                        @Param("nuevo") long nuevo,
+                        @Param("versionEsperada") long versionEsperada);
 
     /** Invariante v1 (uq_captacion_activa_por_local): una sola ACTIVA por local. */
     boolean existsByOrganizacionIdAndPropiedadIdAndEstado(Long idOrganizacion, Long idPropiedad, String estado);
@@ -393,7 +505,7 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
             select c from Captacion c
             where c.organizacionId = :idOrganizacion
               and c.propiedad.id = :idPropiedad
-              and c.estado in ('P', 'O', 'A')
+              and c.estado in ('P', 'A')
             order by c.motivoOperacion asc
             """)
     List<Captacion> encargosVivosDe(@Param("idOrganizacion") long idOrganizacion,
@@ -415,27 +527,15 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
               left join fetch c.condicionEconomica
             where c.organizacionId = :idOrganizacion
               and c.propiedad.id in :idsPropiedades
-              and c.estado in ('P', 'O', 'A')
+              and c.agente.id in :rolesAgente
+              and c.estado in ('P', 'A')
             order by c.propiedad.id, c.motivoOperacion
             """)
-    List<Captacion> encargosVivosDe(@Param("idOrganizacion") long idOrganizacion,
-                                    @Param("idsPropiedades") Collection<Long> idsPropiedades);
+    List<Captacion> encargosVivosParaLectura(@Param("idOrganizacion") long idOrganizacion,
+                                    @Param("idsPropiedades") Collection<Long> idsPropiedades,
+                                    @Param("rolesAgente") Collection<Long> rolesAgente);
 
-    /**
-     * <b>TODOS los encargos de una propiedad, vivos y cerrados.</b>
-     *
-     * <p>Es la consulta de la FICHA, y se separa de {@link #encargosVivosDe} a
-     * proposito. Un listado ensena lo que esta vivo, porque su pregunta es «que
-     * hay en cartera». Una ficha tiene otra: «que ha pasado con esta
-     * propiedad», y ahi un encargo cerrado no es ruido -- <b>es el unico sitio
-     * donde vive su historico economico</b>.
-     *
-     * <p>Una propiedad con alquiler 2024 cerrado, alquiler 2025 cerrado y
-     * alquiler 2026 vigente tiene tres encargos y tres series de precios. Con
-     * el filtro de vivos, la ficha ensenaria uno y las otras dos series
-     * desaparecerian de la vista sin decir que existen. V50 prohibe dos
-     * <b>vivos</b> de la misma operacion; nunca prohibio que hubiera varios.
-     */
+    /** Ficha física: sólo Encargos de la relación comercial actualmente autorizada. */
     @Query("""
             select c from Captacion c
               left join fetch c.condicionEconomica
@@ -444,10 +544,11 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
               left join fetch agRol.persona
             where c.organizacionId = :idOrganizacion
               and c.propiedad.id = :idPropiedad
+              and c.agente.id in :rolesAgente
             order by c.fechaCaptacion desc, c.id desc
             """)
-    List<Captacion> encargosDe(@Param("idOrganizacion") long idOrganizacion,
-                               @Param("idPropiedad") long idPropiedad);
+    List<Captacion> encargosParaLectura(@Param("idOrganizacion") long idOrganizacion,
+            @Param("idPropiedad") long idPropiedad, @Param("rolesAgente") Collection<Long> rolesAgente);
 
     /** El encargo vivo de UNA operacion concreta. Como mucho hay uno (V50). */
     @Query("""
@@ -455,42 +556,38 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
             where c.organizacionId = :idOrganizacion
               and c.propiedad.id = :idPropiedad
               and c.motivoOperacion = :operacion
-              and c.estado in ('P', 'O', 'A')
+              and c.estado in ('P', 'A')
             """)
     Optional<Captacion> encargoVivoDe(@Param("idOrganizacion") long idOrganizacion,
                                       @Param("idPropiedad") long idPropiedad,
                                       @Param("operacion") String operacion);
 
     /**
-     * Oferta candidata del matching de cartera (§7): las captaciones ACTIVAS
-     * del alcance, con la propiedad y su detalle ya cargados porque el scoring
-     * los lee criterio a criterio. No se pagina: el cruce se hace completo y
-     * la paginacion cae sobre las coincidencias resultantes.
+     * C3: sólo referencias de episodios vivos P/A en el alcance comercial canónico.
+     * No hidrata propiedad, contactos o condiciones antes de autorizar el recurso.
+     * P/A delimita candidatos: no demuestra G, vigencia, autorización o frescura D2.
      */
     @Query("""
-            select distinct cap from Captacion cap
-              join fetch cap.propiedad prop
-              join fetch cap.agente ag
+            select cap.id from Captacion cap
             where cap.organizacionId = :idOrganizacion
-              and (:sinScope = true or ag.id in :rolesAgente)
-              and cap.estado = 'A'
-            order by cap.id desc
+              and cap.agente.id in :rolesAgente
+              and cap.estado in ('P','A')
+            order by cap.id
             """)
-    List<Captacion> activasEnAlcance(@Param("idOrganizacion") long idOrganizacion,
-                                     @Param("sinScope") boolean sinScope,
-                                     @Param("rolesAgente") Collection<Long> rolesAgente);
+    List<Long> referenciasParaMatching(@Param("idOrganizacion") long idOrganizacion,
+                                       @Param("rolesAgente") Collection<Long> rolesAgente);
 
-    /** mis-locales del cable v1: locales con captacion del agente en estado != 'C'. */
+    /** Locales con un episodio aún vivo del agente; rescindido no equivale a preparación. */
     @Query(value = """
             select distinct prop from Captacion cap join cap.propiedad prop
             where cap.organizacionId = :idOrganizacion
-              and cap.agente.id = :idRolAgente and cap.estado <> 'C'
+              and cap.agente.id = :idRolAgente and cap.estado in ('P','A')
             order by prop.id desc
             """,
             countQuery = """
             select count(distinct prop) from Captacion cap join cap.propiedad prop
             where cap.organizacionId = :idOrganizacion
-              and cap.agente.id = :idRolAgente and cap.estado <> 'C'
+              and cap.agente.id = :idRolAgente and cap.estado in ('P','A')
             """)
     Page<Propiedad> localesDelAgente(@Param("idOrganizacion") long idOrganizacion,
                                      @Param("idRolAgente") long idRolAgente, Pageable pageable);
@@ -555,7 +652,7 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
             from Captacion cap
             where cap.organizacionId = :idOrganizacion
               and cap.agente.id in :idsAgente
-              and cap.estado in ('P', 'O', 'A')
+              and cap.estado in ('P', 'A')
             group by cap.agente.id
             """)
     List<ConteoPorAgente> contarEnCarteraPorAgentes(
@@ -695,23 +792,21 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     /**
      * <b>Captaciones esperando la decision del broker</b> (D-E2-5, E2.5).
      *
-     * <p>Las pendientes (P) y las observadas (O) de su alcance: aprobar u
-     * observar una captacion es suyo y de nadie mas, y hasta que lo haga el
-     * local no se puede ofrecer.
-     *
-     * <p>{@code fechaPlazo} es la fecha de captacion, que es desde cuando lleva
-     * esperando: la politica de despacho la pesa como antiguedad accionable.
+     * <p>Sólo la petición realmente presentada y pendiente espera decisión del broker.
+     * La preparación sin petición y la observación que espera corrección no crean ese trabajo.
+     * FechaPlazo conserva el día de presentación de esa versión, según la fecha de Core.
      */
     @Query("""
             select c.id as entidadId,
                    c.codigoCaptacion as entidadCodigo,
-                   c.fechaCaptacion as fechaPlazo,
-                   c.estado as marca
+                   cast(p.presentadaEn as LocalDate) as fechaPlazo, p.presentadaEn as detectadoEn,
+                   p.estado as marca
               from Captacion c
+              join PeticionRevisionEncargo p on p.id=c.idPeticionActual and p.organizacionId=c.organizacionId
              where c.organizacionId = :idOrganizacion
-               and c.estado in ('P', 'O')
+               and c.estado in ('P', 'A') and p.estado='P'
                and (:sinScope = true or c.agente.id in :roles)
-             order by c.fechaCaptacion asc, c.id asc
+             order by p.presentadaEn asc, c.id asc
             """)
     List<CandidatoTarea> porRevisarDelBroker(@Param("idOrganizacion") long idOrganizacion,
                                              @Param("sinScope") boolean sinScope,
@@ -729,22 +824,26 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
      * captacion -- y no en el agente de la solicitud, que es otro camino y otro
      * conjunto.
      */
-    @Query("""
-            select k.id as entidadId,
-                   cast(k.id as string) as entidadCodigo,
-                   k.fechaCierre as fechaPlazo,
-                   k.estadoContrato as marca
-              from ContratoAlquiler k
-              join k.oportunidad o
-              join o.captacion c
-             where k.organizacionId = :idOrganizacion
-               and (:sinScope = true or c.agente.id in :roles)
-               and exists (select 1 from ComisionLiquidacion cl
-                            where cl.contrato = k and cl.estado = 'P')
-             order by k.fechaCierre asc, k.id asc
-            """)
-    List<CandidatoTarea> comisionesSinCobrarDelBroker(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("roles") List<Long> roles);
+
+    interface InicioPendiente { long getOrganizacion();long getEncargo(); }
+    @Query(value="""
+        select c.organizacion_id as organizacion,c.id_captacion as encargo from captacion c
+        join revision_encargo r on r.organizacion_id=c.organizacion_id and r.id_revision_encargo=c.id_revision_aplicable
+        where c.estado='A' and c.id_captacion>:despues and c.fecha_inicio_encargo<=:hoy and r.actuacion='APROBAR'
+        and r.snapshot::jsonb->'inicioFuturoAcreditado' is not null
+        and r.snapshot::jsonb->'inicioFuturoAcreditado'<>'null'::jsonb
+        and not exists(select 1 from encargo_primera_habilitacion h where h.organizacion_id=c.organizacion_id and h.id_captacion=c.id_captacion)
+        order by c.id_captacion limit 100
+        """,nativeQuery=true)
+    List<InicioPendiente> iniciosPendientes(@Param("hoy")java.time.LocalDate hoy,@Param("despues")long despues);
+    /** Huella interna: sólo fuentes del instrumento, nunca entrega sus datos a otro tenant. */
+    @Query(value="""
+        select jsonb_build_object(
+          'fisica',(select jsonb_agg(jsonb_build_array(p.id_propiedad,p.version_fisica) order by p.id_propiedad) from propiedad p where p.organizacion_id=:org and p.id_propiedad in :inmuebles),
+          'titulos',(select jsonb_agg(to_jsonb(t) order by t.id_titularidad) from titularidad_propiedad t where t.organizacion_id=:org and t.id_propiedad in :inmuebles),
+          'identidades',(select jsonb_agg(to_jsonb(p) order by p.id_persona) from persona p where p.organizacion_id=:org and p.id_persona in :personas),
+          'origen',(select c.id_prospeccion_origen from captacion c where c.organizacion_id=:org and c.id_captacion=:id),
+          'archivos',(select jsonb_agg(to_jsonb(a) order by a.id_archivo_encargo) from archivo_encargo a where a.organizacion_id=:org and a.id_captacion=:id))::text
+        """,nativeQuery=true)
+    String fuentesDeInicio(@Param("org")long org,@Param("id")long id,@Param("inmuebles")Collection<Long> inmuebles,@Param("personas")Collection<Long> personas);
 }

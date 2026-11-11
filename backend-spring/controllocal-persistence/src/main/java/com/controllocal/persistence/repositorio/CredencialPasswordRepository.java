@@ -18,10 +18,10 @@ public interface CredencialPasswordRepository extends JpaRepository<CredencialPa
      */
     @Query("""
             select h from CredencialPassword h
-             where h.idCredencial = :idCredencial
+             where h.idCuenta = :idCuenta
              order by h.creadoEn desc
             """)
-    List<CredencialPassword> ultimosDe(@Param("idCredencial") long idCredencial, Pageable pagina);
+    List<CredencialPassword> ultimosDe(@Param("idCuenta") long idCuenta, Pageable pagina);
 
     /**
      * Recorta el historial al tamano de la politica. Se poda al escribir y no
@@ -31,9 +31,9 @@ public interface CredencialPasswordRepository extends JpaRepository<CredencialPa
     @Modifying
     @Query("""
             delete from CredencialPassword h
-             where h.idCredencial = :idCredencial
+             where h.idCuenta = :idCuenta
                and h.id not in :idsQueSeConservan
             """)
-    int podar(@Param("idCredencial") long idCredencial,
+    int podar(@Param("idCuenta") long idCuenta,
               @Param("idsQueSeConservan") List<Long> idsQueSeConservan);
 }

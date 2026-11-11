@@ -5,12 +5,12 @@
 # las suites de busqueda cargan 100.000 filas por tabla. Mientras el entorno era
 # uno solo para varias suites, cada una tenia que retirar su banco a mano con
 # `delete ... like` para no contaminar a la siguiente, y eso costaba MAS de ocho
-# minutos —mas que su propia fase de medicion— para borrar filas que iban a
+# minutos -mas que su propia fase de medicion- para borrar filas que iban a
 # morir con la base unos segundos despues. Con un entorno por suite el
 # aislamiento lo da la base efimera, la limpieza es tirarla entera y las suites
 # ya no borran nada. El coste que se paga a cambio es el arranque del entorno de
-# la segunda suite en adelante; una invocacion de una sola suite —el caso
-# normal— no paga nada.
+# la segunda suite en adelante; una invocacion de una sola suite -el caso
+# normal- no paga nada.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -26,14 +26,62 @@ param(
         's0-sesiones', 's0-bloqueo', 's0-contrasenas', 's0-roles', 's0-mfa',
         's0-emergencia'
     )]
-    [string[]] $Suite
+    [string[]] $Suite,
+    [string] $ApiJar,
+    [string] $B0FixtureManifest
 )
 
 $ErrorActionPreference = 'Stop'
 $compose = Join-Path $PSScriptRoot '..\docker-compose.e2e.yml'
 $jar = Join-Path $PSScriptRoot '..\controllocal-app\target\controllocal-app-2.0.0-SNAPSHOT.jar'
-if (-not (Test-Path -LiteralPath $jar)) {
+if (-not [string]::IsNullOrWhiteSpace($ApiJar)) { $jar = $ApiJar }
+if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
     throw "No existe el jar del API: $jar. Ejecuta mvn install antes de la suite."
+}
+$jar = (Resolve-Path -LiteralPath $jar).ProviderPath
+if ([IO.Path]::GetExtension($jar) -ne '.jar') { throw 'ApiJar debe ser un archivo JAR.' }
+$env:CONTROLLOCAL_E2E_API_JAR = $jar.Replace('\', '/')
+$huellaJar = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash
+
+# Mutador exclusivamente TEST, separado del JAR y montado solo al pedirlo.
+function Assert-B0FixtureManifest {
+    param([Parameter(Mandatory = $true)][string] $Manifest)
+    $raiz = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath.TrimEnd('\')
+    $prefijo = $raiz + '\'
+    $archivo = (Resolve-Path -LiteralPath $Manifest).ProviderPath
+    if (-not $archivo.StartsWith($prefijo, [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest TEST fuera del proyecto.' }
+    $datos = Get-Content -LiteralPath $archivo -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($datos.uso -ne 'EXCLUSIVAMENTE_TEST_E2E' -or $datos.shaArtefacto -ne $huellaJar) { throw 'Manifest TEST no corresponde al candidato.' }
+    if ($datos.launcher -ne 'org.springframework.boot.loader.launch.PropertiesLauncher' -or
+        $datos.main -ne 'com.controllocal.integracion.soporte.FinanciacionAlmacenamientoE2E') { throw 'Launcher TEST no admitido.' }
+    $directorio = (Resolve-Path -LiteralPath (Join-Path $raiz $datos.directorio)).ProviderPath.TrimEnd('\')
+    if (-not $directorio.StartsWith($prefijo, [StringComparison]::OrdinalIgnoreCase)) { throw 'Clases TEST fuera del proyecto.' }
+    $paquete = 'com/controllocal/integracion/soporte/'
+    $esperadas = @('FinanciacionAlmacenamientoE2E.class', 'FinanciacionAlmacenamientoE2E$Configuracion.class',
+        'FinanciacionAlmacenamientoE2E$Periodo.class', 'FinanciacionAlmacenamientoE2E$Evidencia.class', 'PlanesFinanciadosDePrueba.class') |
+        ForEach-Object { $paquete + $_ } | Sort-Object
+    $declaradas = @($datos.clases.PSObject.Properties.Name | Sort-Object)
+    $reales = @(Get-ChildItem -LiteralPath $directorio -File -Recurse | ForEach-Object {
+        $_.FullName.Substring($directorio.Length + 1).Replace('\', '/')
+    } | Sort-Object)
+    if (@(Compare-Object $esperadas $declaradas).Count -ne 0 -or @(Compare-Object $esperadas $reales).Count -ne 0) { throw 'El montaje TEST debe contener exactamente las cinco clases acordadas.' }
+    foreach ($propiedad in $datos.clases.PSObject.Properties) {
+        $ruta = Join-Path $directorio $propiedad.Name
+        if ((Get-FileHash -LiteralPath $ruta -Algorithm SHA256).Hash -ne $propiedad.Value) { throw 'Clase TEST alterada.' }
+    }
+    $fuentes = @('FinanciacionAlmacenamientoE2E.java', 'PlanesFinanciadosDePrueba.java') | ForEach-Object {
+        'backend-spring/controllocal-app/src/test/java/' + $paquete + $_
+    } | Sort-Object
+    if (@(Compare-Object $fuentes @($datos.fuentes.PSObject.Properties.Name | Sort-Object)).Count -ne 0) { throw 'Fuentes TEST no corresponden al contrato.' }
+    foreach ($propiedad in $datos.fuentes.PSObject.Properties) {
+        if ((Get-FileHash -LiteralPath (Join-Path $raiz $propiedad.Name) -Algorithm SHA256).Hash -ne $propiedad.Value) { throw 'Fuente TEST cambio despues de compilar.' }
+    }
+    return [PSCustomObject]@{ Manifest = $archivo; Directorio = $directorio; Huella = (Get-FileHash -LiteralPath $archivo -Algorithm SHA256).Hash }
+}
+$fixtureB0 = $null
+if (-not [string]::IsNullOrWhiteSpace($B0FixtureManifest)) { $fixtureB0 = Assert-B0FixtureManifest $B0FixtureManifest }
+if ($null -eq $fixtureB0 -and @($Suite | Where-Object { $_ -in @('v6','f4-solicitud','ficha-comercial','estabilizacion-alquiler') }).Count -gt 0) {
+    throw 'Esta suite requiere B0FixtureManifest: financiacion TEST explicita, sin fuente comercial automatica.'
 }
 
 # Hash PBKDF2 en el formato de PasswordHasher: pbkdf2$<iter>$<salB64>$<hashB64>,
@@ -85,6 +133,20 @@ function Invoke-SuiteAislada {
     $env:CONTROLLOCAL_E2E_BASE_URL = "http://localhost:$($env:CONTROLLOCAL_E2E_API_PORT)/controllocal/Api"
     $env:CONTROLLOCAL_E2E_POSTGRES_CONTAINER = "controllocal-postgres-e2e-$runId"
     $env:CONTROLLOCAL_E2E_API_CONTAINER = "controllocal-api-e2e-$runId"
+    $archivosCompose = @('-f', $compose)
+    if ($null -ne $fixtureB0) {
+        $actual = Assert-B0FixtureManifest $fixtureB0.Manifest
+        if ($actual.Huella -ne $fixtureB0.Huella) { throw 'Manifest TEST alterado durante la corrida.' }
+        $override = Join-Path (Split-Path -Parent $fixtureB0.Manifest) "compose-fixtures-$runId.yml"
+        if (Test-Path -LiteralPath $override) { throw 'El override TEST ya existe.' }
+        $fuenteYaml = ConvertTo-Json -InputObject $fixtureB0.Directorio.Replace('\', '/') -Compress
+        $yaml = "services:`n  api-e2e:`n    volumes:`n      - type: bind`n        source: $fuenteYaml`n        target: /fixtures/testclasses`n        read_only: true`n"
+        [IO.File]::WriteAllText($override, $yaml, [Text.UTF8Encoding]::new($false))
+        Write-Host ('E2E_B0_MOUNT ' + (@{ runId = $runId; manifest = $fixtureB0.Manifest; shaManifest = $fixtureB0.Huella;
+            override = $override; shaOverride = (Get-FileHash -LiteralPath $override -Algorithm SHA256).Hash;
+            destino = '/fixtures/testclasses'; soloLectura = $true } | ConvertTo-Json -Compress))
+        $archivosCompose += @('-f', $override)
+    }
 
     # Bloqueo por cuenta e IP (D-S0-21): la suite que lo prueba necesita
     # umbrales BAJOS para poder provocarlo; el resto los necesita altos para no
@@ -118,8 +180,9 @@ function Invoke-SuiteAislada {
     try {
         Write-Host "`n== Entorno E2E aislado $runId ==" -ForegroundColor Cyan
         Write-Host "Base: $($env:CONTROLLOCAL_E2E_DB)"
+        Write-Host "Artefacto: $jar | SHA256 $huellaJar"
         $entornoIntentado = $true
-        docker compose -p $project -f $compose up -d --wait
+        docker compose -p $project @archivosCompose up -d --wait
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo levantar el entorno E2E aislado.' }
 
         $salud = "$($env:CONTROLLOCAL_E2E_BASE_URL)/salud"
@@ -135,8 +198,8 @@ function Invoke-SuiteAislada {
         # Hibernate) ronda los 63 s con la maquina en reposo y se pasa de largo
         # cuando esta cargada.
         #
-        # Costo una linea base entera el 2026-08-09: seis suites —v6, personas,
-        # ficha-comercial, f4-solicitud, solicitudes-busqueda y f6-f7— murieron
+        # Costo una linea base entera el 2026-08-09: seis suites -v6, personas,
+        # ficha-comercial, f4-solicitud, solicitudes-busqueda y f6-f7- murieron
         # SIN EJECUTAR UN SOLO CHECK despues de una hora de suites encadenadas,
         # y las seis estaban verdes ese mismo dia. Un arnes que se rinde antes
         # de que el servicio arranque no mide el producto, mide la maquina.
@@ -183,7 +246,7 @@ function Invoke-SuiteAislada {
         # la red y cualquier volumen del proyecto. Ninguna suite borra filas.
         if ($entornoIntentado) {
             $cronometro = [Diagnostics.Stopwatch]::StartNew()
-            docker compose -p $project -f $compose down -v --remove-orphans
+            docker compose -p $project @archivosCompose down -v --remove-orphans
             $cronometro.Stop()
             if ($LASTEXITCODE -ne 0 -and $null -eq $fallo) {
                 $fallo = [Exception]'La limpieza del entorno E2E fallo.'

@@ -17,6 +17,7 @@ import com.controllocal.service.AlertaService;
 import com.controllocal.service.EvaluacionService.DatosEvaluacion;
 import com.controllocal.service.EvaluacionService.FichaEvaluacion;
 import com.controllocal.service.excepcion.NoEncontradoException;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AccesoSolicitud;
 import com.controllocal.service.soporte.Alcances;
@@ -24,6 +25,7 @@ import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.Page;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -33,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -243,10 +247,62 @@ class EvaluacionServiceImplTest {
     // ------------------------------------------------------------------
 
     @Test
+    void gobiernoNoListaDecisionesComercialesNiConsultaSusObservaciones() {
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(1, 10, admin));
+        verifyNoInteractions(evaluaciones);
+    }
+
+    @Test
+    void gobiernoSoloCompruebaExistenciaEnTenantAntesDeDenegarLaFicha() {
+        when(evaluaciones.existsByOrganizacionIdAndId(ORG, 9L)).thenReturn(true);
+
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(9L, admin));
+
+        verify(evaluaciones).existsByOrganizacionIdAndId(ORG, 9L);
+        verify(evaluaciones, never()).buscarFicha(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    void gobiernoConEvaluacionAjenaAlTenantRecibe404AntesDeLaBanda() {
+        when(evaluaciones.existsByOrganizacionIdAndId(ORG, 404L)).thenReturn(false);
+
+        assertThrows(NoEncontradoException.class, () -> service.obtener(404L, admin));
+        verify(evaluaciones, never()).buscarFicha(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    void elBrokerConservaListadoPaginadoSinExencionDeAlcance() {
+        when(evaluaciones.buscar(eq(ORG), eq(20L), any())).thenReturn(Page.empty());
+
+        assertEquals(0, service.listar(1, 10, broker).total());
+        verify(evaluaciones, never()).existsByOrganizacionIdAndId(anyLong(), anyLong());
+    }
+
+    @Test
+    void elBrokerConservaSuDetalleConResultadoYObservaciones() {
+        EvaluacionSolicitud evaluacion = new EvaluacionSolicitud();
+        evaluacion.setOrganizacionId(ORG);
+        evaluacion.setSolicitud(solicitudEnRevision());
+        evaluacion.setBroker(detalleBroker(20L, "Rodrigo Salas"));
+        evaluacion.setObservaciones("Sustento revisado");
+        evaluacion.fijarResultado("A");
+        evaluacion.sellarFecha();
+        ReflectionTestUtils.setField(evaluacion, "id", 9L);
+        when(evaluaciones.buscarFicha(ORG, 9L, 20L)).thenReturn(Optional.of(evaluacion));
+
+        FichaEvaluacion ficha = service.obtener(9L, broker);
+
+        assertEquals(9L, ficha.id());
+        assertEquals("A", ficha.resultado());
+        assertEquals("Sustento revisado", ficha.observaciones());
+        verify(evaluaciones, never()).existsByOrganizacionIdAndId(anyLong(), anyLong());
+    }
+
+    @Test
     void laEvaluacionDeOtroBrokerResponde404NoUn403() {
         // La v1 filtra su propia lista, asi que "no es tuya" y "no existe"
         // responden lo mismo.
-        when(evaluaciones.buscarFicha(ORG, 9L, false, 20L)).thenReturn(Optional.empty());
+        when(evaluaciones.buscarFicha(ORG, 9L, 20L)).thenReturn(Optional.empty());
 
         assertThrows(NoEncontradoException.class, () -> service.obtener(9L, broker));
     }

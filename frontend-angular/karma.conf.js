@@ -27,6 +27,8 @@ module.exports = function (config) {
           '--disable-dev-shm-usage',
           '--no-sandbox',
           '--use-angle=swiftshader',
+          // Edge debe conservar el proceso que Karma vigila, sin relanzarlo por compatibilidad.
+          '--edge-skip-compat-layer-relaunch',
         ],
       },
     },

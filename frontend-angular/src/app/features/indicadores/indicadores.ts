@@ -65,12 +65,8 @@ const COLOR_RITMO: Record<string, string> = {
  * Los conceptos son **claves del dominio, no rótulos**: el texto se escribe
  * aquí, con las palabras que usaría alguien del rubro. Lo que no se decide aquí
  * es cuánto urge cada uno — eso llega en `nivelAtencion`.
- *
- * `unidad` importa: `DEMORA_DE_SEGUIMIENTO` vale **días**, no cosas, y sin
- * decirlo la lectura sumaría peras con manzanas — es el mismo error que hacía
- * decir «17 cosas» donde había 8 pendientes y 9 días de atraso.
  */
-const SENAL: Record<ConceptoSenal, { rotulo: string; unidad?: string; pie: string }> = {
+const SENAL: Record<ConceptoSenal, { rotulo: string; pie: string }> = {
   SOLICITUD_POR_EVALUAR: {
     rotulo: 'Solicitudes por evaluar',
     pie: 'interesados esperando la respuesta del broker',
@@ -86,11 +82,6 @@ const SENAL: Record<ConceptoSenal, { rotulo: string; unidad?: string; pie: strin
   SOLICITUD_APROBADA_SIN_CIERRE: {
     rotulo: 'Aprobadas sin contrato',
     pie: 'ya se aprobaron y todavía nadie firma',
-  },
-  DEMORA_DE_SEGUIMIENTO: {
-    rotulo: 'Demora de seguimiento',
-    unidad: 'días',
-    pie: 'promedio sin registrar actividad',
   },
   VISITA_PENDIENTE: {
     rotulo: 'Visitas pendientes',

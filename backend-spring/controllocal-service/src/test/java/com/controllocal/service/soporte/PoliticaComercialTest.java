@@ -81,10 +81,9 @@ class PoliticaComercialTest {
     @Test
     @DisplayName("los valores vigentes son los del inventario de E1")
     void valoresVigentes() {
-        assertEquals(7, PoliticaComercial.RECONTACTO.valor());
+        assertFalse(PoliticaComercial.REGLAS.stream().anyMatch(r->"recontacto.dias".equals(r.nombre())));
         assertEquals(3, PoliticaComercial.VISITA_PROXIMA.valor());
         assertEquals(15, PoliticaComercial.REPORTE_PROPIETARIO.valor());
-        assertEquals(60, PoliticaComercial.COINCIDENCIA_PROPONIBLE.valor());
         assertEquals(200, PoliticaComercial.COMISION_MAXIMA.valor());
 
         // Estos dos tienen espejo en el SPA porque el formulario los necesita
@@ -101,18 +100,11 @@ class PoliticaComercialTest {
     void lasReglasSeAplicanConSuValor() {
         LocalDate hoy = LocalDate.of(2026, 8, 10);
 
-        assertEquals(hoy.minusDays(PoliticaComercial.RECONTACTO.valor()),
-                PoliticaComercial.limiteDeRecontacto(hoy));
-        assertEquals(hoy.plusDays(PoliticaComercial.VISITA_PROXIMA.valor()),
-                PoliticaComercial.horizonteDeVisitas(hoy));
         assertEquals(hoy.plusDays(PoliticaComercial.REPORTE_PROPIETARIO.valor()),
                 PoliticaComercial.proximoReporteAlPropietario(hoy));
         assertEquals(hoy.plusMonths(PoliticaComercial.ENCARGO.valor()),
                 PoliticaComercial.finDelEncargo(hoy));
 
-        int minimo = PoliticaComercial.COINCIDENCIA_PROPONIBLE.valor();
-        assertTrue(PoliticaComercial.valeLaPenaProponer(minimo), "el minimo entra");
-        assertFalse(PoliticaComercial.valeLaPenaProponer(minimo - 1), "por debajo, no");
     }
 
     @Test
@@ -218,17 +210,9 @@ class PoliticaComercialTest {
      * define el plazo, asi que no puede quedarse atras.
      */
     @Test
-    @DisplayName("la demora preocupa cuando supera el plazo entero de recontacto")
+    @DisplayName("la demora sin definición vigente no recibe una clasificación inventada")
     void clasificaLaDemoraContraElPlazo() {
-        int plazo = PoliticaComercial.RECONTACTO.valor();
-        assertEquals(NivelAtencion.INFORMATIVO,
-                PoliticaComercial.clasificar(Concepto.DEMORA_DE_SEGUIMIENTO, plazo));
-        assertEquals(NivelAtencion.MEDIO,
-                PoliticaComercial.clasificar(Concepto.DEMORA_DE_SEGUIMIENTO, plazo + 1));
-        assertNotEquals(NivelAtencion.SIN_PENDIENTES,
-                PoliticaComercial.clasificar(Concepto.DEMORA_DE_SEGUIMIENTO, 0),
-                "cero dias de atraso promedio significa que no hay atrasados, "
-                        + "no que la demora este 'al dia'");
+        assertFalse(java.util.Arrays.stream(Concepto.values()).anyMatch(c->"DEMORA_DE_SEGUIMIENTO".equals(c.name())));
     }
 
     @Test

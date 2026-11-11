@@ -3,51 +3,47 @@ package com.controllocal.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.soporte.Procedencia;
 
 /**
- * Casos de uso del contrato de alquiler, la vertical que CIERRA el ciclo. Los
- * records espejan el contrato CONGELADO (Dtos.ContratoRequest/Response v1).
- *
- * <p>Registrar el contrato no es un alta mas: es la <b>cascada de siete
- * efectos</b> del §6, en una sola transaccion, y es lo que cierra la
- * oportunidad como exitosa. Por eso
- * {@code POST /oportunidades/{id}/cierre-exitoso} responde 400 para siempre:
- * el cierre no lo produce un boton.
- *
- * <p>Alcance (§7): AGENTE = los suyos (via el agente de la solicitud);
- * <b>BROKER = por CAPTACION supervisada</b> —distinto del de solicitudes, que
- * es por agente—; ADMIN = todo el tenant. No unificar.
+ * RF058/059/CAT-E25: preparación distinta del hito contractual confirmado.
+ * La confirmación competente produce los efectos del alquiler; la comisión
+ * conserva su cálculo, devengo y fondos en su único caso de uso.
  */
 public interface ContratoService {
 
+    /** Efecto interno de un contrato realmente firmado y confirmado por RF059/060. */
+    long confirmarHito(com.controllocal.service.formalizacion.HitosConfirmados.ContextoEconomico contexto,
+            com.controllocal.service.formalizacion.HitosConfirmados.FuenteHitoConfirmado hito,
+            com.controllocal.service.formalizacion.HitosConfirmados.FuenteEconomicaFinal fuente,
+            com.controllocal.service.formalizacion.FormalizacionService.AcuerdoFinalDocumentado revisado,Actor actor,
+            PreparacionContrato preparacionRevisada);
+
     /**
-     * Espejo de ContratoRequest. Las condiciones del trato NO viajan aqui: se
-     * leen de la solicitud. El agente solo captura la formalizacion, y los
-     * tres campos opcionales tienen default (hoy, VIGENTE, sin incidencias).
+     * Preparación P sobre la solicitud real; no recibe una firma, un estado
+     * confirmado ni una fecha de cierre por defecto.
      */
-    record DatosContrato(Long idSolicitud, LocalDate fechaCierre, String estadoContrato,
-                         String incidencias) {
+    record DatosContrato(Long idSolicitud,String incidencias) {
     }
 
     /**
-     * Espejo de ContratoResponse. {@code montoAgente} y {@code montoEmpresa}
-     * solo se rellenan para ADMIN/BROKER: el AGENTE no ve el reparto de la
-     * liquidacion, solo la comision bruta, su estado y el cobro.
+     * Una sola proyección financiera autorizada; no confunde devengo con cobro.
      */
     record FichaContrato(Long id, Long idSolicitud, String codigoSolicitud, Long idOportunidad,
                          String codigoOportunidad, String clienteNombre, String direccionLocal,
                          String distritoLocal, String estadoDisponibilidadLocal,
                          String codigoCaptacion, String agenteNombre,
                          BigDecimal rentaMensual, String moneda, Integer plazoContratoMeses,
-                         BigDecimal comisionGenerada, String monedaComision,
                          LocalDate fechaInicioContrato,
                          LocalDate fechaFinContrato, LocalDate fechaCierre, String estadoContrato,
-                         String comisionEstado, String incidencias, Long idComision, Long agenteId,
-                         Long propietarioId, String propietarioNombre, BigDecimal montoAgente,
-                         BigDecimal montoEmpresa, String formaPago, LocalDate fechaCobro,
-                         Long idContratoAnterior, BigDecimal montoCobrado, BigDecimal saldoCobro,
-                         BigDecimal montoPagadoAgente, BigDecimal saldoPagoAgente) {
+                         String incidencias, Long agenteId,Long propietarioId, String propietarioNombre,
+                         Long idContratoAnterior, ComisionService.FichaComision comision) {
     }
+    /** P es preparación; la huella describe datos, nunca concede autoridad ni representa una firma. */
+    record PreparacionContrato(long id,String estado,long encargo,long oportunidad,Long solicitud,
+                                Long contratoAnterior,BigDecimal rentaContractual,String moneda,
+                                LocalDate inicio,LocalDate fin,String huella) { }
 
     /** Ojo con el cable: el {@code tamano} por defecto de este recurso es 100, no 10. */
     Pagina<FichaContrato> listar(int pagina, int tamano, Actor actor);
@@ -68,15 +64,12 @@ public interface ContratoService {
     Pagina<FichaContrato> listar(FiltrosContrato filtros, Actor actor);
 
     /** Los tres KPI de la pantalla de cierres, calculados en la base. */
-    record ImportePorMoneda(String moneda, BigDecimal monto) {
+    record ImportePorMoneda(String moneda, BigDecimal monto,long determinados,long pendientes) {
     }
 
-    record ResumenCierres(long cierres, List<ImportePorMoneda> comisionesGeneradas,
-                          List<ImportePorMoneda> montosCobrados,
-                          List<ImportePorMoneda> saldosPendientes,
-                          List<ImportePorMoneda> montosPagadosAgente,
-                          List<ImportePorMoneda> saldosPendientesAgente,
-                          long porLiquidar, long sinLiquidacion) {
+    record ResumenCierres(long cierres,long cierresConLecturaFinanciera,long sinEvaluacion,List<ImportePorMoneda> calculado,
+                          List<ImportePorMoneda> devengadoAcreditado,List<ImportePorMoneda> ingresosRealmenteRecibidos,
+                          List<ImportePorMoneda> saldoInformativoSobreCalculo) {
     }
 
     ResumenCierres resumenCierres(FiltrosContrato filtros, Actor actor);
@@ -91,49 +84,22 @@ public interface ContratoService {
 
     FichaContrato obtenerPorOportunidad(long idOportunidad, Actor actor);
 
-    /** Alta del AGENTE sobre una solicitud APROBADA suya: dispara la cascada del §6. */
-    FichaContrato registrar(DatosContrato datos, Actor actor);
+    /** Consulta por identidad del contrato con la misma guarda de sus actuaciones. */
+    FichaContrato obtener(long idContrato, Actor actor);
 
-    /** Alta previa sin cerrar la operacion; luego debe firmarse y activarse. */
-    FichaContrato iniciarEnProceso(DatosContrato datos, Actor actor);
+    /** Avance privado sin cierre; el hito se informa y confirma por Formalización. */
+    FichaContrato iniciarEnProceso(DatosContrato datos,Actor actor,ContextoSesion sesion,String clave,Procedencia procedencia);
 
     record DatosTransicion(LocalDate fechaEfectiva, String motivo) { }
 
     record DatosRenovacion(LocalDate fechaInicioContrato, LocalDate fechaFinContrato,
                            BigDecimal rentaContractual, String moneda, String motivo) { }
 
-    FichaContrato firmar(long idContrato, DatosTransicion datos, Actor actor);
     FichaContrato activar(long idContrato, DatosTransicion datos, Actor actor);
     FichaContrato finalizar(long idContrato, DatosTransicion datos, Actor actor);
     FichaContrato rescindir(long idContrato, DatosTransicion datos, Actor actor);
     FichaContrato anular(long idContrato, DatosTransicion datos, Actor actor);
-    FichaContrato renovar(long idContrato, DatosRenovacion datos, Actor actor);
-
-    /** Gate de BROKER (sin ADMIN): define el monto del agente sobre un contrato que supervisa. */
-    FichaContrato asignarComision(long idContrato, BigDecimal montoAgente, Actor actor);
-
-    /** Gate de BROKER (sin ADMIN): registra el desenlace del cobro. */
-    FichaContrato registrarCobroComision(long idContrato, String estado, LocalDate fechaCobro,
-                                         String formaPago, Actor actor);
-
-    /**
-     * Comando monetario idempotente. Con {@code Idempotency-Key}, reenviar el
-     * MISMO comando devuelve el resultado original sin insertar otra fila.
-     */
-    FichaContrato registrarMovimientoComision(long idContrato, String tipo, BigDecimal monto,
-                                               String moneda, LocalDate fecha, String formaPago,
-                                               String observacion, String claveIdempotencia,
-                                               Actor actor);
-
-    /**
-     * El trabajo transaccional del anterior. Publico en la interfaz porque la
-     * relectura tras perder la carrera de idempotencia tiene que entrar por el
-     * PROXY para abrir una transaccion nueva: la anterior quedo marcada como
-     * rollback-only por la violacion de unicidad. No la llames directamente.
-     */
-    FichaContrato registrarMovimientoComisionEnTransaccion(
-            long idContrato, String tipo, BigDecimal monto, String moneda, LocalDate fecha,
-            String formaPago, String observacion, String claveIdempotencia, Actor actor);
+    FichaContrato renovar(long idContrato,DatosRenovacion datos,Actor actor,ContextoSesion sesion,String clave,Procedencia procedencia);
 
     /**
      * Resultado de una revision de disponibilidad. {@code repetida} distingue

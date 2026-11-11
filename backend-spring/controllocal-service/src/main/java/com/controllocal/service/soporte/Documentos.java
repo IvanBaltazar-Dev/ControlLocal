@@ -56,6 +56,20 @@ public class Documentos {
         return escribir(contenido == null ? List.of() : contenido);
     }
 
+    /** Contenido de revisión UC-K-06: orden recursivo, sin cambiar huellas históricas de comandos. */
+    public String objetoCanonico(Object contenido) {
+        try {
+            // Los Map conservan exactamente su rama histórica. Records/DTO se normalizan
+            // con el mismo mapper antes de ordenar; ORDER_MAP_ENTRIES no ordena records.
+            Object normalizado = contenido == null || contenido instanceof Map<?, ?> ? contenido
+                    : mapper.convertValue(contenido, new TypeReference<LinkedHashMap<String, Object>>() { });
+            return mapper.writer().with(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                    .writeValueAsString(normalizado);
+        } catch (Exception fallo) {
+            throw new IllegalStateException("No se pudo preparar el contenido de revisión.", fallo);
+        }
+    }
+
     /** De vuelta a un mapa. Un texto que no sea un objeto es un dato corrupto. */
     public Map<String, Object> comoMapa(String json) {
         if (json == null || json.isBlank()) {
@@ -65,6 +79,15 @@ public class Documentos {
             return mapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() { });
         } catch (Exception e) {
             throw new IllegalStateException("El documento guardado no es un objeto JSON: " + json, e);
+        }
+    }
+
+    /** Recibo durable tipado, con el mismo tratamiento exacto de números y módulos de Jackson. */
+    public <T> T comoObjeto(String json, Class<T> tipo) {
+        try {
+            return mapper.readValue(json, tipo);
+        } catch (Exception fallo) {
+            throw new IllegalStateException("El recibo guardado es incompatible con su contrato.", fallo);
         }
     }
 

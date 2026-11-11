@@ -20,7 +20,7 @@ public final class MfaDtos {
 
     // --------------------------------------------------------------- login
 
-    public record DesafioRequest(String usuario, String contrasena) {
+    public record DesafioRequest(String correo, String contrasena) {
     }
 
     /** 202: la cuenta tiene segundo factor y hace falta el codigo. */
@@ -50,8 +50,6 @@ public final class MfaDtos {
     public record ReautenticacionRequest(String contrasena, String codigo) {
     }
 
-    public record ElevacionResponse(String token, OffsetDateTime expiraEn) {
-    }
 
     public record RevocacionRequest(String motivo) {
     }

@@ -127,7 +127,7 @@ class EventosSeguridadTest {
         // no existe. Si exigieramos persona, no se registraria nada.
         assertEquals(EventoSeguridad.LOGIN_FALLIDO, evento.getTipo());
         assertNull(evento.getIdPersona());
-        assertNull(evento.getIdCredencial());
+        assertNull(evento.getIdCuenta());
         assertEquals(ORG, evento.getOrganizacionId());
         assertEquals("10.0.0.9", evento.getIp());
         assertNotNull(evento.getFecha());

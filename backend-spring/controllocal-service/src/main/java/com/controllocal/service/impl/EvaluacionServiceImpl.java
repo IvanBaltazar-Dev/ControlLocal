@@ -14,6 +14,7 @@ import com.controllocal.service.AlertaService;
 import com.controllocal.service.EvaluacionService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.excepcion.NoEncontradoException;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AccesoSolicitud;
 import com.controllocal.service.soporte.Alcances;
@@ -99,11 +100,12 @@ public class EvaluacionServiceImpl implements EvaluacionService {
     @Override
     @Transactional(readOnly = true)
     public Pagina<FichaEvaluacion> listar(int pagina, int tamano, Actor actor) {
+        exigirBrokerLector(actor);
         // Deuda de la v1 cerrada sin tocar el cable: alli listar() traia
         // listarTodos() y cortaba con subList; aqui el LIMIT/OFFSET esta en
         // SQL (MEJ-05 / RC-003) y la respuesta es identica.
         Page<EvaluacionSolicitud> page = evaluaciones.buscar(
-                actor.idOrganizacion(), actor.esTenantAdmin(), actor.idRolOperativo(),
+                actor.idOrganizacion(), actor.idRolOperativo(),
                 PageRequest.of(Math.max(0, pagina - 1), tamano(tamano)));
         return new Pagina<>(page.getContent().stream().map(EvaluacionServiceImpl::ficha).toList(),
                 page.getTotalElements());
@@ -112,10 +114,18 @@ public class EvaluacionServiceImpl implements EvaluacionService {
     @Override
     @Transactional(readOnly = true)
     public FichaEvaluacion obtener(long id, Actor actor) {
+        if (!actor.esBroker()) {
+            // La existencia sólo se comprueba en el tenant, sin cargar el
+            // resultado/observaciones para una actuación de gobierno.
+            if (!evaluaciones.existsByOrganizacionIdAndId(actor.idOrganizacion(), id)) {
+                throw new NoEncontradoException("Evaluacion");
+            }
+            exigirBrokerLector(actor);
+        }
         // La evaluacion de OTRO broker responde 404, no 403: la v1 filtra su
         // propia lista y no encuentra nada.
         return evaluaciones
-                .buscarFicha(actor.idOrganizacion(), id, actor.esTenantAdmin(), actor.idRolOperativo())
+                .buscarFicha(actor.idOrganizacion(), id, actor.idRolOperativo())
                 .map(EvaluacionServiceImpl::ficha)
                 .orElseThrow(() -> new NoEncontradoException("Evaluacion"));
     }
@@ -166,7 +176,8 @@ public class EvaluacionServiceImpl implements EvaluacionService {
                 "SOLICITUD_ALQUILER", solicitud.getId(),
                 solicitud.getAgente() != null ? solicitud.getAgente().getId() : null,
                 "La solicitud " + solicitud.getCodigoSolicitud() + " fue evaluada con resultado "
-                        + DESCRIPCION_RESULTADO.getOrDefault(resultado, resultado) + "."), actor);
+                        + DESCRIPCION_RESULTADO.getOrDefault(resultado, resultado) + ".",
+                com.controllocal.service.soporte.FuentesAsuntos.Origen.de("EVALUACION_SOLICITUD",guardada.getId())), actor);
         return ficha(guardada);
     }
 
@@ -182,6 +193,13 @@ public class EvaluacionServiceImpl implements EvaluacionService {
     }
 
     // ------------------------------------------------------------------
+
+    /** CAT-R19/C1: la evaluación es lectura comercial del broker, no padrón de gobierno. */
+    private static void exigirBrokerLector(Actor actor) {
+        if (actor == null || !actor.esBroker()) {
+            throw new AccesoNoAutorizadoException();
+        }
+    }
 
     /**
      * "El broker no supervisa al agente responsable de esta solicitud."

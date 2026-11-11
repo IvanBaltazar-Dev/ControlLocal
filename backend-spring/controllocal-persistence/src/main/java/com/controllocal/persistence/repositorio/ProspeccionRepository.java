@@ -1,8 +1,6 @@
 package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.comercial.Prospeccion;
-import com.controllocal.persistence.query.CandidatoTarea;
-import com.controllocal.persistence.query.ExpedienteDeLaProspeccion;
 import com.controllocal.persistence.query.IndicadorProspeccion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,7 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +22,60 @@ import java.util.Optional;
  * dentro de su corredora, no entre corredoras.
  */
 public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> {
+    interface FuenteConversion {
+        Long getId();Long getResponsable();String getEstado();java.time.Instant getRegistrada();java.time.Instant getActualizada();
+        Long getHistorial();java.time.LocalDate getTermino();java.time.Instant getTerminoRegistrado();Long getResponsableTermino();
+        Long getEncargo();Long getVersionEncargo();Long getResponsableEncargo();String getTipoOrigen();Long getOrigen();
+        String getEstadoEncargo();java.time.LocalDate getDesdeEncargo();
+        java.time.Instant getOrigenRegistrado();Long getRevisionHabilitacion();java.time.LocalDate getHabilitada();
+        java.time.Instant getHabilitacionRegistrada();Long getProspeccionHabilitada();Long getResponsableHabilitacion();Long getResponsableAnterior();
+    }
+    @Query(value="""
+        select p.id_prospeccion as id,p.id_rol_agente as responsable,p.estado as estado,
+          p.fecha_registro as registrada,p.fecha_actualizacion as actualizada,
+          fin.id_historial as historial,fin.fecha_efectiva as termino,fin.fecha_evento as "terminoRegistrado",fin.id_rol_responsable as "responsableTermino",
+          c.id_captacion as encargo,c.version as "versionEncargo",c.id_rol_agente as "responsableEncargo",
+          c.estado as "estadoEncargo",c.fecha_inicio_encargo as "desdeEncargo",
+          c.tipo_origen_prospeccion as "tipoOrigen",c.id_prospeccion_origen as origen,c.origen_registrado_en as "origenRegistrado",
+          h.id_revision_encargo as "revisionHabilitacion",h.fecha_habilitacion as habilitada,
+          h.registrada_en as "habilitacionRegistrada",h.id_prospeccion_origen as "prospeccionHabilitada",
+          h.id_rol_responsable_prospeccion as "responsableHabilitacion",anterior.id_rol_responsable as "responsableAnterior"
+        from prospeccion p
+        left join captacion c on c.organizacion_id=p.organizacion_id and c.fecha_creacion<=:corte
+          and (c.id_prospeccion_origen=p.id_prospeccion or c.id_captacion=p.id_captacion)
+        left join encargo_primera_habilitacion h on h.organizacion_id=c.organizacion_id and h.id_captacion=c.id_captacion and h.registrada_en<=:corte
+        left join lateral(select he.id_historial,he.fecha_efectiva,he.fecha_evento,he.id_rol_responsable
+          from historial_estado he where he.organizacion_id=p.organizacion_id and he.entidad_tipo='PROSPECCION'
+          and he.id_entidad=p.id_prospeccion and he.estado_nuevo='D' and he.fecha_evento<=:corte order by he.id_historial desc limit 1) fin on true
+        left join lateral(select he.id_rol_responsable from historial_estado he
+          where he.organizacion_id=p.organizacion_id and he.entidad_tipo='PROSPECCION' and he.id_entidad=p.id_prospeccion
+          and he.fecha_evento<=h.registrada_en order by he.id_historial desc limit 1) anterior on true
+        where p.organizacion_id=:org and p.id_rol_agente in :roles and p.fecha_registro<=:corte
+        order by p.id_prospeccion,c.id_captacion
+        """,nativeQuery=true)
+    List<FuenteConversion> fuentesConversion(@Param("org")long org,@Param("roles")Collection<Long> roles,@Param("corte")java.time.Instant corte);
+    interface ContextoParaActividad {
+        Long getResponsable();Long getPropiedad();Long getEncargo();String getEstado();
+    }
+    @Query(value="""
+        select id_rol_agente as responsable,id_propiedad as propiedad,id_captacion as encargo,estado
+        from prospeccion where organizacion_id=:org and id_prospeccion=:id
+        """,nativeQuery=true)
+    Optional<ContextoParaActividad> contextoParaActividad(@Param("org") long org,@Param("id") long id);
+
+    /** AC149: coordenadas autorizadas antes de hidratar la propiedad o los contactos. */
+    interface OrigenParaMatching {
+        Long getIdPropiedad();
+        Long getIdResponsable();
+        String getEstado();
+    }
+    @Query("""
+            select p.propiedad.id as idPropiedad, p.agente.id as idResponsable, p.estado as estado
+              from Prospeccion p
+             where p.organizacionId=:org and p.id=:id and p.agente.id in :roles
+            """)
+    Optional<OrigenParaMatching> propiedadParaMatching(@Param("org") long org, @Param("id") long id,
+                                                       @Param("roles") Collection<Long> roles);
 
     /**
      * Dos filtros del cable v1 que hay que respetar aqui y son fáciles de
@@ -106,25 +157,6 @@ public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> 
                                               @Param("q") String q,
                                               Pageable pageable);
 
-    String DESDE_RECONTACTO = """
-            from Prospeccion p
-              join p.agente ag
-            where p.organizacionId = :idOrganizacion
-              and (:sinScope = true or ag.id in :rolesAgente)
-              and p.fechaRecontacto is not null
-              and p.fechaRecontacto <= :limite
-              and p.estado not in ('T', 'D')
-            """;
-
-    /** Recontacto vencido: la ultima accion tiene ya N dias o mas (dia 8 = alerta). */
-    @Query(value = "select p " + DESDE_RECONTACTO + " order by p.fechaRecontacto asc, p.id desc",
-            countQuery = "select count(p) " + DESDE_RECONTACTO)
-    Page<Prospeccion> recontactables(@Param("idOrganizacion") long idOrganizacion,
-                                     @Param("sinScope") boolean sinScope,
-                                     @Param("rolesAgente") Collection<Long> rolesAgente,
-                                     @Param("limite") LocalDate limite,
-                                     Pageable pageable);
-
     /** Regla de pertenencia (RF-004, v2): el agente prospecto ese local. */
     boolean existsByOrganizacionIdAndPropiedadIdAndAgenteId(Long idOrganizacion, Long idPropiedad, Long idRolAgente);
 
@@ -144,27 +176,6 @@ public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> 
             where p.organizacionId = :idOrganizacion and p.id = :id
             """)
     Optional<Prospeccion> buscarFicha(@Param("idOrganizacion") long idOrganizacion, @Param("id") long id);
-
-    /**
-     * Disparador 1 de la bandeja (F7): recontacto vencido del agente. Mismo
-     * criterio que {@link #recontactables} —en proceso y con la fecha de
-     * recontacto ya pasada— pero acotado a UN agente y devolviendo solo lo que
-     * la tarea necesita. {@code fechaPlazo} es la fecha de recontacto: es ella,
-     * y no la de creacion de la tarea, la que da los "dias sin accion".
-     */
-    @Query("""
-            select p.id as entidadId, p.codigoProspeccion as entidadCodigo,
-                   p.fechaRecontacto as fechaPlazo, cast(null as string) as marca
-            from Prospeccion p
-            where p.organizacionId = :idOrganizacion
-              and p.agente.id = :idRolAgente
-              and p.estado not in ('T', 'D')
-              and p.fechaRecontacto is not null
-              and p.fechaRecontacto <= :limite
-            """)
-    List<CandidatoTarea> paraRecontactar(@Param("idOrganizacion") long idOrganizacion,
-                                         @Param("idRolAgente") long idRolAgente,
-                                         @Param("limite") LocalDate limite);
 
     /** Base transversal E3: toda la historia del propietario dentro del tenant. */
     @Query("""
@@ -206,39 +217,11 @@ public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> 
                                         @Param("sinScope") boolean sinScope,
                                         @Param("rolesAgente") Collection<Long> rolesAgente);
 
-    /**
-     * El expediente de un lote de prospecciones, para la capa de resolucion del
-     * Inicio (D-E2-1 §10.3).
-     *
-     * <p><b>Por lote y no por asunto.</b> Una pagina del Radar son cinco
-     * asuntos; pedirlo dentro del bucle serian cinco consultas, que es el N+1
-     * que RC-003 quito del listado y que vuelve cada vez que alguien anade una
-     * capa de interpretacion.
-     *
-     * <p>El propietario y la direccion se leen a traves de la propiedad que la
-     * prospeccion persigue. Los {@code left join} no son defensivos por gusto:
-     * una prospeccion puede estar apuntando a un inmueble cuyo propietario
-     * todavia no tiene ficha completa, y perder la fila entera por eso dejaria
-     * el expediente vacio justo en el caso que mas falta hace resolver.
-     */
-    @Query(value = """
-            select p.id_prospeccion  as idProspeccion,
-                   p.estado          as estado,
-                   p.fecha_registro::date as fechaRegistro,
-                   p.fecha_contacto  as fechaContacto,
-                   p.fecha_reunion   as fechaReunion,
-                   p.fecha_propuesta as fechaPropuesta,
-                   p.fecha_recontacto as fechaRecontacto,
-                   per.nombres_o_razon_social as propietario,
-                   pr.direccion      as direccion,
-                   pr.distrito       as distrito
-              from prospeccion p
-              left join propiedad pr   on pr.id_propiedad   = p.id_propiedad
-              left join persona_rol rp on rp.id_persona_rol = pr.id_rol_propietario
-              left join persona per    on per.id_persona    = rp.id_persona
-             where p.organizacion_id = :idOrganizacion
-               and p.id_prospeccion in (:ids)
-            """, nativeQuery = true)
-    List<ExpedienteDeLaProspeccion> expedientesDe(@Param("idOrganizacion") long idOrganizacion,
-                                                  @Param("ids") Collection<Long> ids);
+
+    interface ContextoGobierno {long getVersion();long getResponsable();}
+    @Query("select p.version as version,p.agente.id as responsable from Prospeccion p where p.organizacionId=:org and p.id=:id and (:global=true or p.agente.id in :roles)")
+    Optional<ContextoGobierno> contextoGobierno(@Param("org")long org,@Param("id")long id,@Param("global")boolean global,@Param("roles")Collection<Long> roles);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Prospeccion p where p.organizacionId=:org and p.id=:id and (:global=true or p.agente.id in :roles)")
+    Optional<Prospeccion> bloquearGobierno(@Param("org")long org,@Param("id")long id,@Param("global")boolean global,@Param("roles")Collection<Long> roles);
 }

@@ -60,10 +60,8 @@ export interface IndicadorDesempeno {
 export interface IndicadorOperativo {
   recontactosVencidos: number;
   recontactosAlDia: number;
-  diasPromedioSinSeguimiento: number;
   visitasPendientes: number;
   solicitudesSinCierre: number;
-  conversionProspeccionCaptacion: number;
 }
 
 /**
@@ -252,9 +250,8 @@ export interface IndicadoresResumen {
   /** Los mismos números, clasificados por el dominio y ya ordenados. */
   senales: IndicadorSenal[];
   /**
-   * Cuántas **cosas** reclaman atención ahora mismo. No se deriva sumando
-   * `senales`: `DEMORA_DE_SEGUIMIENTO` vale días, y colarla daría "11 cosas"
-   * donde hay 2 pendientes y 9 días de atraso. Lo suma el dominio.
+   * Cuántos pendientes reclaman atención ahora mismo. El dominio entrega el
+   * total; el cliente no lo reconstruye sumando señales de distintos universos.
    */
   pendientesDeAtencion: number;
   /**

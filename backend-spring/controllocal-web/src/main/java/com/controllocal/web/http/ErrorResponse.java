@@ -1,27 +1,29 @@
 package com.controllocal.web.http;
 
 /**
- * Contrato congelado: mismo cuerpo de error {@code {"error": ...}} que el
- * backend Jakarta.
- *
- * <p>{@code codigo} es <b>aditivo y casi siempre nulo</b>, asi que Jackson
- * (configurado {@code non_null}) no lo emite y todos los errores del contrato
- * siguen viajando byte a byte como antes. Solo lo llevan situaciones que la v1
- * <b>no puede producir</b>:
- * <ul>
- *   <li>el 403 de una sesion capada, por contrasena temporal (§4.5) o por
- *       segundo factor pendiente (D-S0-25) — el SPA tiene que distinguirlos de
- *       un "no tienes permisos" para llevar al paso que falta en vez de a la
- *       pantalla de acceso denegado;</li>
- *   <li>los 400 del segundo factor (V37,
- *       {@code ErrorMfaException}) — "el codigo esta mal", "ese codigo ya se
- *       uso" y "el desafio caduco" piden reacciones distintas.</li>
- * </ul>
- *
- * <p>En los dos casos la alternativa era comparar el texto en español, que es
- * traducible y se retoca sin pensar que algo depende de el.
+ * Error estructurado C0/K0. El mensaje conserva su concepto; el código permite
+ * distinguir permiso, deshabilitación y fallo técnico sin comparar frases.
+ * Los códigos específicos de sesión capada y MFA se conservan. Un error no
+ * representa una colección vacía y la causa técnica privada no sale al cliente.
  */
 public record ErrorResponse(String error, String codigo) {
+
+    public static final String PERMISO_INSUFICIENTE = "PERMISO_INSUFICIENTE";
+    public static final String CAPACIDAD_DESHABILITADA = "CAPACIDAD_DESHABILITADA";
+    public static final String FALLO_TECNICO = "FALLO_TECNICO";
+
+    /** C0/K0: código estable, sin comparar texto y sin convertir errores en un conjunto vacío. */
+    public static ErrorResponse deEstado(int estado, String mensaje) {
+        String codigo = switch (estado) {
+            case 401 -> "SESION_REQUERIDA";
+            case 403 -> PERMISO_INSUFICIENTE;
+            case 404 -> "RECURSO_NO_ENCONTRADO";
+            case 409 -> "CONFLICTO";
+            case 429 -> "LIMITE_SOLICITUDES";
+            default -> estado >= 500 ? FALLO_TECNICO : "PETICION_INVALIDA";
+        };
+        return new ErrorResponse(mensaje, codigo);
+    }
 
     public ErrorResponse(String error) {
         this(error, null);

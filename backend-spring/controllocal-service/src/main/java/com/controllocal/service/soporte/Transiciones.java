@@ -63,6 +63,15 @@ public class Transiciones {
     public <E extends EntidadDeOrganizacion & Transicionable> void aplicar(
             E entidad, long idEntidad, String nuevoEstado, Actor actor, String motivo,
             LocalDate fechaEfectiva) {
+        aplicar(entidad,idEntidad,nuevoEstado,actor,motivo,fechaEfectiva,null);
+    }
+
+    /** El caso C5 aporta su revisión confirmada; no se deduce de un estado o de un cobro. */
+    public <E extends EntidadDeOrganizacion & Transicionable> void aplicar(
+            E entidad, long idEntidad, String nuevoEstado, Actor actor, String motivo,
+            LocalDate fechaEfectiva, Long revisionHito) {
+        if(revisionHito!=null&&(revisionHito<=0||!"OPORTUNIDAD".equals(entidad.entidadTipo())||!"F".equals(nuevoEstado)))
+            throw new IllegalArgumentException("La revisión C5 sólo acredita el desenlace contractual favorable de la oportunidad.");
         String estadoAnterior = entidad.estadoActual();
         if (nuevoEstado.equals(estadoAnterior)) {
             return;
@@ -71,7 +80,7 @@ public class Transiciones {
         entidad.transicionarA(nuevoEstado);
 
         auditar(entidad, entidad.entidadTipo(), idEntidad, estadoAnterior, nuevoEstado,
-                actor, motivo, fechaEfectiva);
+                actor, motivo, fechaEfectiva,revisionHito);
     }
 
     /**
@@ -96,18 +105,20 @@ public class Transiciones {
         MaquinasEstado.validarTransicion(Propiedad.ENTIDAD_DISPONIBILIDAD_TIPO, anterior, nuevo);
         propiedad.cambiarDisponibilidadA(nuevaDisponibilidad);
         auditar(propiedad, Propiedad.ENTIDAD_DISPONIBILIDAD_TIPO, idPropiedad,
-                anterior, nuevo, actor, motivo, fechaEfectiva);
+                anterior, nuevo, actor, motivo, fechaEfectiva,null);
     }
 
     private void auditar(EntidadDeOrganizacion entidad, String entidadTipo, long idEntidad,
                          String estadoAnterior, String estadoNuevo, Actor actor,
-                         String motivo, LocalDate fechaEfectiva) {
+                         String motivo, LocalDate fechaEfectiva, Long revisionHito) {
         HistorialEstado evento = new HistorialEstado();
         evento.setOrganizacionId(entidad.getOrganizacionId());
         evento.setEntidadTipo(entidadTipo);
         evento.setIdEntidad(idEntidad);
         evento.setEstadoAnterior(estadoAnterior);
         evento.setEstadoNuevo(estadoNuevo);
+        evento.setIdRolResponsable(entidad instanceof Transicionable t ? t.responsableDelHecho() : null);
+        evento.setIdRevisionHito(revisionHito);
         if (actor != null) {
             evento.setIdActor(actor.idPersona());
             evento.setTipoRolActor(actor.tipoRolOperativo());

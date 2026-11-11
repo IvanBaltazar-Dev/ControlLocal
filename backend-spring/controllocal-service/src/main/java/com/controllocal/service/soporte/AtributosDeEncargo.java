@@ -4,6 +4,7 @@ import com.controllocal.domain.auditoria.RastroValorGobernado;
 import com.controllocal.domain.comercial.AtributoEncargo;
 import com.controllocal.domain.comercial.ValorMultipleEncargo;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.Sujeto;
 import com.controllocal.persistence.repositorio.AtributoEncargoRepository;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
 import com.controllocal.persistence.repositorio.ValorMultipleEncargoRepository;
@@ -74,10 +75,6 @@ public class AtributosDeEncargo {
         return catalogo.aplicablesAEncargo(idOrganizacion, tipoPropiedad, tipoOperacion);
     }
 
-    public List<CatalogoAtributo> aplicablesA(long idOrganizacion, Comercializacion donde) {
-        return aplicablesA(idOrganizacion, donde.tipoPropiedad(), donde.tipoOperacion());
-    }
-
     /**
      * <b>Lo que le falta a ESTE encargo para poder anunciarse.</b>
      *
@@ -96,12 +93,6 @@ public class AtributosDeEncargo {
                 donde.tipoPropiedad(), donde.tipoOperacion());
     }
 
-    /** Lo que le falta para cerrar el alta del encargo. Solo ALT. */
-    public List<String> obligatoriasQueFaltan(long idOrganizacion, Comercializacion donde) {
-        return valores.clavesObligatoriasQueFaltan(idOrganizacion, donde.idCaptacion(),
-                donde.tipoPropiedad(), donde.tipoOperacion());
-    }
-
     /** Los rotulos de esas claves, para decirlo en palabras y no en claves. */
     public List<String> rotulosDe(long idOrganizacion, Comercializacion donde,
                                   List<String> claves) {
@@ -117,11 +108,23 @@ public class AtributosDeEncargo {
     /** Las definiciones de esta comercializacion, por clave. Evita el N+1 de la ficha. */
     public Map<String, CatalogoAtributo> definicionesDe(long idOrganizacion,
                                                         Comercializacion donde) {
+        return definicionesDe(idOrganizacion,donde.tipoPropiedad(),donde.tipoOperacion());
+    }
+    public Map<String,CatalogoAtributo> definicionesDe(long idOrganizacion,String tipoPropiedad,String operacion){
         Map<String, CatalogoAtributo> porClave = new LinkedHashMap<>();
-        for (CatalogoAtributo atributo : aplicablesA(idOrganizacion, donde)) {
+        for (CatalogoAtributo atributo : aplicablesA(idOrganizacion,tipoPropiedad,operacion)) {
             porClave.putIfAbsent(atributo.getClave(), atributo);
         }
         return porClave;
+    }
+    /** Datos de propuesta, sin Captación ficticia, filas ni linaje de un hecho que todavía no existe. */
+    public ValoresGobernados interpretarPropuesta(long org,String tipo,String operacion,List<ValorEntrante> entradas){
+        var definiciones=definicionesDe(org,tipo,operacion);var salida=ValoresGobernados.constructor();
+        for(var entrada:entradas){
+            var definicion=definiciones.get(entrada.clave());
+            if(definicion==null)throw new ReglaNegocioException("La condición \""+entrada.clave()+"\" no pertenece al contrato editable de esta operación.");
+            salida.con(entrada.clave(),ConversionDeValores.interpretar(definicion,entrada));
+        }return salida.construir();
     }
 
     /**
@@ -138,7 +141,8 @@ public class AtributosDeEncargo {
                                                               Comercializacion donde,
                                                               Collection<String> clavesLeidas) {
         Map<String, CatalogoAtributo> porClave = definicionesDe(idOrganizacion, donde);
-        AtributosGobernados.completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas);
+        AtributosGobernados.completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas,
+                Sujeto.ENCARGO);
         return porClave;
     }
 
@@ -151,30 +155,23 @@ public class AtributosDeEncargo {
      * comercializacion y que el valor encaja con su tipo. Devuelve el atributo
      * listo para guardar.
      */
-    private AtributoEncargo convertir(long idOrganizacion, Comercializacion donde, String clave,
-                                      String valor, String moneda) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
-        exigirQueAplique(definicion, donde);
-        String limpio = ConversionDeValores.exigirValor(clave, valor);
+    private AtributoEncargo convertir(long idOrganizacion,Comercializacion donde,String clave,
+                                      CatalogoAtributo definicion,ValorLogico interpretado) {
         long encargo = donde.idCaptacion();
 
         return switch (definicion.tipo()) {
             case ENTERO -> AtributoEncargo.deNumero(idOrganizacion, encargo, clave,
-                    ConversionDeValores.enRango(definicion,
-                            ConversionDeValores.entero(clave, limpio)));
+                    interpretado.numero());
             case DECIMAL -> AtributoEncargo.deNumero(idOrganizacion, encargo, clave,
-                    ConversionDeValores.enRango(definicion,
-                            ConversionDeValores.decimal(clave, limpio)));
+                    interpretado.numero());
             case IMPORTE -> AtributoEncargo.deImporte(idOrganizacion, encargo, clave,
-                    ConversionDeValores.enRango(definicion,
-                            ConversionDeValores.decimal(clave, limpio)),
-                    ConversionDeValores.exigirMoneda(clave, moneda));
+                    interpretado.numero(),interpretado.moneda());
             case BOOLEANO -> AtributoEncargo.deBooleano(idOrganizacion, encargo, clave,
-                    ConversionDeValores.booleano(clave, limpio));
+                    interpretado.booleano());
             case FECHA -> AtributoEncargo.deFecha(idOrganizacion, encargo, clave,
-                    ConversionDeValores.fecha(clave, limpio));
+                    interpretado.fecha());
             case TEXTO, LISTA -> AtributoEncargo.deTexto(idOrganizacion, encargo, clave,
-                    ConversionDeValores.enLongitud(definicion, limpio));
+                    interpretado.texto());
             case LISTA_MULTIPLE -> throw new ReglaNegocioException(
                     "El atributo \"" + clave + "\" admite varios valores: se guarda con la via de "
                             + "multivalor, no con un valor suelto.");
@@ -183,8 +180,7 @@ public class AtributosDeEncargo {
 
     /** El ancla de un multivalor. Sus valores viven aparte y se SUSTITUYEN. */
     private AtributoEncargo convertirMultivalor(long idOrganizacion, Comercializacion donde,
-                                                String clave) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
+                                                String clave,CatalogoAtributo definicion) {
         exigirQueAplique(definicion, donde);
         if (!definicion.tipo().esMultivalor()) {
             throw new ReglaNegocioException(
@@ -198,29 +194,14 @@ public class AtributosDeEncargo {
      * Reemplazar la fila perderia {@code fecha_creacion}, que es el dato que
      * dice desde cuando se pacto eso.
      */
-    private void actualizar(long idOrganizacion, AtributoEncargo existente, String valor,
-                            String moneda) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, existente.getClave());
+    private void actualizar(AtributoEncargo existente,CatalogoAtributo definicion,ValorLogico interpretado) {
         String clave = existente.getClave();
-        String limpio = valor == null ? null : valor.trim();
-        if (limpio == null || limpio.isEmpty()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" llego sin valor. Para quitarlo, borralo; "
-                            + "no se guarda vacio.");
-        }
         switch (definicion.tipo()) {
-            case ENTERO -> existente.cambiarANumero(ConversionDeValores.enRango(definicion,
-                    ConversionDeValores.entero(clave, limpio)));
-            case DECIMAL -> existente.cambiarANumero(ConversionDeValores.enRango(definicion,
-                    ConversionDeValores.decimal(clave, limpio)));
-            case IMPORTE -> existente.cambiarAImporte(ConversionDeValores.enRango(definicion,
-                            ConversionDeValores.decimal(clave, limpio)),
-                    ConversionDeValores.exigirMoneda(clave, moneda));
-            case BOOLEANO -> existente.cambiarABooleano(
-                    ConversionDeValores.booleano(clave, limpio));
-            case FECHA -> existente.cambiarAFecha(ConversionDeValores.fecha(clave, limpio));
-            case TEXTO, LISTA -> existente.cambiarATexto(
-                    ConversionDeValores.enLongitud(definicion, limpio));
+            case ENTERO,DECIMAL -> existente.cambiarANumero(interpretado.numero());
+            case IMPORTE -> existente.cambiarAImporte(interpretado.numero(),interpretado.moneda());
+            case BOOLEANO -> existente.cambiarABooleano(interpretado.booleano());
+            case FECHA -> existente.cambiarAFecha(interpretado.fecha());
+            case TEXTO,LISTA -> existente.cambiarATexto(interpretado.texto());
             case LISTA_MULTIPLE -> throw new ReglaNegocioException(
                     "El atributo \"" + clave + "\" admite varios valores: se edita con la via de "
                             + "multivalor, no con un valor suelto.");
@@ -244,8 +225,15 @@ public class AtributosDeEncargo {
      * de segunda.
      */
     public void escribir(Actor actor, Comercializacion donde, ValorEntrante entrante) {
+        var definicion=definicionDe(actor.idOrganizacion(),entrante.clave());
+        var actual=catalogo.bloquearVersionDeEncargo(actor.idOrganizacion(),entrante.clave())
+                .orElseThrow(()->new com.controllocal.service.excepcion.ConflictoException("La definición de la condición ya no está vigente."));
+        if(!java.util.Objects.equals(actual.getId(),definicion.getId())||actual.getVersion()!=definicion.getVersionDefinicion())
+            throw new com.controllocal.service.excepcion.ConflictoException("La definición de la condición cambió; debe revisar su versión actual.");
+        exigirQueAplique(definicion,donde);
+        var interpretado=ConversionDeValores.interpretar(definicion,entrante);
         if (entrante.esMultivalor()) {
-            escribirMultivalor(actor, donde, entrante);
+            escribirMultivalor(actor,donde,entrante,definicion);
             return;
         }
         long idOrganizacion = actor.idOrganizacion();
@@ -256,10 +244,9 @@ public class AtributosDeEncargo {
         ValorLogico hallado = existente == null ? null : ValorLogico.deFila(existente, null);
 
         AtributoEncargo fila = existente != null ? existente
-                : convertir(idOrganizacion, donde, entrante.clave(), entrante.valor(),
-                        entrante.moneda());
+                : convertir(idOrganizacion,donde,entrante.clave(),definicion,interpretado);
         if (existente != null) {
-            actualizar(idOrganizacion, existente, entrante.valor(), entrante.moneda());
+            actualizar(existente,definicion,interpretado);
         }
         anotarSegunHabia(actor, entrante, donde.idCaptacion(), hallado,
                 ValorLogico.deFila(valores.save(fila), null));
@@ -273,14 +260,13 @@ public class AtributosDeEncargo {
      * significa editar una lista. Y como en la propiedad, el conjunto anterior
      * se lee entero antes de borrarlo y viaja al linaje como conjunto.
      */
-    private void escribirMultivalor(Actor actor, Comercializacion donde, ValorEntrante entrante) {
+    private void escribirMultivalor(Actor actor,Comercializacion donde,ValorEntrante entrante,CatalogoAtributo definicion) {
         AtributoEncargo ancla = valores
                 .findByIdCaptacionAndClave(donde.idCaptacion(), entrante.clave())
                 .orElse(null);
         boolean existia = ancla != null;
         if (!existia) {
-            ancla = valores.save(convertirMultivalor(actor.idOrganizacion(), donde,
-                    entrante.clave()));
+            ancla = valores.save(convertirMultivalor(actor.idOrganizacion(),donde,entrante.clave(),definicion));
         }
         List<String> antes = existia ? multivalores.valoresDe(ancla.getId()) : List.of();
         ValorLogico hallado = existia ? ValorLogico.deConjunto(antes) : null;
@@ -321,12 +307,18 @@ public class AtributosDeEncargo {
      */
     public ValorRetirado retirar(Actor actor, Comercializacion donde, String clave,
                                  ProcedenciaDelValor procedencia) {
-        Optional<CatalogoAtributo> definicion =
-                catalogo.porClave(actor.idOrganizacion(), clave);
+        // Por CLAVE Y SUJETO (`N7`): sin sujeto en el `where`, una clave
+        // homonima de la PROPIEDAD podia resolverse aqui y el enrutamiento
+        // dependia de cual ganara por precedencia de organizacion.
+        Optional<CatalogoAtributo> definicion = catalogo
+                .porClaveYSujeto(actor.idOrganizacion(), clave, Sujeto.ENCARGO.codigo());
         if (definicion.isEmpty()) {
+            // Puede no existir, o existir en el otro sujeto. Lo segundo se dice
+            // con su nombre en vez de salir como "no esta en el catalogo".
+            catalogo.porClave(actor.idOrganizacion(), clave)
+                    .ifPresent(AtributosDeEncargo::exigirQueSeaDeEncargo);
             return ValorRetirado.NO_ES_DEL_CATALOGO;
         }
-        exigirQueSeaDeEncargo(definicion.get());
 
         AtributoEncargo existente = valores
                 .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
@@ -370,13 +362,32 @@ public class AtributosDeEncargo {
      * falla si existe pero es de la propiedad.
      */
     public CatalogoAtributo definicionDe(long idOrganizacion, String clave) {
-        CatalogoAtributo definicion = catalogo.porClave(idOrganizacion, clave)
+        CatalogoAtributo definicion = catalogo
+                // Por CLAVE Y SUJETO (`N7`). El `exigirQueSeaDeEncargo` de
+                // abajo no sobra: es el MENSAJE, y sigue haciendo falta porque
+                // la consulta sin sujeto del camino del fallo es la que
+                // distingue «no existe» de «existe y es de la propiedad».
+                .porClaveYSujeto(idOrganizacion, clave, Sujeto.ENCARGO.codigo())
                 .orElseThrow(() -> new ReglaNegocioException(
-                        "El atributo \"" + clave + "\" no esta en el catalogo. Una clave existe "
-                                + "antes que su valor: si no, dos encargos dicen lo mismo con "
-                                + "nombres distintos y dejan de poder compararse."));
+                        porQueNoSeResuelve(idOrganizacion, clave)));
         exigirQueSeaDeEncargo(definicion);
         return definicion;
+    }
+    /** Diagnóstico del mismo contrato para una propuesta aún sin episodio persistido. */
+    public CatalogoAtributo definicionAplicable(long organizacion,String clave,String tipo,String operacion){
+        var definicion=definicionDe(organizacion,clave);
+        exigirQueAplique(definicion,tipo,operacion);return definicion;
+    }
+
+    /** «No existe» y «existe y es de la propiedad» son dos cosas distintas (`N7`). */
+    private String porQueNoSeResuelve(long idOrganizacion, String clave) {
+        CatalogoAtributo enOtroSujeto = catalogo.porClave(idOrganizacion, clave).orElse(null);
+        if (enOtroSujeto != null && !enOtroSujeto.esDeEncargo()) {
+            return esDeLaPropiedad(enOtroSujeto.getClave());
+        }
+        return "El atributo \"" + clave + "\" no esta en el catalogo. Una clave existe "
+                + "antes que su valor: si no, dos encargos dicen lo mismo con "
+                + "nombres distintos y dejan de poder compararse.";
     }
 
     // ------------------------------------------------------------------
@@ -392,11 +403,7 @@ public class AtributosDeEncargo {
      */
     private static void exigirQueSeaDeEncargo(CatalogoAtributo definicion) {
         if (!definicion.esDeEncargo()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + definicion.getClave() + "\" es de la PROPIEDAD y se "
-                            + "intento tratar como una condicion del encargo. Un hecho del "
-                            + "inmueble no cambia porque cambie quien lo comercializa: se edita "
-                            + "en la ficha, una vez, y lo ven todos sus encargos.");
+            throw new ReglaNegocioException(esDeLaPropiedad(definicion.getClave()));
         }
         if (definicion.esEstructural()) {
             throw new ReglaNegocioException(
@@ -406,12 +413,27 @@ public class AtributosDeEncargo {
         }
     }
 
+    /**
+     * El mensaje, escrito una vez. Lo dicen la guarda de arriba y el camino del
+     * fallo de {@link #porQueNoSeResuelve}, y dos redacciones del mismo rechazo
+     * se separan.
+     */
+    private static String esDeLaPropiedad(String clave) {
+        return "El atributo \"" + clave + "\" es de la PROPIEDAD y se "
+                + "intento tratar como una condicion del encargo. Un hecho del "
+                + "inmueble no cambia porque cambie quien lo comercializa: se edita "
+                + "en la ficha, una vez, y lo ven todos sus encargos.";
+    }
+
     private static void exigirQueAplique(CatalogoAtributo definicion, Comercializacion donde) {
-        if (!definicion.aplicaA(donde.tipoPropiedad(), donde.tipoOperacion())) {
+        exigirQueAplique(definicion,donde.tipoPropiedad(),donde.tipoOperacion());
+    }
+    private static void exigirQueAplique(CatalogoAtributo definicion,String tipo,String operacion) {
+        if (!definicion.aplicaA(tipo,operacion)) {
             throw new ReglaNegocioException(
                     "El atributo \"" + definicion.getClave() + "\" no aplica a "
-                            + AtributosGobernados.nombreDelTipo(donde.tipoPropiedad())
-                            + " en " + nombreDeLaOperacion(donde.tipoOperacion())
+                            + AtributosGobernados.nombreDelTipo(tipo)
+                            + " en " + nombreDeLaOperacion(operacion)
                             + ". Lo que se pregunta de cada comercializacion sale del catalogo, "
                             + "no del formulario.");
         }

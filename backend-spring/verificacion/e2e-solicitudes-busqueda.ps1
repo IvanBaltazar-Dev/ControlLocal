@@ -3,20 +3,20 @@
 # SOLICITUDES (F4): GET /solicitudes y GET /solicitudes/resumen.
 #
 # Es el equivalente de e2e-demanda-busqueda.ps1 para F4 y existe por la misma
-# razon: la bandeja estrena texto libre y la §5 de
-# contrato-listados-paginados.md exige medir el patron —ramas + UNION— sobre el
+# razon: la bandeja estrena texto libre y la seccion 5 de
+# contrato-listados-paginados.md exige medir el patron -ramas + UNION- sobre el
 # banco de 100.000 antes de dar la pantalla por cerrada.
 #
 # Esta bandeja tiene CINCO ramas, una mas que ninguna anterior:
-#   codigo de la solicitud · codigo de la oportunidad · direccion y distrito de
-#   la propiedad · nombre del cliente · nombre del agente.
+#   codigo de la solicitud / codigo de la oportunidad / direccion y distrito de
+#   la propiedad / nombre del cliente / nombre del agente.
 #
 # Que verifica, en este orden:
 #   1. Semantica: cada rama casa lo suyo, sin duplicados, y conteo = pagina.
 #   2. El KPI del resumen sale del MISMO conjunto que la lista, y el cubo
 #      PENDIENTES (E+O) coincide con listar por ese mismo cubo.
 #   3. Rendimiento por HTTP sobre 100.000 filas, con los TRES criterios de la
-#      §5: discriminante (< 1.000 ms), no discriminante (RC-003, con su
+#      seccion 5: discriminante (< 1.000 ms), no discriminante (RC-003, con su
 #      referencia sin texto como evidencia) y paginacion profunda (RC-003).
 #   4. PLANES: cada rama entra por su indice y NINGUNA tabla grande se recorre
 #      entera, mas el contraste del OR prohibido sobre el mismo banco.
@@ -28,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0; $fail = 0
 
 # Volumen del banco. 100.000 es el numero del requisito; se puede bajar para
@@ -55,14 +56,12 @@ function Api($metodo, $ruta, $token, $cuerpo) {
     if ($null -ne $cuerpo) {
         $p['Body'] = ($cuerpo | ConvertTo-Json -Depth 6); $p['ContentType'] = 'application/json'
     } elseif ($metodo -in @('POST', 'PUT', 'PATCH')) { $p['ContentType'] = 'application/json' }
-    Invoke-RestMethod @p
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @p) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
-}
 
-function Plan($consulta) { Sql "explain (analyze, buffers) $consulta" }
+
+function Plan($consulta) { Invoke-ControlLocalE2ESql "explain (analyze, buffers) $consulta" }
 
 # Token con renovacion por CADUCIDAD, no por escenario: el JWT caduca antes de
 # terminar las llamadas, pero renovarlo en cada escenario agota el limite de 10
@@ -71,7 +70,7 @@ $script:token = $null
 $script:tokenExpira = [datetime]::MinValue
 function Token {
     if ((Get-Date) -lt $script:tokenExpira) { return $script:token }
-    $r = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
+    $r = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
     $script:token = $r.token
     $vida = if ($r.expiraEnSegundos) { [int]$r.expiraEnSegundos } else { 900 }
     $script:tokenExpira = (Get-Date).AddSeconds([math]::Max(60, $vida - 60))
@@ -83,9 +82,9 @@ function Token {
 # cache de planes vacia y las paginas fuera del buffer.
 #
 # `$termino` es el texto libre del escenario, y viaja aparte para poder
-# clasificarlo despues: la §5 define DISCRIMINANTE por lo que acota el TERMINO,
+# clasificarlo despues: la seccion 5 define DISCRIMINANTE por lo que acota el TERMINO,
 # no por cuantas filas devuelve la peticion entera. Cuando hay otro filtro en
-# juego, `Casa` mide el efecto conjunto y no sirve para clasificar (ver §8).
+# juego, `Casa` mide el efecto conjunto y no sirve para clasificar (ver seccion 8).
 function Medir($etiqueta, $ruta, $termino = '', $repeticiones = 20) {
     $token = Token
     $llamada = {
@@ -112,12 +111,12 @@ function Medir($etiqueta, $ruta, $termino = '', $repeticiones = 20) {
 }
 
 Write-Host "`n== 1. Login ==" -ForegroundColor Cyan
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
-$script:token = $admin.token
-$vidaToken = if ($admin.expiraEnSegundos) { [int]$admin.expiraEnSegundos } else { 900 }
+$operador = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$script:token = $operador.token
+$vidaToken = if ($operador.expiraEnSegundos) { [int]$operador.expiraEnSegundos } else { 900 }
 $script:tokenExpira = (Get-Date).AddSeconds([math]::Max(60, $vidaToken - 60))
 $token = $script:token
-Check 'login del administrador' ($admin.rol -eq 'ADMIN') $admin.rol
+Check 'login del broker del equipo TEST' ($operador.rol -eq 'BROKER') $operador.rol
 
 try {
 
@@ -129,36 +128,22 @@ Write-Host "`n== 2. Banco de $VOLUMEN solicitudes ==" -ForegroundColor Cyan
 #   HITOSOL   -> codigo de la solicitud      (rama solicitud)
 #   HITOCLI   -> nombre del cliente          (rama persona del cliente)
 #   HITOAGE   -> nombre del agente           (rama persona del agente)
-$agente = [int](Sql "select min(id_persona_rol) from persona_rol where tipo_rol='AGENTE'")
-$propietario = [int](Sql "select min(id_persona_rol) from persona_rol where tipo_rol='PROPIETARIO'")
-Check 'el seed aporta agente y propietario para colgar el banco' `
-    ($agente -gt 0 -and $propietario -gt 0) "agente=$agente propietario=$propietario"
-
-# Un SEGUNDO agente con el testigo en el nombre: sin el, la rama del agente
-# casaria con todo el banco o con nada, y no probaria nada.
-Sql @"
-insert into persona (tipo_persona, tipo_documento, numero_documento, nombres_o_razon_social,
-                     telefono, correo, estado, consentimiento_uso_dato, organizacion_id)
-values ('N', 'D', '77000001', 'Agente Testigo HITOAGE', '999000001',
-        'agente.testigo@perfsol.test', 'A', true, 1)
+$agentePrincipal = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$agenteSecundario = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.ltorres.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$agente = [long]$agentePrincipal.idDominio
+$agenteTestigo = [long]$agenteSecundario.idDominio
+$propietarioFicha = NuevoPropietarioC2DePrueba -Token $agentePrincipal.token -Nombre 'Propietario TEST de rendimiento solicitudes100000'
+$propietario = $propietarioFicha.id
+# Topologia inicial EXPLICITA del fixture nuevo: ambos profesionales del banco
+# pertenecen al equipo de este broker. No usar gobierno como cartera global.
+Invoke-ControlLocalE2ESql @"
+update supervision_agente set id_rol_broker=$($operador.idDominio)
+ where organizacion_id=$($fixtureE2E.organizacion) and id_rol_agente=$agenteTestigo and fecha_fin is null;
+update persona set nombres_o_razon_social='Agente Testigo HITOAGE'
+ where organizacion_id=$($fixtureE2E.organizacion) and id_persona=$($fixtureE2E.actores.ltorres.persona);
 "@ | Out-Null
-Sql @"
-insert into persona_rol (id_persona, tipo_rol, organizacion_id)
-select id_persona, 'AGENTE', 1 from persona where correo = 'agente.testigo@perfsol.test'
-"@ | Out-Null
-Sql @"
-insert into detalle_agente (id_persona_rol, codigo_agente, fecha_ingreso, estado_operativo, organizacion_id)
-select r.id_persona_rol, 'AGE-PERFSOL', current_date, 'D', 1
-  from persona_rol r join persona p on p.id_persona = r.id_persona
- where p.correo = 'agente.testigo@perfsol.test'
-"@ | Out-Null
-$agenteTestigo = [int](Sql @"
-select r.id_persona_rol from persona_rol r join persona p on p.id_persona = r.id_persona
- where p.correo = 'agente.testigo@perfsol.test'
-"@)
-Check 'el agente testigo del banco existe' ($agenteTestigo -gt 0) "id=$agenteTestigo"
-
-Sql @"
+Check 'el fixture tiene dos actores distintos del equipo' ($agente -gt 0 -and $agenteTestigo -gt 0 -and $agente -ne $agenteTestigo) 'actores TEST'
+Invoke-ControlLocalE2ESql @"
 insert into propiedad (codigo, direccion, distrito, metraje, precio_referencial,
                        moneda_referencial, estado_registro, disponibilidad_comercial,
                        id_rol_propietario, organizacion_id)
@@ -166,66 +151,53 @@ select 'PERFS-' || lpad(g::text, 7, '0'),
        'Calle solicitud ' || g || case when g % $PASO_TESTIGO = 0 then ' HITO' else '' end,
        (array['Miraflores','Lima','Barranco','Surco','Ate','San Isidro'])[1 + g % 6],
        60 + (g % 400), 3000 + (g % 9000), 'PEN', 'A', 'A',
-       $propietario, 1
+       $propietario, $($fixtureE2E.organizacion)
 from generate_series(1, $VOLUMEN) g
 "@ | Out-Null
 
-Sql @"
+Invoke-ControlLocalE2ESql @"
 insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
-select 1, p.id_propiedad, 'rubro_permitido', 'Carga solicitudes'
-  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%';
+select $($fixtureE2E.organizacion), p.id_propiedad, 'rubro_permitido', 'Carga solicitudes'
+  from propiedad p where p.organizacion_id=$($fixtureE2E.organizacion) and p.codigo like 'PERFS-%';
 insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_booleano)
-select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
-  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%'
+select $($fixtureE2E.organizacion), p.id_propiedad, 'apto_licencia_funcionamiento', true
+  from propiedad p where p.organizacion_id=$($fixtureE2E.organizacion) and p.codigo like 'PERFS-%'
 "@ | Out-Null
 
-# Las captaciones del banco nacen VENCIDAS, no activas: una ACTIVA exige
-# exclusividad y condicion economica completas (ck_captacion_activa_completa,
-# V17) y el estado de la captacion NO participa en el conjunto de candidatos de
-# esta bandeja. Igual criterio que en el gate de F3.
-Sql @"
+# Preparaciones TEST P sin pacto ni decision; V104 retiro el estado V.
+Invoke-ControlLocalE2ESql @"
 -- `motivo_operacion` se declara (V50 le quito el DEFAULT). Alquiler, que es la
 -- operacion de la bandeja de solicitudes.
 insert into captacion (codigo_captacion, fecha_captacion, fecha_inicio_encargo, fecha_fin_encargo,
                        estado, motivo_operacion, id_propiedad, id_rol_agente, organizacion_id)
 select 'CAPS-' || lpad(row_number() over (order by p.id_propiedad)::text, 7, '0'),
-       current_date, current_date, current_date + 180, 'V', 'A', p.id_propiedad, $agente, 1
-  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%'
+       current_date, current_date, current_date + 180, 'P', 'A', p.id_propiedad, $agente, $($fixtureE2E.organizacion)
+  from propiedad p where p.organizacion_id=$($fixtureE2E.organizacion) and p.codigo like 'PERFS-%'
 "@ | Out-Null
 
-Sql @"
-insert into persona (tipo_persona, tipo_documento, numero_documento, nombres_o_razon_social,
-                     telefono, correo, estado, consentimiento_uso_dato, organizacion_id)
-select 'N', 'D', lpad((78000000 + g)::text, 8, '0'),
-       case when g = 1 then 'Cliente Testigo HITOCLI' else 'Cliente Solicitud ' || g end,
-       '9' || lpad((10000000 + g)::text, 8, '0'), 'solicitud' || g || '@perfsol.test', 'A', true, 1
-from generate_series(1, $CLIENTES) g
-"@ | Out-Null
-Sql @"
-insert into persona_rol (id_persona, tipo_rol, organizacion_id)
-select p.id_persona, 'CLIENTE', 1 from persona p where p.correo like 'solicitud%@perfsol.test'
-"@ | Out-Null
-Sql @"
-insert into detalle_cliente (id_persona_rol, organizacion_id, rubro_comercial, consentimiento_contacto)
-select r.id_persona_rol, 1, 'Carga solicitudes', true
-  from persona_rol r join persona p on p.id_persona = r.id_persona
- where r.tipo_rol = 'CLIENTE' and p.correo like 'solicitud%@perfsol.test'
-"@ | Out-Null
-
+# Clientes TEST por Core: se conserva su consentimiento y contexto RF003.
+for($g=1;$g -le $CLIENTES;$g++) {
+    $nombreCliente = if($g -eq 1){'Cliente Testigo HITOCLI'}else{'Cliente Solicitud '+$g}
+    $null = Api POST '/clientes' $agentePrincipal.token @{
+        tipoPersona='N';tipoDocumento='D';numeroDocumento=([string](78000000+$g));nombre=$nombreCliente
+        telefono=('9'+(10000000+$g));correo=('solicitud'+$g+'-'+$e2e.RunId+'@example.invalid')
+        consentimientoUsoDato=$true;consentimientoContacto=$true;rubroComercial='Carga solicitudes'
+    }
+}
 # Oportunidades: una por captacion, cliente emparejado por hash (no un lateral
 # con OFFSET, que costaba 100.000 recorridos del banco de clientes).
-Sql @"
+Invoke-ControlLocalE2ESql @"
 insert into oportunidad_comercial (organizacion_id, codigo_oportunidad, estado, id_rol_cliente,
                                    id_captacion, id_rol_agente, observaciones, fecha_registro)
-select 1,
+select $($fixtureE2E.organizacion),
        'OPS-' || lpad(n::text, 7, '0') || case when n % $PASO_TESTIGO = 0 then '-HITOOP' else '' end,
        'S', cli.id_persona_rol, c.id_captacion, $agente,
        'Carga solicitudes ' || n, now() - (n || ' minutes')::interval
   from (select c.id_captacion, row_number() over (order by c.id_captacion) as n
-          from captacion c where c.organizacion_id = 1 and c.codigo_captacion like 'CAPS-%') c
+          from captacion c where c.organizacion_id=$($fixtureE2E.organizacion) and c.codigo_captacion like 'CAPS-%') c
   join (select r.id_persona_rol, (row_number() over (order by r.id_persona_rol) - 1) as k
           from persona_rol r join persona p on p.id_persona = r.id_persona
-         where r.tipo_rol = 'CLIENTE' and p.correo like 'solicitud%@perfsol.test') cli
+         where r.tipo_rol = 'CLIENTE' and p.correo like 'solicitud%@example.invalid' and r.organizacion_id=$($fixtureE2E.organizacion)) cli
     on cli.k = c.n % $CLIENTES
 "@ | Out-Null
 
@@ -234,7 +206,7 @@ select 1,
 # rama del agente case con ~200 filas sobre 100.000.
 #
 # El codigo cabe justo en VARCHAR(20): 'SOLS-' + 7 digitos + '-HITOSOL'.
-Sql @"
+Invoke-ControlLocalE2ESql @"
 -- `tipo` es NOT NULL sin default desde V51: el expediente dice de que operacion
 -- es, porque un alquiler y una compraventa no piden los mismos documentos ni se
 -- cierran igual. El trigger `tg_expediente_tipo_del_encargo` solo VALIDA que
@@ -243,7 +215,7 @@ Sql @"
 insert into solicitud_alquiler (organizacion_id, codigo_solicitud, fecha_registro, monto_propuesto,
                                 moneda, estado, tipo, id_oportunidad, id_rol_agente,
                                 plazo_contrato_meses, observaciones)
-select 1,
+select $($fixtureE2E.organizacion),
        'SOLS-' || lpad(n::text, 7, '0') || case when n % $PASO_TESTIGO = 0 then '-HITOSOL' else '' end,
        -- El cast a int es obligatorio: n viene de row_number() y es bigint, y
        -- PostgreSQL no define la resta date menos bigint. Sin el, el INSERT
@@ -256,15 +228,15 @@ select 1,
        12 + (n % 24), 'Carga solicitudes ' || n
   from (select o.id_oportunidad, row_number() over (order by o.id_oportunidad) as n
           from oportunidad_comercial o
-         where o.organizacion_id = 1 and o.codigo_oportunidad like 'OPS-%') o
+         where o.organizacion_id=$($fixtureE2E.organizacion) and o.codigo_oportunidad like 'OPS-%') o
 "@ | Out-Null
 
 foreach ($t in @('propiedad','captacion','persona','persona_rol','detalle_cliente','detalle_agente',
                  'oportunidad_comercial','solicitud_alquiler')) {
-    Sql "analyze $t" | Out-Null
+    Invoke-ControlLocalE2ESql "analyze $t" | Out-Null
 }
 
-$nSol = [int](Sql "select count(*) from solicitud_alquiler where codigo_solicitud like 'SOLS-%'")
+$nSol = [int](Invoke-ControlLocalE2ESql "select count(*) from solicitud_alquiler where codigo_solicitud like 'SOLS-%'")
 Check "el banco tiene $VOLUMEN solicitudes" ($nSol -eq $VOLUMEN) "cargadas=$nSol"
 
 # [int] en PowerShell REDONDEA, no trunca: con un banco reducido daria 1
@@ -389,7 +361,7 @@ $sinTexto = @(
 $sinTexto | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 
 # ---------------------------------------------------------------------
-# LOS TRES CRITERIOS (§5, decision del 2026-08-02). Cada escenario se juzga por
+# LOS TRES CRITERIOS (seccion 5, decision del 2026-08-02). Cada escenario se juzga por
 # el suyo: meter una busqueda y un listado sin filtro en el mismo saco fue el
 # error que el gate de F3 corrigio.
 #
@@ -397,7 +369,7 @@ $sinTexto | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 # filas devuelve la peticion entera. El gate de F3 usaba el `totalRecords` de la
 # respuesta como proxy, y ahi coincidia porque sus escenarios con otro filtro
 # median rapido igualmente; aqui NO coincide: `texto=Calle&estado=PENDIENTES`
-# casa 28.572 filas —por debajo del umbral— pero su texto casa con las 100.000,
+# casa 28.572 filas -por debajo del umbral- pero su texto casa con las 100.000,
 # asi que el trabajo que mide es el de construir el conjunto entero. Juzgarlo
 # como busqueda discriminante seria exigirle 1.000 ms a un listado sin filtro.
 #
@@ -438,15 +410,15 @@ Check "peor observado de la busqueda discriminante < $PEOR_OBJETIVO ms" `
     ($peorDisc -lt $PEOR_OBJETIVO) "peor=$peorDisc ms"
 # El resumen NO se juzga con el objetivo de 1.000 ms, y la razon es de diseno,
 # no de conveniencia: la peticion agrupa TRES consultas y solo una es la
-# busqueda. Los cubos si cuentan sobre el conjunto de candidatos —y eso ya lo
-# vigila el criterio 1 a traves de la lista, que comparte ese conjunto—, pero
+# busqueda. Los cubos si cuentan sobre el conjunto de candidatos -y eso ya lo
+# vigila el criterio 1 a traves de la lista, que comparte ese conjunto-, pero
 # `distritosDisponibles` y `agentesDisponibles` recorren el ALCANCE COMPLETO a
 # proposito: ofrecen las opciones del alcance, no las del resultado filtrado,
 # igual que en /clientes/resumen y /visitas/resumen. Su coste es el de listar
 # sin filtro, asi que el limite que les aplica sin ambiguedad es RC-003.
 #
-# El objetivo de 1.000 ms se sigue informando —la corrida de FIRMA lo midio en
-# 444 ms, maquina en reposo— para que una regresion de verdad se vea, pero no
+# El objetivo de 1.000 ms se sigue informando -la corrida de FIRMA lo midio en
+# 444 ms, maquina en reposo- para que una regresion de verdad se vea, pero no
 # tumba el gate: hacerlo convertiria cualquier corrida con la maquina ocupada en
 # un falso negativo (1.381 ms con una build de Angular en paralelo; 694 ms con
 # el entorno de desarrollo levantado). La cifra canonica es la de la firma.
@@ -501,26 +473,26 @@ Write-Host "`n== 11. Planes: cada rama entra por su indice, ninguna tabla se rec
 # dentro de su transaccion (PlanDeConsulta). Aqui se explica a mano, asi que hay
 # que pedir lo mismo o se leeria el plan generico y las conclusiones serian las
 # contrarias.
-Sql "set plan_cache_mode = 'force_custom_plan'" | Out-Null
+Invoke-ControlLocalE2ESql "set plan_cache_mode = 'force_custom_plan'" | Out-Null
 $planSol = Plan @"
 select count(*) from (
   select s.id_solicitud as id from solicitud_alquiler s
     join oportunidad_comercial op on op.id_oportunidad = s.id_oportunidad
     join captacion cap on cap.id_captacion = op.id_captacion
     join propiedad prop on prop.id_propiedad = cap.id_propiedad
-   where s.organizacion_id = 1 and lower(s.codigo_solicitud) like lower('%HITOSOL%')
+   where s.organizacion_id=$($fixtureE2E.organizacion) and lower(s.codigo_solicitud) like lower('%HITOSOL%')
   union
   select s.id_solicitud from solicitud_alquiler s
     join oportunidad_comercial op on op.id_oportunidad = s.id_oportunidad
     join captacion cap on cap.id_captacion = op.id_captacion
     join propiedad prop on prop.id_propiedad = cap.id_propiedad
-   where s.organizacion_id = 1 and lower(op.codigo_oportunidad) like lower('%HITOSOL%')
+   where s.organizacion_id=$($fixtureE2E.organizacion) and lower(op.codigo_oportunidad) like lower('%HITOSOL%')
   union
   select s.id_solicitud from solicitud_alquiler s
     join oportunidad_comercial op on op.id_oportunidad = s.id_oportunidad
     join captacion cap on cap.id_captacion = op.id_captacion
     join propiedad prop on prop.id_propiedad = cap.id_propiedad
-   where s.organizacion_id = 1 and (lower(prop.direccion) like lower('%HITOSOL%')
+   where s.organizacion_id=$($fixtureE2E.organizacion) and (lower(prop.direccion) like lower('%HITOSOL%')
                                     or lower(prop.distrito) like lower('%HITOSOL%'))
   union
   select s.id_solicitud from solicitud_alquiler s
@@ -529,7 +501,7 @@ select count(*) from (
     join propiedad prop on prop.id_propiedad = cap.id_propiedad
     join persona_rol prCli on prCli.id_persona_rol = op.id_rol_cliente
     join persona perCli on perCli.id_persona = prCli.id_persona
-   where s.organizacion_id = 1 and lower(perCli.nombres_o_razon_social) like lower('%HITOSOL%')
+   where s.organizacion_id=$($fixtureE2E.organizacion) and lower(perCli.nombres_o_razon_social) like lower('%HITOSOL%')
   union
   select s.id_solicitud from solicitud_alquiler s
     join oportunidad_comercial op on op.id_oportunidad = s.id_oportunidad
@@ -537,7 +509,7 @@ select count(*) from (
     join propiedad prop on prop.id_propiedad = cap.id_propiedad
     join persona_rol prAg on prAg.id_persona_rol = s.id_rol_agente
     join persona perAg on perAg.id_persona = prAg.id_persona
-   where s.organizacion_id = 1 and lower(perAg.nombres_o_razon_social) like lower('%HITOSOL%')
+   where s.organizacion_id=$($fixtureE2E.organizacion) and lower(perAg.nombres_o_razon_social) like lower('%HITOSOL%')
 ) c
 "@
 Write-Host $planSol
@@ -553,7 +525,7 @@ Check 'plan de solicitudes: sin Seq Scan de las tablas grandes' `
      $planSol -notmatch 'Seq Scan on oportunidad_comercial' -and
      $planSol -notmatch 'Seq Scan on propiedad') 'Seq Scan'
 
-# Contraste explicito: el OR cruzado que la §5 prohibe, sobre el MISMO banco.
+# Contraste explicito: el OR cruzado que la seccion 5 prohibe, sobre el MISMO banco.
 $planOr = Plan @"
 select count(*) from solicitud_alquiler s
   join oportunidad_comercial op on op.id_oportunidad = s.id_oportunidad
@@ -563,7 +535,7 @@ select count(*) from solicitud_alquiler s
   join persona perCli on perCli.id_persona = prCli.id_persona
   join persona_rol prAg on prAg.id_persona_rol = s.id_rol_agente
   join persona perAg on perAg.id_persona = prAg.id_persona
- where s.organizacion_id = 1
+ where s.organizacion_id=$($fixtureE2E.organizacion)
    and (lower(s.codigo_solicitud) like lower('%HITOSOL%')
         or lower(op.codigo_oportunidad) like lower('%HITOSOL%')
         or lower(prop.direccion) like lower('%HITOSOL%')
@@ -592,7 +564,7 @@ Check 'SolicitudAlquilerRepository: el listado JPQL no recibe texto libre' `
     # antes de tirar la base entera era trabajo puro; ver la nota larga en
     # `e2e-demanda-busqueda.ps1`, donde se midio.
     Write-Host "`n== Limpieza: la base exclusiva de la corrida se elimina entera ==" -ForegroundColor Cyan
-    $baseActual = (Sql 'select current_database()').Trim()
+    $baseActual = (Invoke-ControlLocalE2ESql 'select current_database()').Trim()
     Check 'el banco vive en la base efimera de la corrida (se elimina entera)' `
         ($baseActual -eq $e2e.Database -and $baseActual -like 'controllocal_e2e_*') `
         "la suite apunta a '$baseActual', que no es la base efimera de la corrida"

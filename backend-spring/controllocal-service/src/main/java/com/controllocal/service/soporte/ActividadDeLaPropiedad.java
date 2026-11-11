@@ -2,7 +2,6 @@ package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.domain.comercial.InteraccionComercial;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.comercial.Visita;
@@ -14,7 +13,10 @@ import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.persona.DetalleCliente;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
+import com.controllocal.service.Actor;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.InteraccionService.FichaInteraccion;
+import com.controllocal.service.InteraccionService.FinalidadLectura;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
@@ -30,32 +32,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * <b>Que ha pasado con una propiedad, y de que encargo viene cada cosa</b>
- * (D-E4-1, D-A-1).
- *
- * <h2>Por que esta regla vive aqui y no en la pantalla</h2>
- * «La actividad de una propiedad es la actividad de sus encargos» es una regla
- * de dominio, no una consulta. Escrita en el cliente obliga a recorrer
- * {@code visita -> oportunidad -> captacion -> propiedad} para saber de donde
- * sale cada fila, que es exactamente la topologia del modelo que una interfaz
- * no debe conocer (D-E4-3). Y con dos interfaces --BROX Web y KAIROS-- serian
- * dos recorridos que se separan.
- *
- * <p>Escrita aqui, se escribe una vez: cada hecho sale de la consulta <b>con su
- * {@code idEncargo} puesto</b>.
- *
- * <h2>La procedencia no es decoracion</h2>
- * Una propiedad en venta y en alquiler acumula visitas de gente que quiere
- * comprar y de gente que quiere alquilar. En una lista plana se leen igual, y
- * eso deshace justo lo que el modelo universal vino a arreglar. Por eso todo
- * {@link HechoDeActividad} arrastra el encargo del que nace, y la operacion de
- * ese encargo <b>en palabras</b>.
- *
- * <h2>Lo que se pide, y lo que no</h2>
- * Cinco consultas por ficha, todas por {@code id in (...)} sobre los encargos
- * que ya se leyeron. Ninguna se recorta: son los hechos de <b>una</b> propiedad,
- * no una bandeja, y un tope silencioso haria que la ficha pareciera completa
- * cuando no lo esta.
+ * Actividad de una propiedad: hechos de sus Encargos visibles e interacciones
+ * autorizadas que pueden precederlos (C4, §§1/4). La comunicación conserva una
+ * identidad y todos sus orígenes; sólo un origen único determina idEncargo/operación.
+ * No se siguen sus vínculos para recuperar contactos o notas fuera de la proyección.
+ * Las consultas no tienen un tope silencioso que aparente una cronología completa.
  */
 @Component
 public class ActividadDeLaPropiedad {
@@ -66,32 +47,15 @@ public class ActividadDeLaPropiedad {
     public static final String EXPEDIENTE = "EXPEDIENTE";
     public static final String CONTRATO = "CONTRATO";
 
-    /**
-     * El canal de un contacto, en palabras.
-     *
-     * <p>Esta aqui y no en el cliente por el mismo motivo que
-     * {@code rotuloDelTipo}: es vocabulario del negocio. La copia que el SPA
-     * heredo sigue sirviendo a las pantallas que aun no han migrado; esta
-     * ficha ya no la necesita.
-     */
-    private static final Map<String, String> CANALES = Map.of(
-            "L", "Llamada",
-            "W", "WhatsApp",
-            "E", "Email",
-            "P", "Presencial",
-            "R", "Reunion",
-            "T", "Portal",
-            "O", "Otro");
-
     private final OportunidadComercialRepository oportunidades;
     private final VisitaRepository visitas;
-    private final InteraccionComercialRepository interacciones;
+    private final InteraccionService interacciones;
     private final SolicitudAlquilerRepository expedientes;
     private final ContratoAlquilerRepository contratos;
 
     public ActividadDeLaPropiedad(OportunidadComercialRepository oportunidades,
                                   VisitaRepository visitas,
-                                  InteraccionComercialRepository interacciones,
+                                  InteraccionService interacciones,
                                   SolicitudAlquilerRepository expedientes,
                                   ContratoAlquilerRepository contratos) {
         this.oportunidades = oportunidades;
@@ -102,14 +66,17 @@ public class ActividadDeLaPropiedad {
     }
 
     /**
-     * @param encargos los de la propiedad, <b>todos</b>: tambien los cerrados.
+     * @param encargos los autorizados de la propiedad, incluidos los cerrados.
      *                 Un contrato firmado en 2024 cuelga de un encargo que hoy
      *                 esta cerrado, y filtrarlos por vivos borraria el cierre
      *                 mas importante de la ficha
      */
-    public ActividadPropiedad de(long idOrganizacion, List<Captacion> encargos) {
+    public ActividadPropiedad de(Actor actor, long idPropiedad, List<Captacion> encargos) {
+        Alcances.exigirOperador(actor);
+        long idOrganizacion = actor.idOrganizacion();
         if (encargos.isEmpty()) {
-            return new ActividadPropiedad(List.of(), List.of(), List.of(), List.of(), List.of());
+            return new ActividadPropiedad(List.of(), List.of(),
+                    interaccionesDe(actor, idPropiedad, Map.of()), List.of(), List.of());
         }
         List<Long> ids = encargos.stream().map(Captacion::getId).toList();
 
@@ -124,7 +91,7 @@ public class ActividadDeLaPropiedad {
         return new ActividadPropiedad(
                 oportunidadesDe(idOrganizacion, ids, operaciones),
                 visitasDe(idOrganizacion, ids, operaciones),
-                interaccionesDe(idOrganizacion, ids, operaciones),
+                interaccionesDe(actor, idPropiedad, operaciones),
                 expedientesDe(idOrganizacion, ids, operaciones),
                 contratosDe(idOrganizacion, ids, operaciones));
     }
@@ -140,7 +107,7 @@ public class ActividadDeLaPropiedad {
                         o.estadoActual(), rotulo(EstadoOportunidad.desde(o.estadoActual())),
                         fecha(o.getFechaRegistro()), null, null,
                         idEncargo(o), operaciones,
-                        "oportunidades/" + o.getId()))
+                        "oportunidades/" + o.getId(), null))
                 .toList();
     }
 
@@ -153,27 +120,23 @@ public class ActividadDeLaPropiedad {
                         v.estadoActual(), rotulo(EstadoVisita.desde(v.estadoActual())),
                         v.getFechaVisita(), null, null,
                         idEncargo(v.getOportunidad()), operaciones,
-                        "visitas"))
+                        "visitas", null))
                 .toList();
     }
 
     /**
-     * La bitacora, con sus dos ramas: lo hablado con el propietario cuelga del
-     * encargo y lo hablado con el interesado cuelga de la oportunidad. Las dos
-     * son actividad de la misma propiedad.
+     * Una sola lectura canónica incluye vínculos directos y padres autorizados,
+     * sin exigir Encargo ni inferir la identidad del interlocutor.
      */
-    private List<HechoDeActividad> interaccionesDe(long idOrganizacion, List<Long> ids,
+    private List<HechoDeActividad> interaccionesDe(Actor actor, long idPropiedad,
                                                    Map<Long, OperacionInmobiliaria> operaciones) {
-        return interacciones.listarFichaPorEncargos(idOrganizacion, ids).stream()
-                .map(i -> hecho(INTERACCION, i.getId(), null,
-                        canal(i.getCanalContacto())
-                                + (i.getCliente() == null ? " con el propietario"
-                                                          : " con " + nombre(i.getCliente())),
-                        i.getObservaciones(),
-                        null, null,
-                        fecha(i.getFechaHora()), null, null,
-                        idEncargoDe(i), operaciones,
-                        "interacciones/" + i.getId()))
+        return interacciones.porPropiedad(idPropiedad, actor,
+                        FinalidadLectura.FICHA_PROPIEDAD).stream()
+                .map(i -> hecho(INTERACCION, i.id(), null,
+                        PresentacionDeInteraccion.titulo(i), PresentacionDeInteraccion.detalle(i),
+                        PresentacionDeInteraccion.estado(i), PresentacionDeInteraccion.resultado(i),
+                        i.fechaHecho(), null, null, idEncargoDe(i, operaciones), operaciones,
+                        "interacciones/" + i.id(), List.copyOf(i.vinculos())))
                 .toList();
     }
 
@@ -186,7 +149,7 @@ public class ActividadDeLaPropiedad {
                         s.estadoActual(), rotulo(EstadoSolicitud.desde(s.estadoActual())),
                         s.getFechaRegistro(), s.getMontoPropuesto(), s.getMoneda(),
                         idEncargo(s.getOportunidad()), operaciones,
-                        "solicitudes/" + s.getCodigoSolicitud()))
+                        "solicitudes/" + s.getCodigoSolicitud(), null))
                 .toList();
     }
 
@@ -200,7 +163,7 @@ public class ActividadDeLaPropiedad {
                         c.estadoActual(), rotulo(EstadoContrato.desde(c.estadoActual())),
                         c.getFechaCierre(), c.getRentaContractual(), c.getMoneda(),
                         idEncargo(c.getOportunidad()), operaciones,
-                        "propiedades-alquiladas"))
+                        "propiedades-alquiladas", null))
                 .toList();
     }
 
@@ -215,7 +178,7 @@ public class ActividadDeLaPropiedad {
                                           LocalDate fecha, BigDecimal monto, String moneda,
                                           Long idEncargo,
                                           Map<Long, OperacionInmobiliaria> operaciones,
-                                          String ruta) {
+                                          String ruta, List<InteraccionService.VinculoFicha> vinculos) {
         OperacionInmobiliaria operacion = idEncargo == null ? null : operaciones.get(idEncargo);
         return new HechoDeActividad(proceso, id, codigo, titulo, detalle, estado, estadoRotulo,
                 fecha, monto, moneda, idEncargo,
@@ -223,7 +186,7 @@ public class ActividadDeLaPropiedad {
                 // El valor para comparar y el rotulo para leer, como en el
                 // resto del read model: «Venta», no VENTA.
                 operacion == null ? null : enFrase(operacion.name()),
-                ruta);
+                ruta, vinculos);
     }
 
     private static Long idEncargo(OportunidadComercial oportunidad) {
@@ -231,21 +194,18 @@ public class ActividadDeLaPropiedad {
                 ? null : oportunidad.getCaptacion().getId();
     }
 
-    /** El encargo de una interaccion: el suyo, o el de su oportunidad. */
-    private static Long idEncargoDe(InteraccionComercial interaccion) {
-        if (interaccion.getCaptacion() != null) {
-            return interaccion.getCaptacion().getId();
-        }
-        return idEncargo(interaccion.getOportunidad());
+    private static Long idEncargoDe(FichaInteraccion interaccion,
+                                    Map<Long, OperacionInmobiliaria> operaciones) {
+        List<Long> ids = interaccion.vinculos().stream()
+                .filter(v -> "ENCARGO".equals(v.tipo()) && operaciones.containsKey(v.referencia()))
+                .map(InteraccionService.VinculoFicha::referencia).distinct().toList();
+        // Varias referencias no se reducen falsamente a un único origen/operación.
+        return ids.size() == 1 ? ids.getFirst() : null;
     }
 
     /** VENTA -> Venta. El valor viaja en mayusculas; la persona lo lee en frase. */
     private static String enFrase(String valor) {
         return valor.charAt(0) + valor.substring(1).toLowerCase(java.util.Locale.ROOT);
-    }
-
-    private static String canal(String codigo) {
-        return CANALES.getOrDefault(codigo, "Contacto");
     }
 
     private static String rotulo(com.controllocal.domain.comun.EstadosDominio.Codigo estado) {

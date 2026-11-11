@@ -74,6 +74,32 @@ describe('OportunidadDetail', () => {
     expect(visitas.pagina).toHaveBeenCalledWith({ idOportunidad: 9, pagina: 1, tamano: 100 });
   });
 
+  it('muestra FALTANTE y el rol del snapshot parcial en la interacción', async () => {
+    interacciones.pagina.and.resolveTo(
+      pagina([
+        {
+          id: 31,
+          contexto: 'OPORTUNIDAD',
+          idOportunidad: 9,
+          propietarioNombre: 'Hugo Salazar',
+          contactoTipo: 'Ocupante',
+          contactoTelefono: '+51 999 333 444',
+          fechaHora: '2026-08-01T10:00:00',
+          canalContacto: 'L',
+          resultado: 'INTERESADO',
+        },
+      ]),
+    );
+
+    const fixture = await montar();
+    const contenido = texto(fixture);
+
+    expect(contenido).toContain('FALTANTE');
+    expect(contenido).toContain('Ocupante');
+    expect(contenido).toContain('+51 999 333 444');
+    expect(contenido).not.toContain('Hugo Salazar');
+  });
+
   /** Solo la oportunidad es fatal: los dos paneles caen por separado. */
   it('un fallo de las visitas no tumba el seguimiento', async () => {
     visitas.pagina.and.rejectWith(new ApiError(500, 'Falló la agenda.'));
@@ -156,6 +182,8 @@ describe('OportunidadDetail', () => {
   async function montar(rol: RolSesion = 'AGENTE'): Promise<ComponentFixture<OportunidadDetail>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

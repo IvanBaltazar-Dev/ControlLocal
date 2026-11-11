@@ -22,7 +22,10 @@ public record OportunidadResponse(Long id, String codigoOportunidad, Long idClie
                                   LocalDateTime fechaCierre, LocalDateTime fechaActualizacion,
                                   Long idPublicacionOrigen,
                                   List<OfertaResponse> ofertas,
-                                  CapacidadesMesaResponse capacidades) {
+                                  CapacidadesMesaResponse capacidades,long version,
+                                  OportunidadService.InteresadoReferencia interesado,Long idDemanda,Long versionDemanda,
+                                  String origen,String referenciaConsulta,String referenciaCoincidencia,
+                                  java.time.LocalDate fechaNoContinuidad,com.controllocal.service.soporte.Procedencia procedencia) {
 
     public static OportunidadResponse desde(OportunidadService.FichaOportunidad f) {
         return new OportunidadResponse(f.id(), f.codigoOportunidad(), f.idCliente(), f.clienteNombre(),
@@ -30,6 +33,7 @@ public record OportunidadResponse(Long id, String codigoOportunidad, Long idClie
                 f.agenteNombre(), f.estado(), f.fechaRegistro(), f.motivoCierre(), f.observaciones(),
                 f.fechaCierre(), f.fechaActualizacion(), f.idPublicacionOrigen(),
                 OfertaResponse.desde(f.ofertas()),
-                CapacidadesMesaResponse.desde(f.capacidades()));
+                CapacidadesMesaResponse.desde(f.capacidades()),f.version(),f.interesado(),f.idDemanda(),f.versionDemanda(),
+                f.origen(),f.referenciaConsulta(),f.referenciaCoincidencia(),f.fechaNoContinuidad(),f.procedencia());
     }
 }

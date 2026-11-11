@@ -1,6 +1,7 @@
 package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.persistence.busqueda.LecturaDePropiedadSql;
 import com.controllocal.persistence.query.ConteoPorPropietario;
 import com.controllocal.persistence.query.LocalListado;
 import com.controllocal.persistence.query.PropiedadListado;
@@ -16,6 +17,30 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
+
+    /** Versión escalar actual, sin reutilizar una entidad administrada antes de I/O. */
+    @Query("select p.versionFisica from Propiedad p where p.organizacionId=:org and p.id=:id")
+    Optional<Long> versionFisicaActual(@Param("org")long org,@Param("id")long id);
+
+    /** Mismo correlativo por organización; serializar sólo su asignación en esta TX. */
+    @Query(value="select 1 from pg_advisory_xact_lock(hashtextextended('BROX:PROP:' || cast(:organizacion as text),0))", nativeQuery=true)
+    int bloquearNumeracion(@Param("organizacion") long organizacion);
+
+    /** Autoridad consultada en SQL actual, aunque JPA ya gestione el inmueble. */
+    @Query(value = "select exists(select 1 from propiedad p where p.organizacion_id = :idOrganizacion"
+            + " and p.id_propiedad = :id" + LecturaDePropiedadSql.PREDICADO + ")", nativeQuery = true)
+    boolean permiteLectura(@Param("idOrganizacion") long idOrganizacion, @Param("id") long id,
+                          @Param("rolesLectura") String rolesLectura);
+
+    @Query(value = "select p.* from propiedad p where p.organizacion_id = :idOrganizacion"
+            + " and p.id_propiedad = :id" + LecturaDePropiedadSql.PREDICADO, nativeQuery = true)
+    Optional<Propiedad> buscarParaLectura(@Param("idOrganizacion") long idOrganizacion,
+                                        @Param("id") long id, @Param("rolesLectura") String rolesLectura);
+
+    @Query(value = "select p.* from propiedad p where p.organizacion_id = :idOrganizacion"
+            + " and p.id_propiedad in :ids" + LecturaDePropiedadSql.PREDICADO, nativeQuery = true)
+    List<Propiedad> buscarVariasParaLectura(@Param("idOrganizacion") long idOrganizacion,
+            @Param("ids") Collection<Long> ids, @Param("rolesLectura") String rolesLectura);
 
     /**
      * Ficha completa en una sola consulta (propietario con su persona +
@@ -90,8 +115,6 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    p.direccion as direccion,
                    p.distrito as distrito,
                    p.metraje as metraje,
-                   p.precioReferencial as precioReferencial,
-                   p.monedaReferencial as monedaReferencial,
                    p.descripcion as descripcion,
                    """ + ESTADO_LEGADO + """
                     as estado,
@@ -134,12 +157,18 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             """ + ASOCIACIONES_LISTADO;
 
     /** Los distritos con cartera, para que el filtro ofrezca solo lo que existe. */
-    @Query("""
-            select distinct p.distrito from Propiedad p
-             where p.organizacionId = :idOrganizacion and p.distrito is not null
-             order by p.distrito
-            """)
-    List<String> distritosConCartera(@Param("idOrganizacion") long idOrganizacion);
+    @Query(value = "select distinct p.distrito from propiedad p"
+            + " where p.organizacion_id = :idOrganizacion and p.distrito is not null"
+            + LecturaDePropiedadSql.PREDICADO + " order by p.distrito", nativeQuery = true)
+    List<String> distritosConCartera(@Param("idOrganizacion") long idOrganizacion,
+                                    @Param("rolesLectura") String rolesLectura);
+
+    @Query(value = "select p.* from propiedad p where p.organizacion_id = :idOrganizacion"
+            + " and p.id_rol_propietario = :idPropietario and p.id_propiedad <> :idExcluir"
+            + LecturaDePropiedadSql.PREDICADO + " order by p.id_propiedad", nativeQuery = true)
+    List<Propiedad> candidatosDuplicadosParaLectura(@Param("idOrganizacion") long idOrganizacion,
+                @Param("idPropietario") long idPropietario, @Param("idExcluir") long idExcluir,
+                @Param("rolesLectura") String rolesLectura);
 
     // ==================================================================
     // La segunda mitad de la busqueda: cargar la pagina YA resuelta.
@@ -173,6 +202,9 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
 
     /** Carga sin fetch joins, ya acotada al tenant (para los casos de uso que solo mutan). */
     Optional<Propiedad> findByOrganizacionIdAndId(long idOrganizacion, long id);
+
+    /** Carga por lote los destinos de las relaciones fisicas, siempre con tenant. */
+    List<Propiedad> findAllByOrganizacionIdAndIdIn(long idOrganizacion, Collection<Long> ids);
 
     // ------------------------------------------------------------------
     // F2.10: la autoridad de EDICION se comprueba sobre la fila tomada
@@ -237,6 +269,15 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     Optional<Propiedad> bloquearParaEscritura(@Param("idOrganizacion") long idOrganizacion,
                                               @Param("id") long id);
 
+    /** RF013: sólo el caso físico avanza este contador; un flush comercial no puede sobrescribirlo. */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            update propiedad set version_fisica=version_fisica+1
+             where organizacion_id=:organizacion and id_propiedad=:id and version_fisica=:observada
+            """, nativeQuery = true)
+    int incrementarVersionFisicaSi(@Param("organizacion") long organizacion,
+                                   @Param("id") long id, @Param("observada") long observada);
+
     /**
      * <b>Compare-and-set del responsable: exactamente UNA transicion legitima
      * puede partir de un estado concreto</b> (D-P0-9).
@@ -289,14 +330,6 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                              @Param("idPropiedad") long idPropiedad,
                              @Param("esperado") Long esperado,
                              @Param("nuevo") long nuevo);
-
-    /**
-     * Candidatos del mismo propietario para la advertencia de posible
-     * duplicado. La comparación técnica se hace en el servicio porque combina
-     * normalización de texto, campos opcionales y una tolerancia de metraje.
-     */
-    List<Propiedad> findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(
-            long idOrganizacion, long idRolPropietario, long idExcluir);
 
     /** Existencia dentro del tenant: un local de otra corredora "no existe". */
     boolean existsByOrganizacionIdAndId(long idOrganizacion, long id);

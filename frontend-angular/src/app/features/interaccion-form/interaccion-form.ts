@@ -101,6 +101,9 @@ export class InteraccionForm implements OnInit {
     resultado: this.fb.control('', [Validators.required]),
     observaciones: this.fb.control('', [Validators.maxLength(2000)]),
     transcripcionNota: this.fb.control('', [Validators.maxLength(4000)]),
+    contactoTipo: this.fb.control(''),
+    contactoNombre: this.fb.control(''),
+    contactoTelefono: this.fb.control(''),
   });
 
   protected readonly puedeGuardar = computed(() => this.auth.sesion()?.rol === 'AGENTE');
@@ -272,6 +275,9 @@ export class InteraccionForm implements OnInit {
         resultado: datos.resultado,
         observaciones: datos.observaciones.trim() || undefined,
         transcripcionNota: datos.transcripcionNota.trim() || undefined,
+        contactoTipo: textoOpcional(datos.contactoTipo),
+        contactoNombre: textoOpcional(datos.contactoNombre),
+        contactoTelefono: textoOpcional(datos.contactoTelefono),
       });
       void this.router.navigate(['/interacciones', creada.id]);
     } catch (error) {
@@ -356,4 +362,8 @@ function idPositivo(valor: string | null): number | null {
 
 function mensajeError(error: unknown, alterno: string): string {
   return error instanceof ApiError || error instanceof Error ? error.message : alterno;
+}
+
+function textoOpcional(valor: string): string | undefined {
+  return valor.trim() || undefined;
 }

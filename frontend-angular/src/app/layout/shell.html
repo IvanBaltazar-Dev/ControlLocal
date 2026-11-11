@@ -106,11 +106,12 @@
 
       @if (auth.sesion(); as sesion) {
         <!--
-          La campana es chrome global, no una pantalla: vive aquí y no en el
-          tablero porque los avisos siguen llegando mientras se trabaja en
-          cualquier otra parte.
+          La campana consume avisos comerciales. Gobierno consulta sus avisos
+          en Seguridad y accesos, sin crear este consumidor de cartera.
         -->
-        <cl-campana />
+        @if (sesion.rol === 'AGENTE' || sesion.rol === 'BROKER') {
+          <cl-campana />
+        }
 
         <div class="cuenta">
           <button

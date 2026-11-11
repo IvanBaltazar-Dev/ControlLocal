@@ -15,20 +15,9 @@ import java.util.List;
  */
 public interface AgenteService {
 
-    /**
-     * {@code idBrokerSupervisor} es {@code detalle_broker.id_persona_rol} del
-     * broker que se hara cargo del agente (D-S0-17, fila 17). Obligatorio en el
-     * alta: el {@code TENANT_ADMIN} que la ejecuta no supervisa a nadie, asi
-     * que el equipo de destino no se puede deducir de la sesion. En la
-     * actualizacion se ignora — reasignar a otro broker es una operacion con
-     * rastro propio ({@code /asignaciones/reasignar}), no un efecto lateral de
-     * editar la ficha.
-     */
-    record DatosAgente(String nombre, String tipoPersona, String tipoDocumento,
-                       String numeroDocumento, String telefono, String correo,
-                       String usuario, String contrasena, String zona,
-                       String codigoAgente, String estado, String estadoOperativo,
-                       Long idBrokerSupervisor) {
+    /** Edición local de gobierno; alta, supervisión y cuenta propia tienen casos distintos. */
+    record DatosAgente(String nombre, String telefono, String correoLaboral, String zona,
+                       String estadoOperativo) {
     }
 
     record FichaAgente(Long id, String codigoAgente, String nombre,
@@ -36,7 +25,7 @@ public interface AgenteService {
                        String numeroDocumento, String telefono, String correo,
                        String usuario, String zona, LocalDate fechaIngreso,
                        String estadoAdministrativo, String estadoOperativo,
-                       int captacionesActivas, int operacionesActivas) {
+                       Integer captacionesActivas, Integer operacionesActivas) {
     }
 
     /**
@@ -59,7 +48,7 @@ public interface AgenteService {
     }
 
     /** Un importe con su moneda; PEN y USD nunca se suman entre sí. */
-    record ImportePorMoneda(String moneda, BigDecimal monto) {
+    record ImportePorMoneda(String moneda, BigDecimal monto, Long determinados, Long pendientes) {
     }
 
     /**
@@ -89,8 +78,8 @@ public interface AgenteService {
     /** Cierre atribuido al agente (V27), para la lista corta de la ficha. */
     record CierreDeAgente(Long idContrato, String codigoSolicitud, String direccionLocal,
                           String distrito, String clienteNombre, LocalDate fechaCierre,
-                          String estadoContrato, BigDecimal comisionGenerada,
-                          String monedaComision) {
+                          String estadoContrato, BigDecimal rentaContractual,
+                          String monedaContrato) {
     }
 
     /**
@@ -112,13 +101,11 @@ public interface AgenteService {
 
     ResumenAgentes resumen(FiltrosAgente filtros, Actor actor);
 
-    /**
-     * Ficha individual. El BROKER solo alcanza a los agentes que supervisa;
-     * el ADMIN, a todos los del tenant.
-     */
+    /** Expediente comercial: sólo BROKER sobre los agentes que supervisa actualmente. */
     FichaCompletaAgente ficha(long id, Actor actor);
 
-    FichaAgente registrar(DatosAgente datos, Actor actor);
+    /** Selección exacta del perfil local para gobierno, sin expediente ni contadores comerciales. */
+    FichaAgente consultarParaGobierno(long id, Actor actor);
 
     FichaAgente actualizar(long id, DatosAgente datos, Actor actor);
 }

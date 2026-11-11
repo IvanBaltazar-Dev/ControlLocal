@@ -97,23 +97,18 @@ public final class EscritorEstructural {
      * escritura, o la regla «clave → autoridad» solo valdria para dos tercios
      * de las operaciones.
      *
-     * <p>No todo concepto se puede vaciar, y el que no se pueda <b>lo dice</b>:
-     * `METRAJE` es NOT NULL porque una propiedad sin metraje no es una
-     * propiedad. Dejarlo pasar en silencio, o vaciarlo a cero, seria inventar
-     * un dato — justo lo que este corte contiene.
+     * <p>CAT18/MAT-01 permite conservar un inmueble identificado con su área
+     * faltante. Retirarla conserva null, nunca cero; el caso canónico exige
+     * autoridad, versión y motivo, y conserva el antecedente. La suficiencia
+     * del Encargo y de publicación se comprueba en sus actuaciones propias.
      */
     public static void vaciar(Propiedad propiedad, String concepto, String clave) {
         switch (concepto == null ? "" : concepto) {
             case CatalogoAtributo.CAMPO_PISO -> propiedad.setPiso(null);
-            // Las dos registrales SI se pueden retirar, y tiene que poder
-            // hacerse: una partida se teclea mal, y la unica forma de decir
-            // "esto que puse no es cierto" sin inventar otra es quitarla. Es lo
-            // contrario de METRAJE, que es NOT NULL en el agregado.
+            // Retirar un dato erróneo no inventa otro valor como sustituto.
             case CatalogoAtributo.CAMPO_PARTIDA_REGISTRAL -> propiedad.setPartidaRegistral(null);
             case CatalogoAtributo.CAMPO_OFICINA_REGISTRAL -> propiedad.setOficinaRegistral(null);
-            case CatalogoAtributo.CAMPO_METRAJE -> throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" no se puede retirar: toda propiedad tiene "
-                            + "metraje. Corrigelo mandando el valor nuevo.");
+            case CatalogoAtributo.CAMPO_METRAJE -> propiedad.setMetraje(null);
             default -> throw new ReglaNegocioException(
                     "El atributo \"" + clave + "\" no se puede retirar: su autoridad es el campo "
                             + "canonico \"" + concepto + "\" y " + SIN_VACIADO_DEFINIDO + ".");

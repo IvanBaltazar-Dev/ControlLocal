@@ -10,7 +10,13 @@ import {
   RESULTADO_INTERACCION,
   TIPO_DOCUMENTO,
 } from '../../core/api/codigos';
-import { Interaccion, InteraccionesService } from '../../core/api/interacciones.service';
+import {
+  Interaccion,
+  InteraccionesService,
+  nombreDelInterlocutor,
+  telefonoDelInterlocutor,
+  tipoDelInterlocutor,
+} from '../../core/api/interacciones.service';
 import {
   Oportunidad,
   OPORTUNIDAD_ACTIVA,
@@ -198,6 +204,18 @@ export class ClienteContactoDetail implements OnInit {
 
   protected resultado(codigo: string | undefined): string {
     return describir(RESULTADO_INTERACCION, codigo) || SIN_DATO;
+  }
+
+  protected interlocutor(interaccion: Interaccion): string {
+    return nombreDelInterlocutor(interaccion);
+  }
+
+  protected rolInterlocutor(interaccion: Interaccion): string {
+    return tipoDelInterlocutor(interaccion);
+  }
+
+  protected telefonoInterlocutor(interaccion: Interaccion): string {
+    return textoDe(telefonoDelInterlocutor(interaccion));
   }
 
   protected estadoOportunidad(codigo: string | undefined): string {

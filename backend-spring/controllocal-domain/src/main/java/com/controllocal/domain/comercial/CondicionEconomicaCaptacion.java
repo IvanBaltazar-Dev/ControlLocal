@@ -30,6 +30,7 @@ public class CondicionEconomicaCaptacion extends EntidadDeOrganizacion {
     public static final String IGV_INCLUIDO = "I";
     public static final String IGV_ADICIONAL = "A";
     public static final String IGV_NO_APLICA = "N";
+    public static final String PERIODO_MENSUAL = "MENSUAL";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,29 +40,38 @@ public class CondicionEconomicaCaptacion extends EntidadDeOrganizacion {
     @Column(name = "tipo_operacion", nullable = false, length = 1)
     private String tipoOperacion;
 
-    @Column(name = "importe_referencia", nullable = false, precision = 14, scale = 2)
+    @Column(name = "importe_referencia", precision = 14, scale = 2)
     private BigDecimal importeReferencia;
 
-    @Column(name = "moneda_referencia", nullable = false, length = 3)
+    @Column(name = "moneda_referencia", length = 3)
     private String monedaReferencia;
 
-    @Column(name = "tipo_comision", nullable = false, length = 1)
+    @Column(name = "tipo_comision", length = 1)
     private String tipoComision;
 
-    @Column(name = "base_calculo", nullable = false, length = 1)
+    @Column(name = "base_calculo", length = 1)
     private String baseCalculo;
 
-    @Column(name = "valor_comision", nullable = false, precision = 12, scale = 4)
+    @Column(name = "valor_comision", precision = 12, scale = 4)
     private BigDecimal valorComision;
 
     @Column(name = "moneda_comision", length = 3)
     private String monedaComision;
 
-    @Column(name = "tratamiento_igv", nullable = false, length = 1)
+    @Column(name = "tratamiento_igv", length = 1)
     private String tratamientoIgv;
 
     @Column(name = "motivo_sin_comision", length = 300)
     private String motivoSinComision;
+
+    @Column(name = "periodo_precio", length = 40) private String periodoPrecio;
+    @Column(name = "hito_devengo", columnDefinition = "text") private String hitoDevengo;
+    @Column(name = "parte_obligada", columnDefinition = "text") private String parteObligada;
+    @Column(name = "beneficiario", columnDefinition = "text") private String beneficiario;
+    @Column(name = "exigibilidad", columnDefinition = "text") private String exigibilidad;
+    @Column(name = "procedencia_pacto", columnDefinition = "text") private String procedenciaPacto;
+    @Column(name = "tramos", columnDefinition = "text") private String tramos;
+    @Column(name = "composicion_mensual", columnDefinition = "text") private String composicionMensual;
 
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
@@ -90,4 +100,24 @@ public class CondicionEconomicaCaptacion extends EntidadDeOrganizacion {
     public void setMotivoSinComision(String motivoSinComision) { this.motivoSinComision = motivoSinComision; }
     public OffsetDateTime getFechaCreacion() { return fechaCreacion; }
     public void touch() { fechaActualizacion = OffsetDateTime.now(); }
+    public String getPeriodoPrecio() { return periodoPrecio; }
+    public void setPeriodoPrecio(String valor) { periodoPrecio=valor; }
+    public String getHitoDevengo() { return hitoDevengo; }
+    public void setHitoDevengo(String valor) { hitoDevengo=valor; }
+    public String getParteObligada() { return parteObligada; }
+    public void setParteObligada(String valor) { parteObligada=valor; }
+    public String getBeneficiario() { return beneficiario; }
+    public void setBeneficiario(String valor) { beneficiario=valor; }
+    public String getExigibilidad() { return exigibilidad; }
+    public void setExigibilidad(String valor) { exigibilidad=valor; }
+    public String getProcedenciaPacto() { return procedenciaPacto; }
+    public void setProcedenciaPacto(String valor) { procedenciaPacto=valor; }
+    @Column(name = "ejecucion_pacto", columnDefinition = "text")
+    private String ejecucionPacto;
+    public String getEjecucionPacto() { return ejecucionPacto; }
+    public void setEjecucionPacto(String valor) { ejecucionPacto=valor; }
+    public String getTramos() { return tramos; }
+    public void setTramos(String valor) { tramos=valor; }
+    public String getComposicionMensual() { return composicionMensual; }
+    public void setComposicionMensual(String valor) { composicionMensual=valor; }
 }

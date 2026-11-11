@@ -1,5 +1,8 @@
 package com.controllocal.persistence.busqueda;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
  * <b>Que se busca sobre la cartera de inmuebles, para cualquiera de sus dos
  * lecturas.</b>
@@ -21,6 +24,8 @@ package com.controllocal.persistence.busqueda;
  *
  * @param idOrganizacion el tenant. Sale del actor, nunca de un parametro de la
  *        peticion, y viaja en TODAS las ramas de la busqueda.
+ * @param rolesLectura roles comerciales autorizados por la relación del contexto;
+ *        obligatorio. Vacío no concede acceso y no existe un modo global implícito.
  * @param texto          texto libre ya recortado, o {@code null} si no hay
  *        filtro. Es lo que decide si el motor usa el conjunto de candidatos.
  * @param estado         codigo legado {@code D}/{@code N}/{@code I}, o
@@ -41,6 +46,7 @@ package com.controllocal.persistence.busqueda;
  */
 public record CriterioBusquedaInmobiliaria(
         long idOrganizacion,
+        List<Long> rolesLectura,
         String texto,
         String estado,
         String tipoPropiedad,
@@ -52,6 +58,7 @@ public record CriterioBusquedaInmobiliaria(
         int tamano) {
 
     public CriterioBusquedaInmobiliaria {
+        rolesLectura = List.copyOf(rolesLectura);
         if (orden == null) {
             throw new IllegalArgumentException("El criterio de busqueda necesita un orden.");
         }
@@ -60,6 +67,11 @@ public record CriterioBusquedaInmobiliaria(
                     "El criterio de busqueda llega sin acotar: pagina=" + pagina + " tamano=" + tamano
                             + ". Acotar es responsabilidad de quien construye el criterio.");
         }
+    }
+
+    /** Parámetro PostgreSQL único, también cuando se repite en las ramas UNION. */
+    public String rolesLecturaArray() {
+        return rolesLectura.stream().map(String::valueOf).collect(Collectors.joining(",", "{", "}"));
     }
 
     /** Si hay texto libre, y por tanto si hace falta el conjunto de candidatos. */

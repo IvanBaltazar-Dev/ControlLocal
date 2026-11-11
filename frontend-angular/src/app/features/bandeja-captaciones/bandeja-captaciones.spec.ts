@@ -63,11 +63,11 @@ describe('BandejaCaptaciones', () => {
     expect(texto(fixture)).not.toContain('CAP-0009');
   });
 
-  it('el módulo queda solo para broker y admin', () => {
+  it('el módulo de revisión queda solo para broker', () => {
     const modulo = MODULOS.find((m) => m.ruta === 'captaciones/pendientes')!;
     expect(modulo).toBeDefined();
     expect(puedeEntrar(modulo, 'BROKER')).toBeTrue();
-    expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeTrue();
+    expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeFalse();
     expect(puedeEntrar(modulo, 'AGENTE')).toBeFalse();
   });
 

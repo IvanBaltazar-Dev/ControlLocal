@@ -14,11 +14,12 @@ import com.controllocal.service.soporte.InterpretacionDelAsunto.Interpretacion;
  */
 public record AsuntoDelBrokerResponse(String id, String tipo, String entidadTipo, Long entidadId,
                                       String entidadCodigo, String destino, int diasEsperando,
-                                      String lado, String paso, Interpretacion interpretacion) {
+                                      String lado, String paso, Interpretacion interpretacion,
+                                      com.controllocal.service.soporte.PoliticaDeDespacho.Clasificacion orden) {
 
     public static AsuntoDelBrokerResponse desde(FocoDelBrokerService.AsuntoDelBroker a) {
         return new AsuntoDelBrokerResponse(a.id(), a.tipo(), a.entidadTipo(), a.entidadId(),
                 a.entidadCodigo(), a.destino(), a.diasEsperando(), a.lado(), a.paso(),
-                a.interpretacion());
+                a.interpretacion(),a.orden());
     }
 }

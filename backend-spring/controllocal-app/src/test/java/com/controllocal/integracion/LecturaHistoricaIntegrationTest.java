@@ -2,6 +2,16 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.integracion.soporte.EncargosDePrueba;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.CifradoSecretos;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.controllocal.service.Actor;
 import com.controllocal.service.CaptacionService;
 import com.controllocal.service.PrecioLocalService;
@@ -54,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   actor                    historia de PROPIEDAD | historico de ENCARGO | expediente    | rastro de reasignaciones
  *   AGENTE responsable           SI                | solo los suyos       | no            | no
  *   AGENTE no responsable        no                | solo los suyos       | no            | no
+ *   AGENTE sin relacion          404               | 404                  | no            | no
  *   BROKER                       en su alcance     | de sus supervisados  | si (C2)       | encargos que HOY lleva un supervisado
  *   TENANT_ADMIN                 NO por ser admin  | NO por ser admin     | si (gobierno) | si, todo el tenant (gobierno)
  *   otro tenant                  nunca (404)       | nunca (404)          | nunca (404)   | nunca
@@ -94,6 +105,19 @@ class LecturaHistoricaIntegrationTest {
     @Autowired PropiedadUniversalService propiedades;
     @Autowired PrecioLocalService precios;
     @Autowired CaptacionService captaciones;
+    @Autowired EncargoService ciclo;
+    @Autowired com.controllocal.service.ProspeccionService prospecciones;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentasPersonales;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
+    private SesionesComercialesDePrueba sesionesFixture;
+    private synchronized SesionesComercialesDePrueba sesiones() {
+        if(sesionesFixture==null)sesionesFixture=new SesionesComercialesDePrueba(jdbc,contextos,cuentasPersonales,factores,cifrado);
+        return sesionesFixture;
+    }
+    private ContextoSesion sesion(Actor actor){return sesiones().de(actor);}
 
     /** El mismo codigo que usa {@code AlcanceYGobiernoDeLaAutoridadIntegrationTest}. */
     private static final String CODIGO_TENANT_VECINO = "ALCANCE-TENANT-VECINO";
@@ -123,7 +147,7 @@ class LecturaHistoricaIntegrationTest {
                 "responde por la propiedad y el unico encargo es suyo: la historia del inmueble "
                         + "es exactamente lo que puede leer");
         assertFalse(ficha.historia().linea().isEmpty(),
-                "y trae hitos: el alta escribio el primer 'U' de la serie");
+                "y trae hitos: el montaje declaró explícitamente el primer U para probar lectura");
         assertEquals(1, ficha.encargos().size());
         assertNotNull(ficha.encargos().get(0).historico(),
                 "el historico de SU encargo llega, y llega como lista y no como ausencia");
@@ -165,17 +189,12 @@ class LecturaHistoricaIntegrationTest {
         FichaPropiedadUniversal suya = propiedades.consultar(idPropiedad, otra);
 
         assertNull(suya.historia(),
-                "no responde por la propiedad, asi que la memoria del INMUEBLE no es suya: "
-                        + "tener un encargo no concede la historia del inmueble");
+                "la lectura fisica por encargo propio no concede la historia agregada del inmueble");
         assertNotNull(encargo(suya, idVenta).historico(),
                 "pero SU encargo si, entero");
         assertFalse(encargo(suya, idVenta).historico().isEmpty());
-        assertNull(encargo(suya, idAlquiler).historico(),
-                "y el del alquiler ajeno no: nulo, que con NON_NULL es «no viaja»");
-        assertNotNull(encargo(suya, idAlquiler).importe(),
-                "aunque el BLOQUE del alquiler si llega: «no puedes ver lo que se pidio antes» "
-                        + "no es «este encargo no existe», y hay pantallas que necesitan saber "
-                        + "que la propiedad tiene un alquiler vivo");
+        assertTrue(suya.encargos().stream().noneMatch(e -> e.idEncargo() == idAlquiler),
+                "C1: ni el bloque, precio ni historico del alquiler ajeno se filtran por el inmueble");
         assertNotNull(suya.actividad(),
                 "y la actividad existe, acotada a su encargo");
 
@@ -183,9 +202,8 @@ class LecturaHistoricaIntegrationTest {
         // ni por el bloque ni por la historia agregada.
         FichaPropiedadUniversal deLaResponsable = propiedades.consultar(idPropiedad, duena);
         assertNotNull(encargo(deLaResponsable, idAlquiler).historico());
-        assertNull(encargo(deLaResponsable, idVenta).historico(),
-                "responder por la propiedad no concede el historico del encargo de otro (P0-4 "
-                        + "leido del lado de la lectura)");
+        assertTrue(deLaResponsable.encargos().stream().noneMatch(e -> e.idEncargo() == idVenta),
+                "responder por la propiedad tampoco concede el bloque de venta ajeno");
         assertNotNull(deLaResponsable.historia(), "su historia si, con lo que puede ver");
         assertTrue(deLaResponsable.historia().linea().stream()
                         .allMatch(hito -> hito.idEncargo() == idAlquiler),
@@ -212,23 +230,12 @@ class LecturaHistoricaIntegrationTest {
         Actor ajena = agenteDeOtroEquipo();
         long idPropiedad = registrar(duena);
 
-        FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, ajena);
-
-        assertNull(ficha.historia(), "ni responde por ella ni tiene encargos: no hay historia suya");
-        assertTrue(ficha.encargos().stream().allMatch(e -> e.historico() == null),
-                "ningun historico");
-        assertNull(ficha.actividad(), "y ningun hecho comercial");
-
-        // Pero la propiedad SIGUE VISIBLE. Lo que D-P0-6 acota es el pasado
-        // comercial, no la existencia del inmueble.
-        assertNotNull(ficha.id());
-        assertFalse(ficha.atributos().isEmpty(),
-                "la cosa fisica no se acota: sigue viendo tipo, ubicacion y atributos");
-        assertNotNull(ficha.responsabilidad(),
-                "y sigue sabiendo quien responde, que es lo que necesita para no pisarla");
-
-        assertTrue(precios.listarPorLocal(idPropiedad, ajena).isEmpty(),
-                "la serie llega VACIA, y vacia significa «de esta serie no te corresponde nada»");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, ajena),
+                "C1: sin relacion no se entrega la ficha fisica ni la existencia del recurso");
+        assertThrows(NoEncontradoException.class,
+                () -> precios.listarPorLocal(idPropiedad, ajena),
+                "la serie no representa una falta de permiso como un resultado vacio");
     }
 
     // ==================================================================
@@ -257,10 +264,8 @@ class LecturaHistoricaIntegrationTest {
 
         FichaPropiedadUniversal conLosDos = propiedades.consultar(idPropiedad, broker());
         assertNotNull(encargo(conLosDos, idAlquiler).historico(), "el suyo sigue");
-        assertNull(encargo(conLosDos, idVenta).historico(),
-                "el del agente de otro equipo NO: el alcance del broker es «los que supervisa "
-                        + "hoy», y no se ensancha porque el encargo cuelgue de una propiedad que "
-                        + "si alcanza");
+        assertTrue(conLosDos.encargos().stream().noneMatch(e -> e.idEncargo() == idVenta),
+                "C1: el bloque de otro equipo tampoco se ensancha por compartir inmueble");
         assertTrue(precios.listarPorLocal(idPropiedad, broker()).stream()
                         .allMatch(hito -> "ALQUILER".equals(hito.operacion())),
                 "y la serie tampoco se ensancha por la propiedad");
@@ -269,8 +274,10 @@ class LecturaHistoricaIntegrationTest {
         Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
         FichaPropiedadUniversal delAjeno = propiedades.consultar(idPropiedad, brokerAjeno);
         assertNull(delAjeno.historia(),
-                "no supervisa a quien responde por el inmueble, asi que su memoria no le toca");
-        assertNull(encargo(delAjeno, idAlquiler).historico());
+                "supervisar otro encargo no concede la historia del inmueble a cargo del equipo ajeno");
+        assertFalse(encargo(delAjeno, idVenta).historico().isEmpty(),
+                "el historico de su propio encargo si conserva la autoridad separada");
+        assertTrue(delAjeno.encargos().stream().noneMatch(e -> e.idEncargo() == idAlquiler));
     }
 
     // ==================================================================
@@ -293,27 +300,21 @@ class LecturaHistoricaIntegrationTest {
         long idPropiedad = registrar(duena);
         Actor gobierno = tenantAdmin();
 
-        FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, gobierno);
-        assertNull(ficha.historia(),
-                "gobernar no es operar: decidir quien responde no concede a cuanto se pidio ni a "
-                        + "cuanto se cerro");
-        assertTrue(ficha.encargos().stream().allMatch(e -> e.historico() == null),
-                "ni el historico de ningun encargo");
-        assertNull(ficha.actividad(), "ni la actividad comercial");
-        assertTrue(precios.listarPorLocal(idPropiedad, gobierno).isEmpty(),
-                "ni la serie de precios por su endpoint propio");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.consultar(idPropiedad, gobierno),
+                "C1: gobierno no recibe una ficha comercial incompleta como sustituto del permiso");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> precios.listarPorLocal(idPropiedad, gobierno),
+                "tampoco recibe una serie vacia que confunda permiso con ausencia de datos");
 
         // Y el control positivo de la misma banda: el EXPEDIENTE si.
         assertEquals(1, propiedades.traspasosDe(idPropiedad, gobierno).size(),
                 "el expediente de traspasos SI: es superficie de gobierno (C2), y esta prueba "
                         + "seguiria verde sin esta linea aunque el admin no pudiera leer nada");
 
-        // Y sigue viendo la propiedad y quien responde: lo acotado es el pasado
-        // comercial, no el inventario.
-        assertNotNull(ficha.responsabilidad().idResponsable());
-        assertTrue(ficha.responsabilidad().puedeTraspasar(),
-                "y sigue pudiendo iniciar el traspaso: la lectura historica y el gobierno del "
-                        + "responsable son dos autorizaciones distintas");
+        assertFalse(propiedades.candidatosAResponsable(idPropiedad, null, 1, 20, gobierno)
+                        .items().isEmpty(),
+                "su preparacion minima de gobierno conserva la finalidad de reasignacion");
     }
 
     // ==================================================================
@@ -362,15 +363,15 @@ class LecturaHistoricaIntegrationTest {
 
         // (1) DENTRO del equipo, y la firma su broker: el encargo se queda.
         long idEncargoQueSeQueda = unEncargoDe(registrar(deSuEquipo), "A");
-        captaciones.reasignar(idEncargoQueSeQueda, tambienDeSuEquipo.idRolOperativo(),
-                MOTIVO_DE_REASIGNACION, deSuEquipo.idRolOperativo(), brokerDelEquipo);
+        long versionObservadaIdEncargoQueSeQueda=versionDe(idEncargoQueSeQueda);
+        captaciones.reasignar(idEncargoQueSeQueda,new CaptacionService.DatosReasignacion(tambienDeSuEquipo.idRolOperativo(),deSuEquipo.idRolOperativo(),versionObservadaIdEncargoQueSeQueda,MOTIVO_DE_REASIGNACION),brokerDelEquipo,sesion(brokerDelEquipo),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
 
         // (2) ENTRE equipos, y la firma el gobierno del tenant (D-S0-17 fila 6:
         //     reasignar entre equipos es organigrama). El encargo ACABA en el
         //     equipo de al lado, que es lo que decide quien lo ve.
         long idEncargoQueSeVa = unEncargoDe(registrar(deSuEquipo), "A");
-        captaciones.reasignar(idEncargoQueSeVa, destinoDeOtroEquipo.idRolOperativo(),
-                MOTIVO_DE_REASIGNACION, deSuEquipo.idRolOperativo(), gobierno);
+        long versionObservadaIdEncargoQueSeVa=versionDe(idEncargoQueSeVa);
+        captaciones.reasignar(idEncargoQueSeVa,new CaptacionService.DatosReasignacion(destinoDeOtroEquipo.idRolOperativo(),deSuEquipo.idRolOperativo(),versionObservadaIdEncargoQueSeVa,MOTIVO_DE_REASIGNACION),gobierno,sesion(gobierno),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
 
         List<Long> delBroker = encargosDelRastro(brokerDelEquipo);
         assertTrue(delBroker.contains(idEncargoQueSeQueda),
@@ -473,13 +474,12 @@ class LecturaHistoricaIntegrationTest {
             assertTrue(precios.listarPorLocal(idPropiedad, broker()).stream()
                             .anyMatch(hito -> idHito.equals(hito.id())),
                     "y el broker que lo alcanza, tambien");
-            assertTrue(precios.listarPorLocal(idPropiedad, ajena).stream()
-                            .noneMatch(hito -> idHito.equals(hito.id())),
-                    "un agente que no responde por ella, no -- que no tenga encargo no lo "
-                            + "convierte en publico");
-            assertTrue(precios.listarPorLocal(idPropiedad, tenantAdmin()).isEmpty(),
-                    "y el gobierno del tenant tampoco: el hito legado es dato comercial igual "
-                            + "que los demas");
+            assertThrows(NoEncontradoException.class,
+                    () -> precios.listarPorLocal(idPropiedad, ajena),
+                    "un hito legado tampoco publica el inmueble ante un agente sin relacion");
+            assertThrows(AccesoNoAutorizadoException.class,
+                    () -> precios.listarPorLocal(idPropiedad, tenantAdmin()),
+                    "el gobierno del tenant tampoco obtiene el hito legado comercial");
 
             // Y NO entra en la historia agregada por su cuenta: sin episodio no
             // se puede decir de que operacion era, y afirmarlo seria inventarlo.
@@ -500,23 +500,26 @@ class LecturaHistoricaIntegrationTest {
     // ==================================================================
 
     private long registrar(Actor quien) {
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        long id=propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso de lectura historica",
                 new Ubicacion("Av. Historica " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("3000"), "PEN",
                         null, null, null, null, null, null, null)),
                 null), quien).idPropiedad();
+        // Fixture de serie económica para LECTURA; no acredita revisión ni Encargo habilitado.
+        precios.registrar(id,new PrecioLocalService.DatosPrecio("U","PEN",new BigDecimal("3000"),LocalDate.now(),"ALQUILER"),quien);
+        return id;
     }
 
     /**
      * <b>Un encargo de VENTA de otro agente sobre la MISMA propiedad, con su
      * serie propia.</b>
      *
-     * <p>El hito se escribe aparte y no lo pone {@code captaciones.registrar}:
+     * <p>El hito se escribe aparte y no lo pone {@code EncargoService.abrir}:
      * abrir un encargo por esa via no autoriza ningun importe. Sin el, el bloque
      * llegaria con el historico <b>vacio</b> y las aserciones de esta suite no
      * podrian distinguir «no te corresponde» (nulo) de «no hay nada que ver»
@@ -526,37 +529,32 @@ class LecturaHistoricaIntegrationTest {
      * hito lo autoriza quien lo negocio ({@code exigirEdicionDelEncargo}).
      */
     private long abrirVentaCon(long idPropiedad, Actor deQuien) {
-        long idVenta = captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, deQuien), deQuien)
-                .id();
-        precios.registrar(idPropiedad,
-                new PrecioLocalService.DatosPrecio("U", "USD", new BigDecimal("400000"),
-                        LocalDate.now(), "VENTA"),
-                deQuien);
+        // La prospección propia establece una relación física real, sin atribuir su edición.
+        prospecciones.registrar(new com.controllocal.service.ProspeccionService.DatosProspeccion(
+                idPropiedad,"Prospección explícita de TEST para abrir su propio Encargo",null),deQuien);
+        long idVenta=new TransactionTemplate(gestor).execute(tx -> ciclo.abrir(
+                new EncargoService.DatosApertura(idPropiedad,deQuien.idRolOperativo(),
+                    "ENC-T-"+UUID.randomUUID().toString().substring(0,12),
+                    com.controllocal.domain.inmueble.OperacionInmobiliaria.VENTA,
+                    LocalDate.now(),LocalDate.now().plusMonths(6),false,
+                    "Encargo de venta explícito del fixture",EncargosDePrueba.venta(
+                        new BigDecimal("400000"),"USD",new BigDecimal("0.03"),"PROPIETARIO_TEST","AGENCIA_TEST"),
+                    com.controllocal.service.soporte.Procedencia.deLaPantalla(),List.of()),deQuien).id());
+        precios.registrar(idPropiedad,new PrecioLocalService.DatosPrecio("U","USD",new BigDecimal("400000"),LocalDate.now(),"VENTA"),deQuien);
         return idVenta;
     }
 
-    /** Un encargo de VENTA sobre una propiedad que YA existe, del agente dado. */
-    private CaptacionService.DatosCaptacion nuevoEncargoDeVenta(long idPropiedad, Actor deQuien) {
-        return new CaptacionService.DatosCaptacion(
-                "CAP-D6-" + UUID.randomUUID().toString().substring(0, 8),
-                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
-                null, "Encargo de venta sobre una propiedad existente",
-                idPropiedad, deQuien.idRolOperativo(), "VENTA", 3, Boolean.FALSE,
-                "VENTA", new BigDecimal("400000"), "USD",
-                "P", "V", new BigDecimal("3"), "USD", "I", null);
-    }
 
     /**
-     * Un hito ECONOMICO sin encargo, como los que dejo el legado.
+     * Reconstruccion de un hito historico para medir exclusivamente su LECTURA.
      *
      * <h2>Por que en DOS sentencias y no en un INSERT</h2>
      * {@code tg_precio_exige_encargo} es un trigger <b>BEFORE INSERT</b> y
-     * rechaza cualquier fila con {@code id_captacion} nulo (V76). <b>Y esa es
-     * exactamente la razon por la que las filas legadas existen</b>: se
-     * escribieron antes de que el trigger existiera, y el trigger no vigila el
-     * UPDATE. Reproducir el estado legado pasa por el mismo camino que lo
-     * produjo — insertar con encargo y despues soltarlo—, no por saltarse una
-     * regla vigente.
+     * rechaza cualquier fila con {@code id_captacion} nulo (V76). El montaje
+     * usa SQL directo para reconstruir el estado conservado de una fila previa,
+     * sin desactivar ese trigger. No acredita que INSERT seguido de desvinculacion
+     * sea una creacion comercial valida hoy, ni afirma que ese fuera el origen
+     * real de alguna fila historica. Los escritores actuales deben declarar Encargo.
      *
      * <p>Se hace asi y no reutilizando una de las filas legadas de la base
      * porque esas cuelgan de propiedades cuyo responsable esta prueba no
@@ -583,8 +581,7 @@ class LecturaHistoricaIntegrationTest {
                 .filter(e -> e.idEncargo() == idEncargo)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
-                        "la ficha no trae el encargo " + idEncargo + ": el BLOQUE del encargo "
-                                + "siempre viaja; lo que D-P0-6 acota es su historico"));
+                        "la ficha no trae el encargo autorizado " + idEncargo));
     }
 
     // ==================================================================
@@ -697,11 +694,7 @@ class LecturaHistoricaIntegrationTest {
     }
 
     /** El gobierno del tenant: misma identidad, otra banda (como en V35). */
-    private Actor tenantAdmin() {
-        Actor base = broker();
-        return new Actor(base.idOrganizacion(), base.idPersona(), base.idRolOperativo(),
-                Actor.TENANT_ADMIN);
-    }
+    private Actor tenantAdmin() {return sesiones().gobiernoDe(broker().idOrganizacion());}
 
     // ==================================================================
     // Lecturas directas y el tenant vecino
@@ -724,7 +717,7 @@ class LecturaHistoricaIntegrationTest {
     private long unEncargoDe(long idPropiedad, String codigoOperacion) {
         Long id = jdbc.queryForObject("""
                 select id_captacion from captacion
-                 where id_propiedad = ? and motivo_operacion = ? and estado <> 'C'
+                 where id_propiedad = ? and motivo_operacion = ? and estado in ('P','A')
                  order by id_captacion desc limit 1
                 """, Long.class, idPropiedad, codigoOperacion);
         assertNotNull(id, "no hay encargo vivo de " + codigoOperacion + " en esa propiedad");
@@ -807,4 +800,9 @@ class LecturaHistoricaIntegrationTest {
                 """, Long.class, idOrganizacion, "9" + (70000000L + idOrganizacion),
                 "Agente del tenant vecino", correo);
     }
+    /** Versión observada por el montaje ANTES del comando o de abrir la carrera. */
+    private long versionDe(long idEncargo) {
+        return jdbc.queryForObject("select version from captacion where id_captacion=?",Long.class,idEncargo);
+    }
+
 }

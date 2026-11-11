@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "capacidades": [{
+    "idCore": "buscar_propiedades",
+    "familia": "PROPIEDAD",
+    "efecto": "LECTURA",
+    "interaccion": "AUTO",
+    "esquema": {"type": "object", "properties": {"texto": {"type": "string"}}, "additionalProperties": false},
+    "version": 2,
+    "estado": "HABILITADA",
+    "contexto": {"organizacionId": 1, "personaId": 20, "rol": "AGENTE"}
+  }, {
+    "idCore": "cargar_archivo_contextual",
+    "familia": "ENCARGO",
+    "efecto": "BORRADOR",
+    "interaccion": "HUMANO",
+    "esquema": {
+      "type": "object",
+      "properties": {
+        "encargo": {"type": "integer"},
+        "documento": {"type": "integer"},
+        "finalidad": {"type": "string"},
+        "versionDestino": {"type": "integer"},
+        "archivo": {
+          "type": "string", "format": "binary",
+          "description": "Entrada binaria en superficie humana segura; el modelo sólo conserva la referencia permitida."
+        }
+      },
+      "additionalProperties": false
+    },
+    "version": 2,
+    "estado": "CONTEXTO_REQUERIDO",
+    "motivo": "CONTEXTO_REQUERIDO",
+    "contexto": {"organizacionId": 1, "personaId": 20, "rol": "AGENTE"}
+  }, {
+    "idCore": "adjuntar_reutilizar_documento",
+    "familia": "ENCARGO",
+    "efecto": "ESCRITURA",
+    "interaccion": "HUMANO",
+    "esquema": {
+      "type": "object",
+      "properties": {
+        "referenciaOrigen": {"type": "string", "format": "uuid"},
+        "encargo": {"type": "integer"},
+        "documento": {"type": "integer"},
+        "finalidad": {"type": "string"},
+        "versionDestino": {"type": "integer"}
+      },
+      "additionalProperties": false
+    },
+    "version": 2,
+    "estado": "CONTEXTO_REQUERIDO",
+    "motivo": "CONTEXTO_REQUERIDO",
+    "contexto": {"organizacionId": 1, "personaId": 20, "rol": "AGENTE"}
+  }, {
+    "idCore": "consultar_fotos_contextuales",
+    "familia": "DOCUMENTOS",
+    "efecto": "LECTURA",
+    "interaccion": "AUTO",
+    "esquema": {"type": "object", "properties": {"id": {"type": "integer"}}, "additionalProperties": false},
+    "version": 2,
+    "estado": "CONTEXTO_REQUERIDO",
+    "motivo": "CONTEXTO_REQUERIDO",
+    "contexto": {"organizacionId": 1, "personaId": 20, "rol": "AGENTE"}
+  }, {
+    "idCore": "seleccionar_fotos_contextuales",
+    "familia": "DOCUMENTOS",
+    "efecto": "BORRADOR",
+    "interaccion": "HUMANO",
+    "esquema": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "integer"},
+        "fotosVersionadas": {"type": "array", "items": {"type": "string", "format": "uuid"}},
+        "finalidad": {"type": "string"},
+        "versionObservada": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "version": 2,
+    "estado": "CONTEXTO_REQUERIDO",
+    "motivo": "CONTEXTO_REQUERIDO",
+    "contexto": {"organizacionId": 1, "personaId": 20, "rol": "AGENTE"}
+  }]
+}

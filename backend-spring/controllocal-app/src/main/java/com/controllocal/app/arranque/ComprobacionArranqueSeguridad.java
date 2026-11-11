@@ -131,25 +131,24 @@ public class ComprobacionArranqueSeguridad implements ApplicationListener<Applic
                 accessKeyS3,
                 secretKeyS3,
                 contar("""
-                        SELECT count(*) FROM credencial_usuario
-                         WHERE contrasena_hash IN (?, ?, ?)""",
+                        SELECT count(*) FROM cuenta_acceso
+                         WHERE contrasena_hash IN (?, ?, ?)
+                            OR algoritmo_hash<>'pbkdf2' OR contrasena_hash NOT LIKE 'pbkdf2$%'""",
                         HASHES_DEL_SEED.get(0), HASHES_DEL_SEED.get(1), HASHES_DEL_SEED.get(2)),
                 contar("""
                         SELECT coalesce(sum(repetidas), 0) FROM (
                             SELECT count(*) AS repetidas
-                              FROM credencial_usuario
+                              FROM cuenta_acceso
                              WHERE contrasena_hash LIKE 'pbkdf2$%'
                              GROUP BY contrasena_hash
                             HAVING count(*) > 1
                         ) compartidos"""),
-                // Gobierno por MEMBRESIA (D-S0-8), no por el booleano heredado:
-                // desde V33 un TENANT_ADMIN puede no tener detalle_broker, y
-                // varios pueden convivir. Solo se exige a las organizaciones
-                // que tienen cuentas: una recien creada todavia no gobierna
-                // nada, igual que en el trigger de V34.
+                // Gobierno empresarial declarado y vigente, separado del rol comercial.
+                // La cuenta personal no depende de una Persona o credencial de origen.
                 contar("""
                         SELECT count(*) FROM organizacion o
                          WHERE o.estado = 'A'
+                           AND o.modalidad = 'EMPRESARIAL'
                            AND EXISTS (
                                SELECT 1 FROM usuario_organizacion uo
                                 WHERE uo.organizacion_id = o.id_organizacion
@@ -158,7 +157,19 @@ public class ComprobacionArranqueSeguridad implements ApplicationListener<Applic
                                SELECT 1 FROM usuario_organizacion uo
                                 WHERE uo.organizacion_id = o.id_organizacion
                                   AND uo.estado = 'A'
-                                  AND uo.rol = 'TENANT_ADMIN')"""),
+                                  AND uo.administrar
+                                  AND EXISTS (SELECT 1 FROM cuenta_acceso c
+                                    WHERE c.id_cuenta_acceso=uo.id_usuario AND c.estado='A'
+                                      AND c.correo_confirmado_en IS NOT NULL
+                                      AND (NOT o.mfa_gobierno_exigido OR
+                                        (NOT c.debe_cambiar_contrasena AND NOT c.debe_enrolar_mfa
+                                          AND EXISTS(SELECT 1 FROM factor_autenticacion f
+                                            WHERE f.id_cuenta_acceso=c.id_cuenta_acceso AND f.estado='A'))))
+                                  AND EXISTS (SELECT 1 FROM persona p JOIN persona_rol r
+                                    ON r.id_persona=p.id_persona AND r.organizacion_id=p.organizacion_id
+                                    WHERE p.id_persona=uo.id_persona AND p.organizacion_id=uo.organizacion_id
+                                      AND p.estado='A' AND r.tipo_rol='ADMIN' AND r.vigencia_hasta IS NULL
+                                      AND r.vigencia_desde<=(clock_timestamp() AT TIME ZONE 'America/Lima')::date))"""),
                 cifradoMfa.usandoFallbackDeDesarrollo(),
                 recuperacionHabilitada,
                 custodios.estanConfigurados(),

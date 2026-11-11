@@ -43,6 +43,10 @@ const PAGINA: PageResponse<Interaccion> = {
   pageSize: 20,
 };
 
+function pagina<T>(items: T[]): PageResponse<T> {
+  return { items, totalRecords: items.length, page: 1, pageSize: 20 };
+}
+
 describe('Interacciones', () => {
   let api: jasmine.SpyObj<InteraccionesService>;
   let router: jasmine.SpyObj<Router>;
@@ -126,6 +130,31 @@ describe('Interacciones', () => {
     expect(acceso.esDePropietario(ITEMS[1])).toBeTrue();
   });
 
+  it('muestra FALTANTE y el rol cuando el snapshot no tiene nombre', async () => {
+    api.pagina$.and.returnValue(
+      of(
+        pagina<Interaccion>([
+          {
+            ...ITEMS[1],
+            propietarioNombre: 'Hugo Salazar',
+            personaNombre: undefined,
+            personaTipo: undefined,
+            contactoTipo: 'Administrador',
+            contactoTelefono: '+51 999 333 444',
+          },
+        ]),
+      ),
+    );
+
+    const fixture = await montar();
+    const contenido = texto(fixture);
+
+    expect(contenido).toContain('FALTANTE');
+    expect(contenido).toContain('Administrador');
+    expect(contenido).toContain('+51 999 333 444');
+    expect(contenido).not.toContain('Hugo Salazar');
+  });
+
   it('solo el agente ve el alta', async () => {
     const agente = await montar('AGENTE');
     expect(texto(agente)).toContain('Nueva interacción');
@@ -154,6 +183,8 @@ describe('Interacciones', () => {
   ): Promise<ComponentFixture<Interacciones>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

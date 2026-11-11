@@ -7,12 +7,9 @@ import com.controllocal.web.dto.BrokerRequest;
 import com.controllocal.web.dto.BrokerResponse;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.seguridad.SesionActual;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Contrato congelado de {@code BrokersRest}. */
+/** Directorio de brokers; las credenciales pertenecen exclusivamente a su titular. */
 @RestController
 @RequestMapping("brokers")
 public class BrokersController {
@@ -55,16 +52,6 @@ public class BrokersController {
         return brokers.agentes(id, SesionActual.actor()).stream()
                 .map(AgenteResponse::desde)
                 .toList();
-    }
-
-    @PostMapping
-    @PreAuthorize("hasRole('TENANT_ADMIN')")
-    public ResponseEntity<BrokerResponse> registrar(
-            @RequestBody(required = false) BrokerRequest dto) {
-        BrokerResponse creado = BrokerResponse.desde(
-                brokers.registrar(dto == null ? null : dto.aDatos(),
-                        SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
     }
 
     @PutMapping("{id}")

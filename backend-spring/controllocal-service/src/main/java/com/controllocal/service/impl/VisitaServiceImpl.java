@@ -1,7 +1,6 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.MotivoNoContinuidad;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.Visita;
 import com.controllocal.domain.inmueble.Propiedad;
@@ -9,8 +8,6 @@ import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleCliente;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.query.ConteoPorEstado;
-import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PlanDeConsulta;
 import com.controllocal.persistence.repositorio.VisitaRepository;
 import com.controllocal.service.Actor;
@@ -28,23 +25,26 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.time.*;
+import java.util.*;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.actividad.RecibosDeActividad;
+import com.controllocal.service.soporte.*;
+import com.controllocal.service.excepcion.ConflictoException;
+import com.controllocal.persistence.repositorio.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import org.springframework.transaction.annotation.Propagation;
+import static com.controllocal.service.negociacion.ContenidoNegociacion.*;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Reglas y mensajes calcados de VisitasRest + VisitaBusinessLogicImpl + el
- * modelo Visita de la v1.
- *
- * <p>Ojo con los mensajes de estado: la guarda que responde en el cable es la
- * del BL ("No se puede {accion} una visita {estado}."), no la del modelo — el
- * BL corta antes. Se replica la del BL.
- *
- * <p>Mejora del stack nuevo, sin tocar el cable: cada cambio de agenda pasa por
- * {@link Transiciones} y deja fila en historial_estado con actor y motivo.
+/** CAT-E21/RF043–045. Una agenda y una identidad Visita; declarar ocurrencia
+ * no crea una reunión ni decide continuidad de la oportunidad. Historial íntegro y CAS.
  */
 @Service
 public class VisitaServiceImpl implements VisitaService {
@@ -58,26 +58,28 @@ public class VisitaServiceImpl implements VisitaService {
     private static final int MAX_PROXIMAS = 8;
 
     private final VisitaRepository visitas;
-    private final OportunidadComercialRepository oportunidades;
-    private final MotivoNoContinuidadRepository motivos;
+    private final AccesoOportunidad acceso;
+    private final ContextosDeActividad contextos;
+    private final EntityManager entidades;
+    private final Documentos documentos;
+    private final RecibosDeActividad recibos;
     private final Alcances alcances;
     private final Transiciones transiciones;
     private final PlanDeConsulta plan;
 
-    public VisitaServiceImpl(VisitaRepository visitas, OportunidadComercialRepository oportunidades,
-                             MotivoNoContinuidadRepository motivos, Alcances alcances,
-                             Transiciones transiciones, PlanDeConsulta plan) {
-        this.visitas = visitas;
-        this.oportunidades = oportunidades;
-        this.motivos = motivos;
-        this.alcances = alcances;
-        this.transiciones = transiciones;
-        this.plan = plan;
+    public VisitaServiceImpl(VisitaRepository visitas,
+            Alcances alcances,Transiciones transiciones,PlanDeConsulta plan,AccesoOportunidad acceso,
+            ContextosDeActividad contextos,EntityManager entidades,Documentos documentos,
+            RecibosDeActividad recibos){
+        this.visitas=visitas;this.alcances=alcances;this.transiciones=transiciones;
+        this.plan=plan;this.acceso=acceso;this.contextos=contextos;this.entidades=entidades;this.documentos=documentos;
+        this.recibos=recibos;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Pagina<FichaVisita> listar(FiltrosVisita f, Actor actor) {
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return Pagina.vacia();
@@ -90,7 +92,7 @@ public class VisitaServiceImpl implements VisitaService {
         Page<Visita> page = visitas.buscar(alcance.idOrganizacion(), alcance.global(), actor.esAgente(),
                 alcance.paramRoles(), f.idOportunidad(), vacioNull(f.estado()), vacioNull(f.distrito()),
                 PageRequest.of(Math.max(0, f.pagina() - 1), tamanoValido));
-        return new Pagina<>(page.getContent().stream().map(VisitaServiceImpl::ficha).toList(),
+        return new Pagina<>(fichasEnLote(page.getContent(),actor),
                 page.getTotalElements());
     }
 
@@ -118,13 +120,14 @@ public class VisitaServiceImpl implements VisitaService {
         }
         return new Pagina<>(
                 visitas.buscarFichaPorIds(alcance.idOrganizacion(), ids).stream()
-                        .map(VisitaServiceImpl::ficha).toList(),
+                        .map(this::ficha).toList(),
                 total);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ResumenVisitas resumen(FiltrosVisita f, Actor actor) {
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return new ResumenVisitas(0, 0, 0, 0, 0, 0, List.of());
@@ -157,14 +160,15 @@ public class VisitaServiceImpl implements VisitaService {
     @Override
     @Transactional(readOnly = true)
     public Pagina<FichaVisita> proximas(int tamano, Actor actor) {
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return Pagina.vacia();
         }
         List<Visita> fuente = visitas.listarProximas(alcance.idOrganizacion(), alcance.global(),
-                actor.esAgente(), alcance.paramRoles(), LocalDate.now(),
+                actor.esAgente(), alcance.paramRoles(), contextos.hoy(),
                 PageRequest.of(0, Math.min(tamano(tamano), MAX_PROXIMAS)));
-        return paginaSinTotal(fuente);
+        return paginaSinTotal(fuente,actor);
     }
 
     @Override
@@ -173,6 +177,7 @@ public class VisitaServiceImpl implements VisitaService {
         if (anio < 2000 || anio > 2100 || mes < 1 || mes > 12) {
             throw new ReglaNegocioException("El mes solicitado no es valido.");
         }
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return Pagina.vacia();
@@ -180,7 +185,7 @@ public class VisitaServiceImpl implements VisitaService {
         YearMonth periodo = YearMonth.of(anio, mes);
         List<Visita> fuente = visitas.listarMes(alcance.idOrganizacion(), alcance.global(), actor.esAgente(),
                 alcance.paramRoles(), periodo.atDay(1), periodo.atEndOfMonth());
-        return paginaSinTotal(fuente);
+        return paginaSinTotal(fuente,actor);
     }
 
     @Override
@@ -189,148 +194,187 @@ public class VisitaServiceImpl implements VisitaService {
         return ficha(cargarConAcceso(id, actor));
     }
 
-    @Override
-    @Transactional
-    public FichaVisita programar(DatosVisita datos, Actor actor) {
-        if (datos == null || datos.idOportunidad() == null) {
-            throw new ReglaNegocioException("Los datos de la visita son obligatorios.");
-        }
-        OportunidadComercial oportunidad = oportunidades
-                .buscarFicha(actor.idOrganizacion(), datos.idOportunidad())
-                .orElseThrow(() -> new NoEncontradoException("Oportunidad"));
-        // El alta compara DIRECTO con el rol del actor: sin alcance de broker.
-        if (oportunidad.getAgente() == null || oportunidad.getAgente().getId() != actor.idRolOperativo()) {
-            throw new AccesoNoAutorizadoException();
-        }
-        if (datos.fechaVisita() == null || datos.horaVisita() == null) {
-            throw new ReglaNegocioException("La visita debe tener fecha, hora y estado.");
-        }
-        if (!oportunidad.estaAbierta()) {
-            throw new ReglaNegocioException("La oportunidad comercial debe estar ABIERTA.");
-        }
-
-        Visita visita = new Visita();
-        visita.setOrganizacionId(actor.idOrganizacion());
-        visita.setOportunidad(oportunidad);
-        visita.setAgente(oportunidad.getAgente());
-        visita.setFechaVisita(datos.fechaVisita());
-        visita.setHoraVisita(datos.horaVisita());
-        visita.setObservaciones(datos.observaciones());
-        transiciones.iniciar(visita, Visita.PROGRAMADA);
-        return ficha(visitas.save(visita));
+    @Override @Transactional(readOnly=true)
+    public Pagina<FichaVisita> agenda(ConsultaAgenda q,Actor actor){
+        if(q==null||q.desde()==null||q.hasta()==null||q.hasta().isBefore(q.desde()))
+            throw new ReglaNegocioException("Indica un intervalo de agenda válido.");
+        contextos.exigirOperador(actor);var a=alcances.de(actor);if(a.vacio())return Pagina.vacia();
+        if(q.idOportunidad()!=null)acceso.contextoParaNegociacion(q.idOportunidad(),actor);
+        var pagina=visitas.agenda(a.idOrganizacion(),a.global(),actor.esAgente(),a.paramRoles(),q.idOportunidad(),
+            vacioNull(q.estado()),null,q.desde(),q.hasta(),PageRequest.of(Math.max(0,q.pagina()-1),tamano(q.tamano())));
+        return new Pagina<>(fichasEnLote(pagina.getContent(),actor),pagina.getTotalElements());
     }
-
-    @Override
-    @Transactional
-    public FichaVisita reprogramar(long id, LocalDate fechaVisita, LocalTime horaVisita, Actor actor) {
-        if (fechaVisita == null || horaVisita == null) {
-            throw new ReglaNegocioException("La nueva fecha y hora son obligatorias para reprogramar.");
-        }
-        Visita visita = cargarModificable(id, actor, "reprogramar");
-        visita.moverA(fechaVisita, horaVisita);
-        transiciones.aplicar(visita, id, Visita.REPROGRAMADA, actor, "Visita reprogramada.");
-        return ficha(visitas.save(visita));
+    @Override @Transactional(readOnly=true)
+    public FichaVisita obtenerVersion(long id,long version,Actor actor){
+        if(version<0)throw new ReglaNegocioException("Indica la versión histórica.");
+        cargarConAcceso(id,actor);
+        var f=documentos.comoObjeto(visitas.fichaVersion(actor.idOrganizacion(),id,version)
+            .orElseThrow(()->new NoEncontradoException("Versión de visita")),FichaVisita.class);
+        if(!Objects.equals(f.id(),id)||f.version()!=version)throw new IllegalStateException("Historia de visita inconsistente.");
+        autorizarSnapshot(f,actor);return f;
     }
-
-    @Override
-    @Transactional
-    public FichaVisita cancelar(long id, String motivo, Actor actor) {
-        if (motivo == null || motivo.isBlank()) {
-            throw new ReglaNegocioException("El motivo de cancelacion es obligatorio.");
-        }
-        Visita visita = cargarModificable(id, actor, "cancelar");
-        visita.registrarMotivoYLimpiarDesenlace(motivo.trim());
-        transiciones.aplicar(visita, id, Visita.CANCELADA, actor, motivo.trim());
-        return ficha(visitas.save(visita));
+    @Override @Transactional(readOnly=true)
+    public List<Antecedente> historia(long id,Actor actor){
+        cargarConAcceso(id,actor);
+        return visitas.historia(actor.idOrganizacion(),id).stream().map(v->{
+            var f=documentos.comoObjeto(v.getFicha(),FichaVisita.class);autorizarSnapshot(f,actor);
+            if(!Objects.equals(f.id(),id)||f.version()!=v.getVersion())throw new IllegalStateException("Historia de visita inconsistente.");
+            return new Antecedente(v.getVersion(),v.getRegistradoEn(),v.getOperacion(),v.getMotivo(),f);
+        }).toList();
     }
-
-    @Override
-    @Transactional
-    public FichaVisita marcarRealizada(long id, Actor actor) {
-        Visita visita = cargarModificable(id, actor, "marcar como realizada");
-        transiciones.aplicar(visita, id, Visita.REALIZADA, actor, "Visita realizada.");
-        return ficha(visitas.save(visita));
+    @Override @Transactional(readOnly=true)
+    public List<FichaVisita> porOportunidad(long id,Instant corte,Actor actor){
+        acceso.contextoParaNegociacion(id,actor);
+        Instant hasta=corte==null?contextos.ahora():corte;
+        return visitas.fichasAlCorte(actor.idOrganizacion(),id,hasta).stream().map(j->{
+            var f=documentos.comoObjeto(j,FichaVisita.class);if(!Objects.equals(f.idOportunidad(),id))throw new IllegalStateException("Visita de otra oportunidad.");
+            autorizarSnapshot(f,actor);return f;
+        }).toList();
     }
-
-    @Override
-    @Transactional
-    public FichaVisita marcarNoRealizada(long id, String motivo, Actor actor) {
-        if (motivo == null || motivo.isBlank()) {
-            throw new ReglaNegocioException("El motivo de la visita no realizada es obligatorio.");
-        }
-        Visita visita = cargarModificable(id, actor, "marcar como no realizada");
-        visita.registrarMotivoYLimpiarDesenlace(motivo.trim());
-        transiciones.aplicar(visita, id, Visita.NO_REALIZADA, actor, motivo.trim());
-        return ficha(visitas.save(visita));
+    private void autorizarSnapshot(FichaVisita f,Actor actor){
+        if(f==null||f.idOportunidad()==null)throw new IllegalStateException("La visita no conserva su contexto.");
+        var p=acceso.contextoParaNegociacion(f.idOportunidad(),actor);
+        if(!Objects.equals(f.idCaptacion(),p.idEncargo()))throw new AccesoNoAutorizadoException();
+        // Participantes/lugar son declaraciones de ESTE hecho, no referencias que
+        // permitan resolver Persona/Contacto. Se autoriza el snapshot íntegro bajo
+        // el contexto histórico, sin sustituirlo por los participantes actuales.
     }
-
-    @Override
-    @Transactional
-    public FichaVisita registrarResultado(long id, DesenlaceVisita desenlace, Actor actor) {
-        if (desenlace == null || desenlace.resultado() == null || desenlace.resultado().isBlank()) {
-            throw new ReglaNegocioException("El resultado de la visita es obligatorio.");
-        }
-        // Las visitas admiten CUALQUIER codigo de ResultadoInteraccion: la
-        // allow-list por contexto es solo de interacciones.
-        String resultado = Vocabulario.exigir(desenlace.resultado(), Vocabulario.RESULTADOS,
-                "ResultadoInteraccion");
-        String razon = Vocabulario.opcional(desenlace.razonNoContinuidad(),
-                Vocabulario.RAZONES_NO_CONTINUIDAD, "MotivoNoContinuidadTipo");
-        String objecion = Vocabulario.opcional(desenlace.objecionPrincipal(),
-                Vocabulario.OBJECIONES_VISITA, "ObjecionVisita");
-        String opinion = Vocabulario.opcional(desenlace.opinionPrecio(),
-                Vocabulario.OPINIONES_PRECIO, "OpinionPrecio");
-        String proxima = Vocabulario.opcional(desenlace.proximaAccion(),
-                Vocabulario.PROXIMAS_ACCIONES, "ProximaAccionVisita");
-
-        Visita visita = cargarConAcceso(id, actor);
-        if (!Visita.REALIZADA.equals(visita.estadoActual()) || visita.tieneDesenlace()) {
-            throw new ReglaNegocioException(
-                    "Solo una visita realizada y sin resultado admite registrar el desenlace.");
-        }
-        boolean noContinua = Vocabulario.implicaNoContinuidad(resultado);
-        if (noContinua && desenlace.nivelInteres() != null) {
-            throw new ReglaNegocioException(
-                    "No se debe registrar nivel de interes cuando el resultado es de no continuidad.");
-        }
-        visita.registrarDesenlace(resultado, vacioNull(desenlace.observaciones()), razon,
-                desenlace.nivelInteres(), objecion, opinion, proxima);
-        visitas.save(visita);
-
-        // El desenlace de no continuidad cierra la oportunidad en la MISMA
-        // transaccion, con su motivo tipificado (cable v1).
-        if (noContinua) {
-            cerrarPorNoContinuidad(visita, razon, desenlace.observaciones(), actor);
-        }
-        return ficha(visita);
+    private void fechaHora(LocalDate fecha,LocalTime hora){
+        if(fecha==null||hora==null)throw new ReglaNegocioException("Indica la fecha y hora programadas.");
     }
-
-    private void cerrarPorNoContinuidad(Visita visita, String razon, String observaciones, Actor actor) {
-        if (razon == null) {
-            throw new ReglaNegocioException(
-                    "Debe indicar el motivo de no continuidad cuando el cliente no continua.");
-        }
-        OportunidadComercial oportunidad = visita.getOportunidad();
-        if (!oportunidad.estaAbierta()) {
-            throw new ReglaNegocioException("La oportunidad comercial debe estar ABIERTA.");
-        }
-        MotivoNoContinuidad motivo = new MotivoNoContinuidad();
-        motivo.setOrganizacionId(oportunidad.getOrganizacionId());
-        motivo.setOportunidad(oportunidad);
-        motivo.setRazonPrincipal(razon);
-        motivo.setObservaciones(observaciones);
-        motivo.setAgente(visita.getAgente());
-        motivos.save(motivo);
-
-        // La descripcion sale de MotivoNoContinuidad, la tabla que guarda la
-        // razon (WP-A). Esta era la segunda puerta a la caida de una
-        // oportunidad, y llevaba su propia copia del vocabulario.
-        String descripcion = MotivoNoContinuidad.rotuloDe(razon);
-        oportunidad.marcarCierre(descripcion);
-        transiciones.aplicar(oportunidad, oportunidad.getId(), OportunidadComercial.NO_CONTINUA,
-                actor, descripcion);
-        oportunidades.save(oportunidad);
+    private DatosVisita normalizar(DatosVisita d){
+        if(d==null)throw new ReglaNegocioException("Aporta la programación de visita.");
+        identidad(d.idOportunidad(),"la oportunidad");version(d.versionContexto(),"Oportunidad");fechaHora(d.fechaVisita(),d.horaVisita());
+        var participantes=d.participantes().stream().map(p->{
+            if(p==null||(texto(p.nombreDeclarado())==null&&texto(p.referenciaDeclarada())==null))
+                throw new ReglaNegocioException("Conserva una declaración identificable de cada participante conocido.");
+            return new ParticipanteConocido(texto(p.nombreDeclarado()),texto(p.referenciaDeclarada()));
+        }).toList();
+        return new DatosVisita(d.idOportunidad(),d.versionContexto(),d.fechaVisita(),d.horaVisita(),texto(d.observaciones()),participantes,texto(d.lugarDeclarado()));
     }
+    @Override @Transactional
+    public DatosVisita validarProgramacion(DatosVisita bruto,Actor actor){
+        var d=normalizar(bruto);contextos.exigirAgente(actor);var p=acceso.contextoParaNegociacion(d.idOportunidad(),actor);
+        if(p.responsableActual()!=actor.idRolOperativo())throw new AccesoNoAutorizadoException();
+        exacta(d.versionContexto(),p.version());
+        if(!OportunidadComercial.ABIERTA.equals(p.estado()))throw new ReglaNegocioException("La oportunidad debe estar ABIERTA para programar la visita.");
+        return d;
+    }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaVisita programar(DatosVisita bruto,Actor actor,ContextoSesion sesion,Procedencia p){
+        var d=normalizar(bruto);iniciar(actor,sesion,p);
+        var op=acceso.bloquearActividad(d.idOportunidad(),d.versionContexto(),actor);validarProgramacion(d,actor);
+        var v=new Visita();v.setOrganizacionId(actor.idOrganizacion());v.setOportunidad(op);v.setAgente(op.getAgente());
+        v.setFechaVisita(d.fechaVisita());v.setHoraVisita(d.horaVisita());v.setObservaciones(d.observaciones());
+        v.setParticipantesJson(documentos.lista(d.participantes()));v.setLugarDeclarado(d.lugarDeclarado());
+        transiciones.iniciar(v,Visita.PROGRAMADA);return guardar(v,"programar_visita",null,p);
+    }
+    private Reprogramacion normalizar(Reprogramacion d){
+        if(d==null)throw new ReglaNegocioException("Aporta la nueva programación.");
+        identidad(d.idVisita(),"la visita");version(d.versionEsperada(),"Visita");fechaHora(d.fechaVisita(),d.horaVisita());
+        if(texto(d.motivo())==null)throw new ReglaNegocioException("Indica el motivo de reprogramación.");
+        return new Reprogramacion(d.idVisita(),d.versionEsperada(),d.fechaVisita(),d.horaVisita(),texto(d.motivo()));
+    }
+    @Override @Transactional
+    public Reprogramacion validarReprogramacion(Reprogramacion bruto,Actor a){
+        var d=normalizar(bruto);var v=paraEscritura(d.idVisita(),d.versionEsperada(),a,false);
+        modificable(v,"reprogramar");return d;
+    }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaVisita reprogramar(Reprogramacion bruto,Actor a,ContextoSesion s,Procedencia p){
+        var d=normalizar(bruto);iniciar(a,s,p);var v=paraEscritura(d.idVisita(),d.versionEsperada(),a,true);modificable(v,"reprogramar");
+        v.moverA(d.fechaVisita(),d.horaVisita());transiciones.aplicar(v,v.getId(),Visita.REPROGRAMADA,a,d.motivo());
+        return guardar(v,"reprogramar_visita",d.motivo(),p);
+    }
+    private Cancelacion normalizar(Cancelacion d){
+        if(d==null)throw new ReglaNegocioException("Aporta la cancelación de visita.");
+        identidad(d.idVisita(),"la visita");version(d.versionEsperada(),"Visita");fecha(d.fechaHecho());
+        if(texto(d.motivo())==null)throw new ReglaNegocioException("Indica el motivo de cancelación.");
+        return new Cancelacion(d.idVisita(),d.versionEsperada(),texto(d.motivo()),d.fechaHecho());
+    }
+    @Override @Transactional
+    public Cancelacion validarCancelacion(Cancelacion bruto,Actor a){
+        var d=normalizar(bruto);modificable(paraEscritura(d.idVisita(),d.versionEsperada(),a,false),"cancelar");return d;
+    }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaVisita cancelar(Cancelacion bruto,Actor a,ContextoSesion s,String clave,Procedencia p){
+        var d=normalizar(bruto);iniciar(a,s,p);String k=Idempotencia.exigirClave(clave);
+        var previo=recibos.buscarOriginal(a,k,RecibosDeActividad.CANCELAR,d,p);
+        if(previo.isPresent()){var f=documentos.comoObjeto(previo.get(),FichaVisita.class);autorizarSnapshot(f,a);return f;}
+        var v=paraEscritura(d.idVisita(),d.versionEsperada(),a,true);modificable(v,"cancelar");
+        v.registrarMotivoYLimpiarDesenlace(d.motivo());v.setFechaHecho(d.fechaHecho());
+        transiciones.aplicar(v,v.getId(),Visita.CANCELADA,a,d.motivo(),d.fechaHecho());
+        var f=guardar(v,"cancelar_visita",d.motivo(),p);String json=documentos.objetoCanonico(f);
+        recibos.registrar(a,k,RecibosDeActividad.CANCELAR,d,p,Visita.ENTIDAD_TIPO,v.getId(),f);
+        return documentos.comoObjeto(json,FichaVisita.class);
+    }
+    @Override @Transactional(readOnly=true)
+    public Optional<FichaVisita> consultarResultadoCancelacion(String clave,Actor a){
+        contextos.exigirOperador(a);return recibos.consultar(a,clave,RecibosDeActividad.CANCELAR).map(r->{
+            var f=documentos.comoObjeto(r,FichaVisita.class);autorizarSnapshot(f,a);return f;
+        });
+    }
+    private DesenlaceVisita normalizar(DesenlaceVisita d){
+        if(d==null||d.ocurrencia()==null)throw new ReglaNegocioException("Declara si la visita se realizó o no.");
+        version(d.versionEsperada(),"Visita");fecha(d.fechaHecho());
+        if(texto(d.resultado())==null)throw new ReglaNegocioException("Conserva el resultado contextual observado o declarado.");
+        String obj=Vocabulario.opcional(d.objecionPrincipal(),Vocabulario.OBJECIONES_VISITA,"ObjecionVisita");
+        String opinion=Vocabulario.opcional(d.opinionPrecio(),Vocabulario.OPINIONES_PRECIO,"OpinionPrecio");
+        String proxima=Vocabulario.opcional(d.proximaAccion(),Vocabulario.PROXIMAS_ACCIONES,"ProximaAccionVisita");
+        if(d.nivelInteres()!=null&&(d.nivelInteres()<1||d.nivelInteres()>5))throw new ReglaNegocioException("El nivel de interés admite 1 a 5.");
+        if(d.ocurrencia()==Ocurrencia.NO_REALIZADA&&(d.nivelInteres()!=null||obj!=null||opinion!=null||proxima!=null))
+            throw new ReglaNegocioException("Las opiniones de la visita requieren que se haya realizado; conserva lo conocido en el resultado contextual.");
+        return new DesenlaceVisita(d.versionEsperada(),d.ocurrencia(),d.fechaHecho(),texto(d.resultado()),texto(d.observaciones()),
+            d.nivelInteres(),obj,opinion,proxima,texto(d.motivoRectificacion()));
+    }
+    private void comprobarResultado(Visita v,DesenlaceVisita d){
+        if(Visita.CANCELADA.equals(v.estadoActual()))throw new ReglaNegocioException("Una visita cancelada no admite declarar ocurrencia ordinaria.");
+        boolean terminal=Visita.REALIZADA.equals(v.estadoActual())||Visita.NO_REALIZADA.equals(v.estadoActual());
+        String destino=d.ocurrencia()==Ocurrencia.REALIZADA?Visita.REALIZADA:Visita.NO_REALIZADA;
+        if((v.tieneDesenlace()||v.getFechaHecho()!=null||(terminal&&!destino.equals(v.estadoActual())))&&d.motivoRectificacion()==null)
+            throw new ReglaNegocioException("Indica el motivo de rectificación; la declaración anterior se conserva.");
+    }
+    @Override @Transactional
+    public DesenlaceVisita validarResultado(long id,DesenlaceVisita bruto,Actor a){
+        var d=normalizar(bruto);comprobarResultado(paraEscritura(id,d.versionEsperada(),a,false),d);return d;
+    }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaVisita registrarResultado(long id,DesenlaceVisita bruto,Actor a,ContextoSesion s,Procedencia p){
+        var d=normalizar(bruto);iniciar(a,s,p);var v=paraEscritura(id,d.versionEsperada(),a,true);comprobarResultado(v,d);
+        String destino=d.ocurrencia()==Ocurrencia.REALIZADA?Visita.REALIZADA:Visita.NO_REALIZADA;
+        transiciones.aplicar(v,v.getId(),destino,a,d.motivoRectificacion()==null?d.resultado():d.motivoRectificacion(),d.fechaHecho());
+        v.registrarDesenlace(d.resultado(),d.observaciones(),d.nivelInteres(),d.objecionPrincipal(),d.opinionPrecio(),d.proximaAccion());
+        v.setFechaHecho(d.fechaHecho());return guardar(v,"registrar_resultado_visita",d.motivoRectificacion(),p);
+    }
+    private void iniciar(Actor a,ContextoSesion s,Procedencia p){
+        if(p==null)throw new ReglaNegocioException("Conserva la procedencia del hecho.");contextos.iniciar(a,s);
+    }
+    private Visita paraEscritura(long id,Long version,Actor a,boolean bloquear){
+        contextos.exigirAgente(a);identidad(id,"la visita");version(version,"Visita");
+        long op=visitas.oportunidadDe(a.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Visita"));
+        var actual=acceso.contextoParaNegociacion(op,a);
+        if(actual.responsableActual()!=a.idRolOperativo())throw new AccesoNoAutorizadoException();
+        if(bloquear)acceso.bloquearActividad(op,actual.version(),a);
+        var v=bloquear?visitas.bloquear(a.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Visita")):cargarConAcceso(id,a);
+        if(bloquear)entidades.refresh(v,LockModeType.PESSIMISTIC_WRITE);
+        if(v.getAgente()==null||v.getAgente().getId()!=a.idRolOperativo())throw new AccesoNoAutorizadoException();
+        exacta(version,v.getVersion());
+        if(bloquear&&visitas.fichaVersion(a.idOrganizacion(),id,v.getVersion()).isEmpty())
+            visitas.historizar(a.idOrganizacion(),id,op,v.getVersion(),contextos.ahora(),"ANTECEDENTE_OBSERVADO",
+                "Estado observado antes de la modificación; sin atribuir fecha histórica desconocida.",documentos.objetoCanonico(ficha(v)));
+        return v;
+    }
+    private void modificable(Visita v,String accion){
+        if(!v.esModificable())throw new ReglaNegocioException("No se puede "+accion+" una visita "+DESCRIPCION_ESTADO.getOrDefault(v.estadoActual(),"")+".");
+    }
+    private FichaVisita guardar(Visita v,String op,String motivo,Procedencia p){
+        v.registrarCambio(contextos.ahora().atOffset(ZoneOffset.UTC),documentos.objetoCanonico(p));visitas.saveAndFlush(v);
+        String ficha=documentos.objetoCanonico(ficha(v));
+        visitas.historizar(v.getOrganizacionId(),v.getId(),v.getOportunidad().getId(),v.getVersion(),contextos.ahora(),op,motivo,ficha);
+        // El único productor de evento/recibo AUTO es ComandosAutomaticos, dentro de esta TX.
+        return documentos.comoObjeto(ficha,FichaVisita.class);
+    }
+    private static void exacta(long obs,long actual){if(obs!=actual)throw new ConflictoException("Cambió la visita o su contexto; revisa su versión.");}
 
     // ------------------------------------------------------------------
     // Alcance por rol: BROKER por CAPTACION de la oportunidad (§5).
@@ -339,39 +383,26 @@ public class VisitaServiceImpl implements VisitaService {
     private Visita cargarConAcceso(long id, Actor actor) {
         Visita visita = visitas.buscarFicha(actor.idOrganizacion(), id)
                 .orElseThrow(() -> new NoEncontradoException("Visita"));
-        if (!alcanza(visita, actor)) {
+        contextos.exigirOperador(actor);
+        if (actor.esAgente()?visita.getAgente()==null||visita.getAgente().getId()!=actor.idRolOperativo()
+                :!acceso.alcanza(visita.getOportunidad(), actor)) {
             throw new AccesoNoAutorizadoException();
         }
         return visita;
     }
 
-    private Visita cargarModificable(long id, Actor actor, String accion) {
-        Visita visita = cargarConAcceso(id, actor);
-        if (!visita.esModificable()) {
-            throw new ReglaNegocioException("No se puede " + accion + " una visita "
-                    + DESCRIPCION_ESTADO.getOrDefault(visita.estadoActual(), "") + ".");
-        }
-        return visita;
-    }
-
-    private boolean alcanza(Visita visita, Actor actor) {
-        if (actor.esTenantAdmin()) {
-            return true;
-        }
-        if (actor.esAgente()) {
-            return visita.getAgente() != null && visita.getAgente().getId() == actor.idRolOperativo();
-        }
-        Captacion captacion = visita.getOportunidad() != null
-                ? visita.getOportunidad().getCaptacion()
-                : null;
-        return captacion != null && captacion.getAgente() != null
-                && alcances.supervisados(actor.idOrganizacion(), actor.idRolOperativo())
-                        .contains(captacion.getAgente().getId());
-    }
-
-    private static Pagina<FichaVisita> paginaSinTotal(List<Visita> fuente) {
-        List<FichaVisita> items = fuente.stream().map(VisitaServiceImpl::ficha).toList();
+    private Pagina<FichaVisita> paginaSinTotal(List<Visita> fuente,Actor actor) {
+        List<FichaVisita> items = fichasEnLote(fuente,actor);
         return new Pagina<>(items, items.size());
+    }
+
+    private List<FichaVisita> fichasEnLote(List<Visita> fuente,Actor actor){
+        if(fuente.isEmpty())return List.of();
+        var cargadas=visitas.buscarFichaPorIds(actor.idOrganizacion(),fuente.stream().map(Visita::getId).toList())
+            .stream().collect(Collectors.toMap(Visita::getId,this::ficha));
+        return fuente.stream().map(v->{
+            var f=cargadas.get(v.getId());if(f==null)throw new NoEncontradoException("Visita");return f;
+        }).toList();
     }
 
     private static int tamano(int tamano) {
@@ -382,7 +413,7 @@ public class VisitaServiceImpl implements VisitaService {
         return valor == null || valor.isBlank() ? null : valor;
     }
 
-    private static FichaVisita ficha(Visita v) {
+    private FichaVisita ficha(Visita v) {
         OportunidadComercial oportunidad = v.getOportunidad();
         DetalleCliente cliente = oportunidad != null ? oportunidad.getCliente() : null;
         Captacion captacion = oportunidad != null ? oportunidad.getCaptacion() : null;
@@ -395,14 +426,17 @@ public class VisitaServiceImpl implements VisitaService {
                 v.getFechaVisita(), v.getHoraVisita(), v.getObservaciones(), v.estadoActual(),
                 v.getResultado(),
                 cliente != null ? cliente.getId() : null,
-                nombre(cliente != null ? cliente.getRol() : null),
+                oportunidad!=null&&oportunidad.getPersonaInteresada()!=null?oportunidad.getPersonaInteresada().getNombresORazonSocial():nombre(cliente != null ? cliente.getRol() : null),
                 captacion != null ? captacion.getId() : null,
                 captacion != null ? captacion.getCodigoCaptacion() : null,
                 propiedad != null ? propiedad.getDireccion() : null,
                 propiedad != null ? propiedad.getDistrito() : null,
                 agente != null ? agente.getId() : null,
                 nombre(agente != null ? agente.getRol() : null),
-                v.getNivelInteres(), v.getObjecionPrincipal(), v.getOpinionPrecio(), v.getProximaAccion());
+                v.getNivelInteres(), v.getObjecionPrincipal(), v.getOpinionPrecio(), v.getProximaAccion(),v.getVersion(),
+                v.getParticipantesJson()==null?List.of():Arrays.asList(documentos.comoObjeto(v.getParticipantesJson(),ParticipanteConocido[].class)),
+                v.getLugarDeclarado(),v.getFechaHecho(),v.getRegistradoEn()==null?null:v.getRegistradoEn().toInstant(),
+                v.getProcedenciaJson()==null?null:documentos.comoObjeto(v.getProcedenciaJson(),Procedencia.class));
     }
 
     private static String nombre(PersonaRol rol) {

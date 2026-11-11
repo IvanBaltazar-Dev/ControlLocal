@@ -365,7 +365,7 @@ class ConvergenciaCampanaColaIntegrationTest {
      * de esta frontera.
      */
     private boolean enLaCola(Actor actor, long idProspeccion) {
-        List<FichaTarea> bandeja = tareas.bandejaDe(actor);
+        List<FichaTarea> bandeja = tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actor);
         return bandeja.stream().anyMatch(t -> "PROSPECCION".equals(t.entidadTipo())
                 && t.entidadId() != null && t.entidadId() == idProspeccion);
     }

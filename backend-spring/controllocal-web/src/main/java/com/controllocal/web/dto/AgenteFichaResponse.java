@@ -34,7 +34,7 @@ public record AgenteFichaResponse(AgenteResponse agente,
     public record ConteoEstado(String estado, String descripcion, long total) {
     }
 
-    public record Importe(String moneda, BigDecimal monto) {
+    public record Importe(String moneda, BigDecimal monto, Long determinados, Long pendientes) {
     }
 
     /**
@@ -72,8 +72,8 @@ public record AgenteFichaResponse(AgenteResponse agente,
                 f.ultimosCierres().stream()
                         .map(c -> new Cierre(c.idContrato(), c.codigoSolicitud(),
                                 c.direccionLocal(), c.distrito(), c.clienteNombre(),
-                                c.fechaCierre(), c.estadoContrato(), c.comisionGenerada(),
-                                c.monedaComision()))
+                                c.fechaCierre(), c.estadoContrato(), c.rentaContractual(),
+                                c.monedaContrato()))
                         .toList());
     }
 
@@ -84,6 +84,6 @@ public record AgenteFichaResponse(AgenteResponse agente,
     }
 
     private static List<Importe> importes(List<AgenteService.ImportePorMoneda> filas) {
-        return filas.stream().map(i -> new Importe(i.moneda(), i.monto())).toList();
+        return filas.stream().map(i -> new Importe(i.moneda(), i.monto(),i.determinados(),i.pendientes())).toList();
     }
 }

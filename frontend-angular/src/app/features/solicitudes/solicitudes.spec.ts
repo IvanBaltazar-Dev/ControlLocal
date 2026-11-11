@@ -173,6 +173,8 @@ describe('Solicitudes', () => {
   ): Promise<ComponentFixture<Solicitudes>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

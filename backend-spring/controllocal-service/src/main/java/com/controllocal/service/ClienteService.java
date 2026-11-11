@@ -13,9 +13,10 @@ import java.time.LocalDateTime;
  * {@code idPropietario} en la vertical de oferta.
  *
  * <p><b>Alcance, la rareza que hay que preservar</b> (contrato §2): el cliente
- * es CATALOGO COMPARTIDO. ADMIN y AGENTE ven y editan TODOS los de su
- * organizacion —no hay regla de pertenencia—; solo el BROKER queda acotado, y
- * su conjunto se deriva de las oportunidades de su equipo.
+ * es CATALOGO COMPARTIDO entre AGENTES de su organizacion, sin pertenencia
+ * individual del cliente; el BROKER queda acotado por las oportunidades de su
+ * equipo. CAT-R19/C1 excluye al gobierno: administrar no concede consulta ni
+ * edicion comercial y su padron minimo tiene puertas propias.
  */
 public interface ClienteService {
 
@@ -73,6 +74,8 @@ public interface ClienteService {
     ResumenClientes resumen(FiltrosCliente filtros, Actor actor);
 
     FichaCliente obtener(long id, Actor actor);
+    /** Identidad mínima autorizada para filtrar sin hidratar Persona ni lanzar una denegación por fila. */
+    java.util.Optional<Long> personaLegible(long id,Actor actor);
 
     FichaCliente registrar(DatosCliente datos, Actor actor);
 

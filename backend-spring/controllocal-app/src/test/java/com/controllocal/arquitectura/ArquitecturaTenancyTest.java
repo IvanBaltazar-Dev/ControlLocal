@@ -4,8 +4,6 @@ import com.controllocal.domain.comun.EntidadDeOrganizacion;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import jakarta.persistence.Entity;
 import org.junit.jupiter.api.Test;
 
@@ -27,10 +25,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArquitecturaTenancyTest {
 
     /**
-     * Catalogos compartidos por todas las organizaciones. Anadir algo a esta
-     * lista es declarar que sus filas son las MISMAS para toda corredora.
+     * Ubicación global explícita. Los catálogos compartidos y la identidad
+     * privada de una cuenta tienen distintas autoridades de lectura: global
+     * nunca significa público ni legible por cualquier organización.
      */
     private static final Set<String> GLOBALES = Set.of(
+            // C1 aprobado: cuenta única y sesiones previas a la selección de pertenencia.
+            // Ninguna de ambas concede cartera; el contexto seleccionado y vigente delimita el efecto.
+            "com.controllocal.domain.seguridad.CuentaAcceso",
+            "com.controllocal.domain.seguridad.SesionAcceso",
+            // Cuenta personal: factor, respaldos, enlaces e historia de contraseña son privados
+            // del titular autenticado; no pertenecen a un antiguo tenant ni reciben org ficticia.
+            "com.controllocal.domain.seguridad.FactorAutenticacion",
+            "com.controllocal.domain.seguridad.CodigoRespaldoMfa",
+            "com.controllocal.domain.seguridad.TokenAcceso",
+            "com.controllocal.domain.seguridad.CredencialPassword",
+            // Auditoría híbrida: antes del contexto sólo acceso/identidad; gobierno/negocio exigen tenant.
+            // EventosSeguridad y V100 mantienen la restricción, no una excepción comercial genérica.
+            "com.controllocal.domain.seguridad.EventoSeguridad",
+            // UC-K-16: correlación pública previa a identidad; vinculación atómica al autenticar.
+            "com.controllocal.domain.seguridad.VinculoInteraccionSegura",
             // Geografia: Miraflores es Miraflores para cualquier corredora.
             "com.controllocal.domain.inmueble.Distrito",
             // La organizacion es la raiz del tenant, no algo dentro de el.
@@ -62,8 +76,7 @@ class ArquitecturaTenancyTest {
             // NOT NULL como cualquier otra fila de negocio.
             "com.controllocal.domain.inmueble.CatalogoAtributo");
 
-    private static final JavaClasses CLASES = new ClassFileImporter()
-            .withImportOption(new ImportOption.DoNotIncludeTests())
+    private static final JavaClasses CLASES = ImportacionesDeProducto.importador()
             .importPackages("com.controllocal");
 
     @Test

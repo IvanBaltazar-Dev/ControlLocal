@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -51,6 +52,20 @@ public class Visita extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "id_visita")
     private Long id;
 
+    @Version
+    @Column(name="version",nullable=false)
+    private long version;
+    @Column(name="participantes_json")
+    private String participantesJson;
+    @Column(name="lugar_declarado")
+    private String lugarDeclarado;
+    @Column(name="fecha_hecho")
+    private LocalDate fechaHecho;
+    @Column(name="registrado_en")
+    private OffsetDateTime registradoEn;
+    @Column(name="procedencia_json")
+    private String procedenciaJson;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_oportunidad", nullable = false)
     private OportunidadComercial oportunidad;
@@ -72,7 +87,7 @@ public class Visita extends EntidadDeOrganizacion implements Transicionable {
     private String observaciones;
 
     /** Codigo de ResultadoInteraccion: MIXTO en el cable (1 char o palabra). */
-    @Column(name = "resultado", length = 30)
+    @Column(name = "resultado")
     private String resultado;
 
     @Column(name = "nivel_interes")
@@ -149,14 +164,13 @@ public class Visita extends EntidadDeOrganizacion implements Transicionable {
         this.proximaAccion = null;
     }
 
-    public void registrarDesenlace(String resultado, String observaciones, String razonNoContinuidad,
+    public void registrarDesenlace(String resultado, String observaciones,
                                    Integer nivelInteres, String objecionPrincipal,
                                    String opinionPrecio, String proximaAccion) {
         this.resultado = resultado;
         if (observaciones != null) {
             this.observaciones = observaciones;
         }
-        this.razonNoContinuidad = razonNoContinuidad;
         this.nivelInteres = nivelInteres;
         this.objecionPrincipal = objecionPrincipal;
         this.opinionPrecio = opinionPrecio;
@@ -238,5 +252,20 @@ public class Visita extends EntidadDeOrganizacion implements Transicionable {
 
     public OffsetDateTime getFechaActualizacion() {
         return fechaActualizacion;
+    }
+
+    public long getVersion(){return version;}
+    public String getParticipantesJson(){return participantesJson;}
+    public void setParticipantesJson(String valor){participantesJson=valor;}
+    public String getLugarDeclarado(){return lugarDeclarado;}
+    public void setLugarDeclarado(String valor){lugarDeclarado=valor;}
+    public LocalDate getFechaHecho(){return fechaHecho;}
+    public void setFechaHecho(LocalDate valor){fechaHecho=valor;}
+    public OffsetDateTime getRegistradoEn(){return registradoEn;}
+    public void setRegistradoEn(OffsetDateTime valor){registradoEn=valor;}
+    public String getProcedenciaJson(){return procedenciaJson;}
+    public void setProcedenciaJson(String valor){procedenciaJson=valor;}
+    public void registrarCambio(OffsetDateTime registrado,String procedencia){
+        registradoEn=registrado;fechaActualizacion=registrado;procedenciaJson=procedencia;
     }
 }

@@ -20,11 +20,15 @@ import com.controllocal.persistence.repositorio.OfertaRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.PublicacionRepository;
+import com.controllocal.service.publicacion.HistoriadorPublicacion;
 import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.CierreVentaService;
+import com.controllocal.service.formalizacion.HitosConfirmados.*;
+import com.controllocal.service.formalizacion.FormalizacionService.AcuerdoFinalDocumentado;
+import com.controllocal.service.encargo.AccesoEncargo;
+import com.controllocal.persistence.repositorio.MesaNegociacionRepository;
 import com.controllocal.service.TareaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ConflictoException;
@@ -83,13 +87,15 @@ public class CierreVentaServiceImpl implements CierreVentaService {
     private final ContratoCompraventaRepository compraventas;
     private final PrecioPropiedadRepository precios;
     private final PropiedadRepository propiedades;
-    private final PublicacionRepository publicaciones;
+    private final HistoriadorPublicacion publicaciones;
     private final SupervisionAgenteRepository supervisiones;
     private final Alcances alcances;
     private final AutoridadDePropiedad autoridad;
     private final Transiciones transiciones;
     private final TareaService tareas;
     private final AlertaService alertas;
+    private final AccesoEncargo accesoEncargo;
+    private final MesaNegociacionRepository mesas;
 
     public CierreVentaServiceImpl(CaptacionRepository captaciones,
                                   OportunidadComercialRepository oportunidades,
@@ -97,11 +103,11 @@ public class CierreVentaServiceImpl implements CierreVentaService {
                                   ContratoCompraventaRepository compraventas,
                                   PrecioPropiedadRepository precios,
                                   PropiedadRepository propiedades,
-                                  PublicacionRepository publicaciones,
+                                  HistoriadorPublicacion publicaciones,
                                   SupervisionAgenteRepository supervisiones,
                                   Alcances alcances, AutoridadDePropiedad autoridad,
                                   Transiciones transiciones, TareaService tareas,
-                                  AlertaService alertas) {
+                                  AlertaService alertas,AccesoEncargo accesoEncargo,MesaNegociacionRepository mesas) {
         this.captaciones = captaciones;
         this.oportunidades = oportunidades;
         this.ofertas = ofertas;
@@ -114,7 +120,7 @@ public class CierreVentaServiceImpl implements CierreVentaService {
         this.autoridad = autoridad;
         this.transiciones = transiciones;
         this.tareas = tareas;
-        this.alertas = alertas;
+        this.alertas = alertas;this.accesoEncargo=accesoEncargo;this.mesas=mesas;
     }
 
     @Override
@@ -128,125 +134,86 @@ public class CierreVentaServiceImpl implements CierreVentaService {
         return ficha(contrato, encargo,
                 oportunidades.buscarFicha(encargo.getOrganizacionId(), contrato.getIdOportunidad())
                         .orElse(null),
-                ofertas.buscarFicha(encargo.getOrganizacionId(), contrato.getIdOferta())
-                        .orElse(null));
+                contrato.getIdOferta()==null?null:ofertas.buscarFicha(encargo.getOrganizacionId(),contrato.getIdOferta()).orElse(null));
     }
 
-    @Override
-    @Transactional
-    public FichaCierreVenta cerrar(long idCaptacion, DatosCierreVenta datos, Actor actor) {
-        if (datos == null || datos.idOferta() == null || datos.idOferta() <= 0) {
-            throw new ReglaNegocioException(
-                    "Indica la oferta aceptada con la que se cierra la venta: sin ella no se "
-                            + "sabe que cifra se acordo.");
+    /** RF059/060: sólo desde el hito confirmado, nunca desde un botón de cierre directo. */
+    @Override @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public long confirmarHito(ContextoEconomico contexto,FuenteHitoConfirmado hito,
+            FuenteEconomicaFinal fuente,AcuerdoFinalDocumentado revisado,Actor actor) {
+        Captacion encargo=accesoEncargo.leer(contexto.encargo(),actor);
+        accesoEncargo.exigirDecision(encargo,actor);
+        if(contexto.organizacion()!=actor.idOrganizacion()||contexto.oportunidad()==null
+                ||hito.tipo()!=com.controllocal.domain.comercial.TipoHitoContractual.ESCRITURA
+                ||!Objects.equals(contexto.referencia(),hito.contexto())||fuente==null
+                ||fuente.precioVenta()==null||fuente.precioVenta().importe()==null
+                ||fuente.precioVenta().importe().signum()<=0)
+            throw new ReglaNegocioException("La escritura requiere contexto, fuente y precio final acreditados.");
+        var dinero=fuente.precioVenta();
+        if(dinero.moneda()==null||!PrecioPropiedad.MONEDAS.contains(dinero.moneda()))
+            throw new ReglaNegocioException("El precio final requiere su propia moneda conocida.");
+        if(hito.fechaEfectiva()==null)
+            throw new ReglaNegocioException("El hito requiere su fecha efectiva acreditada.");
+        var mesa=oportunidades.buscarFicha(actor.idOrganizacion(),contexto.oportunidad())
+                .orElseThrow(()->new NoEncontradoException("Oportunidad"));
+        if(mesa.getCaptacion()==null||!Objects.equals(mesa.getCaptacion().getId(),encargo.getId()))
+            throw new NoEncontradoException("Oportunidad del Encargo");
+        var anterior=compraventas.deLaMesa(actor.idOrganizacion(),mesa.getId());
+        if(hito.rectifica()!=null) {
+            var existente=anterior.orElseThrow(()->new NoEncontradoException("Contrato de compraventa"));
+            if(!Objects.equals(contexto.contratoVenta(),existente.getId()))
+                throw new NoEncontradoException("Contrato del contexto");
+            existente.setMontoPactado(dinero.importe());existente.setMoneda(dinero.moneda());
+            existente.setFechaFirma(hito.fechaEfectiva());
+            declararEscritura(existente,revisado);
+            compraventas.saveAndFlush(existente);
+            return existente.getId();
         }
-        Captacion encargo = cargarConAcceso(idCaptacion, actor);
-        // La autoridad del ENCARGO, y despues de la carga para conservar el 404
-        // de otra corredora: un id ajeno no puede empezar a responder 403.
-        autoridad.exigirEdicionDelEncargo(actor, encargo);
-
-        if (OperacionInmobiliaria.VENTA != encargo.operacion()) {
-            throw new ReglaNegocioException(
-                    "El encargo " + encargo.getCodigoCaptacion() + " es de alquiler. El cierre de "
-                            + "un alquiler es su contrato de alquiler, no una compraventa.");
+        if(anterior.isPresent()||!ADMITEN_CIERRE.contains(mesa.estadoActual()))
+            throw new ConflictoException("La operación ya tiene un resultado contractual; no admite otro cierre.");
+        Long oferta=null;
+        if(fuente.acuerdoC4()!=null) {
+            var acuerdo=mesas.acuerdoExacto(actor.idOrganizacion(),fuente.acuerdoC4(),fuente.versionAcuerdoC4())
+                    .orElseThrow(()->new NoEncontradoException("Acuerdo histórico exacto"));
+            oferta=acuerdo.oferta();
+            var propuesta=ofertas.buscarFicha(actor.idOrganizacion(),oferta)
+                    .orElseThrow(()->new NoEncontradoException("Oferta del acuerdo"));
+            if(!Objects.equals(propuesta.getIdOportunidad(),mesa.getId()))
+                throw new NoEncontradoException("Acuerdo de la operación");
         }
-        if (!Captacion.ACTIVA.equals(encargo.estadoActual())) {
-            throw new ReglaNegocioException("El encargo tiene que estar ACTIVO para cerrarlo.");
-        }
-
-        Oferta oferta = ofertas.buscarFicha(encargo.getOrganizacionId(), datos.idOferta())
-                .orElseThrow(() -> new NoEncontradoException("Oferta"));
-        if (!Objects.equals(oferta.getIdCaptacion(), encargo.getId())) {
-            // Para este encargo esa oferta no existe. 404 y no 403: decir que
-            // existe en otro encargo ya seria informacion.
-            throw new NoEncontradoException("Oferta");
-        }
-        if (!oferta.estaAceptada()) {
-            throw new ReglaNegocioException(
-                    "Solo se cierra con una oferta ACEPTADA; la de la ronda " + oferta.getRonda()
-                            + " esta " + Oferta.rotuloDelEstado(oferta.estadoActual())
-                                    .toLowerCase(Locale.ROOT) + ".");
-        }
-
-        OportunidadComercial mesa = oportunidades
-                .buscarFicha(encargo.getOrganizacionId(), oferta.getIdOportunidad())
-                .orElseThrow(() -> new NoEncontradoException("Oportunidad"));
-        if (!ADMITEN_CIERRE.contains(mesa.estadoActual())) {
-            throw new ReglaNegocioException(
-                    "La oportunidad ya esta cerrada; no admite un cierre de venta.");
-        }
-        if (compraventas.deLaMesa(encargo.getOrganizacionId(), mesa.getId()).isPresent()) {
-            throw new ConflictoException("Esta negociacion ya tiene un cierre de venta registrado.");
-        }
-
-        BigDecimal pactado = pactadoDe(datos, oferta);
-        String moneda = monedaDe(datos, oferta);
-        LocalDate firma = fechaDeFirma(datos.fechaFirma());
-        String motivo = "Venta cerrada con la oferta de la ronda " + oferta.getRonda() + ".";
-
-        // 1) El contrato de compraventa.
-        ContratoCompraventa contrato = new ContratoCompraventa();
-        contrato.setOrganizacionId(encargo.getOrganizacionId());
-        contrato.setIdOportunidad(mesa.getId());
-        contrato.setIdCaptacion(encargo.getId());
-        contrato.setIdPropiedad(encargo.getPropiedad().getId());
-        contrato.setIdOferta(oferta.getId());
-        DetalleCliente comprador = mesa.getCliente();
-        contrato.setIdRolCliente(comprador == null ? null : comprador.getId());
-        DetalleAgente agente = encargo.getAgente();
-        contrato.setIdRolAgenteCierre(agente == null ? null : agente.getId());
-        contrato.setIdRolBrokerCierre(brokerDe(encargo.getOrganizacionId(),
-                agente == null ? null : agente.getId()));
-        contrato.setMontoPactado(pactado);
-        contrato.setMoneda(moneda);
-        contrato.declararEnEscritura(datos.montoDeclarado(),
-                monedaDeclaradaDe(datos.montoDeclarado(), datos.monedaDeclarada()));
-        contrato.setFechaFirma(firma);
-        contrato.setObservaciones(texto(datos.observaciones()));
-        ContratoCompraventa guardado;
-        try {
-            guardado = compraventas.saveAndFlush(contrato);
-        } catch (DataIntegrityViolationException carrera) {
-            // Lo cortan uq_compraventa_oportunidad y uq_compraventa_oferta: una
-            // oferta se firma una sola vez.
-            throw new ConflictoException("Esta negociacion ya tiene un cierre de venta registrado.");
-        }
-
-        // 2) El hito C: el ultimo de la serie de ESTE encargo, atado ademas a la
-        //    vuelta que lo produjo. Sin id_oferta, dos negociaciones sobre la
-        //    misma propiedad mezclarian sus cierres en una sola linea.
-        precios.save(PrecioPropiedad.hito(encargo.getOrganizacionId(),
-                        encargo.getPropiedad().getId(), OperacionInmobiliaria.VENTA,
-                        PrecioPropiedad.HITO_CIERRE, moneda, pactado, firma)
-                .delEncargo(encargo.getId())
-                .deLaOferta(oferta.getId()));
-
-        // 3) La mesa se cierra como EXITOSA.
+        var contrato=new ContratoCompraventa();contrato.setOrganizacionId(actor.idOrganizacion());
+        contrato.setIdOportunidad(mesa.getId());contrato.setIdCaptacion(encargo.getId());
+        contrato.setIdPropiedad(encargo.getPropiedad().getId());contrato.setIdOferta(oferta);
+        contrato.setIdRolCliente(mesa.getCliente()==null?null:mesa.getCliente().getId());
+        contrato.setIdRolAgenteCierre(encargo.getAgente().getId());
+        contrato.setIdRolBrokerCierre(brokerDe(actor.idOrganizacion(),encargo.getAgente().getId()));
+        contrato.setMontoPactado(dinero.importe());contrato.setMoneda(dinero.moneda());
+        contrato.setFechaFirma(hito.fechaEfectiva());declararEscritura(contrato,revisado);
+        if(revisado!=null)contrato.setObservaciones(texto(revisado.descripcion()));
+        compraventas.saveAndFlush(contrato);
+        String motivo="Escritura confirmada de la operación "+mesa.getCodigoOportunidad()+".";
+        // El total de un paquete no se convierte en el precio individual de sus unidades.
+        if(fuente.objeto().tipo()==com.controllocal.service.OfertaService.TipoObjeto.UNIDAD)
+            precios.save(PrecioPropiedad.hito(actor.idOrganizacion(),fuente.objeto().propiedad(),
+                    OperacionInmobiliaria.VENTA,PrecioPropiedad.HITO_CIERRE,dinero.moneda(),dinero.importe(),hito.fechaEfectiva())
+                    .delEncargo(encargo.getId()).deLaOferta(oferta));
         mesa.marcarCierreExitoso();
-        transiciones.aplicar(mesa, mesa.getId(), OportunidadComercial.FINALIZADA_EXITOSA,
-                actor, motivo, firma);
+        transiciones.aplicar(mesa,mesa.getId(),OportunidadComercial.FINALIZADA_EXITOSA,actor,motivo,hito.fechaEfectiva(),hito.referencia().revision());
         oportunidades.save(mesa);
-
-        // 4) El encargo cumplio su objetivo. El motivo es 'V' —vendido— y no el
-        //    'A' del alquiler ni el 'M' del cierre manual del broker: los tres
-        //    son cierres y ninguno es el mismo hecho.
-        transiciones.aplicar(encargo, encargo.getId(), Captacion.CERRADA, actor, motivo, firma);
-        encargo.cerrar(firma, CIERRE_POR_VENTA, motivo);
-        captaciones.save(encargo);
-
-        // 5) El inmueble sale del mercado y sus anuncios se cierran.
-        retirarDelMercado(encargo, actor, motivo);
-
-        // 6) Las tareas abiertas de la operacion se dan por hechas y se avisa.
-        tareas.resolverDeEntidad(OportunidadComercial.ENTIDAD_TIPO, mesa.getId(), actor);
-        tareas.resolverDeEntidad(encargo.entidadTipo(), encargo.getId(), actor);
-        tareas.resolverDeEntidad("INMUEBLE", encargo.getPropiedad().getId(), actor);
-        alertas.emitir(new AlertaService.DatosAlerta(Alerta.OPORTUNIDAD_CERRADA, Alerta.INFO,
-                OportunidadComercial.ENTIDAD_TIPO, mesa.getId(),
-                agente == null ? null : agente.getId(),
-                "Se cerro la venta de la oportunidad " + mesa.getCodigoOportunidad() + "."), actor);
-
-        return ficha(guardado, encargo, mesa, oferta);
+        transiciones.aplicar(encargo,encargo.getId(),Captacion.FINALIZADO,actor,motivo,hito.fechaEfectiva());
+        encargo.cerrar(hito.fechaEfectiva(),CIERRE_POR_VENTA,motivo);captaciones.save(encargo);
+        retirarDelMercado(encargo,fuente.objeto().unidades(),actor,motivo);
+        tareas.resolverPorCierreConfirmado(hito.referencia().revision(),actor);
+        alertas.emitir(new AlertaService.DatosAlerta(Alerta.OPORTUNIDAD_CERRADA,Alerta.INFO,
+                OportunidadComercial.ENTIDAD_TIPO,mesa.getId(),encargo.getAgente().getId(),motivo,
+                com.controllocal.service.soporte.FuentesAsuntos.Origen.de("REVISION_HITO",hito.referencia().revision())),actor);
+        return contrato.getId();
+    }
+    private static void declararEscritura(ContratoCompraventa contrato,AcuerdoFinalDocumentado revisado) {
+        if(revisado!=null) {
+            var d=revisado.declaradoEnEscritura();
+            contrato.declararEnEscritura(d==null?null:d.importe(),d==null?null:d.moneda());
+        }
     }
 
     // ==================================================================
@@ -269,51 +236,36 @@ public class CierreVentaServiceImpl implements CierreVentaService {
     }
 
     /**
-     * <b>El inmueble sale del mercado</b>, y con la palabra que el vocabulario
-     * de hoy sabe decir.
+     * <b>El inmueble se vendio</b>, dicho con esa palabra desde V91.
      *
-     * <p>{@code DisponibilidadComercial} tiene {@code DISPONIBLE},
-     * {@code RESERVADO}, {@code ALQUILADO} y {@code RETIRADO}. <b>No tiene
-     * VENDIDO</b>, y anadirlo cruza dos autoridades que este corte no gobierna
-     * —el catalogo de codigos de estado y el de productores—. De las opciones
-     * reales:
-     * <ul>
-     *   <li>dejarlo {@code DISPONIBLE} seria <b>falso</b>: es una afirmacion
-     *       sobre el presente que la venta desmiente;</li>
-     *   <li>{@code ALQUILADO} seria falso y ademas contaminaria la estadistica
-     *       de rentas;</li>
-     *   <li>{@code RETIRADO} —«retirado del mercado»— es <b>cierto y mas
-     *       debil</b>: no dice que se vendio, y no lo pretende. El por que si
-     *       queda escrito, en {@code contrato_compraventa}, en el hito {@code C}
-     *       y en {@code captacion.motivo_cierre = 'V'}.
-     * </ul>
-     * Se elige la afirmacion verdadera aunque sea incompleta, no la completa
-     * inventada. Que {@code VENDIDO} entre en el vocabulario es una decision
-     * pendiente y esta escrita como tal.
+     * <p>Hasta este corte aqui se escribia {@code RETIRADO} —«retirado del
+     * mercado»— porque era lo mas fuerte que el vocabulario sabia decir con
+     * verdad: no habia {@code VENDIDO}, y las otras opciones eran peores
+     * ({@code DISPONIBLE} lo desmiente la venta; {@code ALQUILADO} es falso y
+     * ademas contamina la estadistica de rentas). Se eligio la afirmacion
+     * verdadera aunque incompleta, y se dejo escrita la decision pendiente.
+     *
+     * <p>{@code V} la cierra. No es un sinonimo mas bonito de {@code T}: son
+     * dos hechos con dos futuros distintos —retirar es reversible y vender no
+     * lo es—, y la maquina de estados lo dice sin adornos: de {@code RETIRADO}
+     * se vuelve a {@code DISPONIBLE} y de {@code VENDIDO} no se sale.
+     *
+     * <p>El por que sigue escrito donde ya estaba —{@code contrato_compraventa},
+     * el hito {@code C} y {@code captacion.motivo_cierre = 'V'}—; lo que cambia
+     * es que la columna del inmueble ya no obliga a ir a buscarlo.
+     *
+     * <p><b>La titularidad no se toca</b>, y no es un olvido: quien figura como
+     * propietario despues de una venta es otro hecho, con su fecha y su
+     * documento, y esta fuera del alcance de este corte.
      */
-    private void retirarDelMercado(Captacion encargo, Actor actor, String motivo) {
-        Propiedad propiedad = encargo.getPropiedad();
-        if (propiedad == null || propiedad.getId() == null) {
-            return;
+    private void retirarDelMercado(Captacion encargo,java.util.List<Long> unidades,Actor actor,String motivo) {
+        for(long id:unidades) {
+            Propiedad propiedad=propiedades.findById(id).filter(p->p.getOrganizacionId()==actor.idOrganizacion())
+                    .orElseThrow(()->new NoEncontradoException("Unidad de la operación"));
+            transiciones.aplicarDisponibilidad(propiedad,id,DisponibilidadComercial.VENDIDO,actor,motivo);
+            propiedades.save(propiedad);
         }
-        transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
-                DisponibilidadComercial.RETIRADO, actor, motivo);
-        propiedades.save(propiedad);
-
-        for (Publicacion publicacion
-                : publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(propiedad.getId())) {
-            if (!Objects.equals(publicacion.getIdEncargo(), encargo.getId())) {
-                // Los anuncios del OTRO encargo —el de alquiler, si lo hay— no
-                // se tocan: vender no cancela un encargo de alquiler vivo, y
-                // cerrarlos aqui seria decidir sobre un trato ajeno.
-                continue;
-            }
-            if (!Publicacion.ESTADO_CERRADO.equals(publicacion.getEstado())) {
-                publicacion.setEstado(Publicacion.ESTADO_CERRADO);
-                publicacion.setFechaBaja(OffsetDateTime.now());
-                publicaciones.save(publicacion);
-            }
-        }
+        publicaciones.cerrarPorHito(encargo,actor);
     }
 
     private Long brokerDe(Long idOrganizacion, Long idRolAgente) {
@@ -323,60 +275,6 @@ public class CierreVentaServiceImpl implements CierreVentaService {
         return supervisiones.buscarActivaPorAgente(idOrganizacion, idRolAgente)
                 .map(SupervisionAgente::getIdRolBroker)
                 .orElse(null);
-    }
-
-    /**
-     * El importe pactado. Por defecto el de la oferta aceptada —que es lo que se
-     * acordo— y solo se aparta de el si el cierre lo declara: un ajuste de
-     * ultima hora es un hecho, deducirlo no.
-     */
-    private static BigDecimal pactadoDe(DatosCierreVenta datos, Oferta oferta) {
-        if (datos.montoPactado() == null) {
-            return oferta.getMonto();
-        }
-        if (datos.montoPactado().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ReglaNegocioException("El importe pactado tiene que ser mayor que cero.");
-        }
-        return datos.montoPactado();
-    }
-
-    private static String monedaDe(DatosCierreVenta datos, Oferta oferta) {
-        if (datos.moneda() == null || datos.moneda().isBlank()) {
-            return oferta.getMoneda();
-        }
-        String limpia = datos.moneda().trim().toUpperCase(Locale.ROOT);
-        if (!PrecioPropiedad.MONEDAS.contains(limpia)) {
-            throw new ReglaNegocioException(
-                    "Moneda no valida para el cierre: " + PrecioPropiedad.MONEDAS + ".");
-        }
-        return limpia;
-    }
-
-    /**
-     * La moneda de lo declarado en la escritura. <b>Sin defecto</b>: si se
-     * declara un importe hay que decir en que moneda, porque en este mercado se
-     * pacta en dolares y se escritura en soles con frecuencia, y suponer que
-     * coinciden convertiria una escritura de 700.000 soles en 700.000 dolares.
-     */
-    private static String monedaDeclaradaDe(BigDecimal montoDeclarado, String moneda) {
-        if (montoDeclarado == null) {
-            return null;
-        }
-        String limpia = moneda == null ? null : moneda.trim().toUpperCase(Locale.ROOT);
-        if (limpia == null || !PrecioPropiedad.MONEDAS.contains(limpia)) {
-            throw new ReglaNegocioException(
-                    "Declara la moneda del importe de la escritura: " + PrecioPropiedad.MONEDAS
-                            + ". No se supone la del importe pactado.");
-        }
-        return limpia;
-    }
-
-    private static LocalDate fechaDeFirma(LocalDate fecha) {
-        LocalDate efectiva = fecha == null ? LocalDate.now() : fecha;
-        if (efectiva.isAfter(LocalDate.now())) {
-            throw new ReglaNegocioException("La fecha de firma no puede ser futura.");
-        }
-        return efectiva;
     }
 
     private static String texto(String valor) {

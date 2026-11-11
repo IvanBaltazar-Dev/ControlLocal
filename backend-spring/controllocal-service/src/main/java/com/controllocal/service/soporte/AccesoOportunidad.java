@@ -1,74 +1,112 @@
 package com.controllocal.service.soporte;
 
-import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.OportunidadService.InteresadoReferencia;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.ConflictoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.Optional;
+import java.util.*;
 
-/**
- * Carga de la oportunidad CON el alcance del actor ya aplicado.
- *
- * <p>Es la gemela de {@link AccesoSolicitud} y existe por la misma razon: son
- * varios los casos de uso que entran por la oportunidad —la oportunidad misma,
- * su caida y, desde WP-A, su <b>mesa de negociacion</b>—, y una segunda copia
- * de este predicado se separaria de la primera. La regla no es la de las
- * solicitudes y no se unifican:
- *
- * <pre>
- *   solicitudes   el BROKER alcanza por AGENTE supervisado
- *   oportunidades el BROKER alcanza por CAPTACION supervisada
- * </pre>
- *
- * <p>El orden es el de siempre: <b>tenant primero</b> —una oportunidad de otra
- * corredora responde 404, no 403, porque un 403 confirmaria que existe— y
- * alcance despues.
- *
- * <p>Antes de WP-A la regla vivia dentro de {@code OportunidadServiceImpl}
- * como metodo privado. Sigue estando ahi el metodo que la matriz nombra
- * ({@code cargarConAcceso}); lo que ya no esta es la <b>definicion</b>, que se
- * escribia una vez y se habria escrito dos.
- */
+/** Autoridad única de Oportunidad. La proyección técnica no revela el expediente de Persona. */
 @Component
 public class AccesoOportunidad {
-
+    public record PermisoOportunidad(long organizacion,long id,long version,long idEncargo,
+            long responsableActual,String estado,String operacion,long idPropiedad,InteresadoReferencia interesado) { }
     private final OportunidadComercialRepository oportunidades;
     private final Alcances alcances;
-
-    public AccesoOportunidad(OportunidadComercialRepository oportunidades, Alcances alcances) {
-        this.oportunidades = oportunidades;
-        this.alcances = alcances;
+    private final ContextosDeActividad contextos;
+    private final EntityManager entidades;
+    public AccesoOportunidad(OportunidadComercialRepository oportunidades,Alcances alcances,
+            ContextosDeActividad contextos,EntityManager entidades){
+        this.oportunidades=oportunidades;this.alcances=alcances;this.contextos=contextos;this.entidades=entidades;
     }
 
-    /** La oportunidad; 404 si no existe en el tenant, 403 si esta fuera del alcance. */
-    public OportunidadComercial conAcceso(long id, Actor actor) {
-        OportunidadComercial oportunidad = oportunidades.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Oportunidad"));
-        if (!alcanza(oportunidad, actor)) {
-            throw new AccesoNoAutorizadoException();
-        }
-        return oportunidad;
+    @Transactional(readOnly=true)
+    public PermisoOportunidad contextoParaNegociacion(long id,Actor actor){
+        contextos.exigirOperador(actor);
+        var c=oportunidades.contexto(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Oportunidad"));
+        if(!permite(c,actor))throw new AccesoNoAutorizadoException();
+        return proyeccion(c);
     }
 
     /**
-     * ¿Alcanza este actor a esta oportunidad? Es la pregunta de LECTURA, y no
-     * concede escritura: quien escribe en la mesa es el agente del ENCARGO
-     * ({@code AutoridadDePropiedad.exigirEdicionDelEncargo}), que es otra
-     * pregunta y tiene otra respuesta.
+     * Selección para filtrar población autorizada sin hacer de una denegación esperada
+     * una excepción de otro interceptor transaccional. No devuelve contenido personal.
      */
-    public boolean alcanza(OportunidadComercial oportunidad, Actor actor) {
-        if (actor.esTenantAdmin()) {
-            return true;
+    @Transactional(readOnly=true)
+    public Optional<PermisoOportunidad> buscarParaLectura(long id,Actor actor){
+        try {
+            // exigirOperador no es transaccional; iniciar es la única puerta TX del helper.
+            contextos.exigirOperador(actor);
+        } catch(AccesoNoAutorizadoException denegada) {
+            return Optional.empty();
         }
-        if (actor.esAgente()) {
-            return oportunidad.getAgente() != null
-                    && oportunidad.getAgente().getId() == actor.idRolOperativo();
-        }
-        Captacion captacion = oportunidad.getCaptacion();
-        return captacion != null && captacion.getAgente() != null
-                && alcances.supervisados(actor.idOrganizacion(), actor.idRolOperativo())
-                        .contains(captacion.getAgente().getId());
+        return oportunidades.contexto(actor.idOrganizacion(),id).filter(c->permite(c,actor)).map(this::proyeccion);
+    }
+
+    private boolean permite(OportunidadComercialRepository.ContextoOportunidad c,Actor actor){
+        return permiteResponsablesActuales(c.getResponsable(),c.getResponsableEncargo(),actor);
+    }
+    /** Metadata servidor de la oportunidad y su Encargo; conserva sus dos autoridades distintas. */
+    public boolean permiteResponsablesActuales(Long responsable,Long responsableEncargo,Actor actor){
+        return permite(responsable,responsableEncargo,actor,actor.esAgente()?Set.of():alcances.de(actor).rolesAgente());
+    }
+    public record ResponsablesActuales(Long responsable,Long responsableEncargo){ }
+    public Set<Long> permitidasActuales(Map<Long,ResponsablesActuales> fuentes,Actor actor){
+        var roles=actor.esAgente()?Set.<Long>of():Set.copyOf(alcances.de(actor).rolesAgente());var permitidas=new HashSet<Long>();
+        fuentes.forEach((id,c)->{if(permite(c.responsable(),c.responsableEncargo(),actor,roles))permitidas.add(id);});return Set.copyOf(permitidas);
+    }
+    private static boolean permite(Long responsable,Long responsableEncargo,Actor actor,Collection<Long> roles){
+        return actor.esAgente()?responsable!=null&&responsable==actor.idRolOperativo():responsableEncargo!=null&&roles.contains(responsableEncargo);
+    }
+
+    private PermisoOportunidad proyeccion(OportunidadComercialRepository.ContextoOportunidad c){
+        return new PermisoOportunidad(c.getOrganizacion(),c.getId(),c.getVersion(),c.getEncargo(),
+                c.getResponsable(),c.getEstado(),c.getOperacion()==null?null:com.controllocal.domain.inmueble.OperacionInmobiliaria.desde(c.getOperacion()).name(),
+                c.getPropiedad(),c.getPersona()==null?null:new InteresadoReferencia(c.getPersona(),c.getCliente()));
+    }
+
+    @Transactional(propagation=Propagation.MANDATORY)
+    public PermisoOportunidad bloquearParaNegociacion(long id,long versionEsperada,Actor actor,ContextoSesion sesion){
+        contextos.iniciar(actor,sesion);
+        var o=bloquearActividad(id,versionEsperada,actor);
+        if(o.getCaptacion()==null||o.getCaptacion().getAgente()==null
+                ||o.getCaptacion().getAgente().getId()!=actor.idRolOperativo())throw new AccesoNoAutorizadoException();
+        return contextoParaNegociacion(id,actor);
+    }
+
+    @Transactional(readOnly=true)
+    public OportunidadComercial conAcceso(long id,Actor actor){
+        contextoParaNegociacion(id,actor);
+        return oportunidades.buscarFicha(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Oportunidad"));
+    }
+
+    /** El llamante ya bloqueó Cuenta/SID e identidad de reintento antes del recurso. */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public OportunidadComercial bloquearActividad(long id,long versionEsperada,Actor actor){
+        contextos.exigirAgente(actor);
+        var o=oportunidades.bloquear(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Oportunidad"));
+        entidades.refresh(o,LockModeType.PESSIMISTIC_WRITE);
+        if(o.getAgente()==null||o.getAgente().getId()!=actor.idRolOperativo())throw new AccesoNoAutorizadoException();
+        if(versionEsperada<0||o.getVersion()!=versionEsperada)throw new ConflictoException("Cambió la oportunidad; revisa su versión.");
+        return o;
+    }
+
+    /** Lector actual usado por consultas ya restringidas por tenant. No concede escritura. */
+    public boolean alcanza(OportunidadComercial o,Actor actor){
+        if(actor==null||(!actor.esAgente()&&!actor.esBroker()))return false;
+        if(o==null||o.getOrganizacionId()==null||o.getOrganizacionId()!=actor.idOrganizacion())return false;
+        return permiteResponsablesActuales(o.getAgente()==null?null:o.getAgente().getId(),
+                o.getCaptacion()==null||o.getCaptacion().getAgente()==null?null:o.getCaptacion().getAgente().getId(),actor);
     }
 }

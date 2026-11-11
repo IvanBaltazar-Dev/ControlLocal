@@ -42,6 +42,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.never;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -69,25 +70,11 @@ class ProspeccionServiceImplTest {
     private final Alcances alcances = mock(Alcances.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
     private final SupervisionAgenteRepository supervisiones = mock(SupervisionAgenteRepository.class);
-    private final AlertaService alertas = mock(AlertaService.class);
-
-    private final com.controllocal.persistence.repositorio.PrecioPropiedadRepository precios =
-            mock(com.controllocal.persistence.repositorio.PrecioPropiedadRepository.class);
-
+    private final com.controllocal.service.encargo.EncargoService encargos =
+            mock(com.controllocal.service.encargo.EncargoService.class);
     private final ProspeccionServiceImpl service = new ProspeccionServiceImpl(
             prospecciones, captaciones, propiedades, agentes, alcances, new Transiciones(historial),
-            supervisiones, alertas, lectorSinGobernados(), precios, titularConocido());
-
-    /** Un inmueble con titular conocido: aqui se blindan las reglas de `captar`. */
-    private static com.controllocal.service.soporte.TitularParaEncargar titularConocido() {
-        var repositorio = mock(
-                com.controllocal.persistence.repositorio.TitularidadPropiedadRepository.class);
-        org.mockito.Mockito.lenient()
-                .when(repositorio.vigentesDe(org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(java.util.List.of(
-                        new com.controllocal.domain.inmueble.TitularidadPropiedad()));
-        return new com.controllocal.service.soporte.TitularParaEncargar(repositorio);
-    }
+            supervisiones, lectorSinGobernados(), encargos,mock(com.controllocal.service.actividad.SeguimientoDeProspeccion.class));
 
     /**
      * Lo que se pacta al captar, con la operacion DICHA. Desde V75 no hay
@@ -187,7 +174,7 @@ class ProspeccionServiceImplTest {
     @Test
     void registrarSinLocalRespondeElMensajeV1() {
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosProspeccion(null, null), agente));
+                () -> service.registrar(new DatosProspeccion(null, null, null), agente));
         assertEquals("El local de la prospeccion es obligatorio.", error.getMessage());
     }
 
@@ -196,12 +183,13 @@ class ProspeccionServiceImplTest {
         when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
         when(propiedades.findByOrganizacionIdAndId(ORG, 9L)).thenReturn(Optional.empty());
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosProspeccion(9L, null), agente));
+                () -> service.registrar(new DatosProspeccion(9L, null, null), agente));
         assertEquals("El local de la prospeccion no existe.", error.getMessage());
     }
 
     @Test
     void captarConComisionNegativaRespondeElMensajeV1() {
+        prospeccionEnEstado(Prospeccion.EN_SEGUIMIENTO);
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                 () -> service.captar(5L, captura(new BigDecimal("-1")), agente));
         assertEquals("La comision pactada es obligatoria y no puede ser negativa.", error.getMessage());
@@ -232,14 +220,14 @@ class ProspeccionServiceImplTest {
         when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
         when(propiedades.findByOrganizacionIdAndId(ORG, 9L)).thenReturn(Optional.of(propiedad(9L)));
         when(prospecciones.countByOrganizacionId(ORG)).thenReturn(0L);
-        when(prospecciones.save(any(Prospeccion.class))).thenAnswer(inv -> {
+        when(prospecciones.saveAndFlush(any(Prospeccion.class))).thenAnswer(inv -> {
             Prospeccion guardada = inv.getArgument(0);
             ReflectionTestUtils.setField(guardada, "id", 5L);
             when(prospecciones.buscarFicha(ORG, 5L)).thenReturn(Optional.of(guardada));
             return guardada;
         });
 
-        FichaProspeccion ficha = service.registrar(new DatosProspeccion(9L, "Local con potencial"), agente);
+        FichaProspeccion ficha = service.registrar(new DatosProspeccion(9L, "Local con potencial", null), agente);
 
         assertEquals("P", ficha.estado());
         assertEquals("PRO-0001", ficha.codigoProspeccion());
@@ -248,7 +236,7 @@ class ProspeccionServiceImplTest {
         verifyNoInteractions(historial);
 
         ArgumentCaptor<Prospeccion> guardada = ArgumentCaptor.forClass(Prospeccion.class);
-        verify(prospecciones).save(guardada.capture());
+        verify(prospecciones).saveAndFlush(guardada.capture());
         assertEquals(ORG, guardada.getValue().getOrganizacionId());
     }
 
@@ -260,14 +248,14 @@ class ProspeccionServiceImplTest {
         when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
         when(propiedades.findByOrganizacionIdAndId(ORG, 9L)).thenReturn(Optional.of(propiedad(9L)));
         when(prospecciones.countByOrganizacionId(ORG)).thenReturn(7L);
-        when(prospecciones.save(any(Prospeccion.class))).thenAnswer(inv -> {
+        when(prospecciones.saveAndFlush(any(Prospeccion.class))).thenAnswer(inv -> {
             Prospeccion guardada = inv.getArgument(0);
             ReflectionTestUtils.setField(guardada, "id", 5L);
             when(prospecciones.buscarFicha(ORG, 5L)).thenReturn(Optional.of(guardada));
             return guardada;
         });
 
-        FichaProspeccion ficha = service.registrar(new DatosProspeccion(9L, null), agente);
+        FichaProspeccion ficha = service.registrar(new DatosProspeccion(9L, null, null), agente);
 
         assertEquals("PRO-0008", ficha.codigoProspeccion());
     }
@@ -280,7 +268,7 @@ class ProspeccionServiceImplTest {
 
         assertEquals("C", ficha.estado());
         assertEquals(LocalDate.now(), ficha.fechaContacto());
-        assertEquals(LocalDate.now(), ficha.fechaRecontacto());
+        assertNull(ficha.fechaRecontacto()); // Cambiar el hito no declara otra llamada ni reinicia R27.
         HistorialEstado evento = eventoAuditado();
         assertEquals("PROSPECCION", evento.getEntidadTipo());
         assertEquals("P", evento.getEstadoAnterior());
@@ -304,91 +292,44 @@ class ProspeccionServiceImplTest {
         assertEquals("S", eventoAuditado().getEstadoNuevo());
     }
 
-    /**
-     * 3.5, corregido el 2026-08-08. Este metodo construye la captacion a mano en
-     * vez de pasar por {@code CaptacionServiceImpl.registrar}, que es donde vive
-     * el aviso — asi que el broker <b>casi nunca</b> se enteraba de que tenia una
-     * captacion esperando, porque captar desde una prospeccion es el camino
-     * NORMAL. Quedaba PENDIENTE_REVISION sin que nadie lo supiera.
-     */
+    /** La apertura única conserva la intención y preparación; no simula revisión ni oferta. */
     @Test
-    void captarAVISAalBrokerDeLaCaptacionQueNace() {
-        Prospeccion p = prospeccionEnEstado(Prospeccion.EN_SEGUIMIENTO);
-        p.marcarSeguimiento(LocalDate.now());
-        when(captaciones.countByOrganizacionId(ORG)).thenReturn(1L);
-        when(captaciones.save(any(Captacion.class))).thenAnswer(inv -> {
-            Captacion guardada = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardada, "id", 40L);
-            return guardada;
-        });
-
-        service.captar(5L, captura(new BigDecimal("100.00")), agente);
-
-        ArgumentCaptor<AlertaService.DatosAlerta> aviso =
-                ArgumentCaptor.forClass(AlertaService.DatosAlerta.class);
-        verify(alertas).emitir(aviso.capture(), eq(agente));
-        // Mismo tipo que el otro camino: para quien la recibe es el mismo hecho.
-        assertEquals("CAPTACION_CREADA", aviso.getValue().tipo());
-        assertEquals("CAPTACION", aviso.getValue().entidadTipo());
-        assertEquals(40L, aviso.getValue().entidadId());
-        // La alerta cuelga del AGENTE aunque el destinatario sea el broker: no
-        // hay columna de destinatario y lo decide el TIPO.
-        assertEquals(p.getAgente().getId(), aviso.getValue().idRolAgente());
+    void captarDelegaAperturaSinEscribirOtroEncargoNiInventarTerminos() {
+        Prospeccion p=prospeccionEnEstado(Prospeccion.EN_SEGUIMIENTO);
+        encargoPreparado(p);
+        service.captar(5L,captura(new BigDecimal("100.00")),agente);
+        var entrada=ArgumentCaptor.forClass(com.controllocal.service.encargo.EncargoService.DatosApertura.class);
+        verify(encargos).abrir(entrada.capture(),eq(agente));
+        assertEquals(p.getPropiedad().getId(),entrada.getValue().idPropiedad());
+        assertEquals(p.getAgente().getId(),entrada.getValue().idResponsable());
+        assertEquals(com.controllocal.domain.inmueble.OperacionInmobiliaria.ALQUILER,entrada.getValue().operacion());
+        assertNull(entrada.getValue().desde()); assertNull(entrada.getValue().hasta());
+        assertNull(entrada.getValue().condiciones().tipoComision());
+        assertEquals(new BigDecimal("2500"),entrada.getValue().condiciones().precioPedido());
+        verify(captaciones,never()).save(any());
+        verify(propiedades,never()).save(any());
     }
 
     @Test
-    void captarCreaLaCaptacionPendienteYApagaElReloj() {
-        Prospeccion p = prospeccionEnEstado(Prospeccion.EN_SEGUIMIENTO);
-        p.marcarSeguimiento(LocalDate.now());
-        when(captaciones.countByOrganizacionId(ORG)).thenReturn(1L);
-        when(captaciones.save(any(Captacion.class))).thenAnswer(inv -> {
-            Captacion guardada = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardada, "id", 40L);
-            return guardada;
-        });
-
-        FichaProspeccion ficha = service.captar(5L, captura(new BigDecimal("100.00")), agente);
-
-        assertEquals("T", ficha.estado());
-        assertEquals("A", ficha.resultadoPropuesta());
-        assertEquals(40L, ficha.idCaptacion());
-        assertEquals("CAP-0002", ficha.captacionCodigo());
+    void captarConservaAceptacionDePropuestaSinEquipararlaARevisionDelEncargo() {
+        Prospeccion p=prospeccionEnEstado(Prospeccion.EN_SEGUIMIENTO);
+        ReflectionTestUtils.setField(p,"fechaRecontacto",LocalDate.now()); encargoPreparado(p);
+        FichaProspeccion ficha=service.captar(5L,captura(new BigDecimal("100.00")),agente);
+        assertEquals("T",ficha.estado()); assertEquals("A",ficha.resultadoPropuesta());
+        assertEquals(40L,ficha.idCaptacion()); assertEquals("CAP-C2-PREP",ficha.captacionCodigo());
         assertNull(ficha.fechaRecontacto());
+        HistorialEstado evento=eventoAuditado();
+        assertEquals("PROSPECCION",evento.getEntidadTipo());
+        assertEquals("S",evento.getEstadoAnterior()); assertEquals("T",evento.getEstadoNuevo());
+        assertEquals("Propuesta aceptada; preparación de Encargo CAP-C2-PREP.",evento.getMotivo());
+    }
 
-        ArgumentCaptor<Captacion> captacion = ArgumentCaptor.forClass(Captacion.class);
-        verify(captaciones).save(captacion.capture());
-        assertEquals("P", captacion.getValue().estadoActual());
-        assertEquals(LocalDate.now(), captacion.getValue().getFechaCaptacion());
-        assertEquals(p.getPropiedad(), captacion.getValue().getPropiedad());
-        assertEquals(p.getAgente(), captacion.getValue().getAgente());
-        assertEquals(ORG, captacion.getValue().getOrganizacionId());
-        // El periodo del encargo es obligatorio siempre (decision 2026-08-01):
-        // la v1 dejaba nacer el borrador sin fechas y la columna ya no lo admite.
-        assertEquals(LocalDate.now(), captacion.getValue().getFechaInicioVigencia());
-        assertEquals(LocalDate.now().plusMonths(6), captacion.getValue().getFechaFinVigencia());
-
-        // Y la OPERACION va escrita, no supuesta (D-E4-1). Este camino dependia
-        // del defecto `= "A"` de la entidad; al retirarlo dejo de escribirse y
-        // `captacion.motivo_operacion` es NOT NULL, asi que captar desde una
-        // prospeccion —el camino NORMAL— fallaba entero. No lo vio ningun test
-        // de servicio porque con el repositorio simulado nada llega a la BD; lo
-        // encontro la suite `f4-solicitud`.
-        //
-        // Se comprueba contra la condicion economica a proposito: son la misma
-        // declaracion, y `tg_captacion_operacion_coherente` (V50) rechaza que
-        // difieran.
-        assertEquals(CondicionEconomicaCaptacion.ARRENDAMIENTO,
-                captacion.getValue().getMotivoOperacion());
-        assertEquals(captacion.getValue().getCondicionEconomica().getTipoOperacion(),
-                captacion.getValue().getMotivoOperacion());
-
-        // Una sola fila de historial: S->T de la prospeccion (el alta de la
-        // captacion es estado inicial, no transicion).
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("PROSPECCION", evento.getEntidadTipo());
-        assertEquals("S", evento.getEstadoAnterior());
-        assertEquals("T", evento.getEstadoNuevo());
-        assertEquals("Propietario acepto; captacion CAP-0002 creada.", evento.getMotivo());
+    private void encargoPreparado(Prospeccion p) {
+        Captacion c=new Captacion();c.setOrganizacionId(ORG);c.setPropiedad(p.getPropiedad());
+        c.setAgente(p.getAgente());c.setCodigoCaptacion("CAP-C2-PREP");c.transicionarA(Captacion.EN_PREPARACION);
+        ReflectionTestUtils.setField(c,"id",40L);
+        when(encargos.abrir(any(),eq(agente))).thenReturn(new com.controllocal.service.encargo.EncargoService.Apertura(40L,"CAP-C2-PREP","EN_PREPARACION",0));
+        when(captaciones.buscarFicha(ORG,40L)).thenReturn(Optional.of(c));
     }
 
     @Test

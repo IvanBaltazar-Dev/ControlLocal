@@ -1,6 +1,5 @@
 package com.controllocal.domain.seguridad;
 
-import com.controllocal.domain.comun.EntidadDeOrganizacion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -26,7 +25,14 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "evento_seguridad")
-public class EventoSeguridad extends EntidadDeOrganizacion {
+public class EventoSeguridad {
+
+    /** NULL exclusivamente para hechos de acceso anteriores a seleccionar contexto (C1). */
+    @Column(name = "organizacion_id")
+    private Long organizacionId;
+
+    public Long getOrganizacionId() { return organizacionId; }
+    public void setOrganizacionId(Long valor) { organizacionId=valor; }
 
     // --- Sesion ---
     public static final String LOGIN_OK = "LOGIN_OK";
@@ -63,8 +69,8 @@ public class EventoSeguridad extends EntidadDeOrganizacion {
      * fallido contra un usuario que no existe no tiene credencial ni persona,
      * y aun asi hay que registrarlo.
      */
-    @Column(name = "id_credencial")
-    private Long idCredencial;
+    @Column(name = "id_cuenta_acceso")
+    private Long idCuenta;
 
     @Column(name = "id_persona")
     private Long idPersona;
@@ -117,12 +123,12 @@ public class EventoSeguridad extends EntidadDeOrganizacion {
         this.resultado = resultado;
     }
 
-    public Long getIdCredencial() {
-        return idCredencial;
+    public Long getIdCuenta() {
+        return idCuenta;
     }
 
-    public void setIdCredencial(Long idCredencial) {
-        this.idCredencial = idCredencial;
+    public void setIdCuenta(Long idCuenta) {
+        this.idCuenta = idCuenta;
     }
 
     public Long getIdPersona() {

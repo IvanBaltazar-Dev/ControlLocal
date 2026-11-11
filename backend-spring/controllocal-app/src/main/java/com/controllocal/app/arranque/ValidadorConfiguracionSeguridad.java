@@ -52,7 +52,7 @@ public final class ValidadorConfiguracionSeguridad {
      * @param bucketS3                  controllocal.almacen.s3.bucket
      * @param accessKeyS3               controllocal.almacen.s3.access-key (vacio = cadena por defecto)
      * @param secretKeyS3               controllocal.almacen.s3.secret-key
-     * @param credencialesConHashDeSeed  cuantas credenciales conservan un hash del seed publicado
+     * @param cuentasConHashPublicoOInseguro cuentas con hash público, MD5 o formato distinto de PBKDF2
      * @param credencialesConHashCompartido cuantas comparten hash con otra cuenta
      * @param organizacionesSinAdministrador cuantas organizaciones se quedaron sin gobierno
      */
@@ -70,7 +70,7 @@ public final class ValidadorConfiguracionSeguridad {
             String bucketS3,
             String accessKeyS3,
             String secretKeyS3,
-            long credencialesConHashDeSeed,
+            long cuentasConHashPublicoOInseguro,
             long credencialesConHashCompartido,
             long organizacionesSinAdministrador,
             boolean usandoFallbackDeClaveMfa,
@@ -99,7 +99,7 @@ public final class ValidadorConfiguracionSeguridad {
                 String contrasenaBaseDatos,
                 String directorioAlmacen,
                 boolean almacenPersistenteYEscribible,
-                long credencialesConHashDeSeed,
+                long cuentasConHashPublicoOInseguro,
                 long credencialesConHashCompartido,
                 long organizacionesSinAdministrador,
                 boolean usandoFallbackDeClaveMfa,
@@ -109,7 +109,7 @@ public final class ValidadorConfiguracionSeguridad {
             this(usandoFallbackDeSecreto, longitudSecreto, corsOrigenes, swaggerHabilitado,
                     urlBaseDatos, contrasenaBaseDatos, "DISCO", directorioAlmacen,
                     almacenPersistenteYEscribible, "", "", "", "",
-                    credencialesConHashDeSeed, credencialesConHashCompartido,
+                    cuentasConHashPublicoOInseguro, credencialesConHashCompartido,
                     organizacionesSinAdministrador, usandoFallbackDeClaveMfa,
                     recuperacionEmergenciaHabilitada, custodiosConfigurados,
                     notificadorExternoConfigurado);
@@ -195,12 +195,11 @@ public final class ValidadorConfiguracionSeguridad {
         }
 
         // --- H-03: credenciales conocidas ---------------------------------
-        if (e.credencialesConHashDeSeed() > 0) {
-            problemas.add("Credenciales del seed activas: " + e.credencialesConHashDeSeed()
-                    + " cuenta(s) conservan un hash publicado en el repositorio "
-                    + "(Admin2026 / Broker2026 / Agente2026). "
-                    + "Falta aplicar V900__neutraliza_credenciales_semilla.sql "
-                    + "(location db/migration-prod, solo perfil prod).");
+        if (e.cuentasConHashPublicoOInseguro() > 0) {
+            problemas.add("Cuentas con hash publico o inseguro: " + e.cuentasConHashPublicoOInseguro()
+                    + " cuenta(s) conservan un hash de seed publicado, MD5 o un formato distinto de PBKDF2. "
+                    + "El titular debe completar el cambio seguro de contrasena; "
+                    + "no se habilita produccion con esas credenciales.");
         }
         if (e.credencialesConHashCompartido() > 0) {
             problemas.add("Contrasenas compartidas: " + e.credencialesConHashCompartido()

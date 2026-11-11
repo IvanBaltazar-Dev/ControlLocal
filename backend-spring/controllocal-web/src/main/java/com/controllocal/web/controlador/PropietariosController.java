@@ -51,6 +51,7 @@ public class PropietariosController {
      * respuesta es la del cable congelado, orden por id descendente incluido.
      */
     @GetMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida("buscar_propietarios")
     public PageResponse<PropietarioResponse> listar(@RequestParam(defaultValue = "1") int pagina,
                                                     @RequestParam(defaultValue = "10") int tamano,
                                                     @RequestParam(required = false) String texto,
@@ -107,6 +108,7 @@ public class PropietariosController {
 
     @PostMapping
     @PreAuthorize("hasRole('AGENTE')")
+    @com.controllocal.web.capacidades.CapacidadReconocida({"registrar_propietario"})
     public ResponseEntity<PropietarioResponse> registrar(
             @RequestBody(required = false) PropietarioRequest dto) {
         PropietarioResponse creado = PropietarioResponse.desde(

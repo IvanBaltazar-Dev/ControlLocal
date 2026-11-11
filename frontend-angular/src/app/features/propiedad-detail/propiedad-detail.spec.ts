@@ -10,10 +10,10 @@ import {
   HechoDeActividad,
   HistoriaComercial,
   PropiedadesService,
+  UnidadRelacionada,
 } from '../../core/api/propiedades.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { Sesion } from '../../core/auth/sesion.model';
-import { LocalesService } from '../../core/api/locales.service';
 import { PropiedadDetail } from './propiedad-detail';
 
 // ====================================================================
@@ -242,6 +242,19 @@ const CON_ACTIVIDAD = ficha({
   },
 });
 
+const UNIDAD_RELACIONADA: UnidadRelacionada = {
+  idRelacion: 501,
+  idPropiedad: 3259,
+  codigo: 'PROP-COCH-01',
+  tipoPropiedad: 'COCHERA',
+  tipoRotulo: 'Cochera',
+  tipoRelacion: 'A',
+  tipoRelacionRotulo: 'Accesoria',
+  partidaRegistral: 'P-12345678',
+  vigenteDesde: '2026-01-10',
+  vigenteHasta: null,
+};
+
 // ====================================================================
 
 describe('PropiedadDetail', () => {
@@ -259,6 +272,8 @@ describe('PropiedadDetail', () => {
             provide: AuthService,
             useValue: {
               sesion: signal<Sesion | null>({
+                  idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+                  modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
                 token: 't',
                 expiraEnSegundos: 3600,
                 rol: rol as Sesion['rol'],
@@ -317,12 +332,10 @@ describe('PropiedadDetail', () => {
   // El cable
   // ------------------------------------------------------------------
 
-  it('lee la propiedad por el modelo universal y NUNCA por /locales/{id}', async () => {
+  it('lee la propiedad por el modelo universal', async () => {
     await montar(PROP_0022);
 
     expect(api.consultar).toHaveBeenCalledWith(3259);
-    // Ni siquiera está inyectado: la ficha universal no toca el modelo heredado.
-    expect(() => TestBed.inject(LocalesService, null as never)).not.toThrow();
     expect(TestBed.inject(PropiedadesService)).toBe(api);
   });
 
@@ -362,6 +375,34 @@ describe('PropiedadDetail', () => {
     expect(html()).toContain('Carlos Torres');
     expect(html()).toContain('40 %');
     expect(html()).toContain('Representante');
+  });
+
+  it('muestra cada unidad relacionada con tipo, partida y vigencia', async () => {
+    await montar(ficha({ unidadesRelacionadas: [UNIDAD_RELACIONADA] }));
+
+    const seccion = (fixture.nativeElement as HTMLElement).querySelector(
+      '.unidades-relacionadas',
+    );
+    expect(seccion?.textContent).toContain('PROP-COCH-01');
+    expect(seccion?.textContent).toContain('Accesoria');
+    expect(seccion?.textContent).toContain('Cochera');
+    expect(seccion?.textContent).toContain('Partida registral');
+    expect(seccion?.textContent).toContain('P-12345678');
+    expect(seccion?.textContent).toContain('vigente');
+  });
+
+  it('omite la partida cuando la unidad relacionada no la tiene', async () => {
+    await montar(
+      ficha({
+        unidadesRelacionadas: [{ ...UNIDAD_RELACIONADA, partidaRegistral: null }],
+      }),
+    );
+
+    const seccion = (fixture.nativeElement as HTMLElement).querySelector(
+      '.unidades-relacionadas',
+    );
+    expect(seccion?.textContent).not.toContain('Partida registral');
+    expect(seccion?.textContent).toContain('vigente');
   });
 
   it('la titularidad enseña la cuota y el representante tambien con un solo titular', async () => {

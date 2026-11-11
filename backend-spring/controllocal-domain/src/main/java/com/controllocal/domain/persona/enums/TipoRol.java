@@ -2,8 +2,8 @@ package com.controllocal.domain.persona.enums;
 
 /**
  * Roles acumulables de una persona (Party-Role). BROKER y AGENTE son roles
- * DE LA PERSONA; el acceso al sistema lo da el rol USUARIO_INTERNO
- * (credenciales), que Broker/Agente implican.
+ * DE LA PERSONA local. La identidad de acceso reside en CuentaAcceso global,
+ * sin rol de autenticación ni identidad civil ficticia.
  *
  * <p>{@code ADMIN} (V32, D-S0-6) es el rol de <b>gobierno</b> del tenant y el
  * unico que no describe una actividad comercial: existe para que el
@@ -15,7 +15,6 @@ package com.controllocal.domain.persona.enums;
 public enum TipoRol {
     PROPIETARIO,
     CLIENTE,
-    USUARIO_INTERNO,
     BROKER,
     AGENTE,
     ADMIN

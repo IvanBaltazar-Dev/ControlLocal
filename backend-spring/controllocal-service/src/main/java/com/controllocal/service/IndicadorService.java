@@ -11,6 +11,16 @@ import java.util.List;
  * comercial (§2 del contrato E4).
  */
 public interface IndicadorService {
+    /** Conteos de hechos autorizados; no contiene nombres, contactos ni una puntuación de personas. */
+    record ContactoProspeccion(String version,java.time.LocalDate desde,java.time.LocalDate hasta,java.time.Instant corte,
+                               int efectivos,int intentosEvaluables,int porPrecisar,int fueraDelCalculo,
+                               java.math.BigDecimal porcentaje) { }
+    record ResultadoPrimeraRespuesta(String estadoCalculo,String causa,
+                                    com.controllocal.service.actividad.IndicadoresIndividuales.PrimeraRespuesta medicion) { }
+    record ResultadoSeguimiento(String estadoCalculo,String causa,
+                                com.controllocal.service.actividad.IndicadoresIndividuales.Tasa medicion) { }
+    record ResultadoConversion(String estadoCalculo,String causa,
+                               com.controllocal.service.actividad.IndicadoresIndividuales.Conversion medicion) { }
 
     Resumen resumen(String periodo, Actor actor);
 
@@ -31,10 +41,8 @@ public interface IndicadorService {
     record Operativo(
             int recontactosVencidos,
             int recontactosAlDia,
-            int diasPromedioSinSeguimiento,
             int visitasPendientes,
-            int solicitudesSinCierre,
-            int conversionProspeccionCaptacion) {
+            int solicitudesSinCierre) {
     }
 
     /**
@@ -50,8 +58,9 @@ public interface IndicadorService {
      * dominio ({@code PoliticaComercial.Concepto} y {@code NivelAtencion}), no
      * texto para mostrar: la pantalla nunca los pinta tal cual.
      */
-    record Senal(String concepto, int valor, String nivelAtencion,
-                 boolean requiereAtencion, int prioridad) {
+    /** Un indicador no evaluable conserva valor y nivel nulos, con estado y causa explícitos. */
+    record Senal(String concepto, Integer valor, String nivelAtencion,
+                 boolean requiereAtencion, int prioridad, String estadoCalculo, String causa) {
     }
 
     record Resumen(
@@ -95,11 +104,13 @@ public interface IndicadorService {
             // ordenados por lo que urge primero. Viene completa —un elemento por
             // concepto—; que subconjunto ve cada rol lo decide la pantalla.
             List<Senal> senales,
-            // Cuantas COSAS reclaman atencion ahora mismo (E2.1): la suma de las
-            // senales pendientes que cuentan unidades. No se puede derivar en el
-            // cliente sumando `senales`, porque `DEMORA_DE_SEGUIMIENTO` vale dias
-            // y colarla daria "11 cosas" donde hay 2 pendientes y 9 dias.
-            int pendientesDeAtencion) {
+            // Conteo de asuntos pendientes, sin promedios temporales retirados.
+            int pendientesDeAtencion,
+            ContactoProspeccion contactoEfectivoProspeccion,
+            @com.fasterxml.jackson.annotation.JsonIgnore ResultadoPrimeraRespuesta primeraRespuesta,
+            @com.fasterxml.jackson.annotation.JsonIgnore java.util.Map<String,com.controllocal.service.actividad.IndicadoresIndividuales.Tasa> efectividadDeCierre,
+            @com.fasterxml.jackson.annotation.JsonIgnore ResultadoConversion conversionAEncargo,
+            @com.fasterxml.jackson.annotation.JsonIgnore ResultadoSeguimiento cumplimientoDeSeguimiento) {
     }
 
     /** Avance comercial de UNA propiedad con captacion ACTIVA. */

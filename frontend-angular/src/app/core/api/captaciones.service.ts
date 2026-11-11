@@ -3,6 +3,25 @@ import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
 import { PageResponse } from './api.types';
 
+/** Proyección RF017 de gobierno; no es la ficha comercial del Encargo. */
+export interface EncargoReasignable {
+  id: number;
+  codigoCaptacion?: string;
+  estado?: string;
+  direccionLocal?: string;
+  idAgente?: number;
+  agenteNombre?: string;
+}
+
+export interface ResultadoReasignacion {
+  id: number;
+  codigoCaptacion?: string;
+  estado?: string;
+  idAgenteAnterior: number;
+  idAgente: number;
+  idReasignacion?: number;
+}
+
 /**
  * Contrato CONGELADO: los 24 campos de `CaptacionResponse`.
  *
@@ -259,8 +278,8 @@ export class CaptacionesService {
   /** Captaciones activas que BROKER/ADMIN pueden mover dentro de su alcance. */
   reasignables$(
     filtros: FiltrosCaptacionesReasignables = {},
-  ): Observable<PageResponse<Captacion>> {
-    return this.api.get$<PageResponse<Captacion>>('captaciones/reasignables', {
+  ): Observable<PageResponse<EncargoReasignable>> {
+    return this.api.get$<PageResponse<EncargoReasignable>>('captaciones/reasignables', {
       ...filtros,
     });
   }
@@ -333,8 +352,8 @@ export class CaptacionesService {
     idAgenteNuevo: number,
     motivo: string,
     idAgenteActual: number,
-  ): Promise<Captacion> {
-    return this.api.post<Captacion>(`captaciones/${id}/reasignar`, {
+  ): Promise<ResultadoReasignacion> {
+    return this.api.post<ResultadoReasignacion>(`captaciones/${id}/reasignar`, {
       idAgenteNuevo,
       motivo,
       idAgenteActual,

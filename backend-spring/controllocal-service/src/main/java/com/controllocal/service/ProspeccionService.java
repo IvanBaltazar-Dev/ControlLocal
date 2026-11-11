@@ -2,6 +2,9 @@ package com.controllocal.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.soporte.Procedencia;
 
 /**
  * Casos de uso de prospeccion (F2). Los records espejan el contrato REST
@@ -13,7 +16,8 @@ import java.time.LocalDate;
 public interface ProspeccionService {
 
     /** Espejo de ProspeccionRequest. */
-    record DatosProspeccion(Long idLocal, String observaciones) {
+    record DestinatarioDeclarado(String tipo,String nombre,String telefono,String correo,String fuente) { }
+    record DatosProspeccion(Long idLocal,String observaciones,DestinatarioDeclarado destinatarioDeclarado) {
     }
 
     /**
@@ -40,13 +44,13 @@ public interface ProspeccionService {
                             String agenteNombre, String estado, String resultadoPropuesta,
                             LocalDate fechaContacto, LocalDate fechaReunion, LocalDate fechaPropuesta,
                             LocalDate fechaRecontacto, String observaciones, Long idCaptacion,
-                            String captacionCodigo, String disponibilidad) {
+                            String captacionCodigo, String disponibilidad,long version) {
     }
 
     Pagina<FichaProspeccion> listar(FiltrosProspeccion filtros, Actor actor);
 
-    /** Recontacto vencido (>= dias sin nueva accion), dentro del alcance del actor. */
-    Pagina<FichaProspeccion> recontactar(int dias, int pagina, int tamano, Actor actor);
+    /** Próximas actuaciones R27 que ya corresponden; Core fija el calendario y las esperas. */
+    Pagina<FichaProspeccion> recontactar(int pagina,int tamano,Actor actor);
 
     FichaProspeccion obtener(long id, Actor actor);
 
@@ -59,8 +63,18 @@ public interface ProspeccionService {
 
     FichaProspeccion entregarPropuesta(long id, Actor actor);
 
-    /** Accion de seguimiento: reinicia el reloj de recontacto a 7 dias. */
-    FichaProspeccion registrarSeguimiento(long id, Actor actor);
+    /** R27: planificar/esperar no declara una comunicación realizada. */
+    record PlanificacionSeguimiento(Long versionEsperada,InteraccionService.OrigenActuacion origen,LocalDate fecha,String detalle) { }
+    record PosposicionSeguimiento(Long versionEsperada,LocalDate hasta,String motivo) { }
+    record ContactoDeSeguimiento(String referenciaDeclarada,String tipo,String nombre,String telefono,String correo,String fuente) { }
+    record RevisionSeguimiento(long id,long version,long idProspeccion,String destinatario,String causa,
+                               LocalDate fechaUltimoIntento,int recontactosSinRespuesta,LocalDate proximaFecha,
+                               String origenFecha,LocalDate pospuestaHasta,String motivoPosposicion,
+                               boolean revisarContinuidad,boolean restringido,boolean alcancePorPrecisar,ContactoDeSeguimiento contactoDeclarado) { }
+    List<RevisionSeguimiento> seguimientos(long id,Actor actor);
+    void exigirLecturaRevisionSeguimiento(RevisionSeguimiento revision,Actor actor);
+    RevisionSeguimiento planificarSeguimiento(long id,long idSeguimiento,PlanificacionSeguimiento datos,Actor actor,ContextoSesion sesion,Procedencia procedencia);
+    RevisionSeguimiento posponerSeguimiento(long id,long idSeguimiento,PosposicionSeguimiento datos,Actor actor,ContextoSesion sesion,Procedencia procedencia);
 
     FichaProspeccion rechazar(long id, String motivo, Actor actor);
 

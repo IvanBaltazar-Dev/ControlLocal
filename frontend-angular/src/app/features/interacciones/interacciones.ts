@@ -33,7 +33,13 @@ import {
   RESULTADO_INTERACCION,
   resultadosDe,
 } from '../../core/api/codigos';
-import { Interaccion, InteraccionesService } from '../../core/api/interacciones.service';
+import {
+  Interaccion,
+  InteraccionesService,
+  nombreDelInterlocutor,
+  telefonoDelInterlocutor,
+  tipoDelInterlocutor,
+} from '../../core/api/interacciones.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { fechaHora, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
@@ -259,14 +265,17 @@ export class Interacciones implements OnInit {
     return describir(RESULTADO_INTERACCION, codigo) || SIN_DATO;
   }
 
-  /**
-   * Con quién se habló. El cable ya lo resuelve en `personaNombre`; se cae a
-   * los nombres específicos solo si viniera vacío.
-   */
+  /** Con quién se habló, conservando un snapshot aunque esté incompleto. */
   protected persona(interaccion: Interaccion): string {
-    return textoDe(
-      interaccion.personaNombre || interaccion.clienteNombre || interaccion.propietarioNombre,
-    );
+    return nombreDelInterlocutor(interaccion);
+  }
+
+  protected rolPersona(interaccion: Interaccion): string {
+    return tipoDelInterlocutor(interaccion);
+  }
+
+  protected telefonoPersona(interaccion: Interaccion): string {
+    return textoDe(telefonoDelInterlocutor(interaccion));
   }
 
   /** El código de la entidad de la que cuelga, sea cual sea el contexto. */

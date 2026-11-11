@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "tipo": "Argumentos estructurados de herramienta, no formulario requerido al usuario",
+  "base_preservada": "tareas-es-v1.json:240 tareas/168 inequívocas/umbral0.95;24expected reconciliados C4 y216tareas intactas",
+  "casos": [
+    {
+      "id": "C4-SDK-001",
+      "clase": "INEQUIVOCA",
+      "accion": "ABRIR_OPORTUNIDAD",
+      "texto": "abrir oportunidad {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-002",
+      "clase": "INEQUIVOCA",
+      "accion": "RECTIFICAR_INTERACCION",
+      "texto": "rectificar interaccion {\"idInteraccion\":17,\"versionEsperada\":3,\"correccion\":{\"vinculos\":[{\"tipo\":\"PROSPECCION\",\"referencia\":91,\"versionEsperada\":7}],\"tipo\":\"LLAMADA\",\"canal\":\"WHATSAPP\",\"eventos\":[{\"referencia\":\"intento-1\",\"evento\":\"LLAMADA_SALIENTE\",\"momento\":{\"fecha\":\"2026-10-29\"}}],\"resultado\":\"SIN_RESPUESTA\",\"momento\":{\"fecha\":\"2026-10-29\"},\"resumen\":\"Intento real declarado sin respuesta\",\"fuente\":\"DECLARACION-TEST\"},\"motivo\":\"Rectificar canal declarado con antecedente\"}",
+      "datos": {
+        "idInteraccion": 17,
+        "versionEsperada": 3,
+        "correccion": {
+          "vinculos": [
+            {
+              "tipo": "PROSPECCION",
+              "referencia": 91,
+              "versionEsperada": 7
+            }
+          ],
+          "tipo": "LLAMADA",
+          "canal": "WHATSAPP",
+          "eventos": [
+            {
+              "referencia": "intento-1",
+              "evento": "LLAMADA_SALIENTE",
+              "momento": {
+                "fecha": "2026-10-29"
+              }
+            }
+          ],
+          "resultado": "SIN_RESPUESTA",
+          "momento": {
+            "fecha": "2026-10-29"
+          },
+          "resumen": "Intento real declarado sin respuesta",
+          "fuente": "DECLARACION-TEST"
+        },
+        "motivo": "Rectificar canal declarado con antecedente"
+      }
+    },
+    {
+      "id": "C4-SDK-003",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_INTERACCION",
+      "texto": "registrar interaccion {\"vinculos\":[{\"tipo\":\"PROSPECCION\",\"referencia\":91,\"versionEsperada\":7}],\"tipo\":\"LLAMADA\",\"canal\":\"WHATSAPP\",\"eventos\":[{\"referencia\":\"intento-1\",\"evento\":\"LLAMADA_SALIENTE\",\"momento\":{\"fecha\":\"2026-10-29\"}}],\"resultado\":\"SIN_RESPUESTA\",\"momento\":{\"fecha\":\"2026-10-29\"},\"resumen\":\"Intento real declarado sin respuesta\",\"fuente\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "vinculos": [
+          {
+            "tipo": "PROSPECCION",
+            "referencia": 91,
+            "versionEsperada": 7
+          }
+        ],
+        "tipo": "LLAMADA",
+        "canal": "WHATSAPP",
+        "eventos": [
+          {
+            "referencia": "intento-1",
+            "evento": "LLAMADA_SALIENTE",
+            "momento": {
+              "fecha": "2026-10-29"
+            }
+          }
+        ],
+        "resultado": "SIN_RESPUESTA",
+        "momento": {
+          "fecha": "2026-10-29"
+        },
+        "resumen": "Intento real declarado sin respuesta",
+        "fuente": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-004",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_NO_CONTINUIDAD_OPORTUNIDAD",
+      "texto": "registrar no continuidad {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-005",
+      "clase": "INEQUIVOCA",
+      "accion": "CONSULTAR_AGENDA_VISITAS",
+      "texto": "consultar agenda {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-006",
+      "clase": "INEQUIVOCA",
+      "accion": "PROGRAMAR_VISITA",
+      "texto": "programar visita {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-007",
+      "clase": "INEQUIVOCA",
+      "accion": "CANCELAR_VISITA",
+      "texto": "cancelar visita {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-008",
+      "clase": "INEQUIVOCA",
+      "accion": "REPROGRAMAR_VISITA",
+      "texto": "reprogramar visita {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-009",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_RESULTADO_VISITA",
+      "texto": "registrar resultado visita {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-010",
+      "clase": "INEQUIVOCA",
+      "accion": "PRESENTAR_OFERTA",
+      "texto": "presentar oferta {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-011",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_CONTRAOFERTA",
+      "texto": "registrar contraoferta {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-012",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_ACEPTACION_OFERTA",
+      "texto": "registrar aceptacion oferta {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-013",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_RECHAZO_OFERTA",
+      "texto": "registrar rechazo oferta {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-014",
+      "clase": "INEQUIVOCA",
+      "accion": "REGISTRAR_RETIRADA_OFERTA",
+      "texto": "registrar retirada oferta {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-015",
+      "clase": "INEQUIVOCA",
+      "accion": "CONSULTAR_OPORTUNIDAD",
+      "texto": "consultar oportunidad {\"versionEsperada\":7,\"fechaHecho\":\"2026-10-29\",\"evidencia\":\"DECLARACION-TEST\"}",
+      "datos": {
+        "versionEsperada": 7,
+        "fechaHecho": "2026-10-29",
+        "evidencia": "DECLARACION-TEST"
+      }
+    },
+    {
+      "id": "C4-SDK-016",
+      "clase": "INEQUIVOCA",
+      "accion": "VINCULAR_INTERACCION",
+      "texto": "vincular interaccion {\"idInteraccion\":17,\"versionEsperada\":3,\"vinculo\":{\"tipo\":\"PROPIEDAD\",\"referencia\":42,\"versionEsperada\":7},\"motivo\":\"Vinculo posterior autorizado\"}",
+      "datos": {
+        "idInteraccion": 17,
+        "versionEsperada": 3,
+        "vinculo": {
+          "tipo": "PROPIEDAD",
+          "referencia": 42,
+          "versionEsperada": 7
+        },
+        "motivo": "Vinculo posterior autorizado"
+      }
+    },
+    {
+      "id": "C4-SDK-017",
+      "clase": "INEQUIVOCA",
+      "accion": "ANOTAR_OBSERVACION_INTERACCION",
+      "texto": "anotar observacion interaccion {\"idInteraccion\":17,\"versionEsperada\":3,\"momento\":{\"fecha\":\"2026-10-29\"},\"detalle\":\"Declaracion posterior conservada\",\"fuente\":\"Parte declarada\"}",
+      "datos": {
+        "idInteraccion": 17,
+        "versionEsperada": 3,
+        "momento": {
+          "fecha": "2026-10-29"
+        },
+        "detalle": "Declaracion posterior conservada",
+        "fuente": "Parte declarada"
+      }
+    }
+  ],
+  "revision": "C4-COMUNICACION-20261030"
+}

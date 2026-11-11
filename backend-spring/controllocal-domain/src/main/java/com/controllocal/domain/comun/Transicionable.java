@@ -15,6 +15,9 @@ public interface Transicionable {
     /** Estado actual de la maquina de estados de la entidad. */
     String estadoActual();
 
+    /** Atribución del hecho; no se sustituye después por el responsable actual. */
+    default Long responsableDelHecho() { return null; }
+
     /**
      * UNICO mutador del estado. Solo puede invocarlo el componente
      * Transiciones de la capa service (lo blinda un test ArchUnit): asi toda

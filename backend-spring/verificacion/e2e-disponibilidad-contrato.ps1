@@ -14,6 +14,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0
 $fail = 0
 
@@ -44,7 +45,7 @@ function Api($metodo, $ruta, $token, $cuerpo) {
     # El splatting exige una VARIABLE: `@(expresion)[0]` no es splatting, es
     # indexar un array, y PowerShell lo pasa como un unico argumento posicional.
     $parametros = ParametrosApi $metodo $ruta $token $cuerpo
-    Invoke-RestMethod @parametros
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @parametros) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
 function ApiError($metodo, $ruta, $token, $cuerpo) {
@@ -55,20 +56,11 @@ function ApiError($metodo, $ruta, $token, $cuerpo) {
         $respuesta = $PSItem.Exception.Response
         if ($null -eq $respuesta) { return @{ codigo = -1; error = $PSItem.Exception.Message } }
         $codigo = [int]$respuesta.StatusCode
-        $contenido = ''
-        try {
-            $lector = New-Object IO.StreamReader($respuesta.GetResponseStream())
-            $contenido = $lector.ReadToEnd(); $lector.Close()
-        } catch { $contenido = '' }
-        $mensaje = $contenido
-        try { $mensaje = ($contenido | ConvertFrom-Json).error } catch { }
+        $contenido = LeerErrorHttpDeFixture $PSItem
+        $mensaje = 'Respuesta HTTP sin mensaje JSON legible.'
+        try { $jsonError = $contenido | ConvertFrom-Json; if($jsonError.error -is [string]){$mensaje=$jsonError.error} } catch { }
         return @{ codigo = $codigo; error = $mensaje }
     }
-}
-
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -v ON_ERROR_STOP=1 -U controllocal `
-        -d $e2e.Database -t -A -c $consulta) -join "`n"
 }
 
 $sufijo = Get-Random -Minimum 100000 -Maximum 999999
@@ -80,9 +72,9 @@ $fechaFin = $hoyFecha.AddDays(380).ToString('yyyy-MM-dd')
 $fechaFinEncargo = $hoyFecha.AddDays(90).ToString('yyyy-MM-dd')
 
 Write-Host "`n== 1. Actores ==" -ForegroundColor Cyan
-$agente = Api POST '/auth/login' $null @{ usuario = 'vmora'; contrasena = 'Agente2026' }
-$broker = Api POST '/auth/login' $null @{ usuario = 'rsalas'; contrasena = 'Broker2026' }
-$brokerAjeno = Api POST '/auth/login' $null @{ usuario = 'psoto'; contrasena = 'Broker2026' }
+$agente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$broker = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$brokerAjeno = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.psoto.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
 Check 'login del agente' ($agente.rol -eq 'AGENTE') $agente.rol
 Check 'login del broker supervisor' ($broker.rol -eq 'BROKER') $broker.rol
 Check 'login del broker de otro equipo' ($brokerAjeno.rol -eq 'BROKER') $brokerAjeno.rol
@@ -103,28 +95,22 @@ function MontarOperacion($etiqueta) {
     }
     # `POST /locales` se retiro en el Corte 0A: el alta universal crea el
     # inmueble y abre su encargo en el mismo acto.
-    $local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. $m 100" `
+    $local = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agente.token -Direccion "Av. $m 100" `
         -Distrito 'Lince' -IdPropietario $propietario.id -Metraje 80 `
         -Importe 2000 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1.00 `
         -TratamientoIgv 'N' -InicioEncargo $hoy -FinEncargo $fechaFinEncargo `
         -Descripcion "Captacion $m"
-    $captacion = Api POST "/captaciones/$($local.idEncargo)/decision" $broker.token @{
-        accion = 'A'; observacion = "Aprobada $m"
-    }
-    $oportunidad = Api POST '/oportunidades' $agente.token @{
-        idCliente = $cliente.id; idCaptacion = [long]$captacion.id; observaciones = "Oportunidad $m"
-    }
+    $null = HabilitarEncargoC2DePrueba -IdEncargo $($local.idEncargo) -TokenResponsable $agente.token -TokenDecisor $broker.token -FechaFirma $hoy `
+        -MonedaComision 'PEN' -Exclusividad $true -HitoDevengo 'Firma del contrato' `
+        -ParteObligada 'Propietario TEST' -Beneficiario 'Agencia TEST' -Exigibilidad 'A la firma del contrato' -EjecucionComision @{devengo=@{hito='CONTRATO_ALQUILER'};exigibilidad=@{hito='CONTRATO_ALQUILER'}}
+    $captacion = Api GET "/captaciones/$($local.idEncargo)" $agente.token $null
+    $oportunidad = NuevaOportunidadC4DePrueba -IdEncargo ([long]$captacion.id) -IdCliente $cliente.id -Token $agente.token `
+        -EvidenciaInteres 'Manifestacion expresa FICTICIA de interes del caso TEST E2E C4.' -Observaciones "Oportunidad $m"
     $idOportunidad = [long]$oportunidad.id
-    Api POST '/interacciones' $agente.token @{
-        idOportunidad = $idOportunidad; canalContacto = 'W'; resultado = 'INTERESADO'
-        observaciones = "Interaccion $m"
-    } | Out-Null
-    $visita = Api POST '/visitas' $agente.token @{
-        idOportunidad = $idOportunidad; fechaVisita = $ayer; horaVisita = '10:00'
-        observaciones = "Visita $m"
-    }
-    Api PATCH "/visitas/$($visita.id)/realizar" $agente.token $null | Out-Null
-    Api PATCH "/visitas/$($visita.id)/resultado" $agente.token @{
+    # C4: disponibilidad y contrato tienen sus actos propios; no registrar
+    # una comunicacion ficticia para habilitar la visita o el contrato.
+    $visita = NuevaVisitaC4DePrueba -IdOportunidad $idOportunidad -Fecha $ayer -Hora '10:00' -Token $agente.token -Observaciones "Visita $m"
+    ResultadoVisitaC4DePrueba -IdVisita $($visita.id) -Token $agente.token -Ocurrencia 'REALIZADA' -FechaHecho $hoy -Desenlace @{
         resultado = 'INTERESADO'; observaciones = "Interes $m"; nivelInteres = 5
         objecionPrincipal = 'O'; opinionPrecio = 'J'; proximaAccion = 'S'
     } | Out-Null
@@ -146,15 +132,13 @@ function MontarOperacion($etiqueta) {
 }
 
 function DisponibilidadDe($idLocal) {
-    Sql "select disponibilidad_comercial from propiedad where id_propiedad=$idLocal"
+    Invoke-ControlLocalE2ESql "select disponibilidad_comercial from propiedad where id_propiedad=$idLocal"
 }
 
 Write-Host "`n== 2. Contrato P: existir no saca el local del mercado ==" -ForegroundColor Cyan
 $a = MontarOperacion 'DISPA'
 Check 'el local nace DISPONIBLE' ((DisponibilidadDe $a.IdLocal) -eq 'D') (DisponibilidadDe $a.IdLocal)
-$borrador = Api POST '/contratos/en-proceso' $agente.token @{
-    idSolicitud = $a.IdSolicitud; fechaCierre = $hoy; incidencias = "Borrador $($a.Marca)"
-}
+$borrador=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$a.IdSolicitud;incidencias="Borrador $($a.Marca)"} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
 $idBorrador = [long]$borrador.id
 Check 'el contrato nace EN PROCESO' ($borrador.estadoContrato -eq 'P') $borrador.estadoContrato
 # Un borrador NO equivale a Reservado: reservar es otra causa de negocio.
@@ -163,7 +147,7 @@ Check 'un contrato P no cambia la disponibilidad' ((DisponibilidadDe $a.IdLocal)
 Write-Host "`n== 3. Anular desde P: no hay nada que liberar ==" -ForegroundColor Cyan
 Api POST "/contratos/$idBorrador/anular" $broker.token @{ motivo = 'El cliente desistio' } | Out-Null
 Check 'el contrato queda ANULADO' `
-    ((Sql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idBorrador") -eq 'A') 'estado'
+    ((Invoke-ControlLocalE2ESql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idBorrador") -eq 'A') 'estado'
 Check 'la disponibilidad original queda intacta' ((DisponibilidadDe $a.IdLocal) -eq 'D') (DisponibilidadDe $a.IdLocal)
 $revisionInnecesaria = ApiError POST "/contratos/$idBorrador/revision-disponibilidad" $broker.token @{
     resultado = 'VOLVER_AL_MERCADO'; motivo = 'No hacia falta'
@@ -174,14 +158,9 @@ Check 'revisar un contrato que nunca ocupo el local se rechaza con 400' `
 
 Write-Host "`n== 4. Firmar y activar: el local queda ALQUILADO y sigue asi ==" -ForegroundColor Cyan
 $b = MontarOperacion 'DISPB'
-$contratoB = Api POST '/contratos/en-proceso' $agente.token @{
-    idSolicitud = $b.IdSolicitud; fechaCierre = $hoy; incidencias = "Borrador $($b.Marca)"
-}
+$contratoB=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$b.IdSolicitud;incidencias="Borrador $($b.Marca)"} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
 $idB = [long]$contratoB.id
-Api POST "/contratos/$idB/firmar" $agente.token @{
-    fechaInicioContrato = $fechaInicio; fechaFinContrato = $fechaFin
-    rentaContractual = 2000; moneda = 'PEN'; motivo = 'Firmado'
-} | Out-Null
+$formalizado=FormalizarAlquilerC5DePrueba -IdEncargo $b.IdCaptacion -IdOportunidad $b.IdOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta 2000 -Moneda 'PEN' -Inicio $contratoB.fechaInicioContrato -Fin $contratoB.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $idB
 Check 'firmar ejecuta el cierre comercial: el local queda ALQUILADO' `
     ((DisponibilidadDe $b.IdLocal) -eq 'A') (DisponibilidadDe $b.IdLocal)
 Api POST "/contratos/$idB/activar" $agente.token @{ motivo = 'Entrega realizada' } | Out-Null
@@ -193,7 +172,7 @@ Api POST "/contratos/$idB/finalizar" $agente.token @{ motivo = 'Plazo cumplido' 
 Check 'finalizar NO devuelve el local al mercado' `
     ((DisponibilidadDe $b.IdLocal) -eq 'A') (DisponibilidadDe $b.IdLocal)
 Check 'y crea la tarea de revision atada a ESE contrato' `
-    ((Sql "select count(*) from tarea where tipo='REVISION_INMUEBLE' and id_contrato_origen=$idB and estado in ('P','E')") -eq '1') `
+    ((Invoke-ControlLocalE2ESql "select count(*) from tarea where tipo='REVISION_INMUEBLE' and id_contrato_origen=$idB and estado in ('P','E')") -eq '1') `
     'tarea de revision'
 
 Write-Host "`n== 6. La revision es del BROKER y valida su cuerpo ==" -ForegroundColor Cyan
@@ -227,22 +206,23 @@ Check 'la respuesta declara el trayecto A->D' `
     ($revision.disponibilidadAnterior -eq 'A' -and $revision.disponibilidadNueva -eq 'D' -and -not $revision.repetida) `
     ($revision | ConvertTo-Json -Compress)
 Check 'y cierra la tarea de revision de ESE contrato' `
-    ((Sql "select count(*) from tarea where id_contrato_origen=$idB and estado in ('P','E')") -eq '0') 'tarea abierta'
+    ((Invoke-ControlLocalE2ESql "select count(*) from tarea where id_contrato_origen=$idB and estado in ('P','E')") -eq '0') 'tarea abierta'
 Check 'el historial guarda la transicion con actor, rol y motivo' `
-    ((Sql "select tipo_rol_actor||'|'||(id_actor is not null)::text||'|'||estado_anterior||'>'||estado_nuevo||'|'||(motivo like '%entregado conforme%')::text from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$($b.IdLocal) order by id_historial desc limit 1") -eq 'BROKER|true|A>D|true') `
-    (Sql "select tipo_rol_actor||'|'||estado_anterior||'>'||estado_nuevo from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$($b.IdLocal) order by id_historial desc limit 1")
+    ((Invoke-ControlLocalE2ESql "select tipo_rol_actor||'|'||(id_actor is not null)::text||'|'||estado_anterior||'>'||estado_nuevo||'|'||(motivo like '%entregado conforme%')::text from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$($b.IdLocal) order by id_historial desc limit 1") -eq 'BROKER|true|A>D|true') `
+    (Invoke-ControlLocalE2ESql "select tipo_rol_actor||'|'||estado_anterior||'>'||estado_nuevo from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$($b.IdLocal) order by id_historial desc limit 1")
 
 Write-Host "`n== 8. La historia comercial NO revive ==" -ForegroundColor Cyan
 Check 'la captacion sigue CERRADA' `
-    ((Sql "select estado from captacion where id_captacion=$($b.IdCaptacion)") -eq 'C') 'captacion reabierta'
+    ((Invoke-ControlLocalE2ESql "select estado from captacion where id_captacion=$($b.IdCaptacion)") -eq 'C') 'captacion reabierta'
 Check 'las publicaciones siguen dadas de baja' `
-    ((Sql "select count(*) from publicacion where id_propiedad=$($b.IdLocal) and estado<>'C'") -eq '0') 'publicacion reabierta'
+    ((Invoke-ControlLocalE2ESql "select count(*) from publicacion where id_propiedad=$($b.IdLocal) and estado<>'C'") -eq '0') 'publicacion reabierta'
 Check 'la oportunidad sigue finalizada exitosa' `
-    ((Sql "select estado from oportunidad_comercial where id_oportunidad=$($b.IdOportunidad)") -eq 'F') 'oportunidad alterada'
+    ((Invoke-ControlLocalE2ESql "select estado from oportunidad_comercial where id_oportunidad=$($b.IdOportunidad)") -eq 'F') 'oportunidad alterada'
 Check 'la solicitud sigue cerrada' `
-    ((Sql "select estado from solicitud_alquiler where id_solicitud=$($b.IdSolicitud)") -eq 'C') 'solicitud alterada'
-Check 'la liquidacion de comision no se toco' `
-    ((Sql "select estado from comision_liquidacion where id_contrato_alquiler=$idB") -eq 'P') 'comision alterada'
+    ((Invoke-ControlLocalE2ESql "select estado from solicitud_alquiler where id_solicitud=$($b.IdSolicitud)") -eq 'C') 'solicitud alterada'
+$comision=LeerComisionC5DePrueba $formalizado $broker.token
+Check 'la revisión no fabrica dinero ni altera la base de comisión' `
+    ($comision.calculo.cuantia.importe -eq 2000 -and $comision.cobro.estado -eq 'SIN_COBROS') 'comisión/cobro'
 
 Write-Host "`n== 9. Idempotencia y conflicto de la revision ==" -ForegroundColor Cyan
 $repetida = Api POST "/contratos/$idB/revision-disponibilidad" $broker.token @{
@@ -251,7 +231,7 @@ $repetida = Api POST "/contratos/$idB/revision-disponibilidad" $broker.token @{
 Check 'repetir la MISMA revision es idempotente, no un 500' `
     ($repetida.repetida -eq $true -and $repetida.id -eq $revision.id) ($repetida | ConvertTo-Json -Compress)
 Check 'y no crea una segunda fila' `
-    ((Sql "select count(*) from revision_disponibilidad where id_contrato_alquiler=$idB") -eq '1') 'filas de revision'
+    ((Invoke-ControlLocalE2ESql "select count(*) from revision_disponibilidad where id_contrato_alquiler=$idB") -eq '1') 'filas de revision'
 $contradictoria = ApiError POST "/contratos/$idB/revision-disponibilidad" $broker.token @{
     resultado = 'RETIRAR_DEL_MERCADO'; motivo = 'Cambio de idea'
 }
@@ -262,14 +242,9 @@ Check 'y la disponibilidad no cambio' ((DisponibilidadDe $b.IdLocal) -eq 'D') (D
 
 Write-Host "`n== 10. Rescindir + RETIRAR_DEL_MERCADO: A -> T ==" -ForegroundColor Cyan
 $c = MontarOperacion 'DISPC'
-$contratoC = Api POST '/contratos/en-proceso' $agente.token @{
-    idSolicitud = $c.IdSolicitud; fechaCierre = $hoy; incidencias = "Borrador $($c.Marca)"
-}
+$contratoC=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$c.IdSolicitud;incidencias="Borrador $($c.Marca)"} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
 $idC = [long]$contratoC.id
-Api POST "/contratos/$idC/firmar" $agente.token @{
-    fechaInicioContrato = $fechaInicio; fechaFinContrato = $fechaFin
-    rentaContractual = 2000; moneda = 'PEN'; motivo = 'Firmado'
-} | Out-Null
+$formalizadoC=FormalizarAlquilerC5DePrueba -IdEncargo $c.IdCaptacion -IdOportunidad $c.IdOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta 2000 -Moneda 'PEN' -Inicio $contratoC.fechaInicioContrato -Fin $contratoC.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $idC
 Api POST "/contratos/$idC/activar" $agente.token @{ motivo = 'Entrega' } | Out-Null
 Api POST "/contratos/$idC/rescindir" $broker.token @{ motivo = 'Incumplimiento del inquilino' } | Out-Null
 Check 'rescindir tampoco libera el local' ((DisponibilidadDe $c.IdLocal) -eq 'A') (DisponibilidadDe $c.IdLocal)
@@ -283,29 +258,26 @@ Check 'la respuesta declara el trayecto A->T' `
 
 Write-Host "`n== 11. Renovacion: nunca una ventana falsa de disponibilidad ==" -ForegroundColor Cyan
 $d = MontarOperacion 'DISPD'
-$contratoD = Api POST '/contratos/en-proceso' $agente.token @{
-    idSolicitud = $d.IdSolicitud; fechaCierre = $hoy; incidencias = "Borrador $($d.Marca)"
-}
+$contratoD=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$d.IdSolicitud;incidencias="Borrador $($d.Marca)"} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
 $idD = [long]$contratoD.id
-Api POST "/contratos/$idD/firmar" $agente.token @{
-    fechaInicioContrato = $fechaInicio; fechaFinContrato = $fechaFin
-    rentaContractual = 2000; moneda = 'PEN'; motivo = 'Firmado'
-} | Out-Null
+$formalizadoD=FormalizarAlquilerC5DePrueba -IdEncargo $d.IdCaptacion -IdOportunidad $d.IdOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta 2000 -Moneda 'PEN' -Inicio $contratoD.fechaInicioContrato -Fin $contratoD.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $idD
 Api POST "/contratos/$idD/activar" $agente.token @{ motivo = 'Entrega' } | Out-Null
-$sucesor = Api POST "/contratos/$idD/renovar" $agente.token @{
+$sucesor = Invoke-ComandoC2DePrueba POST "/contratos/$idD/renovar" $agente.token @{
     fechaInicioContrato = $hoyFecha.AddDays(400).ToString('yyyy-MM-dd')
     fechaFinContrato = $hoyFecha.AddDays(760).ToString('yyyy-MM-dd')
     rentaContractual = 2200; moneda = 'PEN'; motivo = 'Renovacion anual'
-}
+} ('e2e-renovacion-'+[guid]::NewGuid().ToString('N'))
 $idSucesor = [long]$sucesor.id
+Check 'preparar renovación no acredita firma ni termina al anterior' ($sucesor.estadoContrato -eq 'P' -and (Invoke-ControlLocalE2ESql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idD") -eq 'V') 'preparación de sucesor'
+$renovada=FormalizarAlquilerC5DePrueba -IdEncargo $d.IdCaptacion -IdOportunidad $d.IdOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta 2200 -Moneda 'PEN' -Inicio $sucesor.fechaInicioContrato -Fin $sucesor.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $idSucesor
 Check 'el contrato anterior queda RENOVADO' `
-    ((Sql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idD") -eq 'R') 'anterior'
+    ((Invoke-ControlLocalE2ESql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idD") -eq 'R') 'anterior'
 Check 'el sucesor nace vivo' `
-    ((Sql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idSucesor") -in @('D','V')) 'sucesor'
+    ((Invoke-ControlLocalE2ESql "select estado_contrato from contrato_alquiler where id_contrato_alquiler=$idSucesor") -in @('D','V')) 'sucesor'
 Check 'el local permanece ALQUILADO durante toda la renovacion' `
     ((DisponibilidadDe $d.IdLocal) -eq 'A') (DisponibilidadDe $d.IdLocal)
 Check 'nunca hay dos contratos vivos sobre la misma propiedad' `
-    ((Sql "select count(*) from contrato_alquiler where id_propiedad=$($d.IdLocal) and estado_contrato in ('D','V')") -eq '1') `
+    ((Invoke-ControlLocalE2ESql "select count(*) from contrato_alquiler where id_propiedad=$($d.IdLocal) and estado_contrato in ('D','V')") -eq '1') `
     'dos contratos vivos'
 # Un contrato RENOVADO no admite revision: hay continuidad contractual.
 $revisarRenovado = ApiError POST "/contratos/$idD/revision-disponibilidad" $broker.token @{
@@ -314,7 +286,7 @@ $revisarRenovado = ApiError POST "/contratos/$idD/revision-disponibilidad" $brok
 Check 'revisar el contrato RENOVADO se rechaza' `
     ($revisarRenovado.codigo -eq 400) "codigo=$($revisarRenovado.codigo) error=$($revisarRenovado.error)"
 # Y aunque el anterior llegara a un estado revisable, el sucesor vivo lo impide.
-Sql "update contrato_alquiler set estado_contrato='F' where id_contrato_alquiler=$idD" | Out-Null
+Invoke-ControlLocalE2ESql "update contrato_alquiler set estado_contrato='F' where id_contrato_alquiler=$idD" | Out-Null
 $conSucesorVivo = ApiError POST "/contratos/$idD/revision-disponibilidad" $broker.token @{
     resultado = 'VOLVER_AL_MERCADO'; motivo = 'Intento con sucesor vigente'
 }
@@ -323,7 +295,7 @@ Check 'con un sucesor vivo no se puede liberar el local' `
     "codigo=$($conSucesorVivo.codigo) error=$($conSucesorVivo.error)"
 Check 'y el local sigue ALQUILADO' ((DisponibilidadDe $d.IdLocal) -eq 'A') (DisponibilidadDe $d.IdLocal)
 Check 'no quedo ninguna revision registrada para ese contrato' `
-    ((Sql "select count(*) from revision_disponibilidad where id_contrato_alquiler=$idD") -eq '0') 'revision fantasma'
+    ((Invoke-ControlLocalE2ESql "select count(*) from revision_disponibilidad where id_contrato_alquiler=$idD") -eq '0') 'revision fantasma'
 
 Write-Host "`n== Resultado: $ok OK, $fail fallas ==" -ForegroundColor Cyan
 if ($fail -gt 0) { exit 1 }

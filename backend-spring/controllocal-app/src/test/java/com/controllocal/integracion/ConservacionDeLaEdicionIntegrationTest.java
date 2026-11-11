@@ -2,21 +2,33 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.GobiernoCatalogoCapturaService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.AtributoFicha;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
-import com.controllocal.service.PropiedadUniversalService.CondicionesDeEncargo;
 import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService.HitoFicha;
+import com.controllocal.service.PropiedadUniversalService.MetadatosDeCaptura;
+import com.controllocal.service.PropiedadUniversalService.ResultadoEdicion;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.TitularFicha;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.captura.SuficienciaInmueble;
+import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.CifradoSecretos;
+import com.controllocal.service.soporte.Procedencia;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -27,9 +39,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +52,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,9 +86,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * la enseña. Es la misma forma que cerro D-E4-3.
  *
  * <h2>Cobertura, y por que no basta un departamento feliz</h2>
- * Los <b>siete</b> codigos {@code L, O, D, C, T, A, X}, propiedad <b>y</b>
- * encargos, y los <b>seis</b> tipos de valor que el catalogo sabe declarar hoy
- * para la PROPIEDAD — TEXTO, ENTERO, DECIMAL, BOOLEANO, LISTA y LISTA_MULTIPLE.
+ * Los <b>ocho</b> codigos {@code L, O, D, C, T, A, E, X}, propiedad <b>y</b>
+ * encargos, y los <b>siete</b> tipos de valor que el catalogo sabe declarar hoy
+ * para la PROPIEDAD — TEXTO, ENTERO, DECIMAL, IMPORTE, BOOLEANO, LISTA y LISTA_MULTIPLE.
  * Mas los dos escenarios que el recorrido por tipo no ve: una propiedad con
  * venta y alquiler a la vez, y una propiedad con un encargo historico ya
  * cerrado.
@@ -93,7 +109,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Hubo aqui dos casos que median {@code LocalComercialService} -- la puerta por
  * la que BROX Web editaba-- y que estaban rojos a proposito: uno porque aquella
  * puerta reescribia el {@code uso} en cada guardado, otro porque solo sabia
- * representar dos de los siete tipos. V71 la retiro y los dos casos se
+ * representar dos de los ocho tipos. V71 la retiro y los dos casos se
  * borraron; lo que <b>no</b> se borro son sus invariantes, que no eran de la
  * puerta sino del corte:
  *
@@ -120,9 +136,85 @@ class ConservacionDeLaEdicionIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadUniversalService propiedades;
+    @Autowired EncargoService ciclo;
+    @Autowired GobiernoCatalogoCapturaService catalogos;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentas;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
+
+    private static final String JURISDICCION_TEST = "JURISDICCION-CONSERVACION-TEST";
+    private static final String ZONIFICACION_TEST = "ZONA-TEST";
+    private static final String FUENTE_TEST = "FUENTE-FICTICIA-CONSERVACION-TEST";
+    private static final Procedencia PANTALLA = Procedencia.deLaPantalla();
+    private Actor agenteTest;
+    private long propietarioTest;
+    private SesionesComercialesDePrueba sesiones;
+    private GobiernoCatalogoCapturaService.Perfil perfilTest;
+    private final Map<Long, ResultadoEdicion> capturasIniciales = new LinkedHashMap<>();
+
+    @BeforeEach
+    void prepararEspacioDePrueba() {
+        sesiones = new SesionesComercialesDePrueba(jdbc, contextos, cuentas, factores, cifrado);
+        capturasIniciales.clear();
+        Actor gobierno = new TransactionTemplate(gestor).execute(tx -> {
+            String marca = UUID.randomUUID().toString().replace("-", "");
+            long org = jdbc.queryForObject("""
+                    insert into organizacion(codigo,nombre,modalidad,estado)
+                    values(?,?,'INDIVIDUAL','A') returning id_organizacion
+                    """, Long.class, "CONS-TEST-" + marca.substring(0, 20), "Conservacion ficticia TEST");
+            long persona = jdbc.queryForObject("""
+                    insert into persona(organizacion_id,nombres_o_razon_social)
+                    values(?,'Profesional de conservacion TEST') returning id_persona
+                    """, Long.class, org);
+            long rol = jdbc.queryForObject("""
+                    insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde)
+                    values(?,?,'AGENTE',?) returning id_persona_rol
+                    """, Long.class, org, persona, hoy());
+            jdbc.update("""
+                    insert into detalle_agente(organizacion_id,id_persona_rol,codigo_agente,fecha_ingreso,estado_operativo)
+                    values(?,?,?,?, 'D')
+                    """, org, rol, "CONS-" + rol, hoy());
+            long admin = jdbc.queryForObject("""
+                    insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde)
+                    values(?,?,'ADMIN',?) returning id_persona_rol
+                    """, Long.class, org, persona, hoy());
+            long cuenta = jdbc.queryForObject("""
+                    insert into cuenta_acceso(nombre_usuario,correo_propio,correo_confirmado_en,contrasena_hash)
+                    values(?,?,clock_timestamp(),'fixture-sin-credencial-autenticable') returning id_cuenta_acceso
+                    """, Long.class, "conservacion-" + marca, "conservacion-" + marca + "@example.invalid");
+            // Dos atribuciones expresas de TEST. ADMIN gobierna el perfil; el AGENTE corrige su físico.
+            jdbc.update("""
+                    insert into usuario_organizacion(organizacion_id,id_usuario,id_persona,rol,administrar,estado)
+                    values(?,?,?,'AGENTE',true,'A')
+                    """, org, cuenta, persona);
+            long titular = jdbc.queryForObject("""
+                    insert into persona(organizacion_id,nombres_o_razon_social)
+                    values(?,'Titular de conservacion TEST') returning id_persona
+                    """, Long.class, org);
+            propietarioTest = jdbc.queryForObject("""
+                    insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde)
+                    values(?,?,'PROPIETARIO',?) returning id_persona_rol
+                    """, Long.class, org, titular, hoy().minusYears(4));
+            agenteTest = new Actor(org, persona, rol, Actor.AGENTE);
+            return new Actor(org, persona, admin, Actor.TENANT_ADMIN);
+        });
+        long definicion = jdbc.queryForObject("""
+                select id_catalogo_atributo from catalogo_atributo
+                 where clave='zonificacion' and organizacion_id is null and del_sistema
+                """, Long.class);
+        perfilTest = catalogos.crearPerfil(new GobiernoCatalogoCapturaService.DatosPerfil(
+                definicion, JURISDICCION_TEST, "VERSION-FUENTE-TEST-1", FUENTE_TEST,
+                List.of(new GobiernoCatalogoCapturaService.OpcionDefinida(
+                        ZONIFICACION_TEST, "Opcion ficticia de conservacion TEST", 1, true))),
+                gobierno, sesiones.de(gobierno));
+        // Abrir después del enrolamiento administrativo: no conservar un SID previo a ese cambio de seguridad.
+        sesiones.de(agenteTest);
+    }
 
     // ==================================================================
-    // Los siete tipos, con los valores que su catalogo admite hoy
+    // Los ocho tipos, con los valores que su catalogo admite hoy
     // ==================================================================
 
     /**
@@ -170,13 +262,13 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("metraje_construido", "110.25"),
                         v("ambientes", "4"),
                         v("piso", "3"),
-                        v("cuota_mantenimiento", "350.00"),
+                        ValorAtributo.importe("cuota_mantenimiento", "350.00", "PEN"),
                         v("frente", "7.50"),
                         v("carga_electrica_kw", "15.50"),
                         v("altura_libre", "3.20"),
                         v("apto_licencia_funcionamiento", "true"),
                         v("rubro_permitido", "Restaurante"),
-                        v("zonificacion", "CZ"),
+                        v("zonificacion", ZONIFICACION_TEST),
                         v("partida_registral", "P-11223344"),
                         v("oficina_registral", "LIMA"),
                         v("independizado", "false"),
@@ -207,14 +299,14 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("certificado_itse", "VIGENTE"),
                         v("acceso_vehiculo_maximo", "CAMIONETA"),
                         // V84: el hecho sobre el que se pacta `entrega_desocupado`,
-                        // que llega a los siete tipos.
+                        // que llega a los ocho tipos.
                         v("estado_ocupacion", "OCUPADO_POR_INQUILINO"),
                         // CORTE 5 · 5B (`V85`): la unica clave del suelo que llega
                         // al local. Avenida o pasaje es el doble de precio para el
                         // mismo metraje, y eso vale igual para un local que para un
                         // terreno.
                         v("tipo_via_acceso", "CALLE_O_JIRON")),
-                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "IMPORTE", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("OFICINA", "COMERCIAL", List.of(
                         v("metraje_total", "85.00"),
@@ -223,7 +315,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("metraje_construido", "80.00"),
                         v("ambientes", "3"),
                         v("piso", "7"),
-                        v("cuota_mantenimiento", "400.00"),
+                        ValorAtributo.importe("cuota_mantenimiento", "400.00", "PEN"),
                         v("amoblado", "false"),
                         v("carga_electrica_kw", "12.00"),
                         v("apto_licencia_funcionamiento", "false"),
@@ -268,7 +360,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("aforo_itse", "30"),
                         v("certificado_itse", "VIGENTE"),
                         v("estado_ocupacion", "DESOCUPADO")),
-                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "IMPORTE", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // V80 ensancho la vivienda de 10 claves a 38. Este caso las
                 // lleva TODAS, que es lo que dice el contrato de este record:
@@ -282,7 +374,9 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("metraje_construido", "90.00"),
                         v("ambientes", "5"),
                         v("piso", "4"),
-                        v("cuota_mantenimiento", "280.00"),
+                        // MAT-01/V106: aportación voluntaria, sin convertirla en mínimo de D.
+                        v("zonificacion", ZONIFICACION_TEST),
+                        ValorAtributo.importe("cuota_mantenimiento", "280.00", "PEN"),
                         v("dormitorios", "3"),
                         v("banos", "2.5"),
                         v("amoblado", "false"),
@@ -326,7 +420,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("agua_caliente", "NO_TIENE"),
                         v("respaldo_electrico", "NO_TIENE"),
                         v("estado_ocupacion", "OCUPADO_POR_EL_PROPIETARIO")),
-                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "IMPORTE", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("CASA", "VIVIENDA", List.of(
                         v("metraje_total", "210.00"),
@@ -334,12 +428,12 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("estacionamientos", "2"),
                         v("metraje_construido", "180.00"),
                         v("ambientes", "7"),
-                        v("cuota_mantenimiento", "150.00"),
+                        ValorAtributo.importe("cuota_mantenimiento", "150.00", "PEN"),
                         v("dormitorios", "4"),
                         v("banos", "3.5"),
                         v("amoblado", "true"),
                         v("pisos_edificacion", "2"),
-                        v("zonificacion", "CZ"),
+                        v("zonificacion", ZONIFICACION_TEST),
                         v("area_terreno", "250.00"),
                         v("partida_registral", "P-11223344"),
                         v("oficina_registral", "LIMA"),
@@ -382,18 +476,18 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("posicion_en_manzana", "UN_FRENTE"),
                         v("altura_normativa_pisos", "5"),
                         v("zona_de_riesgo", "false")),
-                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "IMPORTE", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("TERRENO", "COMERCIAL", List.of(
                         v("metraje_total", "500.00"),
                         v("antiguedad_anios", "1"),
                         v("estacionamientos", "1"),
                         v("frente", "15.50"),
-                        v("zonificacion", "CZ"),
+                        v("zonificacion", ZONIFICACION_TEST),
                         // `area_terreno` SE VA DE ESTE CASO, Y SOLO DE ESTE (D-7,
                         // `V85`). Para un TERRENO nombraba la MISMA verdad que
                         // `metraje_total` --que es la superficie canonica, columna
-                        // `propiedad.metraje`, ALT en los siete y NOT NULL--, y dos
+                        // `propiedad.metraje`, ALT en los ocho y NOT NULL--, y dos
                         // claves para una verdad no comparan nada. `V85` retira su
                         // aplicabilidad a `T`, asi que desde ahi el alta la rechaza
                         // y dejarla aqui pondria este caso rojo.
@@ -464,21 +558,21 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // TERRENO tenia antes hablaba del suelo COMO SUELO.
                         //
                         // ESTE COMENTARIO YA NO LLEVA CIFRAS DEL CATALOGO NI DEL
-                        // PROTOTIPO, y es la enmienda de la septima ronda.
+                        // MODELO, y es la enmienda de la septima ronda.
                         // Llevaba cuatro -- cuantas caracteristicas gana el
-                        // TERRENO, cuantas claves declara el prototipo
-                        // `motor-captura.js`, cuantas tiene el Core y cuantas
-                        // imprime el prototipo para TERRENO -- y TRES de ellas
+                        // TERRENO, cuantas claves declara el modelo universal,
+                        // cuantas tiene el Core y cuantas declara el contrato-dato
+                        // para TERRENO -- y TRES de ellas
                         // las movio ESTE MISMO CORTE al sembrar las 18 claves y
                         // al ampliar el contrato-dato, asi que nacieron
                         // caducadas y siguieron caducadas seis rondas sin que
                         // nada avisara. Una cifra que el propio corte incrementa
                         // no puede vivir escrita a mano en un comentario: se
-                        // miden con `node docs/ai/modelo/motor-captura.js`,
-                        // contra `catalogo_atributo`, y en la columna `nota` de
-                        // la comprobacion «M2 no se retiraron claves del
-                        // catalogo del sistema» del gate SQL. La deriva
-                        // prototipo/Core sigue anotada como N18 en
+                        // contrasta con `node docs/ai/modelo/gate-modelo-universal.js`,
+                        // contra el `catalogo_atributo` vivo, que es la autoridad
+                        // del Core para tipo, estado, aplicabilidad y exigencia.
+                        // La deriva
+                        // modelo/Core sigue anotada como N18 en
                         // `pendientes-brox.md`.
                         //
                         // `tipo_via_acceso` CONVIVE con `via_de_acceso`, dos lineas
@@ -521,13 +615,13 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("estacionamientos", "4"),
                         v("metraje_construido", "750.00"),
                         v("ambientes", "2"),
-                        v("cuota_mantenimiento", "11.50"),
+                        ValorAtributo.importe("cuota_mantenimiento", "11.50", "PEN"),
                         v("frente", "20.00"),
                         v("carga_electrica_kw", "45.50"),
                         v("altura_libre", "8.50"),
                         v("apto_licencia_funcionamiento", "false"),
                         v("rubro_permitido", "Restaurante"),
-                        v("zonificacion", "CZ"),
+                        v("zonificacion", ZONIFICACION_TEST),
                         v("area_terreno", "900.00"),
                         v("partida_registral", "P-11223344"),
                         v("oficina_registral", "LIMA"),
@@ -577,7 +671,17 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // (arriba, TEXTO: cual) y estas (que clase y en que estado).
                         v("tipo_via_acceso", "CARRETERA"),
                         v("estado_via", "AFIRMADA")),
-                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "IMPORTE", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+
+                new CasoDeTipo("ESTACIONAMIENTO", "COMERCIAL", List.of(
+                        v("metraje_total", "14.50"),
+                        v("antiguedad_anios", "3"),
+                        v("estacionamientos", "1"),
+                        v("partida_registral", "P-EST-001"),
+                        v("oficina_registral", "LIMA"),
+                        ValorAtributo.multiple("cargas_gravamenes", List.of("NINGUNA")),
+                        v("estado_ocupacion", "DESOCUPADO")),
+                        Set.of("DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // OTRO admitia tres claves hasta V84 y ahora admite cuatro: el
                 // Corte 5 le da `estado_ocupacion` porque `entrega_desocupado` ya
@@ -592,7 +696,7 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     /**
-     * El conjunto ejercita las SEIS familias de valor que el catalogo declara
+     * El conjunto ejercita las familias de valor que el catalogo vigente declara
      * hoy para el sujeto PROPIEDAD. Si alguien recorta un caso y con el se va la
      * unica LISTA o el unico BOOLEANO, el gate deja de medir lo que dice medir y
      * nadie se entera.
@@ -619,9 +723,10 @@ class ConservacionDeLaEdicionIntegrationTest {
     @Test
     @DisplayName("cada caso lleva TODAS las claves que su tipo admite en el catalogo")
     void cadaCasoLlevaTodoLoQueSuTipoAdmite() {
-        Map<String, String> codigoDe = Map.of(
-                "LOCAL", "L", "OFICINA", "O", "DEPARTAMENTO", "D", "CASA", "C",
-                "TERRENO", "T", "ALMACEN", "A", "OTRO", "X");
+        Map<String, String> codigoDe = AtributosGobernados.nombresDeTipos().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        tipo -> tipo,
+                        tipo -> AtributosGobernados.codigoDelTipo(tipo).orElseThrow()));
         List<String> incompletos = new ArrayList<>();
         tipos().forEach(caso -> {
             Set<String> enElCaso = caso.atributos().stream()
@@ -630,7 +735,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                     select c.clave
                       from catalogo_atributo c
                       join catalogo_atributo_tipo t on t.id_catalogo_atributo = c.id_catalogo_atributo
-                     where c.del_sistema and c.activo and t.tipo_propiedad = ?
+                     where c.del_sistema and c.activo and c.sujeto='PROPIEDAD' and t.tipo_propiedad = ?
                      order by c.orden
                     """, String.class, codigoDe.get(caso.tipo()));
             List<String> faltan = admitidas.stream().filter(k -> !enElCaso.contains(k)).toList();
@@ -644,18 +749,23 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     @Test
-    @DisplayName("los siete tipos cubren las seis familias de valor que el catalogo declara")
-    void losSieteTiposCubrenLasSeisFamilias() {
+    @DisplayName("los ocho tipos cubren las familias de valor declaradas por el catalogo vigente")
+    void losOchoTiposCubrenLasFamiliasVigentes() {
         Set<String> cubiertas = new TreeSet<>();
         tipos().forEach(caso -> cubiertas.addAll(caso.familias()));
-        assertEquals(
-                Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO"),
-                cubiertas,
-                "El recorrido tiene que tocar las seis familias que sabe declarar el catalogo.");
+        Set<String> declaradas = new TreeSet<>(jdbc.queryForList("""
+                select distinct c.tipo_dato
+                  from catalogo_atributo c
+                  join catalogo_atributo_tipo t using (id_catalogo_atributo)
+                 where c.del_sistema and c.activo and c.sujeto = 'PROPIEDAD'
+                """, String.class));
+        assertTrue(!declaradas.isEmpty(), "No se localizó el catálogo del fixture");
+        assertEquals(declaradas, cubiertas,
+                "El recorrido debe cubrir las familias del catálogo real, incluido IMPORTE con moneda.");
     }
 
     // ==================================================================
-    // El recorrido, por los siete tipos
+    // El recorrido, por los ocho tipos
     // ==================================================================
 
     @ParameterizedTest(name = "{0}")
@@ -664,10 +774,13 @@ class ConservacionDeLaEdicionIntegrationTest {
     void guardarSinCambiarNadaConserva(CasoDeTipo caso) {
         long id = registrar(caso, List.of(venta("150000")));
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+        Map<String, Object> capturaAntes = capturaPersistida(id);
 
-        propiedades.editar(id, comandoEspejo(antes), actor());
+        ResultadoEdicion guardado = propiedades.editar(id, comandoEspejo(antes), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertEquals(antes.versionFisica() + 1, guardado.versionFisica());
+        assertEquals(capturaAntes, capturaPersistida(id), "El espejo físico conserva contexto y sustento.");
         exigirIdentico(retrato(antes), retrato(despues), Set.of(),
                 "Guardar sin tocar nada cambio la propiedad (" + caso.tipo() + ").");
     }
@@ -682,12 +795,12 @@ class ConservacionDeLaEdicionIntegrationTest {
         ComandoEdicion espejo = comandoEspejo(antes);
         propiedades.editar(id, new ComandoEdicion(null, null, "Descripcion nueva",
                 espejo.ubicacion(), espejo.titulares(), espejo.atributos(),
-                espejo.operaciones(), null), actor());
+                null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         assertEquals("Descripcion nueva", despues.descripcion(),
                 "El unico cambio pedido no llego.");
-        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
                 "Cambiar la descripcion movio algo mas (" + caso.tipo() + ").");
     }
 
@@ -708,7 +821,7 @@ class ConservacionDeLaEdicionIntegrationTest {
         propiedades.editar(id, new ComandoEdicion(null, null, null,
                 new Ubicacion(antes.ubicacion().direccion(), antes.ubicacion().distrito(),
                         null, null, null, null, null, null, null),
-                null, null, null, null), actor());
+                null, null, null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         exigirIdentico(retrato(antes), retrato(despues), Set.of(),
@@ -737,7 +850,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                 .map(a -> "banos".equals(a.clave()) ? new ValorAtributo("banos", "4") : a)
                 .toList();
         propiedades.editar(id, new ComandoEdicion(null, null, null, espejo.ubicacion(),
-                espejo.titulares(), atributos, espejo.operaciones(), null), actor());
+                espejo.titulares(), atributos, null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         exigirIdentico(retrato(antes), retrato(despues), Set.of("atributo.banos"),
@@ -750,52 +863,46 @@ class ConservacionDeLaEdicionIntegrationTest {
         long id = registrar(casoDe("CASA"), List.of(venta("320000"), alquiler("2800")));
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
 
-        List<OperacionSolicitada> operaciones = new ArrayList<>();
-        for (EncargoFicha encargo : antes.encargos()) {
-            boolean esVenta = "VENTA".equals(encargo.operacion());
-            operaciones.add(new OperacionSolicitada(encargo.operacion(),
-                    esVenta ? new BigDecimal("330000") : encargo.importe(), encargo.moneda(),
-                    null, null, null, null, null, null, null));
-        }
-        ComandoEdicion espejo = comandoEspejo(antes);
-        propiedades.editar(id, new ComandoEdicion(null, null, null, espejo.ubicacion(),
-                espejo.titulares(), espejo.atributos(), operaciones, null), actor());
+        EncargoFicha ventaAntes = encargoDe(antes, "VENTA");
+        EncargoService.Ficha propuestaAntes = ciclo.consultar(ventaAntes.idEncargo(), actor());
+        Long condicionAnterior = jdbc.queryForObject("select id_condicion_economica from captacion where id_captacion=?",
+                Long.class, ventaAntes.idEncargo());
+        Map<String, Object> pactoAnterior = jdbc.queryForMap(
+                "select * from condicion_economica_captacion where id_condicion_economica=?", condicionAnterior);
+        EncargoService.Ficha editada = ciclo.editar(ventaAntes.idEncargo(), new EncargoService.Edicion(
+                propuestaAntes.version(), null, null, null, null, precio("330000", "USD"),
+                "Correccion del precio propuesto TEST", null, null), actor(), sesiones.de(actor()),
+                UUID.randomUUID().toString(), PANTALLA);
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         Set<String> permitidos = new TreeSet<>();
         for (EncargoFicha encargo : antes.encargos()) {
             if ("VENTA".equals(encargo.operacion())) {
                 permitidos.add("encargo." + encargo.idEncargo() + ".importe");
-                permitidos.add("encargo." + encargo.idEncargo() + ".hitos");
             }
         }
         exigirIdentico(retrato(antes), retrato(despues), permitidos,
                 "Cambiar el importe de la venta movio algo del alquiler.");
 
-        // Y lo permitido no es "cualquier cosa": el historico de la venta tiene
-        // que haber CRECIDO en exactamente un hito autorizado con el importe
-        // nuevo, con todo lo anterior intacto delante. Sin esta afirmacion, un
-        // guardado que sobrescribiera el ultimo hito seguiria pasando en verde.
-        EncargoFicha ventaAntes = encargoDe(antes, "VENTA");
+        // RF016/AC066: cambiar el borrador conserva el pacto anterior y no acredita aceptación ni U.
         EncargoFicha ventaDespues = encargoDe(despues, "VENTA");
-        assertEquals(ventaAntes.historico().size() + 1, ventaDespues.historico().size(),
-                "cambiar el importe ANADE un hito; no sustituye el anterior");
-        for (int i = 0; i < ventaAntes.historico().size(); i++) {
-            assertEquals(ventaAntes.historico().get(i), ventaDespues.historico().get(i),
-                    "el hito " + i + " de la venta cambio al anadir uno nuevo");
-        }
-        HitoFicha nuevo = ventaDespues.historico().get(ventaDespues.historico().size() - 1);
-        assertEquals("U", nuevo.hito(), "el importe editado es un hito AUTORIZADO");
-        assertEquals(0, new BigDecimal("330000").compareTo(nuevo.monto()));
+        assertEquals(propuestaAntes.version() + 1, editada.version());
+        assertEquals(antes.versionFisica(), despues.versionFisica());
+        assertEquals(0, new BigDecimal("330000").compareTo(ventaDespues.importe()));
+        assertEquals(ventaAntes.historico(), ventaDespues.historico(), "No se reemplaza ni fabrica historia autorizada.");
+        assertEquals(pactoAnterior, jdbc.queryForMap(
+                "select * from condicion_economica_captacion where id_condicion_economica=?", condicionAnterior));
+        assertEquals(0, jdbc.queryForObject("""
+                select count(*) from precio_propiedad where id_propiedad=? and hito='U'
+                """, Integer.class, id), "Una propuesta sin aceptación no es un precio autorizado.");
     }
 
     /**
      * <b>Lo pactado en un encargo se edita por su id y no toca nada mas</b>
      * (Corte 0C, visto desde el editor).
      *
-     * <p>Es el bloque que el gate de aislamiento no recorria: {@code condiciones}
-     * entro en {@code ComandoEdicion} despues de escribirse aquel, y ningun caso
-     * lo mandaba solo. La clave se toma del catalogo y no se escribe a mano:
+     * <p>AC066 posee la escritura comercial por Encargo, SID y versión observada.
+     * La clave se toma del catalogo y no se escribe a mano:
      * este test afirma la MECANICA de la edicion por encargo, no que exista una
      * condicion concreta.
      */
@@ -815,9 +922,11 @@ class ConservacionDeLaEdicionIntegrationTest {
                  limit 1
                 """, String.class);
 
-        propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null, null,
-                List.of(new CondicionesDeEncargo(alquiler.idEncargo(),
-                        List.of(new ValorAtributo(clave, "3")), null))), actor());
+        EncargoService.Ficha propuesta = ciclo.consultar(alquiler.idEncargo(), actor());
+        EncargoService.Ficha editada = ciclo.editar(alquiler.idEncargo(), new EncargoService.Edicion(
+                propuesta.version(), null, null, null, null, null, "Condicion dinamica de alquiler TEST",
+                List.of(new ValorAtributo(clave, "3")), null), actor(), sesiones.de(actor()),
+                UUID.randomUUID().toString(), PANTALLA);
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         // Lo pactado no esta en el retrato a proposito: con cero permitidos, TODO
@@ -825,6 +934,8 @@ class ConservacionDeLaEdicionIntegrationTest {
         // importes e historicos -- tiene que volver identico.
         exigirIdentico(retrato(antes), retrato(despues), Set.of(),
                 "Editar lo pactado en el alquiler movio algo fuera de su bloque.");
+        assertEquals(propuesta.version() + 1, editada.version());
+        assertEquals(antes.versionFisica(), despues.versionFisica());
         assertEquals("3", condicionDe(encargoDe(despues, "ALQUILER"), clave),
                 "lo pactado quedo escrito en SU encargo");
         assertNull(condicionDe(encargoDe(despues, "VENTA"), clave),
@@ -875,7 +986,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                    set estado = 'C', fecha_cierre = ?,
                        motivo_cierre = 'O', detalle_motivo_cierre = ?
                  where id_captacion = ?
-                """, LocalDate.now().minusMonths(2), "El propietario retiro la venta", idVenta);
+                """, hoy().minusMonths(2), "El propietario retiro la venta TEST", idVenta);
 
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
         assertEquals(2, antes.encargos().size(),
@@ -884,10 +995,10 @@ class ConservacionDeLaEdicionIntegrationTest {
         ComandoEdicion espejo = comandoEspejo(antes);
         propiedades.editar(id, new ComandoEdicion(null, null, "Retocada hoy",
                 espejo.ubicacion(), espejo.titulares(), espejo.atributos(),
-                espejo.operaciones(), null), actor());
+                null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
-        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
                 "Editar hoy se llevo por delante el episodio cerrado.");
     }
 
@@ -908,10 +1019,10 @@ class ConservacionDeLaEdicionIntegrationTest {
         assertEquals("4", valorDe(antes, "piso"), "El caso tiene que nacer con piso.");
 
         propiedades.editar(id, new ComandoEdicion(null, null, "Otra descripcion",
-                null, null, null, null, null), actor());
+                null, null, null, null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
-        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
                 "Cambiar la descripcion movio un valor que nadie nombro.");
     }
 
@@ -927,12 +1038,14 @@ class ConservacionDeLaEdicionIntegrationTest {
         assertNotNull(valorDe(antes, "cuota_mantenimiento"), "El caso tiene que nacer con cuota.");
 
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null,
-                List.of("cuota_mantenimiento")), actor());
+                List.of("cuota_mantenimiento")).conVersion(antes.versionFisica())
+                .conMotivoRetiro("Retiro declarado de cuota TEST"), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         assertNull(valorDe(despues, "cuota_mantenimiento"),
                 "La clave nombrada en atributosABorrar sigue teniendo valor.");
-        exigirIdentico(retrato(antes), retrato(despues), Set.of("atributo.cuota_mantenimiento"),
+        exigirIdentico(retrato(antes), retrato(despues),
+                Set.of("atributo.cuota_mantenimiento", "atributo.cuota_mantenimiento.moneda"),
                 "Retirar una clave se llevo por delante algo mas.");
     }
 
@@ -952,7 +1065,8 @@ class ConservacionDeLaEdicionIntegrationTest {
 
         assertThrows(ReglaNegocioException.class, () -> propiedades.editar(id,
                 new ComandoEdicion(null, null, null, null, null,
-                        List.of(new ValorAtributo("cuota_mantenimiento", "")), null, null),
+                        List.of(new ValorAtributo("cuota_mantenimiento", "")), null, null)
+                        .conVersion(antes.versionFisica()),
                 actor()), "Un valor en blanco tiene que rechazarse, no adivinarse.");
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
@@ -977,7 +1091,8 @@ class ConservacionDeLaEdicionIntegrationTest {
         assertNotNull(antes.ubicacion().interiorUnidad(), "El caso tiene que nacer con interior.");
 
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null,
-                List.of("piso", "interiorUnidad")), actor());
+                List.of("piso", "interiorUnidad")).conVersion(antes.versionFisica())
+                .conMotivoRetiro("Retiro explícito de piso e interior TEST"), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         assertNull(valorDe(despues, "piso"), "El piso gobernado sigue ahi.");
@@ -1001,7 +1116,8 @@ class ConservacionDeLaEdicionIntegrationTest {
 
         assertThrows(ReglaNegocioException.class, () -> propiedades.editar(id,
                 new ComandoEdicion(null, null, null, null, null,
-                        List.of(new ValorAtributo("piso", "8")), null, List.of("piso")),
+                        List.of(new ValorAtributo("piso", "8")), null, List.of("piso"))
+                        .conVersion(antes.versionFisica()).conMotivoRetiro("Retiro contradictorio TEST"),
                 actor()), "Dos ordenes contrarias tienen que avisarse.");
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
@@ -1010,20 +1126,50 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     /**
-     * Lo que no se puede retirar lo dice. {@code metraje_total} es NOT NULL
-     * porque una propiedad sin metraje no es una propiedad; dejarlo pasar en
-     * silencio, o vaciarlo a cero, seria inventar un dato.
+     * AC055 conserva la estructura obligatoria y rechaza una clave ajena.
+     * MAT-01 no exige área para identificar; su retiro se comprueba por separado.
      */
     @Test
     @DisplayName("borrado: lo que no se puede retirar se rechaza diciendo por que")
     void loQueNoSePuedeRetirarSeRechaza() {
         long id = registrar(casoDe("DEPARTAMENTO"), List.of(venta("180000")));
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
 
-        for (String clave : List.of("metraje_total", "direccion", "distrito", "inventada")) {
+        for (String clave : List.of("direccion", "distrito", "inventada")) {
             assertThrows(ReglaNegocioException.class, () -> propiedades.editar(id,
-                    new ComandoEdicion(null, null, null, null, null, null, null, List.of(clave)),
+                    new ComandoEdicion(null, null, null, null, null, null, null, List.of(clave))
+                            .conVersion(antes.versionFisica()).conMotivoRetiro("Retiro de estructura TEST"),
                     actor()), "Retirar \"" + clave + "\" tenia que rechazarse.");
         }
+        assertEquals(antes.versionFisica(), propiedades.consultar(id, actor()).versionFisica());
+        exigirIdentico(retrato(antes), retrato(propiedades.consultar(id, actor())), Set.of(),
+                "Un retiro rechazado dejó efectos parciales.");
+    }
+
+    @Test
+    @DisplayName("retirar área opcional conserva su valor anterior y motivo en el evento")
+    void retirarAreaNoInventaCeroNiBorraElAntecedente() {
+        long id = registrar(casoDe("DEPARTAMENTO"), List.of(venta("180000")));
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+        String motivo = "Fuente retirada explícitamente TEST";
+        ResultadoEdicion resultado = propiedades.editar(id,
+                new ComandoEdicion(null, PANTALLA, null, null, null, null, null,
+                        List.of("metraje_total")).conVersion(antes.versionFisica()).conMotivoRetiro(motivo), actor());
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertNull(valorDe(despues, "metraje_total"), "La retirada no fabrica un área cero.");
+        assertEquals(antes.versionFisica() + 1, resultado.versionFisica());
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("atributo.metraje_total"),
+                "Retirar el área movió otro dato o la historia comercial.");
+        assertEquals(motivo, jdbc.queryForObject("""
+                select carga_util::jsonb->>'motivoRetiro' from evento_dominio
+                 where entidad_tipo='PROPIEDAD' and entidad_id=? and tipo='PROPIEDAD_EDITADA'
+                 order by id_evento desc limit 1
+                """, String.class, id));
+        assertEquals(0, new BigDecimal("95.00").compareTo(jdbc.queryForObject("""
+                select (carga_util::jsonb#>>'{fisicoAnterior,valoresFisicos,metraje_total,valor}')::numeric
+                  from evento_dominio where entidad_tipo='PROPIEDAD' and entidad_id=? and tipo='PROPIEDAD_EDITADA'
+                 order by id_evento desc limit 1
+                """, BigDecimal.class, id)), "El recibo anterior conserva el área que se retiró.");
     }
 
     // ==================================================================
@@ -1090,10 +1236,10 @@ class ConservacionDeLaEdicionIntegrationTest {
         ComandoEdicion espejo = comandoEspejo(antes);
         propiedades.editar(id, new ComandoEdicion(null, null, "Se retoca solo la descripcion",
                 espejo.ubicacion(), espejo.titulares(), espejo.atributos(),
-                espejo.operaciones(), null), actor());
+                null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
-        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
                 "Editar la descripcion movio alguno de los tres que dejaron el espejo.");
     }
 
@@ -1113,12 +1259,12 @@ class ConservacionDeLaEdicionIntegrationTest {
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
 
         propiedades.editar(id, new ComandoEdicion(null, null, "Solo la descripcion",
-                null, null, null, null, null), actor());
+                null, null, null, null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         assertEquals("Restaurante", valorDe(despues, "rubro_permitido"),
                 "El rubro desaparecio al no mencionarlo.");
-        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
                 "Una edicion que solo trae descripcion movio algo mas.");
     }
 
@@ -1140,9 +1286,9 @@ class ConservacionDeLaEdicionIntegrationTest {
      * <p>Esto se fija <b>aqui y no en Angular</b> a proposito. Una pantalla
      * puede cumplirlo hoy y dejar de cumplirlo el dia que alguien anada un
      * campo "para completar"; el contrato no. Cada bloque toca exactamente un
-     * campo del comando —{@code ubicacion}, {@code atributos},
-     * {@code operaciones}, {@code titulares}— y los demas viajan ausentes, que
-     * por contrato significa "no lo toques".
+     * campo físico —{@code ubicacion}, {@code atributos}, {@code titulares}—
+     * o la escritura canónica de condiciones del Encargo. Los bloques ausentes
+     * significan "no lo toques".
      *
      * <p>Por eso el caso no comprueba el bloque que edita: comprueba
      * <b>todos los demas</b>, y exige que vuelvan identicos hasta el ultimo
@@ -1171,9 +1317,22 @@ class ConservacionDeLaEdicionIntegrationTest {
         long id = registrar(casoDe("LOCAL"), List.of(venta("250000"), alquiler("3500")));
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
 
-        propiedades.editar(id, soloElBloque(bloque, antes), actor());
+        if ("encargo".equals(bloque.nombre())) {
+            long encargo = encargoDe(antes, "VENTA").idEncargo();
+            EncargoService.Ficha observada = ciclo.consultar(encargo, actor());
+            ciclo.editar(encargo, new EncargoService.Edicion(observada.version(), null, null, null, null,
+                    precio("260000", "USD"), "Correccion aislada del bloque comercial TEST", null, null),
+                    actor(), sesiones.de(actor()), UUID.randomUUID().toString(), PANTALLA);
+        } else {
+            propiedades.editar(id, soloElBloque(bloque, antes), actor());
+        }
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        if ("encargo".equals(bloque.nombre())) {
+            assertEquals(0, new BigDecimal("260000").compareTo(encargoDe(despues, "VENTA").importe()));
+            assertEquals(antes.versionFisica(), despues.versionFisica());
+            assertEquals(encargoDe(antes, "VENTA").historico(), encargoDe(despues, "VENTA").historico());
+        }
         Map<String, String> a = retrato(antes);
         Map<String, String> d = retrato(despues);
         // Lo propio del bloque editado se excluye de la comparacion; TODO lo
@@ -1188,25 +1347,24 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     /**
-     * El comando que manda <b>un</b> bloque y nada mas, con un cambio real
-     * dentro para que el guardado no sea un no-op disfrazado de aislamiento.
+     * El comando que manda <b>un</b> bloque físico y nada más. Ubicación y
+     * características cambian; titulares comprueba la conservación al reenviar
+     * la misma titularidad histórica.
      */
     private ComandoEdicion soloElBloque(Bloque bloque, FichaPropiedadUniversal ficha) {
         ComandoEdicion espejo = comandoEspejo(ficha);
-        return switch (bloque.nombre()) {
+        ComandoEdicion comando = switch (bloque.nombre()) {
             case "ubicacion" -> new ComandoEdicion(null, null, null,
                     new Ubicacion(ficha.ubicacion().direccion(), ficha.ubicacion().distrito(),
                             "Urb. Cambiada", null, null, null, null, null, null),
                     null, null, null, null);
             case "caracteristicas" -> new ComandoEdicion(null, null, null, null, null,
                     List.of(new ValorAtributo("ambientes", "9")), null, null);
-            case "encargo" -> new ComandoEdicion(null, null, null, null, null, null,
-                    List.of(new OperacionSolicitada("VENTA", new BigDecimal("260000"), "USD",
-                            null, null, null, null, null, null, null)), null);
             case "titulares" -> new ComandoEdicion(null, null, null, null,
                     espejo.titulares(), null, null, null);
             default -> throw new IllegalArgumentException(bloque.nombre());
         };
+        return comando.conVersion(ficha.versionFisica());
     }
 
     // ==================================================================
@@ -1261,7 +1419,7 @@ class ConservacionDeLaEdicionIntegrationTest {
         ComandoEdicion espejo = comandoEspejo(antes);
         propiedades.editar(id, new ComandoEdicion(null, null, "Otra descripcion",
                 espejo.ubicacion(), espejo.titulares(), espejo.atributos(),
-                espejo.operaciones(), null), actor());
+                null, null).conVersion(antes.versionFisica()), actor());
 
         FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
         assertEquals("Otra descripcion", despues.descripcion(), "El cambio pedido no llego.");
@@ -1280,9 +1438,9 @@ class ConservacionDeLaEdicionIntegrationTest {
      * prueba: es lo que hace un editor que carga el formulario del Core y lo
      * guarda sin que el usuario toque nada.
      *
-     * <p>Solo viajan los encargos <b>vivos</b>, que es lo unico que un editor
-     * puede pedir cambiar. Que los cerrados sobrevivan a eso es justamente lo
-     * que mide {@link #elEncargoCerradoSobreviveALaEdicion}.
+     * <p>AC053: el espejo es físico; los Encargos se consultan para comprobar
+     * conservación, pero no se reenvían por esta puerta. La referencia y el
+     * sustento de zonificación proceden del recibo real que preparó la fixture.
      */
     private ComandoEdicion comandoEspejo(FichaPropiedadUniversal ficha) {
         List<Titular> titulares = ficha.titulares().stream()
@@ -1301,17 +1459,39 @@ class ConservacionDeLaEdicionIntegrationTest {
         // familia mas dificil de conservar --N filas y no una-- ni siquiera
         // llega a ejecutarse. (V80.)
         List<ValorAtributo> atributos = ficha.atributos().stream()
-                .map(a -> a.valores() != null
+                .map(a -> "zonificacion".equals(a.clave())
+                        ? zonificacionDelRecibo(ficha.id(), a.valor())
+                        : a.valores() != null
                         ? ValorAtributo.multiple(a.clave(), a.valores())
-                        : new ValorAtributo(a.clave(), a.valor()))
-                .toList();
-        List<OperacionSolicitada> operaciones = ficha.encargos().stream()
-                .filter(EncargoFicha::vivo)
-                .map(e -> new OperacionSolicitada(e.operacion(), e.importe(), e.moneda(),
-                        null, null, null, null, e.exclusividad(), e.inicio(), e.fin()))
+                        : a.moneda() != null
+                            ? ValorAtributo.importe(a.clave(), cifraDelImporteLeido(a.valor(), a.moneda()), a.moneda())
+                            : new ValorAtributo(a.clave(), a.valor()))
                 .toList();
         return new ComandoEdicion(null, null, ficha.descripcion(), ficha.ubicacion(),
-                titulares, atributos, operaciones, null);
+                titulares, atributos, null, null).conVersion(ficha.versionFisica());
+    }
+
+    private ValorAtributo zonificacionDelRecibo(long idPropiedad, String valor) {
+        var metadato = capturasIniciales.get(idPropiedad).metadatos().get("zonificacion");
+        assertNotNull(metadato, "La fixture tiene que haber recibido la opción cerrada de Core.");
+        return new ValorAtributo("zonificacion", valor, null, null, "DECLARADO", null,
+                metadato.observadoEn(), metadato.evidenciaRef(), new MetadatosDeCaptura(
+                metadato.estado(), metadato.concepto(), metadato.referenciaCatalogo(),
+                metadato.versionDefinicion(), metadato.noSabe()));
+    }
+
+    private Map<String, Object> capturaPersistida(long propiedad) {
+        return jdbc.queryForMap("select contexto_captura,metadatos_atributos from propiedad where id_propiedad=?", propiedad);
+    }
+
+    /** Adaptación explícita del formato actual ValorLogico.comoTexto(), no una moneda inferida. */
+    private static String cifraDelImporteLeido(String texto, String moneda) {
+        String prefijo = moneda + " ";
+        assertTrue(texto != null && texto.startsWith(prefijo),
+                "El fixture debe reconocer el formato de importe que devuelve hoy Core.");
+        String cifra = texto.substring(prefijo.length());
+        new BigDecimal(cifra); // Rechaza texto de presentación inesperado antes de formar el comando.
+        return cifra;
     }
 
     // ==================================================================
@@ -1330,6 +1510,8 @@ class ConservacionDeLaEdicionIntegrationTest {
      */
     private Map<String, String> retrato(FichaPropiedadUniversal f) {
         Map<String, String> r = new LinkedHashMap<>();
+        r.put("codigo", f.codigo());
+        r.put("descripcion", f.descripcion());
         r.put("tipoPropiedad", f.tipoPropiedad());
         r.put("uso", f.uso());
         r.put("estadoRegistro", f.estadoRegistro());
@@ -1450,26 +1632,23 @@ class ConservacionDeLaEdicionIntegrationTest {
         return tipos().filter(c -> c.tipo().equals(tipo)).findFirst().orElseThrow();
     }
 
-    private static String codigoDe(String tipo) {
-        return switch (tipo) {
-            case "LOCAL" -> "L";
-            case "OFICINA" -> "O";
-            case "DEPARTAMENTO" -> "D";
-            case "CASA" -> "C";
-            case "TERRENO" -> "T";
-            case "ALMACEN" -> "A";
-            default -> "X";
-        };
-    }
-
     private static OperacionSolicitada venta(String importe) {
         return new OperacionSolicitada("VENTA", new BigDecimal(importe), "USD",
-                null, null, null, null, Boolean.TRUE, LocalDate.now().minusMonths(6), null);
+                null, null, null, null, Boolean.TRUE, hoy().minusMonths(6), null);
     }
 
     private static OperacionSolicitada alquiler(String importe) {
         return new OperacionSolicitada("ALQUILER", new BigDecimal(importe), "PEN",
-                null, null, null, null, Boolean.FALSE, LocalDate.now().minusMonths(6), null);
+                null, null, null, null, Boolean.FALSE, hoy().minusMonths(6), null);
+    }
+
+    private static LocalDate hoy() {
+        return LocalDate.now(ZoneId.of("America/Lima"));
+    }
+
+    private static EncargoService.Condiciones precio(String importe, String moneda) {
+        return new EncargoService.Condiciones(new BigDecimal(importe), moneda, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,null);
     }
 
     /** El piso que declara el caso, o {@code null} si su tipo no lo gobierna. */
@@ -1490,7 +1669,7 @@ class ConservacionDeLaEdicionIntegrationTest {
      * reemplazarla le cambia la fecha de inicio.
      *
      * <h2>El {@code piso} sale del caso, no de aqui (4.P, segunda vuelta)</h2>
-     * Este fixture mandaba {@code "4"} en {@code ubicacion.piso} para los SIETE
+     * Este fixture mandaba {@code "4"} en {@code ubicacion.piso} para los OCHO
      * tipos, <b>a la vez</b> que el caso declaraba su propio {@code piso} entre
      * los atributos —{@code "3"} en LOCAL, {@code "7"} en OFICINA—. O sea: dos
      * valores DISTINTOS para el mismo dato en la misma peticion.
@@ -1508,41 +1687,45 @@ class ConservacionDeLaEdicionIntegrationTest {
      */
     private long registrar(CasoDeTipo caso, List<OperacionSolicitada> operaciones) {
         Actor actor = actor();
-        Long idPropietario = jdbc.queryForObject("""
-                select min(r.id_persona_rol) from persona_rol r
-                 where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
-                   and r.organizacion_id = ?
-                """, Long.class, actor.idOrganizacion());
-        assertNotNull(idPropietario, "La base de pruebas necesita al menos un propietario.");
-
-        long sufijo = System.nanoTime() % 1000000;
+        // La lista sigue cubriendo todas las asociaciones físicas; sólo la opción
+        // cerrada entra después por respuesta explícita con perfil y fuente TEST.
+        List<ValorAtributo> sinZonificacion = caso.atributos().stream()
+                .filter(a -> !"zonificacion".equals(a.clave())).toList();
         var resultado = propiedades.registrar(new ComandoRegistro(
-                null, null, null, caso.tipo(), caso.uso(),
+                UUID.randomUUID().toString(), PANTALLA, null, caso.tipo(), caso.uso(),
                 "Caso de conservacion " + caso.tipo(),
-                new Ubicacion("Av. Conservacion " + sufijo, "Miraflores",
-                        "Urb. San Antonio", new BigDecimal("-12.1214"), new BigDecimal("-77.0297"),
-                        "Interior 402", pisoDeclarado(caso), "Frente al parque", "Edificio Roma"),
-                List.of(new Titular(idPropietario, null, Boolean.TRUE)),
-                caso.atributos(), operaciones, null), actor);
+                new Ubicacion("Direccion ficticia TEST " + UUID.randomUUID(), "Distrito TEST",
+                        "Urbanizacion TEST", new BigDecimal("-12.1214"), new BigDecimal("-77.0297"),
+                        "Unidad TEST 402", pisoDeclarado(caso), "Referencia TEST", "Edificio TEST"),
+                List.of(new Titular(propietarioTest, null, Boolean.TRUE)),
+                sinZonificacion, operaciones, null), actor);
+
+        if (caso.atributos().stream().anyMatch(a -> "zonificacion".equals(a.clave()))) {
+            FichaPropiedadUniversal observada = propiedades.consultar(resultado.idPropiedad(), actor);
+            ValorAtributo opcion = new ValorAtributo("zonificacion", ZONIFICACION_TEST, null, null,
+                    "DECLARADO", null, hoy(), FUENTE_TEST, new MetadatosDeCaptura(
+                    SuficienciaInmueble.EstadoDato.CONOCIDO, null, perfilTest.referenciaCatalogo(),
+                    Long.toString(perfilTest.version()), false));
+            var contexto = new SuficienciaInmueble.Contexto(caso.tipo(), caso.uso(), null, null,
+                    Map.of(), Set.of(), JURISDICCION_TEST);
+            ResultadoEdicion captura = propiedades.editar(resultado.idPropiedad(), new ComandoEdicion(
+                    UUID.randomUUID().toString(), PANTALLA, null, null, null, List.of(opcion),
+                    null, null, null, contexto).conVersion(observada.versionFisica()), actor);
+            capturasIniciales.put(resultado.idPropiedad(), captura);
+            assertEquals(ZONIFICACION_TEST, captura.valoresFisicos().get("zonificacion").valor());
+        }
 
         // La titularidad viene de lejos: sin esto, reemplazarla el mismo dia en
         // que se creo no cambia ninguna fecha y la fuga queda invisible.
         jdbc.update("""
                 update titularidad_propiedad set vigente_desde = ?
                  where id_propiedad = ? and vigente_hasta is null
-                """, LocalDate.now().minusYears(4), resultado.idPropiedad());
+                """, hoy().minusYears(4), resultado.idPropiedad());
 
         return resultado.idPropiedad();
     }
 
     private Actor actor() {
-        Map<String, Object> fila = jdbc.queryForList("""
-                select a.id_persona_rol, r.organizacion_id, r.id_persona
-                  from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
-                 order by a.id_persona_rol limit 1
-                """).stream().findFirst().orElseThrow();
-        return new Actor(((Number) fila.get("organizacion_id")).longValue(),
-                ((Number) fila.get("id_persona")).longValue(),
-                ((Number) fila.get("id_persona_rol")).longValue(), Actor.AGENTE);
+        return agenteTest;
     }
 }

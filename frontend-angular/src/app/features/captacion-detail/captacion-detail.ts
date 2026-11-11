@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiError } from '../../core/api/api.types';
 import { Captacion, CaptacionesService } from '../../core/api/captaciones.service';
 import { describir, ESTADO_CAPTACION, RESULTADO_PROPUESTA } from '../../core/api/codigos';
-import { Local, LocalesService } from '../../core/api/locales.service';
+import { FichaPropiedad, PropiedadesService } from '../../core/api/propiedades.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { calcularCondicionComision, descripcionCondicionComision, importeTexto } from '../../core/comision';
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
@@ -22,7 +22,7 @@ import { BroxPageHeader } from '../../shared/page-header/page-header';
 })
 export class CaptacionDetail implements OnInit {
   private readonly api = inject(CaptacionesService);
-  private readonly locales = inject(LocalesService);
+  private readonly propiedades = inject(PropiedadesService);
   private readonly prospecciones = inject(ProspeccionesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -33,7 +33,7 @@ export class CaptacionDetail implements OnInit {
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly mensaje = signal<string | null>(null);
   protected readonly captacion = signal<Captacion | null>(null);
-  protected readonly local = signal<Local | null>(null);
+  protected readonly propiedad = signal<FichaPropiedad | null>(null);
   protected readonly prospeccion = signal<Prospeccion | null>(null);
   protected readonly dialogoCierre = signal(false);
   protected readonly motivoCierre = new FormControl('', {
@@ -87,7 +87,7 @@ export class CaptacionDetail implements OnInit {
     if (codigo) void this.router.navigate(['/captaciones', codigo, 'ficha']);
   }
 
-  protected verLocal(): void {
+  protected verPropiedad(): void {
     const id = this.captacion()?.idLocal;
     if (id) void this.router.navigate(['/propiedades', id]);
   }
@@ -126,7 +126,7 @@ export class CaptacionDetail implements OnInit {
   }
 
   protected reintentar(): void { void this.cargar(); }
-  protected valor(valor: string | undefined): string { return texto(valor); }
+  protected valor(valor: string | null | undefined): string { return texto(valor); }
   protected fecha(valor: string | undefined): string { return fechaCorta(valor); }
   protected area(valor: number | undefined): string { return valor === undefined ? SIN_DATO : `${numero(valor)} m²`; }
   protected precio(valor: number | undefined, moneda: string | undefined): string { return monto(valor, moneda); }
@@ -156,11 +156,11 @@ export class CaptacionDetail implements OnInit {
       if (!codigo) throw new Error('El código de la captación es obligatorio.');
       const captacion = await this.api.obtenerPorCodigo(codigo);
       this.captacion.set(captacion);
-      const [local, paginaProspeccion] = await Promise.all([
-        captacion.idLocal ? this.locales.obtener(captacion.idLocal) : Promise.resolve(null),
+      const [propiedad, paginaProspeccion] = await Promise.all([
+        captacion.idLocal ? this.propiedades.consultar(captacion.idLocal) : Promise.resolve(null),
         this.prospecciones.pagina({ idCaptacion: captacion.id, pagina: 1, tamano: 1 }),
       ]);
-      this.local.set(local);
+      this.propiedad.set(propiedad);
       this.prospeccion.set(paginaProspeccion.items[0] ?? null);
     } catch (error) {
       this.captacion.set(null);

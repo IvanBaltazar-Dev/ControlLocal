@@ -10,11 +10,9 @@ import { RolSesion } from './sesion.model';
  * cada request; aquí solo se decide qué se muestra, para no ofrecer al usuario
  * botones que van a responder 403. Si los dos discrepan, manda el backend.
  *
- * La regla que hay que entender antes de tocar esto: en el backend las
- * operaciones sin gate de rol se limitan por alcance y tenant. En esas, lo que
- * limita no es el acceso sino el **alcance** — los tres roles entran y cada uno
- * recibe su porción—. Por eso la mayoría de los módulos de abajo son visibles
- * para todos: ocultarlos sería inventar una restricción que el backend no tiene.
+ * C1 / CAT-E01: gobierno no concede consulta comercial. TENANT_ADMIN usa
+ * los directorios y las actuaciones de gobierno; AGENTE y BROKER conservan
+ * sus superficies comerciales dentro del alcance que Core autoriza.
  *
  * <h2>La taxonomía es de D-E3-1</h2>
  * El menú representa el trabajo mental del usuario, no las tablas del modelo.
@@ -25,8 +23,8 @@ import { RolSesion } from './sesion.model';
  *       es el mismo listado que Captaciones con un filtro de estado.</li>
  *   <li><b>El alcance no crea entradas.</b> «Cartera del equipo» es Propiedades
  *       con el alcance del broker: lo resuelve el backend, no el menú.</li>
- *   <li><b>La acción pertenece al objeto que modifica.</b> Reasignar un encargo
- *       se hace desde el encargo.</li>
+ *   <li><b>La acción pertenece al objeto que modifica.</b> El broker reasigna
+ *       desde el encargo; gobierno accede a su actuación mínima en Organización.</li>
  * </ol>
  */
 
@@ -61,6 +59,8 @@ export interface Modulo {
    * que es lo contrario de lo que se pretendía.
    */
   readonly enMenu?: boolean;
+  /** Excepción de presentación para un rol que no entra por el objeto comercial. */
+  readonly enMenuPara?: readonly RolSesion[];
 }
 
 export type Seccion = 'Inicio' | 'Oferta' | 'Demanda' | 'Cierre' | 'Gestión' | 'Organización' | 'Cuenta';
@@ -83,6 +83,8 @@ export const SECCIONES: readonly Seccion[] = [
  */
 export const SECCION_DE_CUENTA: Seccion = 'Cuenta';
 
+const ROLES_COMERCIALES: readonly RolSesion[] = ['AGENTE', 'BROKER'];
+
 /**
  * Los módulos, en el orden del menú. `roles` copia la columna Roles de la
  * matriz para la operación de ENTRADA de cada pantalla (su GET de listado):
@@ -94,7 +96,7 @@ export const MODULOS: readonly Modulo[] = [
   // qué resolver. El tablero ES la home (`/`): dos entradas al mismo sitio
   // serían ruido.
   // ------------------------------------------------------------------
-  { ruta: '', etiqueta: 'Inicio', roles: 'TODOS', seccion: 'Inicio', icono: 'pulso' },
+  { ruta: '', etiqueta: 'Inicio', roles: ROLES_COMERCIALES, seccion: 'Inicio', icono: 'pulso' },
 
   // ------------------------------------------------------------------
   // OFERTA — Propietario → Propiedad → Prospección → Captación.
@@ -108,25 +110,25 @@ export const MODULOS: readonly Modulo[] = [
   // que es exactamente el cambio cosmético que este corte vino a evitar.
   // `app.routes.ts` conserva cuatro redirects temporales para los enlaces ya
   // guardados.
-  { ruta: 'propiedades', etiqueta: 'Propiedades', roles: 'TODOS', seccion: 'Oferta', icono: 'mapa' },
+  { ruta: 'propiedades', etiqueta: 'Propiedades', roles: ROLES_COMERCIALES, seccion: 'Oferta', icono: 'mapa' },
   {
     ruta: 'propietarios',
     etiqueta: 'Propietarios',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Oferta',
     icono: 'persona',
   },
   {
     ruta: 'prospecciones',
     etiqueta: 'Prospecciones',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Oferta',
     icono: 'lupa',
   },
   {
     ruta: 'captaciones',
     etiqueta: 'Captaciones',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Oferta',
     icono: 'megafono',
   },
@@ -136,7 +138,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'propiedades-equipo',
     etiqueta: 'Cartera del equipo',
-    roles: ['BROKER', 'TENANT_ADMIN'],
+    roles: ['BROKER'],
     seccion: 'Oferta',
     icono: 'mapa',
     enMenu: false,
@@ -146,36 +148,36 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'captaciones/pendientes',
     etiqueta: 'Captaciones por revisar',
-    roles: ['BROKER', 'TENANT_ADMIN'],
+    roles: ['BROKER'],
     seccion: 'Oferta',
     icono: 'megafono',
     enMenu: false,
   },
-  // Reasignar es una ACCIÓN sobre un encargo, y su historial pertenece a la
-  // misma superficie. Se llega desde Captaciones.
+  // El broker llega desde Captaciones. Gobierno sólo ve el caso mínimo de
+  // reasignación: requiere una entrada propia sin abrir la cartera comercial.
   {
     ruta: 'captaciones/reasignaciones',
     etiqueta: 'Reasignaciones',
     roles: ['BROKER', 'TENANT_ADMIN'],
-    seccion: 'Oferta',
+    seccion: 'Organización',
     icono: 'megafono',
     enMenu: false,
+    enMenuPara: ['TENANT_ADMIN'],
   },
 
   // ------------------------------------------------------------------
   // DEMANDA — Cliente → Requerimiento → Oportunidad → Visita.
   // ------------------------------------------------------------------
-  // Clientes es catálogo COMPARTIDO (TENANT_ADMIN y AGENTE ven todo); el único
-  // acotado es el BROKER, vía las oportunidades de su equipo.
-  { ruta: 'clientes', etiqueta: 'Clientes', roles: 'TODOS', seccion: 'Demanda', icono: 'persona' },
+  // Los contactos comerciales se consultan mediante el alcance autorizado en Core.
+  { ruta: 'clientes', etiqueta: 'Clientes', roles: ROLES_COMERCIALES, seccion: 'Demanda', icono: 'persona' },
   {
     ruta: 'oportunidades',
     etiqueta: 'Oportunidades',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Demanda',
     icono: 'diana',
   },
-  { ruta: 'visitas', etiqueta: 'Visitas', roles: 'TODOS', seccion: 'Demanda', icono: 'cal' },
+  { ruta: 'visitas', etiqueta: 'Visitas', roles: ROLES_COMERCIALES, seccion: 'Demanda', icono: 'cal' },
   // La conversación pertenece al EXPEDIENTE, no al menú (D-E3-1 §4.1, unión
   // ejecutada). Había dos superficies para lo mismo: esta bandeja y la
   // bitácora del cliente (`/clientes/:id/contacto`), a la que ya se llega
@@ -188,7 +190,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'interacciones',
     etiqueta: 'Interacciones',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Demanda',
     icono: 'chispa',
     enMenu: false,
@@ -205,7 +207,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'solicitudes',
     etiqueta: 'Solicitudes',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Cierre',
     icono: 'doc',
   },
@@ -220,21 +222,19 @@ export const MODULOS: readonly Modulo[] = [
     icono: 'doc',
     enMenu: false,
   },
-  // «Contratos»: lo firmado. Lo ven los tres roles, cada uno con su alcance.
+  // «Contratos»: lo firmado, dentro del alcance comercial autorizado.
   {
     ruta: 'propiedades-alquiladas',
     etiqueta: 'Contratos',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Cierre',
     icono: 'firma',
   },
-  // Liquidación: la ven los tres con su alcance, pero las tres operaciones son
-  // de BROKER **sin el admin**, así que al administrador se le muestra solo la
-  // lectura.
+  // La lectura comercial de liquidación conserva el alcance del agente/broker.
   {
     ruta: 'comisiones',
     etiqueta: 'Comisiones',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Cierre',
     icono: 'moneda',
   },
@@ -245,7 +245,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'indicadores',
     etiqueta: 'Indicadores',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Gestión',
     icono: 'graf',
   },
@@ -259,7 +259,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'reportes',
     etiqueta: 'Avance por propiedad',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Gestión',
     icono: 'graf',
     enMenu: false,
@@ -267,7 +267,7 @@ export const MODULOS: readonly Modulo[] = [
   {
     ruta: 'seguimiento-comercial',
     etiqueta: 'Seguimiento',
-    roles: 'TODOS',
+    roles: ROLES_COMERCIALES,
     seccion: 'Gestión',
     icono: 'reloj',
   },
@@ -355,7 +355,7 @@ export const MODULOS: readonly Modulo[] = [
 
 /** ¿Puede este rol entrar al módulo? */
 export function puedeEntrar(modulo: Modulo, rol: RolSesion | undefined): boolean {
-  if (!rol) {
+  if (!rol || rol === 'IDENTIDAD') {
     return false;
   }
   return modulo.roles === 'TODOS' || modulo.roles.includes(rol);
@@ -368,10 +368,12 @@ export function modulosDe(rol: RolSesion | undefined): Modulo[] {
 
 /**
  * Módulos que se DIBUJAN en el menú para un rol: los que puede entrar y no
- * están marcados `enMenu: false`.
+ * están marcados `enMenu: false`, salvo la presentación explícita para su rol.
  */
 export function modulosDelMenu(rol: RolSesion | undefined): Modulo[] {
-  return modulosDe(rol).filter((modulo) => modulo.enMenu !== false);
+  return modulosDe(rol).filter((modulo) =>
+    modulo.enMenu !== false || (!!rol && modulo.enMenuPara?.includes(rol)),
+  );
 }
 
 /**
@@ -446,20 +448,20 @@ export const ALTAS: readonly Alta[] = [
   {
     ruta: 'agentes/nuevo',
     etiqueta: 'Agente',
-    descripcion: 'Una cuenta de agente inmobiliario',
+    descripcion: 'Invitar a un agente a la organización',
     roles: ['TENANT_ADMIN'],
   },
   {
     ruta: 'brokers/nuevo',
     etiqueta: 'Broker',
-    descripcion: 'Una cuenta de broker',
+    descripcion: 'Invitar a un broker a la organización',
     roles: ['TENANT_ADMIN'],
   },
 ];
 
 /** Las altas que este rol puede hacer. Vacío = el botón no se dibuja. */
 export function altasDe(rol: RolSesion | undefined): Alta[] {
-  if (!rol) {
+  if (!rol || rol === 'IDENTIDAD') {
     return [];
   }
   return ALTAS.filter((alta) => alta.roles === 'TODOS' || alta.roles.includes(rol));

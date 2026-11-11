@@ -2,15 +2,26 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.integracion.soporte.EncargosDePrueba;
+import com.controllocal.integracion.soporte.ActuacionesHumanasC4DePrueba;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.CifradoSecretos;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.controllocal.service.Actor;
 import com.controllocal.service.CaptacionService;
+import com.controllocal.service.FotoPropiedadService;
 import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.PrecioLocalService;
 import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
-import com.controllocal.service.PropiedadUniversalService.CondicionesDeEncargo;
 import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
@@ -20,6 +31,7 @@ import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AutoridadDePropiedad;
 import org.junit.jupiter.api.DisplayName;
@@ -77,8 +89,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class AutoridadDeEdicionIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -91,7 +108,28 @@ class AutoridadDeEdicionIntegrationTest {
     @Autowired PrecioLocalService precios;
     @Autowired PublicacionService publicaciones;
     @Autowired CaptacionService captaciones;
+    @Autowired EncargoService ciclo;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentasPersonales;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
+    @Autowired com.controllocal.service.GobiernoCatalogoCapturaService catalogosPublicacion;
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacionPublicacion(){
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba(jdbc,propiedades,ciclo,
+                catalogosPublicacion,contextos,cuentasPersonales,factores,cifrado,gestor,
+                archivosFirmaTest,almacenFirmaTest,actuacionesFirmaTest,documentosFirmaTest);
+    }
+    private SesionesComercialesDePrueba sesionesFixture;
+    private synchronized SesionesComercialesDePrueba sesiones() {
+        if(sesionesFixture==null)sesionesFixture=new SesionesComercialesDePrueba(jdbc,contextos,cuentasPersonales,factores,cifrado);
+        return sesionesFixture;
+    }
+    private ContextoSesion sesion(Actor actor){return sesiones().de(actor);}
+    private EncargosDePrueba banco(){return new EncargosDePrueba(jdbc,ciclo,gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);}
     @Autowired ProspeccionService prospecciones;
+    /** La galeria salio de {@code LocalComercialService} en WP-C. */
+    @Autowired FotoPropiedadService fotos;
 
     // ==================================================================
     // 1. La estructura: la columna, su FK y el rastro
@@ -147,11 +185,14 @@ class AutoridadDeEdicionIntegrationTest {
 
         // CONTROL POSITIVO. Sin esto, un fallo que hiciera imposible cualquier
         // edicion dejaria la prueba siguiente verde sin proteger nada.
-        propiedades.editar(idPropiedad, edicionDeFicha("Lo edita su responsable"), duena);
+        propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Lo edita su responsable"), duena);
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(idPropiedad,
+                "Prospección TEST de la otra agente: concede lectura, no edición física", null),ajena);
+        assertNotNull(propiedades.consultar(idPropiedad,ajena),"El negativo de escritura debe alcanzar la guarda de edición, con lectura legítima previa");
 
         AccesoNoAutorizadoException error = assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.editar(idPropiedad,
-                        edicionDeFicha("Lo edita quien no responde"), ajena),
+                        edicionDeFicha(idPropiedad,"Lo edita quien no responde"), ajena),
                 "cualquier agente del tenant editaba cualquier propiedad: es el defecto que "
                         + "abrio este P0");
         assertTrue(error.getMessage().contains("otro agente"),
@@ -162,17 +203,20 @@ class AutoridadDeEdicionIntegrationTest {
     }
 
     @Test
-    @DisplayName("ver no concede editar: el ajeno la lee entera y la ficha le dice que no puede")
+    @DisplayName("ver no concede editar: el supervisor autorizado recibe la negativa de escritura")
     void verNoConcedeEditar() {
         Actor duena = agente(0);
         Actor ajena = agente(1);
         long idPropiedad = registrar(duena, "ALQUILER");
 
-        FichaPropiedadUniversal vista = propiedades.consultar(idPropiedad, ajena);
-        assertNotNull(vista.ubicacion(), "la propiedad se sigue viendo entera");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, ajena),
+                "C1: el agente ajeno no obtiene una ficha para conocer que no puede editar");
+        FichaPropiedadUniversal vista = propiedades.consultar(idPropiedad, broker());
+        assertNotNull(vista.ubicacion(), "su supervisor actual si tiene lectura autorizada");
         assertFalse(vista.responsabilidad().puedeEditar(),
                 "la ficha tiene que decir que no puede, no dejarselo deducir al cliente");
-        assertEquals(AutoridadDePropiedad.OTRO_RESPONSABLE, vista.responsabilidad().motivo());
+        assertEquals(AutoridadDePropiedad.NO_OPERA, vista.responsabilidad().motivo());
         assertNotNull(vista.responsabilidad().motivoTexto(),
                 "el motivo viaja EN PALABRAS desde el Core: si lo tradujera el cliente, BROX Web "
                         + "y KAIROS acabarian con dos redacciones del mismo rechazo");
@@ -197,7 +241,7 @@ class AutoridadDeEdicionIntegrationTest {
             String banda = quien.rolEfectivo();
 
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> propiedades.editar(idPropiedad, edicionDeFicha("Editado por " + banda),
+                    () -> propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Editado por " + banda),
                             quien),
                     banda + " no escribe la ficha por PUT /propiedades/{id}");
 
@@ -206,7 +250,11 @@ class AutoridadDeEdicionIntegrationTest {
                     banda + " no retira la propiedad por DELETE /locales/{id}");
 
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> locales.agregarFoto(idPropiedad, "k/" + UUID.randomUUID(), "f.jpg", quien),
+                    // La galeria se fue a FotoPropiedadService (WP-C) y su
+                    // autoridad viajo con ella: sigue siendo la de la PROPIEDAD,
+                    // y ahora vale igual por /propiedades y por /locales.
+                    () -> fotos.agregar(idPropiedad, "k/" + UUID.randomUUID(), "f.jpg",
+                            FotoPropiedadService.TOPE_UNIVERSAL, quien),
                     banda + " no anade fotos a la ficha");
 
             assertThrows(AccesoNoAutorizadoException.class,
@@ -217,7 +265,7 @@ class AutoridadDeEdicionIntegrationTest {
                     banda + " no escribe la serie economica del encargo");
 
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> publicaciones.crearEnEncargo(unEncargoDe(idPropiedad, "A"),
+                    () -> preparacionPublicacion().publicar(publicaciones,unEncargoDe(idPropiedad, "A"),
                             anuncio(), quien),
                     banda + " no publica el encargo de un agente -- y publicar escribe hito `P`");
 
@@ -228,15 +276,13 @@ class AutoridadDeEdicionIntegrationTest {
             // gobierno del tenant responde SI -- solo la anotacion del
             // controlador los frenaba, y la autoridad no vive en la anotacion.
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> captaciones.actualizar(unEncargoDe(idPropiedad, "A"),
-                            edicionDeEncargoDeAlquiler(idPropiedad, duena,
-                                    new BigDecimal("9999"), Boolean.TRUE),
-                            quien),
+                    () -> ciclo.editar(unEncargoDe(idPropiedad,"A"),
+                            edicionDeEncargoDeAlquiler(versionDe(unEncargoDe(idPropiedad,"A")),new BigDecimal("9999"),true),
+                            quien,sesion(quien),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                     banda + " no edita el encargo por PUT /captaciones/{id}");
         }
 
-        assertEquals(0, hitosDe(idPropiedad, "U") - 1,
-                "el unico hito `U` que puede existir es el que abrio el encargo en el alta");
+        assertEquals(0,hitosDe(idPropiedad,"U"),"Abrir un borrador no autoriza ni publica precio en C2.");
         assertEquals(0, hitosDe(idPropiedad, "P"),
                 "ninguna de las vias de gobierno puede haber dejado un hito publicado");
     }
@@ -279,7 +325,10 @@ class AutoridadDeEdicionIntegrationTest {
         // 2) Y NO modifica ningun atributo inmobiliario. Cambiar de responsable
         //    no cambia el inmueble: si el traspaso arrastrara datos, seria un
         //    acto de gobierno con efectos que nadie pidio.
-        FichaPropiedadUniversal despues = propiedades.consultar(idPropiedad, otra);
+        FichaPropiedadUniversal despues = propiedades.consultar(idPropiedad, duena);
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, otra),
+                "el traspaso de gobierno no crea una relacion lectora de prospeccion o Encargo");
         assertEquals(atributosDe(antes), atributosDe(despues),
                 "el traspaso movio la autoridad y de paso un dato del inmueble");
         assertEquals(antes.descripcion(), despues.descripcion());
@@ -332,6 +381,9 @@ class AutoridadDeEdicionIntegrationTest {
         Actor duena = agente(0);
         Actor ajena = agente(1);
         long idPropiedad = registrar(duena, "ALQUILER");
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(idPropiedad,
+                "Prospección TEST lectora para comparar los dos canales", null),ajena);
+        assertNotNull(propiedades.consultar(idPropiedad,ajena));
 
         // Los nombres REALES del vocabulario (`EventoDominio.CANALES`): SPA es
         // BROX Web y WHATSAPP es el canal por el que entra la conversacion de
@@ -341,14 +393,14 @@ class AutoridadDeEdicionIntegrationTest {
         for (String canal : List.of("SPA", "WHATSAPP")) {
             assertThrows(AccesoNoAutorizadoException.class,
                     () -> propiedades.editar(idPropiedad,
-                            edicionDeFicha("Entrada por " + canal, canal), ajena),
+                            edicionDeFicha(idPropiedad,"Entrada por " + canal, canal), ajena),
                     "por " + canal + " el agente ajeno tampoco edita: la autoridad vive en el "
                             + "servicio, no en la puerta, precisamente para que declararse otro "
                             + "canal no cambie nada");
 
             // Y el permitido pasa por los DOS. Sin esta mitad, la prueba
             // anterior seria compatible con "KAIROS no puede hacer nada".
-            propiedades.editar(idPropiedad, edicionDeFicha("Entrada valida por " + canal, canal),
+            propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Entrada valida por " + canal, canal),
                     duena);
         }
         assertEquals("Entrada valida por WHATSAPP", descripcionDe(idPropiedad),
@@ -379,20 +431,24 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrar(duena, "ALQUILER");
         dejarSinResponsable(idPropiedad);
 
-        for (Actor quien : List.of(duena, otra)) {
-            FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, quien);
-            assertNotNull(ficha.codigo(), "FALTANTE no la esconde: se sigue viendo entera");
-            assertNull(ficha.responsabilidad().idResponsable(),
-                    "y no se le inventa un dueno, ni un actor SISTEMA que tape el hueco");
-            assertFalse(ficha.responsabilidad().puedeEditar());
-            assertEquals(AutoridadDePropiedad.FALTA_RESPONSABLE, ficha.responsabilidad().motivo(),
-                    "el motivo tiene que distinguir «no hay responsable» de «hay otro»: son "
-                            + "cosas distintas y se arreglan de forma distinta");
+        FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, duena);
+        assertNotNull(ficha.codigo(), "su encargo propio conserva lectura aun sin responsable fisico");
+        assertNull(ficha.responsabilidad().idResponsable(),
+                "y no se le inventa un dueno, ni un actor SISTEMA que tape el hueco");
+        assertFalse(ficha.responsabilidad().puedeEditar());
+        assertEquals(AutoridadDePropiedad.FALTA_RESPONSABLE, ficha.responsabilidad().motivo(),
+                "el motivo tiene que distinguir «no hay responsable» de «hay otro»: son "
+                        + "cosas distintas y se arreglan de forma distinta");
 
-            assertThrows(AccesoNoAutorizadoException.class,
-                    () -> propiedades.editar(idPropiedad, edicionDeFicha("Sin dueno"), quien),
-                    "ni siquiera quien la registro: FALTANTE no es «de quien pasaba por aqui»");
-        }
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, otra),
+                "FALTANTE no concede lectura al agente sin relacion");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.editar(idPropiedad,edicionDeFicha(idPropiedad,"Sin dueno"),duena),
+                "El Encargo concede lectura, pero FALTANTE no concede edición física");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.editar(idPropiedad,edicionDeFicha(idPropiedad,"Sin dueno"),otra),
+                "Sin relación lectora tampoco se revela por edición si tiene responsable físico");
 
         // Y el broker la saca de FALTANTE. La primera asignacion no tiene
         // anterior, y ese NULL es informacion.
@@ -402,7 +458,12 @@ class AutoridadDeEdicionIntegrationTest {
         assertNull(primera.idResponsableAnterior(),
                 "no habia predecesor. Rellenarlo con el agente del encargo seria inventarle "
                         + "una procedencia al permiso");
-        propiedades.editar(idPropiedad, edicionDeFicha("Ya tiene responsable"), otra);
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, otra),
+                "la asignacion inicial tampoco fabrica una relacion lectora");
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(idPropiedad,
+                "Prospeccion expresa posterior a la asignacion inicial", null), otra);
+        propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Ya tiene responsable"), otra);
         assertEquals("Ya tiene responsable", descripcionDe(idPropiedad));
     }
 
@@ -422,11 +483,12 @@ class AutoridadDeEdicionIntegrationTest {
 
         // La ficha no se puede tocar...
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> propiedades.editar(idPropiedad, edicionDeFicha("No"), duena));
+                () -> propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"No"), duena));
 
         // ...y su encargo si.
-        propiedades.editar(idPropiedad, edicionDeEncargo("ALQUILER", new BigDecimal("3100")),
-                duena);
+        long idEncargo=unEncargoDe(idPropiedad,"A");
+        ciclo.editar(idEncargo,edicionDeEncargoDeAlquiler(versionDe(idEncargo),new BigDecimal("3100"),false),
+                duena,sesion(duena),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(new BigDecimal("3100.00").stripTrailingZeros(),
                 importeVivoDe(idPropiedad, "A").stripTrailingZeros(),
                 "el encargo responde a su agente, no al responsable de la propiedad");
@@ -444,16 +506,26 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrar(antigua, "ALQUILER");
         Long incorporoAntes = incorporoDe(idPropiedad);
 
-        propiedades.editar(idPropiedad, edicionDeFicha("Antes del traspaso"), antigua);
+        propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Antes del traspaso"), antigua);
         propiedades.asignarResponsable(idPropiedad, nueva.idRolOperativo(),
                 "La agente anterior sale del equipo",
                 observado(idPropiedad), broker());
 
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> propiedades.editar(idPropiedad, edicionDeFicha("Despues del traspaso"),
+                () -> propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"Despues del traspaso"),
                         antigua),
                 "el traspaso quita la autoridad al anterior. Si no, seria una suma de permisos");
-        propiedades.editar(idPropiedad, edicionDeFicha("La escribe la nueva"), nueva);
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, nueva),
+                "el traspaso no concede lectura por si mismo");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"La escribe la nueva"), nueva),
+                "sin relacion lectora no se entrega la ficha y se revierte la edicion");
+        assertEquals("Antes del traspaso", descripcionDe(idPropiedad),
+                "el fallo de la respuesta no deja una escritura parcial");
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(idPropiedad,
+                "Prospeccion expresa posterior al traspaso", null), nueva);
+        propiedades.editar(idPropiedad, edicionDeFicha(idPropiedad,"La escribe la nueva"), nueva);
         assertEquals("La escribe la nueva", descripcionDe(idPropiedad));
 
         // Y la historia anterior no se destruye.
@@ -503,8 +575,8 @@ class AutoridadDeEdicionIntegrationTest {
         long idEncargo = unEncargoDe(idPropiedad, "A");
         Long responsableAntes = responsableDe(idPropiedad);
 
-        captaciones.reasignar(idEncargo, nueva.idRolOperativo(),
-                "El encargo pasa a otra agente", antigua.idRolOperativo(), broker());
+        long versionObservadaIdEncargo=versionDe(idEncargo);
+        captaciones.reasignar(idEncargo,new CaptacionService.DatosReasignacion(nueva.idRolOperativo(),antigua.idRolOperativo(),versionObservadaIdEncargo,"El encargo pasa a otra agente"),broker(),sesion(broker()),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
 
         assertEquals(responsableAntes, responsableDe(idPropiedad),
                 "reasignar el encargo movio el encargo. Si ademas moviera al responsable de la "
@@ -532,8 +604,8 @@ class AutoridadDeEdicionIntegrationTest {
         Actor deAlquiler = agente(1);
         long idPropiedad = registrarConVentaYAlquiler(deVenta);
         long idAlquiler = unEncargoDe(idPropiedad, "A");
-        captaciones.reasignar(idAlquiler, deAlquiler.idRolOperativo(),
-                "El alquiler lo lleva otra agente", deVenta.idRolOperativo(), broker());
+        long versionObservadaIdAlquiler=versionDe(idAlquiler);
+        captaciones.reasignar(idAlquiler,new CaptacionService.DatosReasignacion(deAlquiler.idRolOperativo(),deVenta.idRolOperativo(),versionObservadaIdAlquiler,"El alquiler lo lleva otra agente"),broker(),sesion(broker()),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
         // Y que la propiedad responda a UNA de las dos no puede decidir nada
         // sobre el encargo de la otra: es justo lo que se esta probando.
         propiedades.asignarResponsable(idPropiedad, deAlquiler.idRolOperativo(),
@@ -543,8 +615,8 @@ class AutoridadDeEdicionIntegrationTest {
         int hitosVentaAntes = hitosDeEncargo(unEncargoDe(idPropiedad, "V"), "U");
 
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> propiedades.editar(idPropiedad,
-                        edicionDeEncargo("VENTA", new BigDecimal("999999")), deAlquiler),
+                () -> ciclo.editar(unEncargoDe(idPropiedad,"V"),edicionVenta(versionDe(unEncargoDe(idPropiedad,"V")),new BigDecimal("999999"),"USD"),
+                        deAlquiler,sesion(deAlquiler),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "ser responsable de la PROPIEDAD no concede permiso sobre el ENCARGO de otro");
 
         assertEquals(hitosVentaAntes, hitosDeEncargo(unEncargoDe(idPropiedad, "V"), "U"),
@@ -560,12 +632,11 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrarConVentaYAlquiler(deVenta);
         long idVenta = unEncargoDe(idPropiedad, "V");
         long idAlquiler = unEncargoDe(idPropiedad, "A");
-        captaciones.reasignar(idAlquiler, deAlquiler.idRolOperativo(),
-                "Reparto del equipo: el alquiler pasa a otra agente", deVenta.idRolOperativo(),
-                broker());
+        long versionObservadaIdAlquiler=versionDe(idAlquiler);
+        captaciones.reasignar(idAlquiler,new CaptacionService.DatosReasignacion(deAlquiler.idRolOperativo(),deVenta.idRolOperativo(),versionObservadaIdAlquiler,"Reparto del equipo: el alquiler pasa a otra agente"),broker(),sesion(broker()),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
 
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> propiedades.editar(idPropiedad, edicionDeCondiciones(idVenta), deAlquiler),
+                () -> ciclo.editar(idVenta,edicionDeCondiciones(versionDe(idVenta)),deAlquiler,sesion(deAlquiler),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "las condiciones gobernadas son datos del ENCARGO tanto como el importe: sin "
                         + "esto, nombrar un id ajeno bastaba para escribir en el");
     }
@@ -601,20 +672,16 @@ class AutoridadDeEdicionIntegrationTest {
 
         // CONTROL POSITIVO: su propio agente si escribe, y se comprueba en la
         // base -- no en la ficha que devuelve el propio caso de uso.
-        captaciones.actualizar(idEncargo,
-                edicionDeEncargoDeAlquiler(idPropiedad, duena, new BigDecimal("4321"),
-                        Boolean.TRUE),
-                duena);
+        ciclo.editar(idEncargo,edicionDeEncargoDeAlquiler(versionDe(idEncargo),new BigDecimal("4321"),true),
+                duena,sesion(duena),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(0, new BigDecimal("4321").compareTo(importeVivoDe(idPropiedad, "A")),
                 "el agente del encargo lo edita: sin esta mitad, la negacion de abajo pasaria "
                         + "igual en un sistema que no dejara editar a nadie");
         assertEquals(Boolean.TRUE, exclusividadDe(idEncargo));
 
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> captaciones.actualizar(idEncargo,
-                        edicionDeEncargoDeAlquiler(idPropiedad, ajena, new BigDecimal("999999"),
-                                Boolean.FALSE),
-                        ajena),
+                () -> ciclo.editar(idEncargo,edicionDeEncargoDeAlquiler(versionDe(idEncargo),new BigDecimal("999999"),false),
+                        ajena,sesion(ajena),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "el encargo lo edita quien lo negocio (P0-4): llegar por /captaciones/{id} no "
                         + "puede ser una puerta mas barata que llegar por PUT /propiedades/{id}");
 
@@ -650,32 +717,28 @@ class AutoridadDeEdicionIntegrationTest {
     @Test
     @DisplayName("D-P0-12: el TENANT_ADMIN no decide ni cierra un encargo, tampoco por el Core")
     void elGobiernoDelTenantNoDecideNiCierraEncargos() {
-        Actor duena = agente(0);
-        long idPropiedad = registrar(duena, "ALQUILER");
-        long idEncargo = captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, duena), duena).id();
-        Actor gobierno = tenantAdmin();
-
-        AccesoNoAutorizadoException alDecidir = assertThrows(AccesoNoAutorizadoException.class,
-                () -> captaciones.decidir(idEncargo, "APROBAR", null, gobierno),
-                "aprobar un encargo es el juicio profesional sobre quien entra a cartera, y lo "
-                        + "firma el broker");
-        assertTrue(alDecidir.getMessage().toLowerCase().contains("broker"),
-                "y el motivo lo dice: es cuestion de banda. Dijo: " + alDecidir.getMessage());
-        assertEquals("P", estadoDelEncargo(idEncargo),
-                "y el encargo no se movio de PENDIENTE");
-
-        // Para poder intentar el cierre hace falta una ACTIVA, y activarla es
-        // justo lo que el broker si puede: sirve de control positivo de que la
-        // via funciona cuando la banda es la correcta.
-        captaciones.decidir(idEncargo, "APROBAR", null, broker());
-        assertEquals("A", estadoDelEncargo(idEncargo),
-                "control positivo: con la banda BROKER la misma llamada entra");
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> captaciones.cerrar(idEncargo, "Cierre solicitado por el propietario",
-                        gobierno),
-                "cerrar tiene efecto sobre disponibilidad y cartera: tambien es comercial");
-        assertEquals("A", estadoDelEncargo(idEncargo), "y sigue ACTIVA");
+        Actor duena=agente(0), supervisor=broker(), gobierno=tenantAdmin();
+        long idPropiedad=registrar(duena,"ALQUILER");
+        long idEncargo=abrirVentaCon(idPropiedad,duena);
+        prepararFisica(idPropiedad,duena);
+        var pendiente=banco().presentarExistente(idEncargo,casoComercial(idPropiedad,"VENTA",duena));
+        long versionPresentada=versionDe(idEncargo);
+        var decision=new EncargoService.Decision("APROBAR",pendiente.peticion().version(),versionPresentada,"Revisión del fixture",
+                new EncargoService.RevisionManuscrita(pendiente.peticion().firma().revisionPresentacion(),pendiente.peticion().firma().huellaManifestacion(),true));
+        assertThrows(AccesoNoAutorizadoException.class,()->actuacionesFirmaTest.prepararDecisionEncargo(gobierno,pendiente.peticion().id(),decision,
+                sesion(gobierno),com.controllocal.service.soporte.Procedencia.deLaPantalla()));
+        assertEquals("P",estadoDelEncargo(idEncargo));
+        assertEquals("PENDIENTE",ciclo.consultarPeticion(pendiente.peticion().id(),supervisor).estado());
+        var propuesta=actuacionesFirmaTest.prepararDecisionEncargo(supervisor,pendiente.peticion().id(),decision,sesion(supervisor),com.controllocal.service.soporte.Procedencia.deLaPantalla());
+        new ActuacionesHumanasC4DePrueba(actuacionesFirmaTest,documentosFirmaTest).confirmar(propuesta,supervisor,sesion(supervisor),EncargoService.Peticion.class);
+        assertEquals("A",estadoDelEncargo(idEncargo));
+        long versionAprobada=versionDe(idEncargo);
+        var fin=new EncargoService.DatosFin("FINALIZACION",LocalDate.now(),"Fin solicitado en el fixture",versionAprobada,
+                pendiente.peticion().evidencias());
+        assertThrows(AccesoNoAutorizadoException.class,()->ciclo.finalizar(idEncargo,fin,gobierno,sesion(gobierno),
+                UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()));
+        assertEquals("A",estadoDelEncargo(idEncargo));
+        assertEquals(versionAprobada,versionDe(idEncargo));
     }
 
     /**
@@ -703,63 +766,33 @@ class AutoridadDeEdicionIntegrationTest {
     @Test
     @DisplayName("D-P0-12: las capacidades del encargo salen del mismo predicado que los comandos")
     void lasCapacidadesDelEncargoLasResuelveElCore() {
-        Actor duena = agente(0);
-        Actor otra = agente(1);
-        long idPropiedad = registrar(duena, "ALQUILER");
-        long idEncargo = captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, duena), duena).id();
-
-        // --- PENDIENTE ---
-        assertEquals(new CaptacionService.Capacidades(true, false, false, false),
-                captaciones.obtener(idEncargo, duena).capacidades(),
-                "su agente lo edita mientras esta pendiente; ni lo revisa ni lo cierra, que son "
-                        + "decisiones del broker; y no se lo reasigna a nadie, que es gobierno "
-                        + "de quien lo supervisa");
-        assertEquals(new CaptacionService.Capacidades(false, true, false, true),
-                captaciones.obtener(idEncargo, broker()).capacidades(),
-                "el broker que lo supervisa lo REVISA y puede REASIGNARLO. No lo edita: por P0-4 "
-                        + "el importe y la exclusividad los cambia quien los negocio. Y no lo "
-                        + "cierra: todavia no esta activo");
-        assertEquals(new CaptacionService.Capacidades(false, false, false, true),
-                captaciones.obtener(idEncargo, tenantAdmin()).capacidades(),
-                "el gobierno del tenant lo alcanza para leerlo y lo unico que puede hacer con el "
-                        + "es REASIGNARLO -- entre equipos es organigrama (D-S0-17 fila 6). Ni "
-                        + "lo revisa ni lo cierra ni lo edita: gobernar no es operar");
-        // Y otro agente del mismo equipo NO LLEGA A LAS CAPACIDADES: el alcance
-        // de LECTURA le niega el recurso antes (`cargarConAcceso`), que es una
-        // respuesta mas fuerte que un (false,false,false) -- no ve el encargo
-        // en absoluto. Se comprueba asi y no esperando la terna porque afirmar
-        // la terna exigiria abrirle la lectura para poder negarle las acciones.
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> captaciones.obtener(idEncargo, otra),
-                "un agente que no lleva el encargo no lo alcanza siquiera para leerlo, asi que "
-                        + "la pregunta «que puede hacer con el» no llega a plantearse");
-
-        // --- ACTIVA ---
-        captaciones.decidir(idEncargo, "APROBAR", null, broker());
-        assertEquals(new CaptacionService.Capacidades(false, false, true, true),
-                captaciones.obtener(idEncargo, broker()).capacidades(),
-                "activo, ya no se revisa ni se edita: lo que queda es cerrarlo -- y reasignarlo, "
-                        + "que no depende del estado del encargo sino de quien lo lleva");
-        assertEquals(new CaptacionService.Capacidades(false, false, false, false),
-                captaciones.obtener(idEncargo, duena).capacidades(),
-                "y su agente deja de poder editarlo, que es lo que dice `editable()`");
-
-        // Y la SEGUNDA PUERTA al mismo recurso publica lo mismo: si una lo
-        // trajera y la otra no, el SPA acabaria con la regla escrita en la que
-        // se olvida.
-        String codigo = captaciones.obtener(idEncargo, broker()).codigoCaptacion();
-        assertEquals(captaciones.obtener(idEncargo, broker()).capacidades(),
-                captaciones.obtenerPorCodigo(codigo, broker()).capacidades(),
-                "GET por id y GET por codigo son dos puertas al mismo encargo, asi que publican "
-                        + "la misma forma");
-
-        // Y los LISTADOS no las traen: alli la pregunta es «que hay», no «que
-        // puedo hacer con este». Nulo -> con NON_NULL no viaja.
-        assertTrue(captaciones.listar(
-                        new CaptacionService.FiltrosCaptacion(null, null, null, 1, 20), broker())
-                        .items().stream().allMatch(f -> f.capacidades() == null),
-                "el listado no calcula tres alcances por fila: su ausencia significa «no "
-                        + "calculado aqui», no «no puedes»");
+        Actor duena=agente(0), otra=agente(1), supervisor=broker(), gobierno=tenantAdmin();
+        long idPropiedad=registrar(duena,"ALQUILER");
+        long idEncargo=abrirVentaCon(idPropiedad,duena);
+        var propias=ciclo.consultar(idEncargo,duena).facultades();
+        assertTrue(propias.editar());assertFalse(propias.decidir());assertFalse(propias.finalizar());assertFalse(propias.reasignar());
+        var delBroker=ciclo.consultar(idEncargo,supervisor).facultades();
+        assertFalse(delBroker.editar());assertFalse(delBroker.decidir(),"Sin petición pendiente no se anuncia revisión.");
+        assertTrue(delBroker.reasignar());
+        assertThrows(AccesoNoAutorizadoException.class,()->ciclo.consultar(idEncargo,gobierno));
+        assertThrows(AccesoNoAutorizadoException.class,()->ciclo.consultar(idEncargo,otra));
+        assertFalse(captaciones.candidatosAReasignacion(idEncargo,null,1,20,gobierno).items().isEmpty());
+        prepararFisica(idPropiedad,duena);
+        var pendiente=banco().presentarExistente(idEncargo,casoComercial(idPropiedad,"VENTA",duena));
+        assertTrue(ciclo.consultar(idEncargo,supervisor).facultades().decidir(),"La petición real habilita esa actuación.");
+        var decision=new EncargoService.Decision("APROBAR",pendiente.peticion().version(),versionDe(idEncargo),"Revisión competente del fixture",
+                new EncargoService.RevisionManuscrita(pendiente.peticion().firma().revisionPresentacion(),pendiente.peticion().firma().huellaManifestacion(),true));
+        var propuesta=actuacionesFirmaTest.prepararDecisionEncargo(supervisor,pendiente.peticion().id(),decision,sesion(supervisor),com.controllocal.service.soporte.Procedencia.deLaPantalla());
+        new ActuacionesHumanasC4DePrueba(actuacionesFirmaTest,documentosFirmaTest).confirmar(propuesta,supervisor,sesion(supervisor),EncargoService.Peticion.class);
+        assertFalse(ciclo.consultar(idEncargo,duena).facultades().editar(),"Los términos aceptados no admiten edición ordinaria.");
+        assertFalse(ciclo.consultar(idEncargo,supervisor).facultades().decidir());
+        assertTrue(ciclo.consultar(idEncargo,supervisor).facultades().finalizar());
+        assertFalse(ciclo.consultar(idEncargo,supervisor).facultades().reasignar(),"No se reescriben términos aceptados.");
+        // La fachada conservada sólo anuncia su comando vigente de reasignación; no revive las tres rutas retiradas.
+        var legado=captaciones.obtener(idEncargo,supervisor);
+        assertEquals(legado.capacidades(),captaciones.obtenerPorCodigo(legado.codigoCaptacion(),supervisor).capacidades());
+        assertTrue(captaciones.listar(new CaptacionService.FiltrosCaptacion(null,null,null,1,20),supervisor)
+                .items().stream().allMatch(f->f.capacidades()==null));
     }
 
     // ==================================================================
@@ -793,15 +826,16 @@ class AutoridadDeEdicionIntegrationTest {
                         + "y solo comprobaba el tenant");
 
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> publicaciones.crearEnEncargo(idEncargo, anuncio(), ajena),
+                () -> preparacionPublicacion().publicar(publicaciones,idEncargo, anuncio(), ajena),
                 "publicar escribe un hito `P` en la serie del encargo: es la tercera puerta");
 
         assertEquals(uAntes, hitosDeEncargo(idEncargo, "U"), "ni un `U` de mas");
         assertEquals(pAntes, hitosDeEncargo(idEncargo, "P"), "ni un `P` de mas");
 
-        // CONTROL POSITIVO: su agente si escribe, o esta prueba estaria
-        // midiendo un sistema que no deja escribir a nadie.
-        publicaciones.crearEnEncargo(idEncargo, anuncio(), duena);
+        // El positivo se habilita mediante petición, evidencia y revisión reales del fixture.
+        prepararFisica(idPropiedad,duena);
+        banco().habilitarExistente(idEncargo,casoComercial(idPropiedad,"ALQUILER",duena));
+        preparacionPublicacion().publicar(publicaciones,idEncargo, anuncio(), duena);
         assertTrue(hitosDeEncargo(idEncargo, "P") > pAntes,
                 "el agente del encargo si publica y su hito si entra");
     }
@@ -986,7 +1020,7 @@ class AutoridadDeEdicionIntegrationTest {
         // La otra agente la prospecta y la capta en VENTA: encargo nuevo suyo
         // sobre una propiedad que no es suya.
         long idProspeccion = prospecciones.registrar(
-                new ProspeccionService.DatosProspeccion(idPropiedad, "La retoma otra agente"),
+                new ProspeccionService.DatosProspeccion(idPropiedad, "La retoma otra agente", null),
                 otra).id();
         prospecciones.contactar(idProspeccion, otra);
         prospecciones.captar(idProspeccion, capturaDeVenta(), otra);
@@ -1007,7 +1041,7 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrar(duena, "ALQUILER");
         int altasAntes = altasDe(idPropiedad);
 
-        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+        abrirVentaCon(idPropiedad, otra);
 
         assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
                 "abrir una VENTA no cambia quien responde por el inmueble: son autoridades "
@@ -1023,7 +1057,7 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrar(duena, "ALQUILER");
         dejarSinResponsable(idPropiedad);
 
-        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+        abrirVentaCon(idPropiedad, otra);
 
         assertNull(responsableDe(idPropiedad),
                 "una propiedad historica sin responsable NO se adopta abriendole un encargo: "
@@ -1046,12 +1080,13 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrar(duena, "ALQUILER");
 
         // Puerta 1: abrirle un encargo.
-        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+        abrirVentaCon(idPropiedad, otra);
         assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
 
         // Puerta 2: operar ese encargo propio -- legitimo, y sin efecto aqui.
-        propiedades.editar(idPropiedad,
-                edicionDeEncargo("VENTA", new BigDecimal("410000"), "USD"), otra);
+        long idVenta=unEncargoDe(idPropiedad,"V");
+        ciclo.editar(idVenta,edicionVenta(versionDe(idVenta),new BigDecimal("410000"),"USD"),
+                otra,sesion(otra),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
                 "operar un encargo propio no concede la ficha: son tres autoridades");
 
@@ -1097,30 +1132,30 @@ class AutoridadDeEdicionIntegrationTest {
     // ==================================================================
 
     private long registrar(Actor quien, String operacion) {
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso P0",
                 new Ubicacion("Av. Autoridad " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
                 List.of(new OperacionSolicitada(operacion, new BigDecimal("3000"), "PEN",
-                        null, null, null, null, null, null, null)),
+                        null, null, null, null, Boolean.FALSE, null, null)),
                 null), quien).idPropiedad();
     }
 
     private long registrarConVentaYAlquiler(Actor quien) {
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso P0 con dos encargos",
                 new Ubicacion("Av. Dos Encargos " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("350000"), "USD",
-                                null, null, null, null, null, null, null),
+                                null, null, null, null, Boolean.FALSE, null, null),
                         new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
-                                null, null, null, null, null, null, null)),
+                                null, null, null, null, Boolean.FALSE, null, null)),
                 null), quien).idPropiedad();
     }
 
@@ -1130,27 +1165,31 @@ class AutoridadDeEdicionIntegrationTest {
      */
     private long registrarPorCanal(Actor quien, String canalDeclarado) {
         return propiedades.registrar(new ComandoRegistro(UUID.randomUUID().toString(),
-                canal(canalDeclarado), null, "DEPARTAMENTO", null,
+                canal(canalDeclarado), null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso P0 por " + canalDeclarado,
                 new Ubicacion("Av. Canal " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("3000"), "PEN",
-                        null, null, null, null, null, null, null)),
+                        null, null, null, null, Boolean.FALSE, null, null)),
                 null), quien).idPropiedad();
     }
 
     /** Un encargo de VENTA sobre una propiedad que YA existe. */
-    private CaptacionService.DatosCaptacion nuevoEncargoDeVenta(long idPropiedad, Actor deQuien) {
-        return new CaptacionService.DatosCaptacion(
-                "CAP-P0-" + UUID.randomUUID().toString().substring(0, 8),
-                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
-                null, "Encargo sobre una propiedad existente",
-                idPropiedad, deQuien.idRolOperativo(), "VENTA", 3, Boolean.FALSE,
-                "VENTA", new BigDecimal("400000"), "USD",
-                "P", "V", new BigDecimal("3"), "USD", "I", null);
+    private long abrirVentaCon(long idPropiedad, Actor deQuien) {
+        // La prospección propia establece una relación física real, sin atribuir su edición.
+        prospecciones.registrar(new com.controllocal.service.ProspeccionService.DatosProspeccion(
+                idPropiedad,"Prospección explícita de TEST para abrir su propio Encargo",null),deQuien);
+        return new TransactionTemplate(gestor).execute(tx -> ciclo.abrir(
+                new EncargoService.DatosApertura(idPropiedad,deQuien.idRolOperativo(),
+                    "ENC-T-"+UUID.randomUUID().toString().substring(0,12),
+                    com.controllocal.domain.inmueble.OperacionInmobiliaria.VENTA,
+                    LocalDate.now(),LocalDate.now().plusMonths(6),false,
+                    "Encargo de venta explícito del fixture",EncargosDePrueba.venta(
+                        new BigDecimal("400000"),"USD",new BigDecimal("0.03"),"PROPIETARIO_TEST","AGENCIA_TEST"),
+                    com.controllocal.service.soporte.Procedencia.deLaPantalla(),List.of()),deQuien).id());
     }
 
     /**
@@ -1165,15 +1204,13 @@ class AutoridadDeEdicionIntegrationTest {
      * comision de un alquiler se calcula sobre la renta mensual y en su misma
      * moneda ({@code CondicionesEconomicas.exigirBaseCoherente}).
      */
-    private CaptacionService.DatosCaptacion edicionDeEncargoDeAlquiler(
-            long idPropiedad, Actor deQuien, BigDecimal importe, Boolean exclusividad) {
-        return new CaptacionService.DatosCaptacion(
-                "CAP-P0-" + UUID.randomUUID().toString().substring(0, 8),
-                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
-                null, "Edicion del encargo de alquiler",
-                idPropiedad, deQuien.idRolOperativo(), "ALQUILER", 4, exclusividad,
-                "ALQUILER", importe, "PEN",
-                "P", "R", new BigDecimal("5"), "PEN", "I", null);
+    private EncargoService.Edicion edicionDeEncargoDeAlquiler(
+            long versionEsperada, BigDecimal importe, Boolean exclusividad) {
+        return new EncargoService.Edicion(versionEsperada,LocalDate.now(),LocalDate.now().plusMonths(6),
+                exclusividad,"Edición explícita del fixture",
+                new EncargoService.Condiciones(importe,"PEN","MENSUAL","P","R",new BigDecimal("0.05"),
+                    "PEN","I",null,"FIRMA_CONTRATO","PROPIETARIO_TEST","AGENCIA_TEST",
+                    "AL_FIRMAR","PACTO_FICTICIO_TEST",List.of(),null,null),"Corrección acordada del importe",null,null);
     }
 
     /** Las condiciones con las que se capta una prospeccion, en VENTA. */
@@ -1191,17 +1228,17 @@ class AutoridadDeEdicionIntegrationTest {
         return n == null ? 0 : n;
     }
 
-    private ComandoEdicion edicionDeFicha(String descripcion) {
-        return edicionDeFicha(descripcion, null);
+    private ComandoEdicion edicionDeFicha(long idPropiedad,String descripcion) {
+        return edicionDeFicha(idPropiedad,descripcion, null);
     }
 
     /**
      * Una edicion que toca SOLO la ficha fisica: ni operaciones ni condiciones.
      * Es la que tiene que pedir la autoridad de la PROPIEDAD.
      */
-    private ComandoEdicion edicionDeFicha(String descripcion, String canal) {
+    private ComandoEdicion edicionDeFicha(long idPropiedad,String descripcion, String canal) {
         return new ComandoEdicion(UUID.randomUUID().toString(), canal(canal), descripcion,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null).conVersion(versionFisicaDe(idPropiedad));
     }
 
     /**
@@ -1209,9 +1246,7 @@ class AutoridadDeEdicionIntegrationTest {
      * ni atributos, y por eso no pide la autoridad de la propiedad: es lo que
      * permite que su agente lo siga operando aunque la propiedad este FALTANTE.
      */
-    private ComandoEdicion edicionDeEncargo(String operacion, BigDecimal importe) {
-        return edicionDeEncargo(operacion, importe, "PEN");
-    }
+    
 
     /**
      * La moneda se declara porque no es decorativa: {@code ck_condicion_tipo_base}
@@ -1219,18 +1254,15 @@ class AutoridadDeEdicionIntegrationTest {
      * asi que cambiar el importe de un encargo en USD mandando PEN rompe la
      * invariante economica -- y con razon.
      */
-    private ComandoEdicion edicionDeEncargo(String operacion, BigDecimal importe, String moneda) {
-        return new ComandoEdicion(UUID.randomUUID().toString(), null, null, null, null, null,
-                List.of(new OperacionSolicitada(operacion, importe, moneda,
-                        null, null, null, null, null, null, null)),
-                null, null);
+    private EncargoService.Edicion edicionVenta(long version,BigDecimal importe,String moneda) {
+        return new EncargoService.Edicion(version,LocalDate.now(),LocalDate.now().plusMonths(6),false,
+                "Edición de venta de TEST",EncargosDePrueba.venta(importe,moneda,new BigDecimal("0.03"),
+                        "PROPIETARIO_TEST","AGENCIA_TEST"),"Nuevo importe acordado",null,null);
     }
 
-    private ComandoEdicion edicionDeCondiciones(long idEncargo) {
-        return new ComandoEdicion(UUID.randomUUID().toString(), null, null, null, null, null,
-                null, null,
-                List.of(new CondicionesDeEncargo(idEncargo,
-                        List.of(new ValorAtributo("garantia_meses", "2")), null)));
+    private EncargoService.Edicion edicionDeCondiciones(long version) {
+        return new EncargoService.Edicion(version,null,null,null,null,null,
+                "Condiciones comerciales explícitas de TEST",List.of(new ValorAtributo("garantia_meses", "2")),List.of());
     }
 
     /** El canal declarado por el cliente, que es lo unico que separa Web de KAIROS. */
@@ -1239,8 +1271,8 @@ class AutoridadDeEdicionIntegrationTest {
                 : com.controllocal.service.soporte.Procedencia.deCabecera(canal);
     }
 
-    private PublicacionService.DatosPublicacion anuncio() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null,
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio anuncio() {
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio("WEB_PROPIA", null,
                 new BigDecimal("2500"), "PEN", "Anuncio P0 " + UUID.randomUUID(), null, null);
     }
 
@@ -1302,11 +1334,7 @@ class AutoridadDeEdicionIntegrationTest {
     }
 
     /** El gobierno del tenant, con la misma identidad y otra banda. */
-    private Actor tenantAdmin() {
-        Actor base = broker();
-        return new Actor(base.idOrganizacion(), base.idPersona(), base.idRolOperativo(),
-                Actor.TENANT_ADMIN);
-    }
+    private Actor tenantAdmin() {return sesiones().gobiernoDe(broker().idOrganizacion());}
 
     // ------------------------------------------------------------------
     // Lecturas directas
@@ -1379,7 +1407,7 @@ class AutoridadDeEdicionIntegrationTest {
     private long unEncargoDe(long idPropiedad, String operacion) {
         return jdbc.queryForObject("""
                 select id_captacion from captacion
-                 where id_propiedad = ? and motivo_operacion = ? and estado <> 'C'
+                 where id_propiedad = ? and motivo_operacion = ? and estado in ('P','A')
                  order by id_captacion desc limit 1
                 """, Long.class, idPropiedad, operacion);
     }
@@ -1388,7 +1416,7 @@ class AutoridadDeEdicionIntegrationTest {
         Map<String, Long> porOperacion = new java.util.LinkedHashMap<>();
         jdbc.queryForList("""
                 select motivo_operacion, id_rol_agente from captacion
-                 where id_propiedad = ? and estado <> 'C' order by motivo_operacion
+                 where id_propiedad = ? and estado in ('P','A') order by motivo_operacion
                 """, idPropiedad).forEach(fila -> porOperacion.put(
                         (String) fila.get("motivo_operacion"),
                         ((Number) fila.get("id_rol_agente")).longValue()));
@@ -1404,7 +1432,7 @@ class AutoridadDeEdicionIntegrationTest {
                   from captacion cap
                   join condicion_economica_captacion c
                     on c.id_condicion_economica = cap.id_condicion_economica
-                 where cap.id_propiedad = ? and cap.motivo_operacion = ? and cap.estado <> 'C'
+                 where cap.id_propiedad = ? and cap.motivo_operacion = ? and cap.estado in ('P','A')
                  order by cap.id_captacion desc limit 1
                 """, BigDecimal.class, idPropiedad, operacion);
     }
@@ -1443,4 +1471,35 @@ class AutoridadDeEdicionIntegrationTest {
                  where table_name = ? and column_name = ?
                 """, String.class, tabla, columna));
     }
+    /** Versión observada por el montaje ANTES del comando o de abrir la carrera. */
+    private long versionDe(long idEncargo) {
+        return jdbc.queryForObject("select version from captacion where id_captacion=?",Long.class,idEncargo);
+    }
+    /** El atacante puede conocer la versión; no constituye autorización sobre el recurso. */
+    private long versionFisicaDe(long idPropiedad) {
+        return jdbc.queryForObject("select version_fisica from propiedad where id_propiedad=?",Long.class,idPropiedad);
+    }
+
+    private EncargosDePrueba.Caso casoComercial(long id,String operacion,Actor responsable) {
+        var op=com.controllocal.domain.inmueble.OperacionInmobiliaria.desde(operacion);
+        var condiciones=op==com.controllocal.domain.inmueble.OperacionInmobiliaria.VENTA
+                ?EncargosDePrueba.venta(new BigDecimal("400000"),"USD",new BigDecimal("0.03"),"PROPIETARIO_TEST","AGENCIA_TEST")
+                :EncargosDePrueba.alquiler(new BigDecimal("3000"),"PEN",BigDecimal.ONE,"PROPIETARIO_TEST","AGENCIA_TEST");
+        Actor supervisor=broker();
+        return new EncargosDePrueba.Caso(id,op,LocalDate.now(),LocalDate.now().plusMonths(6),false,condiciones,
+                new EncargosDePrueba.Actuante(responsable,sesion(responsable)),new EncargosDePrueba.Actuante(supervisor,sesion(supervisor)));
+    }
+    private void prepararFisica(long id,Actor responsable) {
+        var conocido=com.controllocal.service.captura.SuficienciaInmueble.EstadoDato.CONOCIDO;
+        var aplica=com.controllocal.service.captura.SuficienciaInmueble.Aplicabilidad.APLICA;
+        var contexto=new com.controllocal.service.captura.SuficienciaInmueble.Contexto("D","V","Departamento 101 ficticio "+id,null,
+                Map.of("unidadDeEdificio",aplica,"mantenimiento",aplica),java.util.Set.of());
+        propiedades.editar(id,new ComandoEdicion(UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla(),
+                null,null,null,List.of(new ValorAtributo("metraje_total","90",null,null,"DECLARADO",null,null,
+                                "DOCUMENTO_FICTICIO_90M2",new PropiedadUniversalService.MetadatosDeCaptura(conocido,"AREA_TOTAL",null,null,false)),
+                        new ValorAtributo("dormitorios","3"),new ValorAtributo("banos","2"),new ValorAtributo("piso","3"),
+                        new ValorAtributo("ascensores","1"),new ValorAtributo("cuota_mantenimiento","100","PEN",null,null,null,null,"PACTO_FICTICIO_MANTENIMIENTO")),
+                null,null,null,contexto).conVersion(versionFisicaDe(id)),responsable);
+    }
+
 }

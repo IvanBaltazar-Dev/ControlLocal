@@ -1,303 +1,72 @@
 package com.controllocal.service.impl;
+import com.controllocal.service.*;
+import com.controllocal.service.ReportePropietarioService.*;
+import com.controllocal.service.InteraccionService.*;
+import com.controllocal.service.actividad.*;
+import com.controllocal.service.encargo.*;
+import com.controllocal.service.soporte.*;
+import com.controllocal.service.documentos.*;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.service.impl.ReportePropietarioServiceImpl.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
+import org.junit.jupiter.api.*;
+import java.time.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.ReportePropietario;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.persistence.repositorio.CaptacionRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
-import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
-import com.controllocal.persistence.repositorio.ReportePropietarioRepository;
-import com.controllocal.persistence.repositorio.VisitaRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.ReportePropietarioService.DatosReporte;
-import com.controllocal.service.ReportePropietarioService.FichaReporte;
-import com.controllocal.service.ReportePropietarioService.ResumenAvance;
-import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
-import com.controllocal.service.excepcion.NoEncontradoException;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Alcances;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
-
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda E2: alcance por tenant/rol, resumen derivado, defaults y mensajes del
- * ReportesPropietarioRest v1. Los valores que envia el cliente para los tres
- * derivados se prueban expresamente como no autoritativos.
- */
+/** RF078/079 conserva autoridad original antes de leer cuerpos e historia sin reinterpretación. */
 class ReportePropietarioServiceImplTest {
-
-    private static final long ORG = 1L;
-    private static final long ID_CAPTACION = 9L;
-    private static final long ID_AGENTE = 30L;
-
-    private final ReportePropietarioRepository reportes =
-            mock(ReportePropietarioRepository.class);
-    private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final InteraccionComercialRepository interacciones =
-            mock(InteraccionComercialRepository.class);
-    private final VisitaRepository visitas = mock(VisitaRepository.class);
-    private final MotivoNoContinuidadRepository motivos =
-            mock(MotivoNoContinuidadRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
-
-    private final ReportePropietarioServiceImpl service =
-            new ReportePropietarioServiceImpl(
-                    reportes, captaciones, interacciones, visitas, motivos, alcances);
-
-    private final Actor agente = new Actor(ORG, 3L, ID_AGENTE, "AGENTE");
-    private final Actor otroAgente = new Actor(ORG, 4L, 31L, "AGENTE");
-    private final Actor broker = new Actor(ORG, 2L, 23L, "BROKER");
-    private final Actor admin = new Actor(ORG, 1L, 20L, "TENANT_ADMIN");
-
-    @Test
-    void listarFiltraPorTenantYCaptacionYMapeaLaFormaCongelada() {
-        Captacion captacion = visiblePara(admin);
-        ReportePropietario reporte = reporte(captacion, 77L);
-        when(reportes.listarPorCaptacion(ORG, ID_CAPTACION)).thenReturn(List.of(reporte));
-
-        List<FichaReporte> resultado = service.listar(ID_CAPTACION, admin);
-
-        assertEquals(1, resultado.size());
-        FichaReporte ficha = resultado.getFirst();
-        assertEquals(77L, ficha.id());
-        assertEquals(ID_CAPTACION, ficha.idCaptacion());
-        assertEquals(ID_AGENTE, ficha.idAgente());
-        assertEquals("E", ficha.canalEnvio());
-        assertNotNull(ficha.fechaCreacion());
-        verify(reportes).listarPorCaptacion(ORG, ID_CAPTACION);
+    final ReporteAvanceRepository repo=mock(ReporteAvanceRepository.class);
+    final AvanceDeReporte avance=mock(AvanceDeReporte.class);
+    final AccesoEncargo acceso=mock(AccesoEncargo.class);
+    final ContextosDeActividad contexto=mock(ContextosDeActividad.class);
+    final ContactosDeInteraccion contactos=mock(ContactosDeInteraccion.class);
+    final InteraccionService interacciones=mock(InteraccionService.class);
+    final AccesoOportunidad oportunidades=mock(AccesoOportunidad.class);
+    final ActividadInformeC7Repository actividad=mock(ActividadInformeC7Repository.class);
+    final ObjectMapper mapper=new ObjectMapper().findAndRegisterModules();final Documentos json=new Documentos(mapper);
+    final ComandoIdempotenteRepository recibos=mock(ComandoIdempotenteRepository.class);
+    final ComandosIdempotentes comandos=mock(ComandosIdempotentes.class);
+    final EventoDominioRepository eventos=mock(EventoDominioRepository.class);
+    final ArchivoEncargoRepository archivos=mock(ArchivoEncargoRepository.class);
+    @SuppressWarnings("unchecked") final ObjectProvider<DocumentosReporteAvance> pdf=mock(ObjectProvider.class);
+    @SuppressWarnings("unchecked") final ObjectProvider<AccesoArchivoEncargo> accesoArchivos=mock(ObjectProvider.class);
+    final ReportePropietarioServiceImpl s=new ReportePropietarioServiceImpl(repo,avance,acceso,contexto,contactos,interacciones,oportunidades,actividad,json,recibos,comandos,eventos,archivos,pdf,accesoArchivos);
+    final Actor agente=new Actor(1,3,30,"AGENTE"),broker=new Actor(1,2,23,"BROKER"),admin=new Actor(1,1,20,"TENANT_ADMIN");
+    final Instant ahora=Instant.parse("2026-11-10T12:00:00Z");final Referencia ref=new Referencia(UUID.randomUUID(),0L);
+    final ReferenciaContactoContextual contacto=new ReferenciaContactoContextual(TipoContacto.PERSONA,44L,null,null);
+    final ReferenciaVersion fuente=new ReferenciaVersion(88,2);
+    final UUID archivo=UUID.randomUUID();
+    ReporteAvanceRepository.Cabecera cabecera;
+    @BeforeEach void montar(){
+        var fuentes=new Fuentes(List.of(fuente),List.of(new ActividadInformeC7Repository.Fuente("ENCARGO",9,3)),new FuenteContacto(contacto,44));
+        cabecera=new ReporteAvanceRepository.Cabecera(77,ref.referencia(),ref.version(),9,30,LocalDate.of(2026,11,1),LocalDate.of(2026,11,10),ahora,"Avance",json.objetoCanonico(fuentes),archivo,ahora);
+        when(repo.version(1,ref.referencia(),0)).thenReturn(Optional.of(cabecera));when(repo.porId(1,77)).thenReturn(Optional.of(cabecera));
+        var hechos=new Hechos(4,1,2,1,0,2,1,Map.of("Sin respuesta",1),"Actividad autorizada registrada; no todo el mercado.");
+        var v=new VistaPrevia(9,"ENC-TEST","VENTA","APROBADO",3,cabecera.desde(),cabecera.hasta(),ahora,hechos,List.of());
+        var f=new FichaReporte(ref,9,ReportePropietarioService.PLANTILLA,new PersonaDestinataria(44,"Gestora TEST","Recibe propuestas","Declaración de la gestora"),"Avance",v,List.of("Recomendación profesional"),null,ahora);
+        when(repo.contenido(1,77)).thenReturn(Optional.of(json.objetoCanonico(f)));when(contactos.comprobar(contacto,44L,agente)).thenReturn(44L);
+        when(contexto.ahora()).thenReturn(ahora);when(contexto.hoy()).thenReturn(LocalDate.of(2026,11,10));
     }
-
-    @Test
-    void unaCaptacionDeOtroTenantEs404AntesDeEvaluarElRol() {
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION)).thenReturn(Optional.empty());
-
-        NoEncontradoException error = assertThrows(NoEncontradoException.class,
-                () -> service.listar(ID_CAPTACION, admin));
-
-        assertEquals("Captacion no encontrado.", error.getMessage());
-        verifyNoInteractions(alcances, reportes);
-    }
-
-    @Test
-    void unaCaptacionFueraDelEquipoEs403() {
-        Captacion captacion = captacion();
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION)).thenReturn(Optional.of(captacion));
-        when(alcances.alcanza(broker, ID_AGENTE)).thenReturn(false);
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.preview(ID_CAPTACION, null, null, broker));
-
-        verifyNoInteractions(interacciones, visitas, motivos);
-    }
-
-    @Test
-    void previewUsaRangoInclusivoYTraduceLasObjecionesPorFrecuencia() {
-        visiblePara(broker);
-        LocalDate desde = LocalDate.of(2026, 7, 1);
-        LocalDate hasta = LocalDate.of(2026, 7, 15);
-        OffsetDateTime desdeInstante = inicio(desde);
-        OffsetDateTime hastaExclusiva = inicio(hasta.plusDays(1));
-        when(interacciones.contarParaReporte(
-                ORG, ID_CAPTACION, desdeInstante, hastaExclusiva)).thenReturn(4L);
-        when(visitas.contarRealizadasParaReporte(
-                ORG, ID_CAPTACION, desde, hasta)).thenReturn(2L);
-        when(motivos.contarParaReporte(
-                ORG, ID_CAPTACION, desdeInstante, hastaExclusiva))
-                .thenReturn(List.of(new Object[]{"P", 3L}, new Object[]{"U", 1L}));
-
-        ResumenAvance resumen =
-                service.preview(ID_CAPTACION, desde, hasta, broker);
-
-        assertEquals(4, resumen.consultas());
-        assertEquals(2, resumen.visitas());
-        assertEquals("Precio (3), Ubicacion (1)", resumen.objeciones());
-    }
-
-    @Test
-    void previewSinObjecionesDevuelveCadenaVacia() {
-        visiblePara(agente);
-        OffsetDateTime desde = inicio(LocalDate.of(1, 1, 1));
-        OffsetDateTime hastaExclusiva = inicio(LocalDate.of(9999, 12, 31));
-        when(interacciones.contarParaReporte(
-                ORG, ID_CAPTACION, desde, hastaExclusiva))
-                .thenReturn(0L);
-        when(visitas.contarRealizadasParaReporte(
-                ORG, ID_CAPTACION, LocalDate.of(1, 1, 1),
-                LocalDate.of(9999, 12, 30)))
-                .thenReturn(0L);
-        when(motivos.contarParaReporte(
-                ORG, ID_CAPTACION, desde, hastaExclusiva))
-                .thenReturn(List.of());
-
-        ResumenAvance resumen =
-                service.preview(ID_CAPTACION, null, null, agente);
-
-        assertEquals("", resumen.objeciones());
-    }
-
-    @Test
-    void registrarSinCuerpoConservaElMensajeV1() {
-        propia();
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(ID_CAPTACION, null, agente));
-
-        assertEquals("Los datos del reporte son obligatorios.", error.getMessage());
-        verifyNoInteractions(interacciones, visitas, motivos, reportes);
-    }
-
-    @Test
-    void registrarValidaElPeriodoAntesDeConsultarLaActividad() {
-        propia();
-        DatosReporte datos = datos(
-                LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1), "E");
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(ID_CAPTACION, datos, agente));
-
-        assertEquals("El fin del periodo no puede ser anterior al inicio.",
-                error.getMessage());
-        verifyNoInteractions(interacciones, visitas, motivos, reportes);
-    }
-
-    @Test
-    void registrarRechazaUnCanalDesconocidoConElMensajeExacto() {
-        propia();
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(ID_CAPTACION, datos(null, null, " X "), agente));
-
-        assertEquals("Canal de envío no válido:  X ", error.getMessage());
-        verifyNoInteractions(interacciones, visitas, motivos, reportes);
-    }
-
-    @Test
-    void registrarIgnoraLosDerivadosDelClienteYAplicaEmailPorDefecto() {
-        Captacion captacion = propia();
-        OffsetDateTime desde = inicio(LocalDate.of(1, 1, 1));
-        OffsetDateTime hastaExclusiva = inicio(LocalDate.of(9999, 12, 31));
-        when(interacciones.contarParaReporte(
-                ORG, ID_CAPTACION, desde, hastaExclusiva))
-                .thenReturn(5L);
-        when(visitas.contarRealizadasParaReporte(
-                ORG, ID_CAPTACION, LocalDate.of(1, 1, 1),
-                LocalDate.of(9999, 12, 30)))
-                .thenReturn(2L);
-        when(motivos.contarParaReporte(
-                ORG, ID_CAPTACION, desde, hastaExclusiva))
-                .thenReturn(List.<Object[]>of(new Object[]{"C", 2L}));
-        when(reportes.saveAndFlush(any(ReportePropietario.class))).thenAnswer(invocacion -> {
-            ReportePropietario guardado = invocacion.getArgument(0);
-            ReflectionTestUtils.setField(guardado, "id", 88L);
-            return guardado;
-        });
-        DatosReporte manipulados = new DatosReporte(
-                null, null, -999, -888, "Texto del cliente",
-                "Ajustar precio", " ");
-
-        FichaReporte creado =
-                service.registrar(ID_CAPTACION, manipulados, agente);
-
-        assertEquals(88L, creado.id());
-        assertEquals(5, creado.consultasReportadas());
-        assertEquals(2, creado.visitasReportadas());
-        assertEquals("Condiciones del contrato (2)", creado.objecionesFrecuentes());
-        assertEquals("Ajustar precio", creado.ajustesRecomendados());
-        assertEquals("E", creado.canalEnvio());
-        assertEquals(captacion.getAgente().getId(), creado.idAgente());
-        assertNotNull(creado.fechaCreacion());
-
-        ArgumentCaptor<ReportePropietario> captor =
-                ArgumentCaptor.forClass(ReportePropietario.class);
-        verify(reportes).saveAndFlush(captor.capture());
-        assertEquals(ORG, captor.getValue().getOrganizacionId());
-    }
-
-    @Test
-    void elAgenteNoPuedeRegistrarSobreLaCaptacionDeOtroAgente() {
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION))
-                .thenReturn(Optional.of(captacion()));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(
-                        ID_CAPTACION, datos(null, null, "E"), otroAgente));
-
-        verifyNoInteractions(interacciones, visitas, motivos, reportes);
-    }
-
-    @Test
-    void niBrokerNiAdminPuedenSaltarElGateDelServiceParaRegistrar() {
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION))
-                .thenReturn(Optional.of(captacion()));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(ID_CAPTACION, datos(null, null, "E"), broker));
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(ID_CAPTACION, datos(null, null, "E"), admin));
-
-        verifyNoInteractions(interacciones, visitas, motivos, reportes);
-    }
-
-    private Captacion visiblePara(Actor actor) {
-        Captacion captacion = captacion();
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION))
-                .thenReturn(Optional.of(captacion));
-        when(alcances.alcanza(actor, ID_AGENTE)).thenReturn(true);
-        return captacion;
-    }
-
-    private Captacion propia() {
-        Captacion captacion = captacion();
-        when(captaciones.buscarFicha(ORG, ID_CAPTACION))
-                .thenReturn(Optional.of(captacion));
-        return captacion;
-    }
-
-    private static Captacion captacion() {
-        Captacion captacion = new Captacion();
-        ReflectionTestUtils.setField(captacion, "id", ID_CAPTACION);
-        DetalleAgente agente = new DetalleAgente();
-        ReflectionTestUtils.setField(agente, "id", ID_AGENTE);
-        captacion.setAgente(agente);
-        captacion.setOrganizacionId(ORG);
-        return captacion;
-    }
-
-    private static ReportePropietario reporte(Captacion captacion, long id) {
-        ReportePropietario reporte = new ReportePropietario();
-        ReflectionTestUtils.setField(reporte, "id", id);
-        reporte.setOrganizacionId(ORG);
-        reporte.setCaptacion(captacion);
-        reporte.setAgente(captacion.getAgente());
-        reporte.setFechaReporte(LocalDate.of(2026, 7, 29));
-        reporte.setConsultasReportadas(4);
-        reporte.setVisitasReportadas(2);
-        reporte.setCanalEnvio("E");
-        reporte.setFechaCreacion(OffsetDateTime.now());
-        return reporte;
-    }
-
-    private static DatosReporte datos(LocalDate inicio, LocalDate fin, String canal) {
-        return new DatosReporte(inicio, fin, 0, 0, null, null, canal);
-    }
-
-    private static OffsetDateTime inicio(LocalDate fecha) {
-        return fecha.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
-    }
+    @Test void consultaConservaHechosCongeladosSinRecalcularNiDeclararArchivo(){var f=s.consultar(ref,agente);assertEquals(2,f.avance().hechos().consultasComercialesRegistradas());assertEquals(4,f.avance().hechos().comunicacionesRegistradas());assertEquals(0L,f.reporte().version());assertNull(f.archivo());verifyNoInteractions(avance,pdf,comandos);}
+    @Test void permisoDelEncargoSeCompruebaAntesDelCuerpo(){doThrow(new AccesoNoAutorizadoException()).when(acceso).exigirLectura(9,agente);assertThrows(AccesoNoAutorizadoException.class,()->s.consultar(ref,agente));verify(repo,never()).contenido(anyLong(),anyLong());}
+    @Test void permisoDelContactoOriginalSeCompruebaAntesDelCuerpo(){doThrow(new NoEncontradoException("Contacto")).when(contactos).comprobar(contacto,44L,agente);assertThrows(NoEncontradoException.class,()->s.consultar(ref,agente));verify(repo,never()).contenido(anyLong(),anyLong());}
+    @Test void revocarUnaInteraccionImpideRevelarElAgregado(){doThrow(new AccesoNoAutorizadoException()).when(interacciones).exigirVersiones(List.of(fuente),agente,FinalidadLectura.REPORTE_PROPIETARIO);assertThrows(AccesoNoAutorizadoException.class,()->s.consultar(ref,agente));verify(repo,never()).contenido(anyLong(),anyLong());}
+    @Test void revocacionDuranteLaLecturaDescartaLaSalida(){doNothing().doThrow(new AccesoNoAutorizadoException()).when(acceso).exigirLectura(9,agente);assertThrows(AccesoNoAutorizadoException.class,()->s.consultar(ref,agente));}
+    @Test void otraOrganizacionConsultaSuPropioAmbitoYNoHidrata(){var b=new Actor(2,13,130,"AGENTE");assertThrows(NoEncontradoException.class,()->s.consultar(ref,b));verify(repo).version(2,ref.referencia(),0);verify(repo,never()).contenido(anyLong(),anyLong());}
+    @Test void administrarNoConcedeLecturaComercial(){doThrow(new AccesoNoAutorizadoException()).when(contexto).exigirOperador(admin);assertThrows(AccesoNoAutorizadoException.class,()->s.consultar(ref,admin));verify(repo,never()).version(anyLong(),any(),anyLong());}
+    @Test void noSeAsumeVersionCeroSiFalta(){assertThrows(ReglaNegocioException.class,()->s.consultar(new Referencia(ref.referencia(),null),agente));verify(repo,never()).contenido(anyLong(),anyLong());}
+    @Test void listadoAutorizaAntesDeRevelarCabeceras(){when(repo.listar(1,9,1,20)).thenReturn(List.of(cabecera));doThrow(new AccesoNoAutorizadoException()).when(contactos).comprobar(contacto,44L,agente);assertThrows(AccesoNoAutorizadoException.class,()->s.listar(9,1,20,agente));}
+    @Test void antecedenteSinFuentesNoInventaUnaPoblacionVacia(){var h=new ReporteAvanceRepository.Cabecera(77,null,null,9,30,null,null,null,null,null,null,ahora);when(repo.porId(1,77)).thenReturn(Optional.of(h));assertThrows(AccesoNoAutorizadoException.class,()->s.consultarAntecedente(77,agente));verify(repo,never()).antecedente(anyLong(),anyLong());}
+    @Test void antecedenteConocidoNoSeConvierteEnVersionNiComunicacion(){String fuentes=json.objeto(Map.of("versionEsquema",1,"idEncargo",9,"interacciones",List.of(fuente)));
+        var h=new ReporteAvanceRepository.Cabecera(77,null,null,9,30,null,null,null,null,fuentes,null,ahora);when(repo.porId(1,77)).thenReturn(Optional.of(h));
+        when(repo.antecedente(1,77)).thenReturn(Optional.of(new ReporteAvanceRepository.Antecedente(77,LocalDate.of(2026,10,1),null,null,1,2,"NOTA_PRIVADA","TEL_PRIVADO","E",ahora)));
+        String resultado=json.objetoCanonico(s.consultarAntecedente(77,agente));assertFalse(resultado.contains("NOTA_PRIVADA"));assertFalse(resultado.contains("TEL_PRIVADO"));assertTrue(resultado.contains("contadorHistoricoInteracciones"));verifyNoInteractions(comandos,eventos,pdf);}
+    @Test void noHayCampoParaContadoresInventadosNiEnvioEnElInput(){String valor="{\"versionEncargo\":3,\"consultasReportadas\":900,\"canalEnvio\":\"W\"}";assertThrows(com.fasterxml.jackson.databind.JsonMappingException.class,()->mapper.copy().disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(valor,DatosReporte.class));}
+    @Test void rechazaPaginacionNoAcotadaAntesDeConsultar(){assertThrows(ReglaNegocioException.class,()->s.listar(9,0,20,agente));assertThrows(ReglaNegocioException.class,()->s.comunicaciones(9,1,101,agente));verify(repo,never()).listar(anyLong(),anyLong(),anyInt(),anyInt());}
+    @Test void previsualizacionUsaLaMismaComposicionCanonica(){var v=json.comoObjeto(repo.contenido(1,77).orElseThrow(),FichaReporte.class).avance();when(avance.preparar(9,cabecera.desde(),cabecera.hasta(),broker)).thenReturn(new AvanceDeReporte.Lectura(v,List.of(fuente),List.of()));assertEquals(v,s.preview(9,cabecera.desde(),cabecera.hasta(),broker));verifyNoInteractions(eventos,comandos,pdf);}
 }

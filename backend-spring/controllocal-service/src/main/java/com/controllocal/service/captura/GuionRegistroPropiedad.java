@@ -2,6 +2,7 @@ package com.controllocal.service.captura;
 
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.service.captura.MotorDeCaptura.Pregunta;
+import com.controllocal.service.soporte.AtributosGobernados;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,8 +15,8 @@ import java.util.Set;
  * <h2>Dos clases de dato, y solo una esta escrita aqui</h2>
  * <ul>
  *   <li><b>Estructural</b>: el tipo, la operacion, el importe, el titular, la
- *       direccion. Son las columnas del modelo y las mismas para los siete
- *       tipos de propiedad, asi que estan declaradas en esta clase.</li>
+ *       direccion. Son las columnas del modelo y las mismas para los tipos
+ *       fisicos de propiedad, asi que estan declaradas en esta clase.</li>
  *   <li><b>De catalogo</b>: dormitorios, metraje, zonificacion... Esas
  *       <b>no</b> estan aqui. Salen de {@code catalogo_atributo} segun el tipo,
  *       y por eso anadir "Almacen" no toca este fichero.</li>
@@ -24,27 +25,26 @@ import java.util.Set;
  * <h2>El orden no es estetico</h2>
  * {@link #TIPO_PROPIEDAD} va primero porque <b>decide todo lo demas</b>: hasta
  * saber si es un terreno o un departamento, el catalogo no puede decir si toca
- * preguntar dormitorios o zonificacion. Detras va la operacion, porque decide
- * si el importe que viene despues es un precio de venta o una renta mensual —
- * y si se pregunta el importe antes que la operacion, hay un numero guardado
- * que no significa nada.
+ * preguntar dormitorios o zonificacion. La {@link #OPERACIONES} se pregunta
+ * en la apertura para conocer la intencion comercial, pero es opcional al
+ * registrar la cosa fisica; sus importes solo aparecen cuando se declara una
+ * operacion.
  *
- * <p>Despues, lo que identifica: quien es el titular y donde esta. Y al final
- * los atributos del catalogo, que son los que mas varian y los que menos
- * bloquean.
+ * <p>Los datos minimos de ubicacion completan la identificacion de la
+ * propiedad. Titularidad y encargo se conservan si se conocen y solo bloquean
+ * cuando se declara una operacion que se quiere encargar.
  */
 public final class GuionRegistroPropiedad {
 
-    /** LOCAL, OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN, OTRO. */
+    /** Tipos fisicos que el catalogo y la base admiten, incluido ESTACIONAMIENTO. */
     public static final String TIPO_PROPIEDAD = "tipoPropiedad";
     /**
-     * <b>Que se va a encargar sobre la propiedad</b>: {@code "VENTA"},
+     * <b>Operaciones observadas de la propiedad</b>: {@code "VENTA"},
      * {@code "ALQUILER"} o {@code "VENTA,ALQUILER"}. Nunca se infiere.
      *
-     * <p>Esta en plural porque una propiedad puede ofrecerse para las dos cosas,
-     * y entonces se abren <b>dos encargos independientes</b> sobre una sola
-     * propiedad. Lo que no existe es una operacion combinada: la lista dice
-     * cuantos encargos hay, no inventa un tercer valor
+     * <p>Está en plural porque una oferta observada puede contemplar ambas.
+     * Registrar el físico no abre Encargos ni acredita mandato. La lista
+     * conserva dos intenciones, sin inventar una tercera operación
      * ({@link com.controllocal.domain.inmueble.OperacionInmobiliaria#desdeLista}).
      */
     public static final String OPERACIONES = "operaciones";
@@ -90,69 +90,6 @@ public final class GuionRegistroPropiedad {
     public static final String EDIFICIO = "nombreEdificioGaleria";
     public static final String EXCLUSIVIDAD = "exclusividad";
 
-    /**
-     * Lo estructural obligatorio que <b>no depende de cuantos encargos</b> haya,
-     * en el orden en que se pregunta.
-     *
-     * <p>El importe y la moneda no estan aqui: son de cada encargo y por tanto
-     * hay tantos como operaciones declaradas. La lista completa y ordenada la
-     * da {@link #obligatorias(List)}.
-     */
-    private static final List<String> OBLIGATORIAS_SIN_OPERACION = List.of(
-            TIPO_PROPIEDAD, DIRECCION, DISTRITO);
-
-    /** Lo obligatorio de <b>cada</b> encargo. Una copia por operacion declarada. */
-    private static final List<String> OBLIGATORIAS_DE_CADA_ENCARGO = List.of(IMPORTE, MONEDA);
-
-    /**
-     * <b>Lo estructural obligatorio, en el orden en que se pregunta</b>, ya
-     * desplegado sobre las operaciones que se han declarado.
-     *
-     * <p>El orden no es estetico y se conserva: primero el tipo, que decide que
-     * mas hay que preguntar; despues las operaciones, que deciden si el importe
-     * que viene detras es un precio de venta o una renta; despues <b>la
-     * condicion economica de cada encargo</b>; y al final lo que identifica —de
-     * quien es y donde esta—.
-     *
-     * <p>Con las operaciones todavia sin declarar, la lista llega hasta
-     * {@link #OPERACIONES} y para: no se puede preguntar un importe sin saber
-     * de que es.
-     *
-     * <h2>La operacion se PREGUNTA, pero ya no BLOQUEA</h2>
-     * Sigue estando en la lista y en este orden —decide si el importe que viene
-     * detras es un precio de venta o una renta—, pero salio de
-     * {@link #OBLIGATORIAS_SIN_OPERACION} en V75: una propiedad puede
-     * registrarse para PROSPECTARLA, y entonces todavia no hay ninguna
-     * operacion que declarar. El encargo nace despues, cuando el propietario
-     * acepta.
-     *
-     * <p>Lo que no se afloja: en cuanto se declara una operacion, su importe y
-     * su moneda vuelven a ser obligatorios. Cero operaciones es una respuesta;
-     * una operacion a medias no.
-     *
-     * <h2>Y el TITULAR salio de la misma lista en V76</h2>
-     * Por la misma razon y con el mismo gesto: se puede conocer un inmueble sin
-     * saber de quien es, y obligar a declararlo obligaria a inventarlo. Sigue
-     * preguntandose —y en este orden—, pero ya no impide ejecutar el alta.
-     *
-     * <p>La exigencia no desaparece: se muda al ENCARGO, que es donde sigue
-     * siendo cierta. Conocer un inmueble no es poder venderlo.
-     */
-    public static List<String> obligatorias(List<OperacionInmobiliaria> operaciones) {
-        List<String> ordenadas = new java.util.ArrayList<>();
-        ordenadas.add(TIPO_PROPIEDAD);
-        ordenadas.add(OPERACIONES);
-        for (OperacionInmobiliaria operacion : operaciones == null ? List.<OperacionInmobiliaria>of() : operaciones) {
-            for (String base : OBLIGATORIAS_DE_CADA_ENCARGO) {
-                ordenadas.add(para(base, operacion));
-            }
-        }
-        ordenadas.add(TITULARES);
-        ordenadas.add(DIRECCION);
-        ordenadas.add(DISTRITO);
-        return List.copyOf(ordenadas);
-    }
-
     /** Todo lo estructural que el motor reconoce. Lo demas se busca en el catalogo. */
     public static final List<String> ESTRUCTURALES = List.of(
             TIPO_PROPIEDAD, OPERACIONES, IMPORTE, MONEDA, TITULARES, DIRECCION, DISTRITO,
@@ -180,6 +117,59 @@ public final class GuionRegistroPropiedad {
         return base + DE + operacion.name();
     }
 
+    /**
+     * La clave compañera de un IMPORTE gobernado: {@code moneda:<clave>}.
+     *
+     * <p>La clave puede ser de la propiedad ({@code cuota_mantenimiento}) o de
+     * una condición del encargo ({@code precio_estacionamiento_adicional:ALQUILER}).
+     * La moneda pertenece al importe concreto y no a toda la propiedad. Esta
+     * forma no se usa para {@code moneda:VENTA} ni {@code moneda:ALQUILER}, que
+     * siguen siendo las monedas propias del importe estructural del encargo.
+     */
+    public static String claveMonedaDeAtributo(String clave) {
+        if (clave == null || clave.isBlank()) {
+            return null;
+        }
+        return MONEDA + DE + clave;
+    }
+
+    /**
+     * Devuelve el importe al que acompaña una clave de moneda.
+     *
+     * <p>{@code moneda:VENTA} y {@code moneda:ALQUILER} son las únicas monedas
+     * estructurales y devuelven {@code null}; cualquier otra forma
+     * {@code moneda:<clave>} devuelve el resto, incluso cuando la clave lleva
+     * su propia operación ({@code moneda:precio_estacionamiento_adicional:ALQUILER}).
+     */
+    public static String atributoDeMoneda(String clave) {
+        String prefijo = MONEDA + DE;
+        if (clave == null || !clave.startsWith(prefijo)) {
+            return null;
+        }
+        String atributo = clave.substring(prefijo.length());
+        if (atributo.isBlank()) {
+            return null;
+        }
+        // La moneda estructural conserva la forma corta y única del guion.
+        if (operacionDe(clave) != null && !atributo.contains(DE)) {
+            return null;
+        }
+        return atributo;
+    }
+
+    /** Devuelve solo la moneda compañera de un IMPORTE de la propiedad. */
+    public static String atributoDeMonedaDePropiedad(String clave) {
+        String atributo = atributoDeMoneda(clave);
+        return atributo != null && operacionDe(atributo) == null ? atributo : null;
+    }
+
+    /** Devuelve la clave calificada de un IMPORTE de condición de encargo. */
+    public static String atributoDeMonedaDeEncargo(String clave) {
+        String atributo = atributoDeMoneda(clave);
+        return atributo != null && atributo.contains(DE) && operacionDe(atributo) != null
+                ? atributo : null;
+    }
+
     /** {@code importe:VENTA} -> {@code importe}. Una clave sin calificar se devuelve igual. */
     public static String claveBase(String clave) {
         int corte = clave.indexOf(DE);
@@ -194,7 +184,7 @@ public final class GuionRegistroPropiedad {
      * declarado y puede decir cual esperaba.
      */
     public static OperacionInmobiliaria operacionDe(String clave) {
-        int corte = clave.indexOf(DE);
+        int corte = clave.lastIndexOf(DE);
         if (corte < 0) {
             return null;
         }
@@ -205,9 +195,17 @@ public final class GuionRegistroPropiedad {
         }
     }
 
-    /** ¿Es la clave de un dato que pertenece a un encargo y no a la propiedad? */
+    /**
+     * ¿Es la clave de un dato que pertenece a un encargo y no a la propiedad?
+     *
+     * <p>Incluye {@code moneda:VENTA} y {@code moneda:ALQUILER}, aunque la
+     * moneda ya no se publica como una segunda pregunta: sigue siendo parte del
+     * par interno que valida y construye el encargo. El motor distingue antes
+     * la compañera de propiedad de la forma anidada
+     * {@code moneda:<clave-calificada>} de una condición.
+     */
     public static boolean esDeLaOperacion(String clave) {
-        return DE_LA_OPERACION.contains(claveBase(clave));
+        return CLAVES_DE_LA_OPERACION.contains(claveBase(clave));
     }
 
     // ------------------------------------------------------------------
@@ -245,9 +243,14 @@ public final class GuionRegistroPropiedad {
     /**
      * <b>Dependen de la OPERACION comercial.</b> El importe existe siempre,
      * pero no significa lo mismo —precio de venta o renta mensual— y por eso su
-     * rotulo se calcula, no se escribe.
+     * rotulo se calcula, no se escribe. Su moneda viaja como compañera de la
+     * clave calificada, pero no se publica como una segunda pregunta del bloque.
      */
-    public static final List<String> DE_LA_OPERACION = List.of(IMPORTE, MONEDA, EXCLUSIVIDAD);
+    public static final List<String> DE_LA_OPERACION = List.of(IMPORTE, EXCLUSIVIDAD);
+
+    /** Claves de encargo que se validan y transportan, incluidas compañeras no publicadas. */
+    private static final List<String> CLAVES_DE_LA_OPERACION =
+            List.of(IMPORTE, MONEDA, EXCLUSIVIDAD);
 
     /** ¿Esta clave estructural aplica a este tipo de propiedad? */
     public static boolean aplicaAlTipo(String clave, String codigoTipo) {
@@ -259,15 +262,18 @@ public final class GuionRegistroPropiedad {
 
     static {
         declarar(TIPO_PROPIEDAD, "Tipo de propiedad", "LISTA", null,
-                valores("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"),
+                valores(AtributosGobernados.nombresDeTipos().toArray(String[]::new)),
                 "Decide qué más hay que preguntar: un terreno no tiene dormitorios.");
         declarar(OPERACIONES, "Operación", "LISTA_MULTIPLE", null, valores("VENTA", "ALQUILER"),
-                "Se puede elegir más de una: la propiedad se registra una vez y se abre un "
-                        + "encargo por cada operación, cada uno con su precio y su histórico.");
+                "Operaciones observadas. No crea un Encargo ni acredita autorización del propietario.");
         // Sin ayuda: el rotulo ya la lleva. Un campo que se titula «Precio de
         // venta» y debajo dice «segun la operacion declarada» repite lo que
         // acaba de decir, y en una conversacion KAIROS lo leeria en voz alta.
-        declarar(IMPORTE, "Importe", "DECIMAL", "moneda", null, null);
+        // IMPORTE ya declara que su valor lleva moneda. La unidad no es
+        // "moneda": la moneda viaja como la clave compañera del monto, igual
+        // que en los atributos del catálogo; así el control es IMPORTE y no
+        // un selector de moneda usado por separado.
+        declarar(IMPORTE, "Importe", "IMPORTE", null, null, null);
         declarar(MONEDA, "Moneda", "LISTA", null, valores("PEN", "USD"), null);
         // Tipo de dato propio y no TEXTO: el valor no es una frase, es «quien es
         // el dueno y en que cuota». Declararlo aqui es lo que permite al cliente
@@ -278,7 +284,7 @@ public final class GuionRegistroPropiedad {
         declarar(DIRECCION, "Dirección", "TEXTO", null, null, null);
         declarar(DISTRITO, "Distrito", "TEXTO", null, null, null);
         declarar(USO, "Uso", "LISTA", null, valores("COMERCIAL", "VIVIENDA", "INDUSTRIAL", "MIXTO"),
-                "Si no se declara, se deduce del tipo: una casa es vivienda.");
+                "Se conserva el uso declarado; si no consta, sigue pendiente.");
         declarar(CODIGO, "Código interno", "TEXTO", null, null, "Si no se declara, lo genera BROX.");
         declarar(DESCRIPCION, "Descripción", "TEXTO", null, null, null);
         declarar(LATITUD, "Latitud", "DECIMAL", "grados", null, null);
@@ -303,6 +309,12 @@ public final class GuionRegistroPropiedad {
      * y quien responde tiene que poder verlo sin deducirlo.
      */
     public static Pregunta pregunta(String clave) {
+        // Una moneda compañera comparte el prefijo con la moneda estructural,
+        // pero no es una pregunta propia del guion. El motor la resuelve contra
+        // la definición IMPORTE que acompaña.
+        if (atributoDeMoneda(clave) != null) {
+            return null;
+        }
         Pregunta declarada = PREGUNTAS.get(claveBase(clave));
         if (declarada == null) {
             return null;
@@ -323,8 +335,9 @@ public final class GuionRegistroPropiedad {
      */
     private static boolean esObligatoria(String clave) {
         String base = claveBase(clave);
-        return OBLIGATORIAS_SIN_OPERACION.contains(clave)
-                || (operacionDe(clave) != null && OBLIGATORIAS_DE_CADA_ENCARGO.contains(base));
+        // La dirección admite una referencia suficiente alternativa. El motor
+        // evalúa esa suficiencia en SuficienciaInmueble, no en una segunda lista.
+        return TIPO_PROPIEDAD.equals(clave) || DISTRITO.equals(clave);
     }
 
     private static String mayuscula(String texto) {
@@ -332,7 +345,14 @@ public final class GuionRegistroPropiedad {
     }
 
     public static boolean esEstructural(String clave) {
-        return PREGUNTAS.containsKey(claveBase(clave));
+        if (clave == null || !PREGUNTAS.containsKey(claveBase(clave))) {
+            return false;
+        }
+        int primerSeparador = clave.indexOf(DE);
+        boolean llevaClaveAnidada = primerSeparador >= 0
+                && clave.indexOf(DE, primerSeparador + DE.length()) >= 0;
+        return !llevaClaveAnidada
+                && (primerSeparador < 0 || operacionDe(clave) != null);
     }
 
     /**

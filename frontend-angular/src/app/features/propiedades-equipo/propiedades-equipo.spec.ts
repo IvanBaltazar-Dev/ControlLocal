@@ -151,9 +151,9 @@ describe('PropiedadesEquipo', () => {
       expect(modulo).toBeDefined();
     });
 
-    it('entran BROKER y ADMIN, que es el gate del backend', () => {
+    it('entra solo BROKER, como exige el gate del backend', () => {
       expect(puedeEntrar(modulo, 'BROKER')).toBeTrue();
-      expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeTrue();
+      expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeFalse();
     });
 
     it('el AGENTE no entra: el endpoint le responde 403', () => {

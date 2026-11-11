@@ -69,11 +69,11 @@ class PoliticaUnicaTest {
 
     private static final List<Prohibido> EN_JAVA = List.of(
             new Prohibido(Pattern.compile("(minus|plus)Days\\(\\s*7\\s*\\)"),
-                    "recontacto.dias",
-                    "PoliticaComercial.limiteDeRecontacto(hoy)"),
+                    "CAT-R27: reloj universal retirado",
+                    "SeguimientoDeProspeccion y sus fechas contextuales"),
             new Prohibido(Pattern.compile("(minus|plus)Days\\(\\s*3\\s*\\)"),
                     "visita.dias-de-aviso",
-                    "PoliticaComercial.horizonteDeVisitas(hoy)"),
+                    "Catálogo16/D5: consultar todas las futuras, sin horizonte universal"),
             new Prohibido(Pattern.compile("(minus|plus)Days\\(\\s*15\\s*\\)"),
                     "reporte-propietario.dias",
                     "PoliticaComercial.proximoReporteAlPropietario(desde)"),
@@ -82,7 +82,7 @@ class PoliticaUnicaTest {
                     "PoliticaComercial.finDelEncargo(inicio)"),
             new Prohibido(Pattern.compile(">=?\\s*60\\b"),
                     "coincidencia.puntaje-minimo",
-                    "PoliticaComercial.valeLaPenaProponer(puntaje)"),
+                    "MotorMatchingDeterminista según D1–D4; el umbral porcentual anterior está retirado"),
             new Prohibido(Pattern.compile("BigDecimal\\(\"200\"\\)|BigDecimal\\.valueOf\\(\\s*200\\s*\\)"),
                     "comision.porcentaje-maximo",
                     "PoliticaComercial.comisionMaxima()"),
@@ -94,8 +94,8 @@ class PoliticaUnicaTest {
 
     private static final List<Prohibido> EN_TYPESCRIPT = List.of(
             new Prohibido(Pattern.compile(">=?\\s*7\\b"),
-                    "recontacto.dias",
-                    "el `nivelAtencion` que ya viene en `senales`"),
+                    "CAT-R27: reloj universal retirado",
+                    "el seguimiento contextual y su ausencia explícita, sin plazo local"),
             new Prohibido(Pattern.compile("<\\s*10\\b"),
                     "reasignacion.caracteres-minimos-del-motivo",
                     "POLITICA_COMERCIAL.motivoReasignacionCaracteres"),
@@ -111,6 +111,26 @@ class PoliticaUnicaTest {
      * lo ve.
      */
     private static final Set<String> EXENTOS = Set.of(POLITICA, ESPEJO_SPA);
+
+    @Test
+    void elRelojUniversalRetiradoSigueProhibidoSinInventarOtroUmbral() {
+        var retirado=EN_JAVA.stream().filter(p->p.regla().equals("CAT-R27: reloj universal retirado")).findFirst().orElseThrow();
+        assertTrue(viola("var limite = hoy.minusDays(7);",retirado));
+        assertFalse(PoliticaComercial.REGLAS.stream().anyMatch(r->"recontacto.dias".equals(r.nombre())));
+    }
+
+    @Test
+    void longitudTecnicaNoEsPuntajePeroElUmbralComercialSigueDetectado() {
+        Prohibido puntaje=EN_JAVA.stream().filter(p->p.regla().equals("coincidencia.puntaje-minimo"))
+                .findFirst().orElseThrow();
+        assertFalse(viola("if (nombre.length() > 60) rechazar();",puntaje));
+        assertFalse(viola("if ((cuenta.nombreUsuario().length()) >= 60) rechazar();",puntaje));
+        assertTrue(viola("if (puntaje >= 60) proponer();",puntaje));
+        assertTrue(viola("if (nombre.length() > 60 || puntaje >= 60) proponer();",puntaje));
+        assertTrue(viola("if (puntaje >= 60 || nombre.length() > 60) proponer();",puntaje));
+        assertTrue(viola("if ((puntaje + nombre.length()) >= 60) proponer();",puntaje),
+                "La presencia de length en una expresión no exime el umbral de puntaje.");
+    }
 
     @Test
     @DisplayName("ningun servicio vuelve a escribir a mano un plazo de la politica")
@@ -179,10 +199,8 @@ class PoliticaUnicaTest {
                         + "encontrara alli creyendo que gobierna.");
 
         Map<String, Integer> esperado = Map.of(
-                "recontactoDias", PoliticaComercial.RECONTACTO.valor(),
                 "reporteAlPropietarioDias", PoliticaComercial.REPORTE_PROPIETARIO.valor(),
                 "rentaSinAjustarDias", PoliticaComercial.RENTA_SIN_AJUSTAR.valor(),
-                "volumenMinimo", PoliticaComercial.RITMO_VOLUMEN_MINIMO.valor(),
                 "muestraMinima", PoliticaComercial.MUESTRA_MINIMA.valor(),
                 "rangoMuestraMinima", PoliticaComercial.RANGO_MUESTRA_MINIMA.valor());
 
@@ -197,28 +215,17 @@ class PoliticaUnicaTest {
             }
         });
 
-        // Los tres del ritmo viajan como fraccion en JS y como porcentaje aqui.
-        comprobarFraccion(texto, "llega", PoliticaComercial.RITMO_LLEGA.valor(), divergen);
-        comprobarFraccion(texto, "cerca", PoliticaComercial.RITMO_CERCA.valor(), divergen);
-        comprobarFraccion(texto, "arranquePc", PoliticaComercial.RITMO_ARRANQUE.valor(), divergen);
+        // Catálogo20.10 no traslada el semáforo histórico a categorías nuevas.
+        // El prototipo conserva su evidencia histórica; no gobierna la composición actual.
+        assertFalse(PoliticaComercial.REGLAS.stream().anyMatch(r->r.nombre().startsWith("ritmo.")),
+                "Las metas actuales no deben reutilizar umbrales del clasificador retirado.");
+        String avance=leer(raiz().resolve("backend-spring/controllocal-service/src/main/java/com/controllocal/service/soporte/AvanceDeMeta.java"));
+        assertTrue(avance.contains("calendario"));
+        assertFalse(avance.contains("PoliticaComercial.RITMO_"));
 
         assertEquals(List.of(), divergen,
                 "La maqueta y la politica dicen cosas distintas. Corrige nucleo-brox.js y "
                         + "vuelve a correr construir.mjs; la fuente es " + POLITICA + ".");
-    }
-
-    private static void comprobarFraccion(String texto, String clave, int porcentaje,
-                                          List<String> divergen) {
-        Matcher m = Pattern.compile(clave + "[ ]*:[ ]*([0-9.]+)").matcher(texto);
-        if (!m.find()) {
-            divergen.add(clave + ": la maqueta ya no lo declara");
-            return;
-        }
-        int enLaMaqueta = (int) Math.round(Double.parseDouble(m.group(1)) * 100);
-        if (enLaMaqueta != porcentaje) {
-            divergen.add(clave + ": la maqueta dice " + enLaMaqueta + " % y la politica "
-                    + porcentaje + " %");
-        }
     }
 
     private static Integer enteroDe(String texto, String clave) {
@@ -308,13 +315,74 @@ class PoliticaUnicaTest {
                 continue;
             }
             for (Prohibido p : prohibidos) {
-                if (p.patron().matcher(codigo).find()) {
+                if (viola(codigo,p)) {
                     hallazgos.add(archivo.getFileName() + ":" + (i + 1)
                             + "  reimplementa `" + p.regla() + "`\n      " + cruda.trim()
                             + "\n      usa en su lugar: " + p.enSuLugar());
                 }
             }
         }
+    }
+
+    /** Examina cada comparación, no exime la línea ni el archivo por contener length. */
+    private static boolean viola(String codigo,Prohibido prohibido) {
+        Matcher coincidencia=prohibido.patron().matcher(codigo);
+        while(coincidencia.find()) {
+            if(prohibido.regla().equals("coincidencia.puntaje-minimo")
+                    && esLongitudTecnica(operandoIzquierdo(codigo,coincidencia.start()))) continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static String operandoIzquierdo(String codigo,int comparador) {
+        int parentesis=0,corchetes=0;
+        for(int i=comparador-1;i>=0;i--) {
+            char c=codigo.charAt(i);
+            if(c==')')parentesis++;
+            else if(c==']')corchetes++;
+            else if(c=='(') {
+                if(parentesis==0&&corchetes==0)return codigo.substring(i+1,comparador).trim();
+                parentesis--;
+            } else if(c=='[') {
+                if(corchetes==0&&parentesis==0)return codigo.substring(i+1,comparador).trim();
+                corchetes--;
+            } else if(parentesis==0&&corchetes==0&&";{}=<>!?:,&|".indexOf(c)>=0)
+                return codigo.substring(i+1,comparador).trim();
+        }
+        return codigo.substring(0,comparador).trim();
+    }
+
+    private static boolean esLongitudTecnica(String expresion) {
+        String operando=sinParentesisExteriores(expresion);
+        Matcher longitud=Pattern.compile("(?s)(.+)\\.\\s*length\\s*(?:\\(\\s*\\))?\\s*$").matcher(operando);
+        if(!longitud.matches())return false;
+        String acceso=sinParentesisExteriores(longitud.group(1));int parentesis=0,corchetes=0;
+        for(int i=0;i<acceso.length();i++) {
+            char c=acceso.charAt(i);
+            if(c=='(')parentesis++;
+            else if(c==')')parentesis--;
+            else if(c=='[')corchetes++;
+            else if(c==']')corchetes--;
+            else if(parentesis==0&&corchetes==0&&!Character.isJavaIdentifierPart(c)
+                    &&c!='.'&&!Character.isWhitespace(c))return false;
+            if(parentesis<0||corchetes<0)return false;
+        }
+        return !acceso.isBlank()&&parentesis==0&&corchetes==0;
+    }
+
+    private static String sinParentesisExteriores(String expresion) {
+        String limpia=expresion.trim();
+        while(limpia.startsWith("(")&&limpia.endsWith(")")) {
+            int nivel=0;boolean envuelve=true;
+            for(int i=0;i<limpia.length();i++) {
+                char c=limpia.charAt(i);if(c=='(')nivel++;else if(c==')')nivel--;
+                if(nivel==0&&i<limpia.length()-1){envuelve=false;break;}
+            }
+            if(!envuelve||nivel!=0)break;
+            limpia=limpia.substring(1,limpia.length()-1).trim();
+        }
+        return limpia;
     }
 
     /**

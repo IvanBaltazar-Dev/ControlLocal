@@ -1,5 +1,6 @@
 package com.controllocal.arquitectura;
 
+import com.controllocal.service.soporte.AtributosGobernados;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -157,7 +158,7 @@ class FronteraDeAutoridadEnElSpaTest {
     // ==================================================================
 
     /**
-     * Los siete tipos, en el vocabulario de la OFERTA. Es el del catalogo
+     * Los tipos fisicos, en el vocabulario de la OFERTA. Es el del catalogo
      * ({@code catalogo_atributo}) y el que el motor de captura publica como
      * {@code opciones} de {@code tipoPropiedad}.
      *
@@ -167,8 +168,7 @@ class FronteraDeAutoridadEnElSpaTest {
      * gate. Cuando se unifiquen, la lista de la demanda tendra que salir del
      * Core igual que esta, y entonces estas comprobaciones la cubriran sola.
      */
-    private static final List<String> TIPOS_DE_PROPIEDAD = List.of(
-            "LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO");
+    private static final List<String> TIPOS_DE_PROPIEDAD = AtributosGobernados.nombresDeTipos();
 
     /**
      * {@code if (tipo === 'CASA') { mostrarDormitorios(); }} — la linea con la
@@ -266,7 +266,7 @@ class FronteraDeAutoridadEnElSpaTest {
 
                     %s
 
-                    La lista de los siete tipos es del catalogo, y viaja como `opciones` de
+                    La lista de tipos es del catalogo, y viaja como `opciones` de
                     la pregunta `tipoPropiedad`. Copiarla aqui significa que anadir un tipo
                     -- que el modelo universal prometio que seria una fila -- vuelve a ser
                     un cambio en dos repositorios (D-A-1 §4).

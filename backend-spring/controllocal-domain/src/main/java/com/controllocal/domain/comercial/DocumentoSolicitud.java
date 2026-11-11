@@ -17,6 +17,7 @@ import jakarta.persistence.Transient;
 
 import java.time.OffsetDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Documento entregado para una solicitud. Nace Registrado con revision
@@ -65,6 +66,10 @@ public class DocumentoSolicitud extends EntidadDeOrganizacion implements Transic
 
     @Column(name = "ruta_archivo", length = 255)
     private String rutaArchivo;
+
+    /** Referencia pública de esta versión binaria; la clave del proveedor permanece privada. */
+    @Column(name = "archivo_ref")
+    private UUID archivoRef;
 
     /**
      * La fija la APLICACION al registrar la entrega, como {@code registrarEntrega()}
@@ -193,8 +198,13 @@ public class DocumentoSolicitud extends EntidadDeOrganizacion implements Transic
     }
 
     public void setRutaArchivo(String rutaArchivo) {
+        if (!java.util.Objects.equals(this.rutaArchivo, rutaArchivo)) {
+            this.archivoRef = rutaArchivo == null || rutaArchivo.isBlank() ? null : UUID.randomUUID();
+        }
         this.rutaArchivo = rutaArchivo;
     }
+
+    public UUID getArchivoRef() { return archivoRef; }
 
     public OffsetDateTime getFechaEntrega() {
         return fechaEntrega;

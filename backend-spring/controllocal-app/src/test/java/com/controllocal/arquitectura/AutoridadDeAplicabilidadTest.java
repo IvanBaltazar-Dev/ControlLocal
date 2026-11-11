@@ -153,11 +153,11 @@ class AutoridadDeAplicabilidadTest {
         String puerta = "captura/definicion";
 
         Path clienteKairos = rutaDelRepo(
-                "kairos-service/src/main/java/com/kairos/brox/ClienteBroxHttp.java");
+                "backend-spring/controllocal-web/src/main/java/com/controllocal/web/asistencia/ClienteBroxInterno.java");
         assertTrue(Files.isRegularFile(clienteKairos),
                 "no se encontro " + clienteKairos + ": sin el cliente de KAIROS este gate no "
                         + "puede comparar las dos superficies, y su verde no significaria nada");
-        assertTrue(leer(clienteKairos).contains(puerta),
+        assertTrue(leer(clienteKairos).contains("captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD"),
                 "KAIROS ya no pide la definicion a " + puerta + ". Si se trajo su propia idea "
                         + "de que aplica a cada tipo, BROX Web y KAIROS dejaron de recibir la "
                         + "misma definicion del Core.");

@@ -61,7 +61,12 @@ public record IndicadoresResponse(
         IndicadorOperativoResponse operativo,
         List<IndicadorSenalResponse> senales,
         int pendientesDeAtencion,
-        RendimientoResponse rendimiento) {
+        RendimientoResponse rendimiento,
+        IndicadorService.ContactoProspeccion contactoEfectivoProspeccion,
+        IndicadorService.ResultadoSeguimiento cumplimientoDeSeguimiento,
+        IndicadorService.ResultadoConversion conversionAEncargo,
+        java.util.Map<String,com.controllocal.service.actividad.IndicadoresIndividuales.Tasa> efectividadDeCierre,
+        IndicadorService.ResultadoPrimeraRespuesta primeraRespuesta) {
 
     public static IndicadoresResponse desde(IndicadorService.Resumen r,
                                             RendimientoResponse rendimiento) {
@@ -92,6 +97,6 @@ public record IndicadoresResponse(
                 IndicadorOperativoResponse.desde(r.operativo()),
                 r.senales().stream().map(IndicadorSenalResponse::desde).toList(),
                 r.pendientesDeAtencion(),
-                rendimiento);
+                rendimiento,r.contactoEfectivoProspeccion(),r.cumplimientoDeSeguimiento(),r.conversionAEncargo(),r.efectividadDeCierre(),r.primeraRespuesta());
     }
 }

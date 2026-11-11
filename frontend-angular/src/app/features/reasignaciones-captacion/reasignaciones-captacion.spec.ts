@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import {
   CandidatoAgente,
-  Captacion,
+  EncargoReasignable,
   CaptacionesService,
   ReasignacionCaptacion,
 } from '../../core/api/captaciones.service';
@@ -15,7 +15,7 @@ import {
   ReasignacionesCaptacion,
 } from './reasignaciones-captacion';
 
-const CAPTACION: Captacion = {
+const CAPTACION: EncargoReasignable = {
   id: 9,
   codigoCaptacion: 'CAP-0009',
   estado: 'A',
@@ -69,7 +69,8 @@ describe('ReasignacionesCaptacion', () => {
     ]);
     api.reasignables$.and.returnValue(of(pagina([CAPTACION], 1, 8)));
     api.historialReasignaciones$.and.returnValue(of([EVENTO]));
-    api.reasignar.and.resolveTo({ ...CAPTACION, idAgente: 31, agenteNombre: 'Javier Ruiz' });
+    api.reasignar.and.resolveTo({ id: 9, codigoCaptacion: 'CAP-0009', estado: 'A',
+      idAgenteAnterior: 30, idAgente: 31, idReasignacion: 4 });
     api.candidatosReasignacion.and.resolveTo(pagina(CANDIDATOS, 1, 50));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);

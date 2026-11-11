@@ -56,26 +56,8 @@ describe('AgentesService', () => {
     expect(api.get$).toHaveBeenCalledTimes(1);
   });
 
-  it('la baja es un PUT con estado I: este recurso no tiene DELETE', async () => {
-    api.put.and.resolveTo({ id: 30 });
-
-    await service.desactivar(30, {
-      id: 30,
-      nombre: 'Valentina Mora',
-      telefono: '999888777',
-      correo: 'vmora@corredora.test',
-      zona: 'Lima',
-      estadoOperativo: 'D',
-      estadoAdministrativo: 'A',
-    });
-
-    expect(api.put).toHaveBeenCalledOnceWith('agentes/30', {
-      nombre: 'Valentina Mora',
-      telefono: '999888777',
-      correo: 'vmora@corredora.test',
-      zona: 'Lima',
-      estadoOperativo: 'D',
-      estado: 'I',
-    });
+  it('el perfil de gobierno se consulta directamente sin recorrer páginas ni pedir actividad comercial', async () => {
+    await service.perfilParaGobierno(30);
+    expect(api.get).toHaveBeenCalledOnceWith('agentes/30/perfil');
   });
 });

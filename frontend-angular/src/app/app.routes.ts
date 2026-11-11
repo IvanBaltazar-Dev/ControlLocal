@@ -87,11 +87,12 @@ export const routes: Routes = [
       },
       {
         // Cartera del equipo. A diferencia de la ficha, esta SÍ lleva gate de
-        // rol: el backend responde 403 a un AGENTE
-        // (`/captaciones/propiedades-equipo` es de BROKER/ADMIN), y la fila de
+        // rol: el backend reserva `/captaciones/propiedades-equipo` al BROKER,
+        // y la fila de
         // `MODULOS` que dibuja el menú es la misma que lee el guard.
         path: 'propiedades-equipo',
         canActivate: [rolGuard],
+        data: { roles: ['BROKER'] },
         loadComponent: () =>
           import('./features/propiedades-equipo/propiedades-equipo').then(
             (m) => m.PropiedadesEquipo,
@@ -133,6 +134,10 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'miembros/invitar', canActivate: [rolGuard], data: {roles: ['TENANT_ADMIN']},
+        loadComponent: () => import('./features/miembro-form/miembro-form').then(m=>m.MiembroForm),
+      },
+      {
         path: 'agentes',
         canActivate: [rolGuard],
         loadComponent: () => import('./features/agentes/agentes').then((m) => m.Agentes),
@@ -140,18 +145,21 @@ export const routes: Routes = [
       {
         // Antes de `agentes/:id/...`, como en el resto: `:id` capturaría "nuevo".
         path: 'agentes/nuevo',
+        data: { roles: ['TENANT_ADMIN'], rolMiembro: 'AGENTE' },
         canActivate: [rolGuard],
         loadComponent: () =>
-          import('./features/agente-form/agente-form').then((m) => m.AgenteForm),
+          import('./features/miembro-form/miembro-form').then((m) => m.MiembroForm),
       },
       {
         path: 'agentes/:id/editar',
+        data: { roles: ['TENANT_ADMIN'], rolMiembro: 'AGENTE' },
         canActivate: [rolGuard],
         loadComponent: () =>
-          import('./features/agente-form/agente-form').then((m) => m.AgenteForm),
+          import('./features/miembro-form/miembro-form').then((m) => m.MiembroForm),
       },
       {
         path: 'agentes/:id',
+        data: { roles: ['BROKER'] },
         canActivate: [rolGuard],
         loadComponent: () =>
           import('./features/agente-detail/agente-detail').then((m) => m.AgenteDetail),
@@ -163,15 +171,17 @@ export const routes: Routes = [
       },
       {
         path: 'brokers/nuevo',
+        data: { roles: ['TENANT_ADMIN'], rolMiembro: 'BROKER' },
         canActivate: [rolGuard],
         loadComponent: () =>
-          import('./features/broker-form/broker-form').then((m) => m.BrokerForm),
+          import('./features/miembro-form/miembro-form').then((m) => m.MiembroForm),
       },
       {
         path: 'brokers/:id/editar',
+        data: { roles: ['TENANT_ADMIN'], rolMiembro: 'BROKER' },
         canActivate: [rolGuard],
         loadComponent: () =>
-          import('./features/broker-form/broker-form').then((m) => m.BrokerForm),
+          import('./features/miembro-form/miembro-form').then((m) => m.MiembroForm),
       },
       {
         path: 'brokers/:id',
@@ -403,9 +413,9 @@ export const routes: Routes = [
       },
       {
         path: 'captaciones/pendientes',
-        // Fila 1: supervisión, y el admin la conserva en lectura.
+        // Supervisión comercial del equipo; el gobierno no consulta esta bandeja.
         canActivate: [rolGuard],
-        data: { roles: ['BROKER', 'TENANT_ADMIN'] },
+        data: { roles: ['BROKER'] },
         loadComponent: () =>
           import('./features/bandeja-captaciones/bandeja-captaciones').then(
             (m) => m.BandejaCaptaciones,

@@ -31,29 +31,35 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.*;
+import java.util.*;
+import com.controllocal.service.*;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.actividad.RecibosDeActividad;
+import com.controllocal.service.demanda.InteresadosDeDemanda;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.*;
+import com.controllocal.service.excepcion.ConflictoException;
+import com.controllocal.persistence.repositorio.ComandoIdempotenteRepository;
+import com.controllocal.persistence.repositorio.EventoDominioRepository;
+import com.controllocal.domain.auditoria.EventoDominio;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Propagation;
+import static com.controllocal.service.negociacion.ContenidoNegociacion.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Reglas y mensajes calcados de OportunidadesRest +
- * OportunidadComercialBusinessLogicImpl + MotivoNoContinuidadBusinessLogicImpl.
- *
- * <p>Mejora del stack nuevo, sin tocar el cable: A->N se aplica por
- * {@link Transiciones}, asi que el cierre por no continuidad deja fila en
- * {@code historial_estado} con actor y motivo (MEJ-01). El {@code motivoCierre}
- * que viaja en la respuesta sigue siendo la DESCRIPCION de la razon, como en la v1.
+/** CAT-E21/RF040/042/050. El interés real y su episodio son explícitos; las
+ * lecturas/historias conservan autoridad actual y las escrituras usan revisión/SID/CAS/recibo.
  */
 @Service
 public class OportunidadServiceImpl implements OportunidadService {
 
-    private static final DateTimeFormatter CODIGO = DateTimeFormatter.ofPattern("yyMMddHHmmss");
 
     private final OportunidadComercialRepository oportunidades;
     private final MotivoNoContinuidadRepository motivos;
     private final CaptacionRepository captaciones;
-    private final DetalleClienteRepository clientes;
     private final DetalleAgenteRepository agentes;
     private final Alcances alcances;
     private final Transiciones transiciones;
@@ -66,29 +72,47 @@ public class OportunidadServiceImpl implements OportunidadService {
      * pedirlas aparte ni decidir por rol.
      */
     private final OfertaService ofertas;
+    private final ContextosDeActividad contextos;
+    private final InteresadosDeDemanda interesados;
+    private final EncargoService encargos;
+    private final RequerimientoService demandas;
+    private final CoincidenciaService coincidencias;
+    private final InteraccionService interacciones;
+    private final VisitaService visitas;
+    private final RecibosDeActividad recibos;
+    private final Documentos documentos;
+    private final EntityManager entidades;
+    private final com.controllocal.persistence.repositorio.PublicacionRepository publicaciones;
 
     public OportunidadServiceImpl(OportunidadComercialRepository oportunidades,
                                   MotivoNoContinuidadRepository motivos, CaptacionRepository captaciones,
-                                  DetalleClienteRepository clientes, DetalleAgenteRepository agentes,
+                                  DetalleAgenteRepository agentes,
                                   Alcances alcances, Transiciones transiciones,
                                   PlanDeConsulta plan, AccesoOportunidad acceso,
-                                  OfertaService ofertas) {
+                                  OfertaService ofertas,ContextosDeActividad contextos,InteresadosDeDemanda interesados,
+                                  EncargoService encargos,RequerimientoService demandas,CoincidenciaService coincidencias,
+                                  InteraccionService interacciones,VisitaService visitas,RecibosDeActividad recibos,
+                                  Documentos documentos,EntityManager entidades,
+                                  com.controllocal.persistence.repositorio.PublicacionRepository publicaciones) {
         this.oportunidades = oportunidades;
         this.motivos = motivos;
         this.captaciones = captaciones;
-        this.clientes = clientes;
         this.agentes = agentes;
         this.alcances = alcances;
         this.transiciones = transiciones;
         this.plan = plan;
         this.acceso = acceso;
-        this.ofertas = ofertas;
+        this.ofertas = ofertas;this.contextos=contextos;this.interesados=interesados;this.encargos=encargos;
+        this.demandas=demandas;this.coincidencias=coincidencias;this.interacciones=interacciones;this.visitas=visitas;
+        this.recibos=recibos;this.documentos=documentos;this.entidades=entidades;
+        this.publicaciones=publicaciones;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Pagina<FichaOportunidad> listar(int pagina, int tamano, Long idCaptacion, Long idCliente,
                                            String estado, String query, Actor actor) {
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return Pagina.vacia();
@@ -103,7 +127,7 @@ public class OportunidadServiceImpl implements OportunidadService {
                 alcance.idOrganizacion(), alcance.global(), actor.esAgente(), alcance.paramRoles(),
                 idCaptacion, idCliente, vacioNull(estado),
                 PageRequest.of(Math.max(0, pagina - 1), tamanoValido));
-        return new Pagina<>(page.getContent().stream().map(OportunidadServiceImpl::ficha).toList(),
+        return new Pagina<>(page.isEmpty()?List.of():oportunidades.buscarFichaPorIds(actor.idOrganizacion(),page.getContent().stream().map(OportunidadComercial::getId).toList()).stream().map(this::ficha).toList(),
                 page.getTotalElements());
     }
 
@@ -131,13 +155,14 @@ public class OportunidadServiceImpl implements OportunidadService {
         }
         return new Pagina<>(
                 oportunidades.buscarFichaPorIds(alcance.idOrganizacion(), ids).stream()
-                        .map(OportunidadServiceImpl::ficha).toList(),
+                        .map(this::ficha).toList(),
                 total);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ResumenOportunidades resumen(Long idCaptacion, Long idCliente, String query, Actor actor) {
+        contextos.exigirOperador(actor);
         Alcance alcance = alcances.de(actor);
         if (alcance.vacio()) {
             return new ResumenOportunidades(0, 0, 0, 0, 0, 0);
@@ -176,92 +201,138 @@ public class OportunidadServiceImpl implements OportunidadService {
         return fichaIndividual(cargarConAcceso(id, actor), actor);
     }
 
-    @Override
-    @Transactional
-    public FichaOportunidad registrar(DatosOportunidad datos, Actor actor) {
-        if (datos == null) {
-            throw new ReglaNegocioException("Los datos de la oportunidad son obligatorios.");
+    @Override @Transactional
+    public DatosOportunidad validarApertura(DatosOportunidad bruto,Actor actor){
+        var d=normalizar(bruto);contextos.exigirAgente(actor);var e=encargos.consultar(d.idEncargo(),actor);
+        if(!Objects.equals(e.responsable(),actor.idRolOperativo()))throw new AccesoNoAutorizadoException();
+        exacta(d.versionEncargo(),e.version(),"Encargo");var interesadoValidado=interesados.validar(d.interesado(),actor);
+        if(d.idPublicacionOrigen()!=null){
+            var publicacion=publicaciones.findByOrganizacionIdAndId(actor.idOrganizacion(),d.idPublicacionOrigen())
+                .orElseThrow(()->new NoEncontradoException("Publicación"));
+            if(!Objects.equals(publicacion.getIdEncargo(),d.idEncargo()))throw new ReglaNegocioException("La publicación no corresponde al Encargo de la oportunidad.");
         }
-        if (datos.idCliente() == null || datos.idCliente() <= 0) {
-            throw new ReglaNegocioException("Selecciona un cliente interesado.");
-        }
-        if (datos.idCaptacion() == null || datos.idCaptacion() <= 0) {
-            throw new ReglaNegocioException("Selecciona una captacion activa.");
-        }
-        // Regla del cable: la captacion tiene que estar en la lista del AGENTE
-        // que registra (sin alcance de broker). Una captacion inexistente o
-        // ajena responde IGUAL —403—, porque la v1 solo consulta esa lista.
-        Captacion captacion = captaciones.buscarFicha(actor.idOrganizacion(), datos.idCaptacion())
-                .filter(cap -> cap.getAgente() != null && cap.getAgente().getId() == actor.idRolOperativo())
-                .orElseThrow(AccesoNoAutorizadoException::new);
-        if (!Captacion.ACTIVA.equals(captacion.estadoActual())) {
-            throw new ReglaNegocioException("La captacion debe estar ACTIVA.");
-        }
-        DetalleCliente cliente = clientes.buscarFicha(actor.idOrganizacion(), datos.idCliente())
-                .orElseThrow(() -> new NoEncontradoException("Cliente"));
-        if (oportunidades.existeAbiertaDe(actor.idOrganizacion(), cliente.getId(), captacion.getId())) {
-            throw new ReglaNegocioException("Ya existe una oportunidad abierta para el cliente y captacion.");
-        }
-        DetalleAgente agente = agentes.findById(actor.idRolOperativo())
-                .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado para oportunidad."));
-
-        OportunidadComercial oportunidad = new OportunidadComercial();
-        oportunidad.setOrganizacionId(actor.idOrganizacion());
-        oportunidad.setCodigoOportunidad(codigo(datos.codigoOportunidad()));
-        oportunidad.setCliente(cliente);
-        oportunidad.setCaptacion(captacion);
-        oportunidad.setAgente(agente);
-        oportunidad.setObservaciones(datos.observaciones());
-        if (datos.idPublicacionOrigen() != null && datos.idPublicacionOrigen() > 0) {
-            oportunidad.setIdPublicacionOrigen(datos.idPublicacionOrigen());
-        }
-        transiciones.iniciar(oportunidad, OportunidadComercial.ABIERTA);
-        return ficha(oportunidades.save(oportunidad));
+        if(d.idDemanda()!=null)exacta(d.versionDemanda(),demandas.buscar(d.idDemanda(),actor).version(),"Demanda");
+        if("COINCIDENCIA".equals(d.origen()))coincidencias.verificarSeleccionParaApertura(
+            d.referenciaConsulta(),d.referenciaCoincidencia(),d.idEncargo(),d.idDemanda(),d.versionDemanda(),actor);
+        return new DatosOportunidad(d.codigoOportunidad(),d.idEncargo(),d.versionEncargo(),interesadoValidado,d.observaciones(),
+            d.idPublicacionOrigen(),d.idDemanda(),d.versionDemanda(),d.origen(),d.referenciaConsulta(),d.referenciaCoincidencia(),d.evidenciaInteres());
     }
-
-    @Override
-    @Transactional
-    public FichaOportunidad noContinuidad(long id, String razon, String observaciones, Actor actor) {
-        OportunidadComercial oportunidad = cargarConAcceso(id, actor);
-        if (razon == null || razon.isBlank()) {
-            throw new ReglaNegocioException("El motivo de no continuidad es obligatorio.");
-        }
-        String codigoRazon = razon.trim();
-        if (!MotivoNoContinuidad.RAZONES.contains(codigoRazon)) {
-            throw new ReglaNegocioException("Codigo invalido para MotivoNoContinuidadTipo: " + razon);
-        }
-        if (!oportunidad.estaAbierta()) {
-            throw new ReglaNegocioException("La oportunidad comercial debe estar ABIERTA.");
-        }
-        DetalleAgente agente = agentes.findById(actor.idRolOperativo())
-                .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado para no continuidad."));
-
-        MotivoNoContinuidad motivo = new MotivoNoContinuidad();
-        motivo.setOrganizacionId(oportunidad.getOrganizacionId());
-        motivo.setOportunidad(oportunidad);
-        motivo.setRazonPrincipal(codigoRazon);
-        motivo.setObservaciones(observaciones);
-        motivo.setAgente(agente);
-        motivos.save(motivo);
-
-        // El cable guarda la DESCRIPCION, no el codigo, y esa descripcion sale
-        // de la tabla que la guarda (WP-A): aqui vivia una de las cinco copias
-        // del mismo vocabulario, y una razon nueva salia como null en el cable.
-        String descripcion = MotivoNoContinuidad.rotuloDe(codigoRazon);
-        oportunidad.marcarCierre(descripcion);
-        transiciones.aplicar(oportunidad, id, OportunidadComercial.NO_CONTINUA, actor, descripcion);
-        return ficha(oportunidades.save(oportunidad));
+    @Override @Transactional(readOnly=true)
+    public void exigirLecturaApertura(DatosOportunidad d,Actor actor){
+        if(d==null)throw new ReglaNegocioException("No se conserva la propuesta de apertura.");
+        contextos.exigirOperador(actor);encargos.consultar(d.idEncargo(),actor);
+        interesados.exigirLectura(d.interesado(),null,actor);
     }
-
-    @Override
-    @Transactional(readOnly = true)
-    public FichaOportunidad cierreExitoso(long id, Actor actor) {
-        // Valida rol (en el controlador) y acceso, y despues SIEMPRE falla:
-        // es cable real que el frontend consume.
-        cargarConAcceso(id, actor);
-        throw new ReglaNegocioException(
-                "El cierre exitoso se registra desde la solicitud aprobada para crear el contrato de alquiler.");
+    private DatosOportunidad normalizar(DatosOportunidad d){
+        if(d==null)throw new ReglaNegocioException("Aporta la oportunidad y su interesado real.");
+        identidad(d.idEncargo(),"el Encargo");version(d.versionEncargo(),"Encargo");
+        if(d.interesado()==null)throw new ReglaNegocioException("Identifica un interesado conocido sin inventar un rol Cliente.");
+        String origen=texto(d.origen());
+        if(origen==null||!Set.of("DIRECTO","COINCIDENCIA","COLABORACION").contains(origen))
+            throw new ReglaNegocioException("Declara el origen DIRECTO, COINCIDENCIA o COLABORACION.");
+        if((d.idDemanda()==null)!=(d.versionDemanda()==null))throw new ReglaNegocioException("Identifica Demanda y versión juntas.");
+        if(d.idDemanda()!=null){identidad(d.idDemanda(),"la Demanda");version(d.versionDemanda(),"Demanda");}
+        if(d.evidenciaInteres()==null||(texto(d.evidenciaInteres().descripcion())==null&&texto(d.evidenciaInteres().referencia())==null))
+            throw new ReglaNegocioException("Conserva la manifestación conocida de interés.");
+        if(d.idPublicacionOrigen()!=null)identidad(d.idPublicacionOrigen(),"la publicación de origen");
+        if("COINCIDENCIA".equals(origen)&&(texto(d.referenciaConsulta())==null||texto(d.referenciaCoincidencia())==null))
+            throw new ReglaNegocioException("Conserva las referencias de la coincidencia elegida.");
+        String codigo=texto(d.codigoOportunidad());
+        if(codigo!=null&&codigo.length()>20)throw new ReglaNegocioException("El código de oportunidad admite hasta 20 caracteres.");
+        return new DatosOportunidad(codigo,d.idEncargo(),d.versionEncargo(),d.interesado(),texto(d.observaciones()),d.idPublicacionOrigen(),
+            d.idDemanda(),d.versionDemanda(),origen,texto(d.referenciaConsulta()),texto(d.referenciaCoincidencia()),d.evidenciaInteres());
     }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaOportunidad registrar(DatosOportunidad bruto,Actor actor,ContextoSesion sesion,String clave,Procedencia p){
+        var d=normalizar(bruto);var previo=iniciar(RecibosDeActividad.ABRIR,d,actor,sesion,clave,p);
+        if(previo.isPresent())return restaurar(previo.get(),actor);
+        validarApertura(d,actor);
+        var cap=captaciones.bloquearParaEscritura(actor.idOrganizacion(),d.idEncargo()).orElseThrow(()->new NoEncontradoException("Encargo"));
+        entidades.refresh(cap,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if(cap.getAgente()==null||cap.getAgente().getId()!=actor.idRolOperativo())throw new AccesoNoAutorizadoException();
+        exacta(d.versionEncargo(),cap.getVersion(),"Encargo");
+        var i=interesados.resolver(d.interesado(),actor,p);
+        if(d.idDemanda()!=null){var dem=demandas.buscar(d.idDemanda(),actor);exacta(d.versionDemanda(),dem.version(),"Demanda");
+            if(!Objects.equals(dem.idPersonaInteresada(),i.persona().getId()))throw new ReglaNegocioException("La Demanda corresponde a otro interesado.");}
+        if(oportunidades.existeAbiertaDelInteresado(actor.idOrganizacion(),cap.getId(),i.persona().getId()))
+            throw new ConflictoException("Ya existe una oportunidad abierta para este interesado y Encargo.");
+        oportunidades.bloquearNumeracion(actor.idOrganizacion());
+        var o=new OportunidadComercial();o.setOrganizacionId(actor.idOrganizacion());
+        o.setCodigoOportunidad(d.codigoOportunidad()==null?"OP-"+oportunidades.siguienteNumero(actor.idOrganizacion()):d.codigoOportunidad());
+        o.setCliente(i.cliente());o.setPersonaInteresada(i.persona());o.setInteresadoContextoJson(i.contextoJson());
+        o.setCaptacion(cap);o.setAgente(agentes.findById(actor.idRolOperativo()).orElseThrow(AccesoNoAutorizadoException::new));
+        o.setObservaciones(d.observaciones());o.setIdPublicacionOrigen(d.idPublicacionOrigen());o.setIdDemanda(d.idDemanda());
+        o.setVersionDemanda(d.versionDemanda());o.setOrigen(d.origen());o.setReferenciaConsulta(d.referenciaConsulta());
+        o.setReferenciaCoincidencia(d.referenciaCoincidencia());o.setEvidenciaInteresJson(documentos.objetoCanonico(d.evidenciaInteres()));
+        o.setProcedenciaJson(documentos.objetoCanonico(p));transiciones.iniciar(o,OportunidadComercial.ABIERTA);
+        o.fijarRegistro(contextos.ahora().atOffset(ZoneOffset.UTC));oportunidades.saveAndFlush(o);
+        return terminar(RecibosDeActividad.ABRIR,d,o,actor,clave,p,null);
+    }
+    @Override @Transactional
+    public NoContinuidad validarNoContinuidad(NoContinuidad bruto,Actor actor){
+        var d=normalizar(bruto);contextos.exigirAgente(actor);var o=acceso.conAcceso(d.idOportunidad(),actor);
+        if(o.getAgente()==null||o.getAgente().getId()!=actor.idRolOperativo())throw new AccesoNoAutorizadoException();
+        exacta(d.versionEsperada(),o.getVersion(),"Oportunidad");
+        if(!o.estaAbierta())throw new ReglaNegocioException("La oportunidad comercial debe estar ABIERTA.");return d;
+    }
+    private NoContinuidad normalizar(NoContinuidad d){
+        if(d==null)throw new ReglaNegocioException("Aporta la decisión de no continuidad.");
+        identidad(d.idOportunidad(),"la oportunidad");version(d.versionEsperada(),"Oportunidad");fecha(d.fechaHecho());
+        String r=texto(d.razon());if(r==null||!MotivoNoContinuidad.RAZONES.contains(r))throw new ReglaNegocioException("Indica una razón de no continuidad admitida.");
+        return new NoContinuidad(d.idOportunidad(),d.versionEsperada(),r,texto(d.observaciones()),d.fechaHecho());
+    }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public FichaOportunidad noContinuidad(NoContinuidad bruto,Actor a,ContextoSesion s,String clave,Procedencia p){
+        var d=normalizar(bruto);var previo=iniciar(RecibosDeActividad.NO_CONTINUAR,d,a,s,clave,p);
+        if(previo.isPresent())return restaurar(previo.get(),a);
+        var o=acceso.bloquearActividad(d.idOportunidad(),d.versionEsperada(),a);validarNoContinuidad(d,a);
+        if(oportunidades.fichaVersion(a.idOrganizacion(),o.getId(),o.getVersion()).isEmpty())
+            oportunidades.historizar(a.idOrganizacion(),o.getId(),o.getVersion(),contextos.ahora(),"ANTECEDENTE_OBSERVADO",
+                "Estado observado antes de la modificación; sin atribuir fecha histórica desconocida.",documentos.objetoCanonico(ficha(o)));
+        var m=new MotivoNoContinuidad();m.setOrganizacionId(a.idOrganizacion());m.setOportunidad(o);
+        m.setRazonPrincipal(d.razon());m.setObservaciones(d.observaciones());m.setAgente(o.getAgente());motivos.save(m);
+        String descripcion=MotivoNoContinuidad.rotuloDe(d.razon());
+        transiciones.aplicar(o,o.getId(),OportunidadComercial.NO_CONTINUA,a,descripcion,d.fechaHecho());
+        o.registrarNoContinuidad(d.fechaHecho(),contextos.ahora().atOffset(ZoneOffset.UTC),descripcion,documentos.objetoCanonico(p));
+        oportunidades.saveAndFlush(o);return terminar(RecibosDeActividad.NO_CONTINUAR,d,o,a,clave,p,descripcion);
+    }
+    @Override @Transactional(readOnly=true)
+    public Optional<FichaOportunidad> consultarResultadoApertura(String clave,Actor a){return resultado(RecibosDeActividad.ABRIR,clave,a);}
+    @Override @Transactional(readOnly=true)
+    public Optional<FichaOportunidad> consultarResultadoNoContinuidad(String clave,Actor a){return resultado(RecibosDeActividad.NO_CONTINUAR,clave,a);}
+    private Optional<FichaOportunidad> resultado(String cap,String clave,Actor a){
+        contextos.exigirOperador(a);return recibos.consultar(a,clave,cap).map(r->restaurar(r,a));
+    }
+    private Optional<String> iniciar(String cap,Object d,Actor a,ContextoSesion s,String clave,Procedencia p){
+        if(p==null)throw new ReglaNegocioException("Conserva la procedencia del hecho.");contextos.iniciar(a,s);
+        return recibos.buscarOriginal(a,clave,cap,d,p);
+    }
+    private FichaOportunidad terminar(String cap,Object d,OportunidadComercial o,Actor a,String clave,Procedencia p,String motivo){
+        String json=documentos.objetoCanonico(ficha(o));Instant ahora=contextos.ahora();
+        oportunidades.historizar(a.idOrganizacion(),o.getId(),o.getVersion(),ahora,cap,motivo,json);
+        recibos.registrar(a,clave,cap,d,p,OportunidadComercial.ENTIDAD_TIPO,o.getId(),ficha(o));
+        return documentos.comoObjeto(json,FichaOportunidad.class);
+    }
+    private FichaOportunidad restaurar(String json,Actor a){
+        var f=documentos.comoObjeto(json,FichaOportunidad.class);var actual=acceso.contextoParaNegociacion(f.id(),a);
+        if(!Objects.equals(f.idCaptacion(),actual.idEncargo())||!Objects.equals(f.interesado(),actual.interesado()))
+            throw new AccesoNoAutorizadoException();
+        return f;
+    }
+    @Override @Transactional(readOnly=true)
+    public ConsultaOportunidad consultar(long id,Seccion seccion,Instant corte,Actor a){
+        acceso.contextoParaNegociacion(id,a);if(seccion==null)throw new ReglaNegocioException("Selecciona la sección de la oportunidad.");
+        Instant hasta=corte==null?contextos.ahora():corte;
+        var base=corte==null?ficha(cargarConAcceso(id,a)):oportunidades.fichaAlCorte(a.idOrganizacion(),id,hasta)
+            .map(j->restaurar(j,a)).orElseThrow(()->new NoEncontradoException("Oportunidad en el corte"));
+        var historia=seccion==Seccion.HISTORIA?oportunidades.historia(a.idOrganizacion(),id,hasta).stream().map(v->
+            new Antecedente(v.getVersion(),v.getRegistradoEn(),v.getOperacion(),v.getMotivo(),restaurar(v.getFicha(),a))).toList():null;
+        if(seccion==Seccion.NEGOCIACION)base=conMesa(base,ofertas.listar(id,hasta,a),ofertas.capacidades(id,a));
+        return new ConsultaOportunidad(base,seccion,corte,historia,seccion==Seccion.ACTIVIDAD?interacciones.porOportunidad(id,hasta,a):null,
+            seccion==Seccion.VISITAS?visitas.porOportunidad(id,hasta,a):null,
+            seccion==Seccion.NEGOCIACION?ofertas.consultarAcuerdoAceptado(id,hasta,a).orElse(null):null);
+    }
+    private static void exacta(long obs,long actual,String campo){if(obs!=actual)throw new ConflictoException("Cambió la versión de "+campo+"; revisa el hecho exacto.");}
 
     // ------------------------------------------------------------------
     // Alcance por rol: BROKER por CAPTACION (§4), no por agente.
@@ -276,12 +347,6 @@ public class OportunidadServiceImpl implements OportunidadService {
      */
     private OportunidadComercial cargarConAcceso(long id, Actor actor) {
         return acceso.conAcceso(id, actor);
-    }
-
-    private static String codigo(String codigoSolicitado) {
-        return codigoSolicitado != null && !codigoSolicitado.isBlank()
-                ? codigoSolicitado.trim()
-                : "OP-" + LocalDateTime.now().format(CODIGO);
     }
 
     private static int tamano(int tamano) {
@@ -302,26 +367,25 @@ public class OportunidadServiceImpl implements OportunidadService {
      * campos llegan nulos, y con {@code NON_NULL} no viajan: su ausencia
      * significa «no calculado aqui», no «no hay ofertas» ni «no puedes».
      */
-    private FichaOportunidad fichaIndividual(OportunidadComercial o, Actor actor) {
-        FichaOportunidad base = ficha(o);
-        return new FichaOportunidad(base.id(), base.codigoOportunidad(), base.idCliente(),
-                base.clienteNombre(), base.idCaptacion(), base.codigoCaptacion(),
-                base.direccionLocal(), base.distritoLocal(), base.idAgente(), base.agenteNombre(),
-                base.estado(), base.fechaRegistro(), base.motivoCierre(), base.observaciones(),
-                base.fechaCierre(), base.fechaActualizacion(), base.idPublicacionOrigen(),
-                ofertas.listar(o.getId(), actor),
-                ofertas.capacidades(o.getId(), actor));
+    private FichaOportunidad fichaIndividual(OportunidadComercial o,Actor a){return conMesa(ficha(o),ofertas.listar(o.getId(),a),ofertas.capacidades(o.getId(),a));}
+    private FichaOportunidad conMesa(FichaOportunidad b,List<OfertaService.FichaOferta> mesa,OfertaService.CapacidadesDeLaMesa capacidades){
+        return new FichaOportunidad(b.id(),b.codigoOportunidad(),b.idCliente(),b.clienteNombre(),b.idCaptacion(),b.codigoCaptacion(),
+            b.direccionLocal(),b.distritoLocal(),b.idAgente(),b.agenteNombre(),b.estado(),b.fechaRegistro(),b.motivoCierre(),b.observaciones(),
+            b.fechaCierre(),b.fechaActualizacion(),b.idPublicacionOrigen(),mesa,capacidades,b.version(),b.interesado(),b.idDemanda(),b.versionDemanda(),
+            b.origen(),b.referenciaConsulta(),b.referenciaCoincidencia(),b.fechaNoContinuidad(),b.procedencia());
     }
 
-    private static FichaOportunidad ficha(OportunidadComercial o) {
+    private FichaOportunidad ficha(OportunidadComercial o) {
         DetalleCliente cliente = o.getCliente();
         Captacion captacion = o.getCaptacion();
         Propiedad propiedad = captacion != null ? captacion.getPropiedad() : null;
         DetalleAgente agente = o.getAgente();
+        Long persona=o.getPersonaInteresada()!=null?o.getPersonaInteresada().getId():
+            cliente==null||cliente.getRol()==null||cliente.getRol().getPersona()==null?null:cliente.getRol().getPersona().getId();
         return new FichaOportunidad(
                 o.getId(), o.getCodigoOportunidad(),
                 cliente != null ? cliente.getId() : null,
-                nombre(cliente != null ? cliente.getRol() : null),
+                o.getPersonaInteresada()!=null?o.getPersonaInteresada().getNombresORazonSocial():nombre(cliente != null ? cliente.getRol() : null),
                 captacion != null ? captacion.getId() : null,
                 captacion != null ? captacion.getCodigoCaptacion() : null,
                 propiedad != null ? propiedad.getDireccion() : null,
@@ -335,7 +399,9 @@ public class OportunidadServiceImpl implements OportunidadService {
                 Fechas.local(o.getFechaActualizacion()),
                 o.getIdPublicacionOrigen(),
                 // Sin mesa ni capacidades: los produce fichaIndividual.
-                null, null);
+                null, null,o.getVersion(),persona==null?null:new InteresadoReferencia(persona,cliente==null?null:cliente.getId()),
+                o.getIdDemanda(),o.getVersionDemanda(),o.getOrigen(),o.getReferenciaConsulta(),o.getReferenciaCoincidencia(),o.getFechaNoContinuidad(),
+                o.getProcedenciaJson()==null?null:documentos.comoObjeto(o.getProcedenciaJson(),Procedencia.class));
     }
 
     private static String nombre(PersonaRol rol) {

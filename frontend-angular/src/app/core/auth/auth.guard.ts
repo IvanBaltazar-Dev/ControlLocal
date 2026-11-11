@@ -12,9 +12,11 @@ import { destinoSeguro, PARAM_DESTINO } from './destino-tras-login';
  * abrir un enlace directo a una ficha sin sesión te dejaba en el panel y con
  * el enlace perdido.
  */
-export const authGuard: CanActivateFn = (_ruta, estado) => {
+export const authGuard: CanActivateFn = (ruta, estado) => {
   const auth = inject(AuthService);
-  if (auth.autenticado()) {
+  const accesoSeguro = ruta.routeConfig?.path === 'cambiar-contrasena' || ruta.routeConfig?.path === 'enrolar-mfa';
+  if (auth.autenticado() && (accesoSeguro ||
+      (auth.sesion()?.contextoRequerido === false && auth.sesion()?.rol !== 'IDENTIDAD'))) {
     return true;
   }
   const destino = destinoSeguro(estado.url);

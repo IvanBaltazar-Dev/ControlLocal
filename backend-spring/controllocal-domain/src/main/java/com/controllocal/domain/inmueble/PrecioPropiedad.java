@@ -175,7 +175,7 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
     @Column(name = "moneda", nullable = false, length = 3)
     private String moneda;
 
-    @Column(name = "monto", nullable = false, precision = 12, scale = 2)
+    @Column(name = "monto", nullable = false, precision = 14, scale = 2)
     private BigDecimal monto;
 
     @Column(name = "fecha", nullable = false)

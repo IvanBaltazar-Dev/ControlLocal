@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -63,6 +64,7 @@ class BusquedaLocalesIntegrationTest {
     private long idPorTodasLasRamas;
     private long idOtroTenant;
     private long rolPropietarioBuscado;
+    private final Map<Long, Long> agentesDelMontaje = new HashMap<>();
 
     /**
      * Un local por rama de busqueda, uno que casa por TODAS a la vez y uno en
@@ -134,7 +136,7 @@ class BusquedaLocalesIntegrationTest {
     @Test
     void elRubroEntraTambienEnElListadoUniversal() {
         List<Long> universal = motor.resolver(FiltrosDeListadoInmobiliario.dePropiedades(
-                ORG, "Tienda de ZORZAL", null, null, null, false, false, 1, 100, 100)).ids();
+                ORG, List.of(agentesDelMontaje.get(ORG)), "Tienda de ZORZAL", null, null, null, false, false, 1, 100, 100)).ids();
 
         assertTrue(universal.contains(idPorRubro),
                 "el listado universal tiene que encontrar por rubro lo mismo que el heredado");
@@ -162,6 +164,7 @@ class BusquedaLocalesIntegrationTest {
                 values ('LOC-ZORZAL-T', 'Av. ZORZAL 700', 'ZORZAL Alto', 500, 'A', 'D', 'T', 'C', ?, ?)
                 returning id_propiedad
                 """, Long.class, rolPropietarioBuscado, ORG);
+        vincularProspeccion(ORG,idTerreno);
 
         assertTrue(idsDelConjunto("ZORZAL").contains(idTerreno),
                 "el terreno si entra por direccion y distrito, que si le aplican");
@@ -231,7 +234,7 @@ class BusquedaLocalesIntegrationTest {
         long orgVecina = jdbc.queryForObject(
                 "select organizacion_id from propiedad where id_propiedad=?", Long.class, idOtroTenant);
         assertEquals(1, motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
-                orgVecina, "ZORZAL", null, 1, 1, 1000)).total());
+                orgVecina, List.of(agentesDelMontaje.get(orgVecina)), "ZORZAL", null, 1, 1, 1000)).total());
     }
 
     /**
@@ -370,9 +373,10 @@ class BusquedaLocalesIntegrationTest {
      * recurso cambiara de configuracion, este gate mediria otra cosa sin
      * enterarse.
      */
-    private static CriterioBusquedaInmobiliaria criterio(String texto, String estado,
+    private CriterioBusquedaInmobiliaria criterio(String texto, String estado,
                                                          int tamano, int pagina) {
-        return FiltrosDeListadoInmobiliario.deLocales(ORG, texto, estado, pagina, tamano, 1000);
+        return FiltrosDeListadoInmobiliario.deLocales(ORG, List.of(agentesDelMontaje.get(ORG)),
+                texto, estado, pagina, tamano, 1000);
     }
 
     private long totalDelConjunto(String texto, String estado) {
@@ -415,6 +419,33 @@ class BusquedaLocalesIntegrationTest {
                 insert into atributo_propiedad (id_propiedad, clave, valor_texto, organizacion_id)
                 values (?, 'rubro_permitido', ?, ?)
                 """, id, rubro, organizacion);
+        vincularProspeccion(organizacion,id);
         return id;
+    }
+
+    private void vincularProspeccion(long organizacion,long idPropiedad) {
+        long agente = agentesDelMontaje.computeIfAbsent(organizacion, this::crearAgente);
+        jdbc.update("""
+                insert into prospeccion (codigo_prospeccion, estado, id_propiedad, id_rol_agente, organizacion_id)
+                values (?, 'P', ?, ?, ?)
+                """, "PRO-BUSQ-" + idPropiedad, idPropiedad, agente, organizacion);
+    }
+
+    private long crearAgente(long organizacion) {
+        long persona = jdbc.queryForObject("""
+                insert into persona(organizacion_id,tipo_persona,tipo_documento,numero_documento,
+                                    nombres_o_razon_social,estado)
+                values (?, 'N', 'D', ?, 'Profesional de búsqueda', 'A') returning id_persona
+                """, Long.class, organizacion,
+                String.format(java.util.Locale.ROOT, "%08d", 10000000L + Math.floorMod(System.nanoTime(), 90000000L)));
+        long rol = jdbc.queryForObject("""
+                insert into persona_rol (organizacion_id, id_persona, tipo_rol, vigencia_desde)
+                values (?, ?, 'AGENTE', current_date) returning id_persona_rol
+                """, Long.class, organizacion, persona);
+        jdbc.update("""
+                insert into detalle_agente (id_persona_rol, organizacion_id, codigo_agente, fecha_ingreso, estado_operativo)
+                values (?, ?, ?, current_date, 'D')
+                """, rol, organizacion, "AG-BUSQ-" + rol);
+        return rol;
     }
 }

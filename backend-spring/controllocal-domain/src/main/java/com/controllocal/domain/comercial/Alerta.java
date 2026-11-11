@@ -24,13 +24,10 @@ import java.util.Set;
  * porque auditar cada aviso llenaria {@code historial_estado} de ruido
  * operativo. Su estado se mueve con {@link #atender()}.
  *
- * <p><b>La regla que ordena el modulo</b>: la alerta se ata SIEMPRE a un
- * AGENTE, nunca a un broker. El agente la ve como propia y su broker
- * supervisor la ve a traves de la supervision, asi que <b>quien es el
- * destinatario lo dice el TIPO, no una columna</b>: {@code CAPTACION_CREADA}
- * cuelga del agente pero esta escrita <i>para</i> el broker, y
- * {@code CAPTACION_REVISADA} cuelga del mismo agente y esta escrita
- * <i>para</i> el. No hay {@code id_destinatario} y no hay que inventarlo.
+ * <p>Las causas C7 conservan aquí el agente al detectar el hecho, como
+ * procedencia inmutable. La entrega vuelve a resolver el responsable y la
+ * autoridad actuales del recurso; reasignar no crea otro aviso ni cambia su
+ * fecha. R27 conserva su vínculo y su conciliación propios.
  *
  * <p>El estado persiste como codigo de un caracter. El enum es una vista
  * derivada y estricta; el atributo {@code String} sigue siendo consultable por
@@ -80,6 +77,27 @@ public class Alerta extends EntidadDeOrganizacion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_alerta")
     private Long id;
+    @Column(name="marca_causa",length=64)
+    private String marcaCausa;
+    @Column(name="huella_causa_c7",length=64)
+    private String huellaCausaC7;
+    @Column(name="fuente_causa_c7",columnDefinition="text")
+    private String fuenteCausaC7;
+    @Column(name="estado_causa_c7",length=15)
+    private String estadoCausaC7;
+    @Column(name="id_antecedente_c7")
+    private Long idAntecedenteC7;
+
+    public String getMarcaCausa(){return marcaCausa;}
+    public void setMarcaCausa(String valor){marcaCausa=valor;}
+    public String getHuellaCausaC7(){return huellaCausaC7;}
+    public void setHuellaCausaC7(String valor){huellaCausaC7=valor;}
+    public String getFuenteCausaC7(){return fuenteCausaC7;}
+    public void setFuenteCausaC7(String valor){fuenteCausaC7=valor;}
+    public String getEstadoCausaC7(){return estadoCausaC7;}
+    public void setEstadoCausaC7(String valor){estadoCausaC7=valor;}
+    public Long getIdAntecedenteC7(){return idAntecedenteC7;}
+    public void setIdAntecedenteC7(Long valor){idAntecedenteC7=valor;}
 
     @Column(name = "tipo", nullable = false, length = 30)
     private String tipo;
@@ -94,9 +112,14 @@ public class Alerta extends EntidadDeOrganizacion {
     @Column(name = "entidad_id", nullable = false)
     private Long entidadId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_rol_agente", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_rol_agente")
     private DetalleAgente agente;
+    @ManyToOne(fetch=FetchType.LAZY)
+    @JoinColumn(name="id_rol_broker")
+    private com.controllocal.domain.persona.DetalleBroker broker;
+    @Column(name="nb_evento") private Long eventoBroker;
+    @Column(name="nb_codigo",length=5) private String codigoBroker;
 
     @Column(name = "mensaje", nullable = false, length = 300)
     private String mensaje;

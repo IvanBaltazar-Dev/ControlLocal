@@ -1,73 +1,57 @@
 package com.controllocal.service.soporte;
 
-import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
+import com.controllocal.service.ComisionService.Calculo;
+import com.controllocal.service.ComisionService.Dinero;
+import com.controllocal.service.encargo.PactosDeEncargo.ReglaComision;
+import com.controllocal.service.formalizacion.HitosConfirmados.FuenteEconomicaFinal;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Set;
 
-/** Aritmetica unica de comisiones; cada operando llega con tipo y base. */
+/** RF063/Spec8: única aritmética. Porcentaje fraccionario; HALF_UP2 vigente. */
 public final class CalculadoraComision {
     private CalculadoraComision() { }
 
-    public static BigDecimal calcular(CondicionEconomicaCaptacion condicion,
-                                      BigDecimal renta, BigDecimal precioVenta) {
-        if (condicion == null) throw new ReglaNegocioException("La condicion economica es obligatoria.");
-        BigDecimal valor = condicion.getValorComision();
-        if (valor == null || valor.signum() < 0) {
-            throw new ReglaNegocioException("El valor de comision debe ser cero o positivo.");
-        }
-        validarTipoBaseYMoneda(condicion);
-        BigDecimal resultado = switch (condicion.getTipoComision()) {
-            case CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES ->
-                    base(renta, "renta mensual").multiply(valor);
-            case CondicionEconomicaCaptacion.PORCENTAJE -> {
-                BigDecimal base = CondicionEconomicaCaptacion.RENTA_MENSUAL.equals(condicion.getBaseCalculo())
-                        ? base(renta, "renta mensual") : base(precioVenta, "precio de venta");
-                yield base.multiply(valor).divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP);
-            }
-            case CondicionEconomicaCaptacion.MONTO_FIJO -> valor;
-            default -> throw new ReglaNegocioException("Tipo de comision invalido.");
-        };
-        return resultado.setScale(2, RoundingMode.HALF_UP);
+    public static Calculo calcular(ReglaComision regla, OperacionInmobiliaria operacion,
+                                    FuenteEconomicaFinal fuente) {
+        if(regla==null || operacion==null)
+            throw new ReglaNegocioException("Identifica el pacto y su operación.");
+        String tipo=regla.tipoComision(), base=regla.baseCalculo();
+        BigDecimal valor=regla.valorComision();
+        if(valor==null || valor.signum()<0)
+            throw new ReglaNegocioException("El valor pactado de comisión debe ser conocido y no negativo.");
+        if(!Set.of("P","E","F").contains(tipo==null?"":tipo)
+                || !("F".equals(tipo)?"N".equals(base):
+                    "E".equals(tipo)?"R".equals(base):Set.of("R","V").contains(base==null?"":base)))
+            throw new ReglaNegocioException("La combinación de tipo y base de comisión es inválida.");
+        CondicionesEconomicas.exigirBaseCoherente(operacion.codigo(),tipo,base);
+        String moneda=CondicionesEconomicas.moneda(regla.monedaComision(),"de la comisión pactada");
+        if(valor.signum()==0 && (regla.motivoSinComision()==null || regla.motivoSinComision().isBlank()))
+            throw new ReglaNegocioException("La comisión cero conserva su motivo pactado.");
+        if("F".equals(tipo)||valor.signum()==0)
+            return conocido(valor,moneda);
+        var dinero=fuente==null?null:("R".equals(base)?fuente.rentaMensual():fuente.precioVenta());
+        if(dinero==null || dinero.importe()==null)
+            return pendiente(moneda,"R".equals(base)?"RENTA_MENSUAL_FINAL":"PRECIO_VENTA_FINAL");
+        if(dinero.importe().signum()<=0)
+            throw new ReglaNegocioException("La base final de comisión debe ser mayor que cero.");
+        if(dinero.moneda()==null || dinero.moneda().isBlank())
+            return pendiente(moneda,"MONEDA_BASE_FINAL");
+        String monedaBase=CondicionesEconomicas.moneda(dinero.moneda(),"de la base final");
+        if(!moneda.equals(monedaBase))
+            return pendiente(moneda,"MONEDA_BASE_FINAL_NO_COMPARABLE");
+        // La fuente tipada distingue renta mensual contractual de cargos/total mensual.
+        // P ya es una fracción: 0.03 × 500000 = 15000; no dividir otra vez entre100.
+        return conocido(dinero.importe().multiply(valor),moneda);
     }
 
-    private static void validarTipoBaseYMoneda(CondicionEconomicaCaptacion condicion) {
-        String tipo = condicion.getTipoComision();
-        String base = condicion.getBaseCalculo();
-        boolean combinacionValida =
-                CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES.equals(tipo)
-                        && CondicionEconomicaCaptacion.RENTA_MENSUAL.equals(base)
-                || CondicionEconomicaCaptacion.PORCENTAJE.equals(tipo)
-                        && (CondicionEconomicaCaptacion.RENTA_MENSUAL.equals(base)
-                            || CondicionEconomicaCaptacion.PRECIO_VENTA.equals(base))
-                || CondicionEconomicaCaptacion.MONTO_FIJO.equals(tipo)
-                        && CondicionEconomicaCaptacion.NO_APLICA.equals(base);
-        if (!combinacionValida) {
-            throw new ReglaNegocioException("La combinacion de tipo y base de comision es invalida.");
-        }
-        // Y la combinacion tiene que caber en la operacion del encargo (V76).
-        // La operacion es obligatoria en la tabla, asi que una condicion sin
-        // ella esta a medio construir: se dice, en vez de dejar pasar el
-        // calculo sin comprobar sobre que importe se apoya.
-        if (condicion.getTipoOperacion() == null) {
-            throw new ReglaNegocioException(
-                    "La condicion economica no dice de que operacion es: sin eso no se sabe si "
-                            + "la comision se calcula sobre una renta o sobre un precio de venta.");
-        }
-        CondicionesEconomicas.exigirBaseCoherente(condicion.getTipoOperacion(), tipo, base);
-        if (CondicionEconomicaCaptacion.MONTO_FIJO.equals(tipo)) {
-            CondicionesEconomicas.moneda(condicion.getMonedaComision(), "de la comision fija");
-        } else if (condicion.getMonedaReferencia() == null
-                || !condicion.getMonedaReferencia().equals(condicion.getMonedaComision())) {
-            throw new ReglaNegocioException("La comision derivada debe usar la moneda de su base.");
-        }
+    private static Calculo conocido(BigDecimal valor,String moneda) {
+        return new Calculo(new Dinero(valor.setScale(2,RoundingMode.HALF_UP),moneda),List.of());
     }
-
-    private static BigDecimal base(BigDecimal importe, String nombre) {
-        if (importe == null || importe.signum() <= 0) {
-            throw new ReglaNegocioException("La " + nombre + " debe ser mayor que cero.");
-        }
-        return importe;
+    private static Calculo pendiente(String moneda,String causa) {
+        return new Calculo(new Dinero(null,moneda),List.of(causa));
     }
 }

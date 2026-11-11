@@ -88,7 +88,10 @@
             </td>
             <td>
               <strong>{{ persona(i) }}</strong>
-              <span class="secundario">{{ valor(i.personaTipo) }}</span>
+              <span class="secundario">{{ rolPersona(i) }}</span>
+              @if (telefonoPersona(i) !== '—') {
+                <span class="secundario">{{ telefonoPersona(i) }}</span>
+              }
             </td>
             <td><span class="cl-badge">{{ canal(i.canalContacto) }}</span></td>
             <td>{{ resultado(i.resultado) }}</td>

@@ -2,27 +2,18 @@ import { inject, Injectable } from '@angular/core';
 import { ApiClient } from './api.client';
 import { PageResponse } from './api.types';
 
-/**
- * Una cuenta del tenant, vista por el gobierno.
- *
- * **Los dos identificadores viajan a propósito.** Las fichas comerciales
- * (agente, broker) usan `idRol` — `persona_rol.id` —, y todas las operaciones
- * de acceso usan `idPersona`. Confundirlos aquí significaría revocarle el
- * segundo factor a otra persona, así que los dos van con su nombre y ninguno
- * se llama `id` a secas.
- */
+/** Padrón mínimo de gobierno, sin credenciales o factores personales. */
 export interface CuentaDeGobierno {
   idPersona: number;
-  idRol: number;
+  idMembresia: number;
+  version: number;
+  idCuenta: number;
   nombre: string;
   usuario: string;
   /** `TENANT_ADMIN` | `BROKER` | `AGENTE`, o ausente si no tiene membresía activa. */
-  rolDeGobierno?: string;
-  activa: boolean;
-  debeCambiarContrasena: boolean;
-  debeEnrolarMfa: boolean;
-  mfaActivo: boolean;
-  codigosRespaldoDisponibles: number;
+  rolPrincipal?: 'BROKER' | 'AGENTE' | null;
+  administrar: boolean;
+  pertenenciaActiva: boolean;
 }
 
 /** Un hecho de gobierno ya legible: quién tocó accesos, factores o roles. */

@@ -1,12 +1,9 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.comun.EstadosDominio.Codigos;
 import com.controllocal.domain.seguridad.EventoSeguridad;
-import com.controllocal.persistence.repositorio.CredencialUsuarioRepository;
+import com.controllocal.persistence.repositorio.CuentaAccesoRepository;
 import com.controllocal.persistence.repositorio.CuentaDeGobiernoFila;
 import com.controllocal.persistence.repositorio.EventoSeguridadRepository;
-import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
-import com.controllocal.persistence.repositorio.UsuarioOrganizacionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.SeguridadService;
@@ -17,25 +14,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class SeguridadServiceImpl implements SeguridadService {
 
     private final EventoSeguridadRepository eventos;
-    private final CredencialUsuarioRepository credenciales;
-    private final FactorAutenticacionRepository factores;
-    private final UsuarioOrganizacionRepository membresias;
+    private final CuentaAccesoRepository cuentas;
 
     public SeguridadServiceImpl(EventoSeguridadRepository eventos,
-                                CredencialUsuarioRepository credenciales,
-                                FactorAutenticacionRepository factores,
-                                UsuarioOrganizacionRepository membresias) {
+                                CuentaAccesoRepository cuentas) {
         this.eventos = eventos;
-        this.credenciales = credenciales;
-        this.factores = factores;
-        this.membresias = membresias;
+        this.cuentas = cuentas;
     }
 
     /**
@@ -47,7 +36,7 @@ public class SeguridadServiceImpl implements SeguridadService {
     @Override
     @Transactional(readOnly = true)
     public Pagina<AvisoDeGobierno> avisosDeGobierno(int pagina, int tamano, Actor actor) {
-        if (!actor.esTenantAdmin()) {
+        if (actor == null || !actor.esTenantAdmin()) {
             throw new AccesoNoAutorizadoException();
         }
         int paginaValida = Math.max(1, pagina);
@@ -58,42 +47,22 @@ public class SeguridadServiceImpl implements SeguridadService {
                 page.getTotalElements());
     }
 
-    /**
-     * <b>Tres consultas planas en vez de una ingeniosa.</b> El padron sin
-     * agregados ni joins a entidades sin relacion, la banda de gobierno aparte
-     * y el recuento de codigos aparte; el cruce se hace aqui. La version que lo
-     * resolvia todo en un solo {@code SELECT} devolvia una unica fila para todo
-     * el tenant, y sobre decenas de cuentas dos consultas mas no se notan.
-     */
+    /** Una consulta de pertenencias locales; no consulta credenciales, factores o cartera. */
     @Override
     @Transactional(readOnly = true)
     public List<CuentaDeGobierno> cuentas(Actor actor) {
-        if (!actor.esTenantAdmin()) {
+        if (actor == null || !actor.esTenantAdmin()) {
             throw new AccesoNoAutorizadoException();
         }
-        Map<Long, String> bandaPorCuenta = membresias.bandasActivas(actor.idOrganizacion()).stream()
-                .collect(Collectors.toMap(fila -> (Long) fila[0], fila -> (String) fila[1]));
-        // Estar en el mapa significa "tiene factor ACTIVO"; el valor es cuantos
-        // codigos le quedan sin usar. La ausencia es el dato, no un hueco.
-        Map<Long, Long> codigosPorCredencial = factores
-                .codigosDisponiblesPorCredencial(actor.idOrganizacion()).stream()
-                .collect(Collectors.toMap(fila -> (Long) fila[0], fila -> (Long) fila[1]));
-
-        return credenciales.cuentasDeGobierno(actor.idOrganizacion()).stream()
-                .map(fila -> cuenta(fila, bandaPorCuenta, codigosPorCredencial))
+        return cuentas.cuentasDeGobierno(actor.idOrganizacion()).stream()
+                .map(SeguridadServiceImpl::cuenta)
                 .toList();
     }
 
-    private static CuentaDeGobierno cuenta(CuentaDeGobiernoFila fila,
-                                           Map<Long, String> bandaPorCuenta,
-                                           Map<Long, Long> codigosPorCredencial) {
-        Long codigos = codigosPorCredencial.get(fila.idCredencial());
+    private static CuentaDeGobierno cuenta(CuentaDeGobiernoFila fila) {
         return new CuentaDeGobierno(
-                fila.idPersona(), fila.idRol(), fila.nombre(), fila.nombreUsuario(),
-                bandaPorCuenta.get(fila.idCredencial()),
-                Codigos.ActivoInactivo.ACTIVO.equals(fila.estadoAdministrativo()),
-                fila.debeCambiarContrasena(), fila.debeEnrolarMfa(),
-                codigos != null, codigos == null ? 0 : codigos);
+                fila.idPersona(), fila.idCuenta(), fila.nombre(), fila.usuario(),
+                fila.rolPrincipal(), fila.administrar(), fila.pertenenciaActiva(),fila.idMembresia(),fila.version());
     }
 
     private static AvisoDeGobierno aviso(Object[] fila) {

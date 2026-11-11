@@ -13,15 +13,6 @@
   font-size: 0.84rem;
 }
 
-.exito {
-  margin: 0.75rem 0 0;
-  padding: 0.55rem 0.8rem;
-  border-left: 3px solid var(--cl-exito, #15803d);
-  background: var(--cl-exito-suave, #dcfce7);
-  color: var(--cl-exito, #15803d);
-  font-size: 0.86rem;
-}
-
 // La tabla scrollea DENTRO de su envoltorio: sin esto, en pantallas estrechas
 // el desbordamiento lo hereda el body y toda la página se mueve en horizontal.
 .tabla-envoltorio {
@@ -49,22 +40,9 @@
   }
 }
 
-.celda-accion {
-  text-align: right;
-}
-
 .vacio {
   color: var(--cl-tinta-suave);
   font-style: italic;
-}
-
-.visualmente-oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
 }
 
 .avisos {
@@ -113,24 +91,3 @@
   font-size: 0.8rem;
 }
 
-.destinatario {
-  margin: 0 0 0.6rem;
-  font-size: 0.9rem;
-}
-
-.ayuda {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--cl-tinta-suave);
-  font-size: 0.78rem;
-}
-
-.alerta {
-  margin: 0.6rem 0 0;
-  padding: 0.5rem 0.7rem;
-  border-radius: 8px;
-  background: rgba(192, 57, 43, 0.09);
-  border: 1px solid rgba(192, 57, 43, 0.25);
-  color: var(--cl-error);
-  font-size: 0.85rem;
-}

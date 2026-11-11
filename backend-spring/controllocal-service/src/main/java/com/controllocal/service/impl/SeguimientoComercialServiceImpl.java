@@ -44,8 +44,8 @@ import java.util.function.Function;
  *
  * <p>Tres cosas que hay que saber antes de tocarla:
  * <ul>
- *   <li>el <b>cierre se arma desde su solicitud</b>, no desde el contrato: si
- *       la solicitud no esta en el alcance, el contrato desaparece de la lista;</li>
+ *   <li>el cierre C5 usa el contrato real y el mismo selector de alcance que
+ *       su ficha; una Solicitud ausente no se fabrica ni lo oculta;</li>
  *   <li>el <b>propietario se resuelve por mapa</b> {@code id_local → propietario}
  *       construido con TODAS las captaciones del tenant, sin filtro de rol
  *       (§6.3 del contrato) — es del cable y se replica;</li>
@@ -114,7 +114,7 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
     private List<Fila> filasPermitidas(Actor actor) {
         Alcances.Alcance alcance = alcances.de(actor);
         long organizacion = alcance.idOrganizacion();
-        boolean esBroker = !alcance.global() && !actor.esAgente();
+        boolean esBroker = actor.esBroker();
         Set<Long> agentesBroker = esBroker ? Set.copyOf(alcance.rolesAgente()) : Set.of();
 
         // El propietario solo viene cargado en la captacion; oportunidad, solicitud y
@@ -158,26 +158,19 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
         for (OportunidadComercial o : oportunidades.listarSeguimiento(
                 organizacion, alcance.global(), esBroker, alcance.paramRoles())) {
             if (permitidoPorAgente(o.getAgente(), actor, agentesBroker)
-                    || captacionPermitida(o.getCaptacion(), captacionesBroker, actor)) {
+                    || captacionPermitida(o.getCaptacion(), captacionesBroker)) {
                 filas.add(filaOportunidad(o, propietarioPorLocal));
             }
         }
         for (SolicitudAlquiler s : solicitudes.listarSeguimiento(
                 organizacion, alcance.global(), esBroker, alcance.paramRoles())) {
             if (permitidoPorAgente(s.getAgente(), actor, agentesBroker)
-                    || captacionPermitida(captacion(s), captacionesBroker, actor)) {
+                    || captacionPermitida(captacion(s), captacionesBroker)) {
                 filas.add(filaSolicitud(s, propietarioPorLocal));
             }
         }
-        for (ContratoAlquiler c : contratos.listarSeguimiento(organizacion)) {
-            SolicitudAlquiler solicitud = c.getSolicitud();
-            if (solicitud == null) {
-                continue;
-            }
-            if (permitidoPorAgente(solicitud.getAgente(), actor, agentesBroker)
-                    || captacionPermitida(captacion(solicitud), captacionesBroker, actor)) {
-                filas.add(filaContrato(c, solicitud, propietarioPorLocal));
-            }
+        for (ContratoAlquiler c : contratos.listarSeguimiento(organizacion,alcance.global(),actor.esAgente(),alcance.paramRoles())) {
+            filas.add(filaContrato(c));
         }
 
         // Orden del cable, con una consecuencia contraintuitiva que hay que conservar:
@@ -212,7 +205,7 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
                 "store",
                 "blue",
                 primerDia(p.getFechaPropuesta(), p.getFechaReunion(), p.getFechaContacto()),
-                "");
+                "",null);
     }
 
     private Fila filaCaptacion(Captacion c) {
@@ -235,7 +228,7 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
                 "pin",
                 "blue",
                 primerDia(c.getFechaCaptacion(), c.getFechaInicioVigencia()),
-                "");
+                "",null);
     }
 
     private Fila filaOportunidad(OportunidadComercial o, Map<Long, PersonaRol> propietarioPorLocal) {
@@ -260,7 +253,7 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
                 "target",
                 "info",
                 marca,
-                "");
+                "",null);
     }
 
     private Fila filaSolicitud(SolicitudAlquiler s, Map<Long, PersonaRol> propietarioPorLocal) {
@@ -285,40 +278,38 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
                 "fileText",
                 "gray",
                 actualizacion != null ? actualizacion : primerDia(s.getFechaRegistro()),
-                monto(s.getMontoPropuesto()));
+                monto(s.getMontoPropuesto()),s.getMoneda());
     }
 
-    /**
-     * El cierre toma TODO de la solicitud —codigo, cliente, agente, local y
-     * monto—; del contrato solo salen el estado y la fecha de cierre.
-     */
-    private Fila filaContrato(ContratoAlquiler contrato,
-                              SolicitudAlquiler solicitud,
-                              Map<Long, PersonaRol> propietarioPorLocal) {
-        Propiedad local = local(captacion(solicitud));
-        OportunidadComercial oportunidad = solicitud.getOportunidad();
-        PersonaRol propietario = propietarioDeFila(local, propietarioPorLocal);
+    /** RF059: hecho contractual propio, sin convertir una Solicitud ausente en obligatoria. */
+    private Fila filaContrato(ContratoAlquiler contrato) {
+        SolicitudAlquiler solicitud=contrato.getSolicitud();
+        OportunidadComercial oportunidad=contrato.getOportunidad();
+        Propiedad local=local(oportunidad==null?null:oportunidad.getCaptacion());
+        DetalleCliente cliente=oportunidad==null?null:oportunidad.getCliente();
+        DetalleAgente agente=contrato.getAgenteCierre()!=null?contrato.getAgenteCierre():solicitud==null?null:solicitud.getAgente();
+        PersonaRol propietario=local==null?null:local.getRolPropietario();
         return new Fila(
                 CIERRE,
                 texto(oportunidad != null ? oportunidad.getCodigoOportunidad() : null,
-                        solicitud.getCodigoSolicitud()),
-                nombre(cliente(solicitud)),
-                idCliente(cliente(solicitud)),
+                        solicitud==null?null:solicitud.getCodigoSolicitud()),
+                nombre(cliente),
+                idCliente(cliente),
                 direccion(local),
                 distrito(local),
-                nombre(solicitud.getAgente()),
+                nombre(agente),
                 propietario(propietario),
                 propietarioId(propietario),
                 Descripciones.contrato(contrato.estadoActual()),
                 fecha(contrato.getFechaCierre()),
-                solicitud.getCodigoSolicitud() != null
+                solicitud!=null&&solicitud.getCodigoSolicitud() != null
                         ? "solicitud-detail/" + solicitud.getCodigoSolicitud()
                         : "propiedades-alquiladas",
                 "",
                 "checkCircle",
                 "green",
                 primerDia(contrato.getFechaCierre()),
-                monto(solicitud.getMontoPropuesto()));
+                monto(contrato.getRentaContractual()),contrato.getMoneda());
     }
 
     // ---------- filtros, conteos y opciones ----------
@@ -381,11 +372,8 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
 
     // ---------- alcance ----------
 
-    /** ADMIN todo; AGENTE lo suyo; BROKER lo de su equipo vigente. */
+    /** AGENTE lo suyo; BROKER lo de su equipo vigente (CAT-R19). */
     private static boolean permitidoPorAgente(DetalleAgente agente, Actor actor, Set<Long> agentesBroker) {
-        if (actor.esTenantAdmin()) {
-            return true;
-        }
         Long id = idAgente(agente);
         if (id == null) {
             return false;
@@ -393,10 +381,7 @@ public class SeguimientoComercialServiceImpl implements SeguimientoComercialServ
         return actor.esAgente() ? id == actor.idRolOperativo() : agentesBroker.contains(id);
     }
 
-    private static boolean captacionPermitida(Captacion captacion, Set<Long> captacionesBroker, Actor actor) {
-        if (actor.esTenantAdmin()) {
-            return true;
-        }
+    private static boolean captacionPermitida(Captacion captacion, Set<Long> captacionesBroker) {
         return captacion != null && captacion.getId() != null
                 && captacionesBroker.contains(captacion.getId());
     }

@@ -1,5 +1,6 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.domain.persona.DetalleCliente;
 import com.controllocal.persistence.repositorio.DetalleClienteRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PersonaRepository;
@@ -7,15 +8,20 @@ import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.ClienteService.FiltrosCliente;
 import com.controllocal.service.ClienteService.ResumenClientes;
+import com.controllocal.service.ClienteService.DatosCliente;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Autorizaciones;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -49,6 +55,53 @@ class ClienteServiceImplTest {
 
     private final ClienteServiceImpl service =
             new ClienteServiceImpl(clientes, personas, roles, oportunidades, alcances, autorizaciones);
+
+    @Test void identidadParaFiltrarNoHidrataDatosPersonales(){
+        when(clientes.personaContextual(ORG,7)).thenReturn(Optional.of(107L));
+        assertEquals(Optional.of(107L),service.personaLegible(7,AGENTE));
+        verify(clientes,never()).buscarFicha(anyLong(),anyLong());verifyNoInteractions(personas);
+    }
+    @Test void filtroFueraDelEquipoEsEmptyPeroDetalleDirectoConserva403SinHidratar(){
+        when(clientes.personaContextual(ORG,7)).thenReturn(Optional.of(107L));
+        when(alcances.de(BROKER)).thenReturn(new Alcances.Alcance(ORG,false,List.of(31L)));
+        when(oportunidades.idsClienteDelEquipo(ORG,List.of(31L))).thenReturn(List.of(8L));
+        assertTrue(service.personaLegible(7,BROKER).isEmpty());
+        assertThrows(AccesoNoAutorizadoException.class,()->service.obtener(7,BROKER));
+        verify(clientes,never()).buscarFicha(anyLong(),anyLong());
+    }
+    @Test void unFalloTecnicoDelFiltroNoEsUnaPoblacionVacia(){
+        when(clientes.personaContextual(ORG,7)).thenThrow(new IllegalStateException("DB"));
+        assertThrows(IllegalStateException.class,()->service.personaLegible(7,AGENTE));
+    }
+
+    @Test
+    void gobiernoIdentidadYBandasFuturasNoObtienenCatalogoNiMutacionesComerciales() {
+        var cliente = mock(DetalleCliente.class);
+        when(clientes.buscarFicha(ORG, 7L)).thenReturn(Optional.of(cliente));
+        when(clientes.personaContextual(ORG,7L)).thenReturn(Optional.of(107L));
+        var filtros = new FiltrosCliente(null, null, null, null, 1, 10);
+        var datos = new DatosCliente(null, null, null, null, null, null, null, null, null, null);
+        for (String banda : new String[]{Actor.TENANT_ADMIN, "IDENTIDAD", "BROX_PLATFORM", "FUTURO"}) {
+            Actor actor = new Actor(ORG, 11L, 21L, banda);
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(1, 10, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(filtros, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.resumen(filtros, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(7L, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.autorizacion(7L, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.registrar(null, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.actualizar(7L, datos, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.desactivar(7L, actor));
+        }
+        verifyNoInteractions(cliente, personas, roles, oportunidades, alcances, autorizaciones);
+    }
+
+    @Test
+    void laFronteraDeTenantPrecedeALaNegativaDeGobiernoEnElDetalle() {
+        Actor gobierno = new Actor(ORG, 11L, 21L, Actor.TENANT_ADMIN);
+        assertThrows(NoEncontradoException.class, () -> service.obtener(7L, gobierno));
+        verify(clientes).personaContextual(ORG,7L);
+        verify(clientes,org.mockito.Mockito.never()).buscarFicha(anyLong(),anyLong());
+    }
 
     /**
      * Los filtros bajan a SQL normalizados y la pagina se recorta EN LA BASE;

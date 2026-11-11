@@ -24,6 +24,12 @@ import { RolSesion } from './sesion.model';
 describe('acceso (mapa módulo→rol)', () => {
   const ROLES: RolSesion[] = ['TENANT_ADMIN', 'BROKER', 'AGENTE'];
 
+  it('IDENTIDAD no recibe módulos ni altas comerciales o de gobierno', () => {
+    expect(modulosDe('IDENTIDAD')).toEqual([]);
+    expect(altasDe('IDENTIDAD')).toEqual([]);
+    expect(menuDe('IDENTIDAD')).toEqual([]);
+  });
+
   /** Todo lo que el rol puede ABRIR, se dibuje o no en el menú. */
   const alcanzables = (rol: RolSesion) => modulosDe(rol).map((m) => m.etiqueta);
   /** Solo lo que el rol VE en el menú. */
@@ -45,18 +51,17 @@ describe('acceso (mapa módulo→rol)', () => {
    * <b>Una cola de trabajo no es una sección</b>, <b>el alcance no crea
    * entradas</b> y <b>la acción pertenece al objeto que modifica</b>.
    *
-   * Las cinco entradas de abajo eran exactamente eso: el mismo listado con un
+   * Las entradas de abajo eran exactamente eso: el mismo listado con un
    * filtro, el mismo listado con otro alcance, o una acción sacada de su
    * objeto. La auditoría que originó el Corte 2 las encontró presentadas como
    * secciones, y conservarlas «temporalmente» habría conservado el problema.
    */
-  it('no ofrece como entrada de menú ninguna cola, alcance ni acción', () => {
+  it('mantiene fuera del menú las colas y los alcances comerciales', () => {
     const fueraDelMenu = [
       'Captaciones por revisar', // = Captaciones filtrada por estado
       'Solicitudes por revisar', // = Solicitudes filtrada por evaluar
       'Cartera del equipo', // = Propiedades con el alcance del broker
       'Mi equipo', // = Agentes con el alcance del broker
-      'Reasignaciones', // = una acción sobre el encargo
     ];
     for (const etiqueta of fueraDelMenu) {
       for (const rol of ROLES) {
@@ -72,15 +77,29 @@ describe('acceso (mapa módulo→rol)', () => {
    * el backend»). Es decir: se abriría a cualquier rol por URL.
    */
   it('mantiene el gate de rol de las pantallas que salieron del menú', () => {
-    expect(moduloDeRuta('captaciones/pendientes')?.roles).toEqual(['BROKER', 'TENANT_ADMIN']);
-    expect(moduloDeRuta('captaciones/reasignaciones')?.roles).toEqual(['BROKER', 'TENANT_ADMIN']);
-    expect(moduloDeRuta('propiedades-equipo')?.roles).toEqual(['BROKER', 'TENANT_ADMIN']);
+    expect(moduloDeRuta('captaciones/pendientes')?.roles).toEqual(['BROKER']);
+    expect(moduloDeRuta('propiedades-equipo')?.roles).toEqual(['BROKER']);
     expect(moduloDeRuta('mi-equipo')?.roles).toEqual(['BROKER']);
     expect(moduloDeRuta('solicitudes/revisar')?.roles).toEqual(['BROKER']);
 
     // Alcanzable por quien corresponde, invisible para el agente en los dos sentidos.
     expect(alcanzables('BROKER')).toContain('Captaciones por revisar');
     expect(alcanzables('AGENTE')).not.toContain('Captaciones por revisar');
+    expect(alcanzables('TENANT_ADMIN')).not.toContain('Captaciones por revisar');
+    expect(alcanzables('BROKER')).toContain('Cartera del equipo');
+    expect(alcanzables('AGENTE')).not.toContain('Cartera del equipo');
+    expect(alcanzables('TENANT_ADMIN')).not.toContain('Cartera del equipo');
+  });
+
+  it('conserva las reasignaciones como gobierno de broker y administrador', () => {
+    expect(moduloDeRuta('captaciones/reasignaciones')?.roles).toEqual(['BROKER', 'TENANT_ADMIN']);
+    expect(alcanzables('BROKER')).toContain('Reasignaciones');
+    expect(alcanzables('TENANT_ADMIN')).toContain('Reasignaciones');
+    expect(alcanzables('AGENTE')).not.toContain('Reasignaciones');
+    expect(enMenu('BROKER')).not.toContain('Reasignaciones');
+    expect(enMenu('TENANT_ADMIN')).toContain('Reasignaciones');
+    expect(cuerpoDelMenu('TENANT_ADMIN').find((g) =>
+      g.modulos.some((m) => m.etiqueta === 'Reasignaciones'))?.seccion).toBe('Organización');
   });
 
   /**
@@ -101,7 +120,7 @@ describe('acceso (mapa módulo→rol)', () => {
    * lo que se decidió.
    */
   it('une Interacciones al expediente y el avance a Indicadores sin perder sus rutas', () => {
-    for (const rol of ROLES) {
+    for (const rol of ['AGENTE', 'BROKER'] as const) {
       expect(enMenu(rol)).not.toContain('Interacciones');
       expect(enMenu(rol)).not.toContain('Avance por propiedad');
       expect(enMenu(rol)).not.toContain('Reportes');
@@ -119,16 +138,16 @@ describe('acceso (mapa módulo→rol)', () => {
    * `pendientes-brox.md` §4.2 usaba para saber si 4.8 estaba hecho, y aquí
    * queda fijada para que no se deshaga sin que nadie lo note.
    *
-   * El agente ve las 13 comunes; el broker suma Agentes y Brokers; el
-   * administrador suma además Asignaciones y Seguridad y accesos.
+   * El agente ve las 13 comerciales; el broker suma Agentes y Brokers.
+   * Gobierno usa cinco superficies organizacionales, sin cartera comercial.
    */
-  it('deja el menú en 13 · 15 · 17 entradas', () => {
+  it('conserva 13 y 15 entradas comerciales y ofrece cinco de gobierno', () => {
     const entradas = (rol: RolSesion) =>
       cuerpoDelMenu(rol).reduce((total, grupo) => total + grupo.modulos.length, 0);
 
     expect(entradas('AGENTE')).toBe(13);
     expect(entradas('BROKER')).toBe(15);
-    expect(entradas('TENANT_ADMIN')).toBe(17);
+    expect(entradas('TENANT_ADMIN')).toBe(5);
   });
 
   /**
@@ -185,13 +204,8 @@ describe('acceso (mapa módulo→rol)', () => {
   // Reparto por rol
   // ------------------------------------------------------------------
 
-  it('comparte la supervisión entre BROKER y TENANT_ADMIN', () => {
-    for (const deSupervision of ['Captaciones por revisar', 'Reasignaciones', 'Cartera del equipo']) {
-      expect(alcanzables('BROKER')).toContain(deSupervision);
-      expect(alcanzables('TENANT_ADMIN')).toContain(deSupervision);
-      expect(alcanzables('AGENTE')).not.toContain(deSupervision);
-    }
-    // Agentes sí es entrada de menú: es un padrón, no una cola.
+  it('comparte el padrón de agentes entre BROKER y TENANT_ADMIN', () => {
+    // La supervisión y las reasignaciones se comprueban por separado; Agentes es el padrón.
     expect(enMenu('BROKER')).toContain('Agentes');
     expect(enMenu('TENANT_ADMIN')).toContain('Agentes');
     expect(enMenu('AGENTE')).not.toContain('Agentes');
@@ -226,15 +240,20 @@ describe('acceso (mapa módulo→rol)', () => {
     expect(alcanzables('AGENTE')).not.toContain('Brokers');
   });
 
-  it('no restringe lo que el backend no restringe', () => {
-    // Donde el backend no pone gate, lo que limita es el ALCANCE. Esconder esos
-    // módulos sería inventar una restricción que el API no tiene.
-    const sinGate = ['Propiedades', 'Propietarios', 'Clientes', 'Solicitudes', 'Indicadores'];
-    for (const modulo of sinGate) {
-      for (const rol of ROLES) {
+  it('conserva los módulos comerciales para agente y broker dentro de su alcance', () => {
+    const comerciales = ['Propiedades', 'Propietarios', 'Clientes', 'Solicitudes', 'Indicadores'];
+    for (const modulo of comerciales) {
+      for (const rol of ['AGENTE', 'BROKER'] as const) {
         expect(enMenu(rol)).toContain(modulo);
       }
     }
+  });
+
+  it('limita gobierno a sus superficies existentes y al perfil propio', () => {
+    expect(alcanzables('TENANT_ADMIN')).toEqual([
+      'Reasignaciones', 'Agentes', 'Brokers', 'Asignaciones', 'Seguridad y accesos', 'Mi perfil',
+    ]);
+    expect(menuDe('TENANT_ADMIN').map((g) => g.seccion)).toEqual(['Organización', 'Cuenta']);
   });
 
   // ------------------------------------------------------------------
@@ -310,7 +329,7 @@ describe('acceso (mapa módulo→rol)', () => {
   it('resuelve la ruta con o sin barra inicial, y solo las declaradas', () => {
     expect(moduloDeRuta('/solicitudes/revisar')?.etiqueta).toBe('Solicitudes por revisar');
     expect(moduloDeRuta('solicitudes/revisar')?.etiqueta).toBe('Solicitudes por revisar');
-    // Rutas no declaradas (detalles, formularios) pasan y las cubre el backend.
+    // El guard trata los detalles según su operación y módulo; el mapa sigue siendo exacto.
     expect(moduloDeRuta('/solicitudes/42/documentos')).toBeUndefined();
   });
 

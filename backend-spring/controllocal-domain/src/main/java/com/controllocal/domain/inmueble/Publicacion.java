@@ -75,7 +75,7 @@ public class Publicacion extends EntidadDeOrganizacion {
     @Column(name = "id_captacion", nullable = false)
     private Long idEncargo;
 
-    @Column(name = "canal", nullable = false, length = 30)
+    @Column(name = "canal", length = 30)
     private String canal;
 
     @Column(name = "url_publicacion", length = 500)
@@ -84,7 +84,7 @@ public class Publicacion extends EntidadDeOrganizacion {
     @Column(name = "version_anuncio", nullable = false)
     private Integer versionAnuncio = 1;
 
-    @Column(name = "titulo_anuncio", nullable = false, length = 200)
+    @Column(name = "titulo_anuncio", length = 200)
     private String tituloAnuncio;
 
     /**
@@ -94,19 +94,19 @@ public class Publicacion extends EntidadDeOrganizacion {
      * venta» o «renta mensual»-- lo dice la operacion del encargo,
      * {@code OperacionInmobiliaria.nombreDelImporte()}.
      */
-    @Column(name = "importe_publicado", nullable = false, precision = 12, scale = 2)
+    @Column(name = "importe_publicado", precision = 12, scale = 2)
     private BigDecimal importePublicado;
 
-    @Column(name = "moneda", nullable = false, length = 3)
+    @Column(name = "moneda", length = 3)
     private String moneda;
 
     @Column(name = "inversion_pauta", precision = 12, scale = 2)
     private BigDecimal inversionPauta;
 
-    @Column(name = "codigo_origen", nullable = false, length = 50)
+    @Column(name = "codigo_origen", length = 50)
     private String codigoOrigen;
 
-    @Column(name = "fecha_publicacion", nullable = false)
+    @Column(name = "fecha_publicacion")
     private OffsetDateTime fechaPublicacion;
 
     @Column(name = "fecha_baja")
@@ -120,6 +120,20 @@ public class Publicacion extends EntidadDeOrganizacion {
 
     @Column(name = "fecha_actualizacion")
     private OffsetDateTime fechaActualizacion;
+
+    @Column(name="estado_externo",length=80)
+    private String estadoExterno;
+    @Column(name="fecha_estado_externo")
+    private OffsetDateTime fechaEstadoExterno;
+    @Column(name="procedencia_estado_externo",length=500)
+    private String procedenciaEstadoExterno;
+
+    public String getEstadoExterno(){return estadoExterno;}
+    public void setEstadoExterno(String valor){estadoExterno=valor;}
+    public OffsetDateTime getFechaEstadoExterno(){return fechaEstadoExterno;}
+    public void setFechaEstadoExterno(OffsetDateTime valor){fechaEstadoExterno=valor;}
+    public String getProcedenciaEstadoExterno(){return procedenciaEstadoExterno;}
+    public void setProcedenciaEstadoExterno(String valor){procedenciaEstadoExterno=valor;}
 
     @PreUpdate
     void preUpdate() {

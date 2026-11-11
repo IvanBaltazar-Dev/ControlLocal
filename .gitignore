@@ -1,17 +1,12 @@
-# ============================================================
-# BROX — Repository hygiene
-# ============================================================
+# BROX — Archivos locales y documentación privada
+# La documentación privada permanece en disco y queda fuera del índice de Git.
+# Estas reglas no eliminan archivos ni contenido de commits anteriores.
 
-
-# ============================================================
-# Secrets / local configuration
-# ============================================================
-
+# Secretos y configuración local
 .env
 .env.*
 !.env.example
 !.env.*.example
-
 *.pem
 *.key
 *.p12
@@ -19,31 +14,25 @@
 *.jks
 *.keystore
 *.ppk
-
 secrets/
 credentials/
 private/
 keys/
 certs/
-
 .aws/
 .azure/
 .gcloud/
-
 secrets.properties
 credentials.properties
 local.properties
 database.local.properties
 aws.properties
 aws.local.properties
-
 api.properties
 db.properties
-
 *.token
 *.jwt
 *.secret
-
 application-local.properties
 application-local.yml
 application-local.yaml
@@ -51,417 +40,263 @@ application-*.local.properties
 application-*.local.yml
 application-*.local.yaml
 
-
-# ============================================================
-# IDE / editors
-# ============================================================
-
+# Editores y herramientas de agentes
 .idea/
 **/.idea/
-
 .vscode/
 **/.vscode/
-
 *.iml
 *.ipr
 *.iws
-
 .project
 .classpath
 .settings/
-
 *.swp
 *.swo
 *~
-
-
-# ============================================================
-# AI / agent tooling
-# ============================================================
-
 .claude/
 **/.claude/
-
 .serena/
 **/.serena/
-
 .codex/
 .codex-build/
 .codex-grade/
-
 .agents/
 **/.agents/
-
-AGENTS.md
-CLAUDE.md
-
 .tmp_*
 *.session
 *.session.json
 
-
-# ============================================================
-# Internal documentation
-#
-# The repository is PUBLIC (github.com/IvanBaltazar-Dev/ControlLocal), so
-# `docs/` does NOT travel: it carries the North Star, the commissions, the
-# audits and `docs/ai/seguridad-no-leer.md`.
-#
-# The exception is narrow and mechanical: a document travels ONLY if a test
-# READS it, because otherwise a clean clone cannot run the build. There is no
-# copy under `src/test/resources` on purpose -- two copies diverge in silence,
-# which is the disease that cost eight rounds in 5B. Authority stays single.
-#
-#   docs/ai/matriz-codigos-estado.md          <- CatalogoEstadosTest
-#   docs/ai/catalogo-productores-canonico.md  <- CatalogoProductoresTest
-#   docs/ai/decision-estados-sin-productor.md <- EstadosSinProductorTest
-#   docs/ai/matriz-operacion-rol.md           <- MatrizOperacionRolTest
-#   docs/ai/prototipos/nucleo-brox.js         <- PoliticaUnicaTest
-#   docs/ai/modelo/*.js                       <- node gate-modelo-universal.js
-#
-# The six tests FAIL (they do not skip) when the file is missing, so a clone
-# without them is a red build, not a silent green.
-#
-# The `docs/*` + `!` shape is deliberate: git cannot re-include a file whose
-# parent DIRECTORY is excluded, so each level has to be opened before the
-# contents of the next one are excluded.
-# ============================================================
-
-docs/*
-!docs/ai/
-docs/ai/*
-!docs/ai/matriz-codigos-estado.md
-!docs/ai/catalogo-productores-canonico.md
-!docs/ai/decision-estados-sin-productor.md
-!docs/ai/matriz-operacion-rol.md
-# Autoridad del corte P0: la regla viva de quien puede escribir la propiedad y
-# cada encargo. Viaja porque GOBIERNA -- un documento que decide y no viaja no
-# puede gobernar un clon limpio, y `AutoridadDeLaPropiedadTest` lo comprueba.
-!docs/ai/decision-autoridad-de-edicion-de-la-propiedad.md
-# Marco de alcances y frontera de informacion de BROX Intelligence (D-I-1). No
-# hay codigo de Intelligence todavia; viaja porque fija que puede salir de la
-# operacion interna, y eso condiciona cada salida nueva.
-!docs/ai/decision-brox-intelligence-alcances-y-frontera.md
-#
-# --- N41 (2026-09-05): las decisiones VIGENTES que faltaban -------------
-#
-# Clasificacion completa, con la razon de cada una, en `docs/ai/README.md`.
-# El criterio es el de AGENTS.md y no se amplia aqui: una decision VIGENTE que
-# gobierna codigo viaja; historia, auditoria y evidencia fechada, no. Se midio
-# clave por clave contra los gates, las clases y las migraciones que cada
-# documento cita, y las DIECISEIS resultaron vigentes -- las superadas ya se
-# habian borrado del arbol, que es por lo que son 16 y no los 21 de la ficha.
-#
-# Esto NO es "versionar todo docs/": de los 51 ficheros de `docs/ai/` siguen
-# ignorados 32 -- encargos, auditorias, borradores, diagnosticos, prototipos,
-# el North Star y el inventario.
-#
-# ATENCION: el repositorio es PUBLICO, asi que anadir estas rutas al indice es
-# tambien publicarlas. La linea de `.gitignore` la prepara el CONSTRUCTOR; el
-# `git add` lo hace el titular.
-!docs/ai/decision-frontera-brox-core-web-kairos.md
-!docs/ai/decision-modelo-universal-propiedad-operacion.md
-!docs/ai/decision-motor-de-registro.md
-!docs/ai/decision-autoridad-de-cada-dato.md
-!docs/ai/decision-4p-modelo-de-procedencia.md
-!docs/ai/decision-estado-ocupacion-en-los-siete.md
-!docs/ai/decision-kairos-contrato-de-acciones.md
-!docs/ai/decision-inicio-foco-y-resolucion.md
-!docs/ai/decision-indicadores-comerciales.md
-!docs/ai/decision-sidebar-brox.md
-!docs/ai/decision-el-broker-tiene-sus-propios-asuntos.md
-!docs/ai/decision-alta-de-propietario.md
-!docs/ai/decision-presupuesto-de-estilos-de-componente.md
-#
-# Decision de WP-A, escrita el 2026-09-05 mientras corria este mismo paquete.
-# Se anade por el MISMO criterio y no por ser nueva: gobierna codigo que ya
-# existe -- `V90`, `Oferta`, `ContratoCompraventa`, `OfertasController` y las
-# ocho filas nuevas de `matriz-operacion-rol.md` la citan por D-N-1..D-N-5 --,
-# asi que un clon sin ella se queda sin la autoridad escrita de la mesa de
-# negociacion. Sustituye ademas al retirado `decision-hito-oferta-de-demanda.md`.
-!docs/ai/decision-oferta-y-cierre-de-venta.md
-!docs/ai/modelo/
-docs/ai/modelo/*
-!docs/ai/modelo/gate-modelo-universal.js
-!docs/ai/modelo/modelo-universal.js
-!docs/ai/modelo/motor-captura.js
-!docs/ai/prototipos/
-docs/ai/prototipos/*
-!docs/ai/prototipos/nucleo-brox.js
-
-
-# ============================================================
-# Internal development / verification tooling
-#
-# Same rule as `docs/`: only what a clean clone needs to run the closing run
-# (`verificacion/Verificar-Cierre.ps1`) travels.
-#
-#   Verificar-Cierre.ps1      the closing run itself, read by GateDeCierreTest
-#   gate-modelo-universal.sql step 2 of the closing run
-#   Invoke-E2E.ps1            step 5, and it needs docker-compose.e2e.yml
-#   e2e-context.ps1           dot-sourced by every suite
-#   lib-alta-inmueble.ps1     dot-sourced by `editor-universal`
-#   e2e-<suite>.ps1           the five suites of the DEFAULT $Suites list
-#
-# `evidencia/` does NOT travel (2.4 MB, 69 files): it is dated history, not a
-# requirement to run anything. `backups/` does not travel either.
-#
-# CORRECTED 2026-09-05 (WP-G, `N26`). This comment used to add "neither do the
-# E2E suites outside the closing run's default list, nor `operacion/`". Both
-# were FALSE, and a comment that lies about the whitelist is how the whitelist
-# gets "fixed" in the wrong direction. A LATER block re-includes all of them
-# (`!backend-spring/verificacion/e2e-*.ps1` and three files of `operacion/`),
-# and in git the LAST matching rule wins -- so the 26 E2E suites, the two SQL
-# helpers, `verificacion/README.md` and the backup runbook all DO travel.
-# Measured: `git ls-files | git check-ignore --stdin --no-index` returns
-# NOTHING, i.e. NO tracked file is ignored (positive control: the same command
-# does report `docs/ai/north-star-brox.md`, which is untracked and ignored).
-# The narrow list above is what the ORIGINAL rule allowed, not what ships.
-# ============================================================
-
-backend-spring/operacion/
+# Verificación y operación: conservar las fuentes técnicas existentes
+# La documentación se excluye mediante las reglas privadas al final.
 backend-spring/backups/
-
 backend-spring/verificacion/*
 !backend-spring/verificacion/Verificar-Cierre.ps1
 !backend-spring/verificacion/gate-modelo-universal.sql
 !backend-spring/verificacion/Invoke-E2E.ps1
 !backend-spring/verificacion/e2e-context.ps1
 !backend-spring/verificacion/lib-alta-inmueble.ps1
-!backend-spring/verificacion/e2e-comision-movimientos.ps1
-!backend-spring/verificacion/e2e-disponibilidad-contrato.ps1
-!backend-spring/verificacion/e2e-f4-solicitud.ps1
-!backend-spring/verificacion/e2e-estabilizacion-alquiler.ps1
-!backend-spring/verificacion/e2e-editor-universal.ps1
+!backend-spring/verificacion/e2e-*.ps1
+!backend-spring/verificacion/semilla-propiedades-mvp.json
+!backend-spring/verificacion/sembrar-propiedades-mvp.ps1
+!backend-spring/verificacion/generar-datos-demo.sh
+!backend-spring/verificacion/sanear-residuo-de-pruebas.sql
+!backend-spring/verificacion/v6-dos-organizaciones.sql
+!backend-spring/verificacion/v6-rollback.sql
+backend-spring/operacion/*
+!backend-spring/operacion/respaldo.ps1
+!backend-spring/operacion/restaurar-verificar.ps1
+frontend-angular/tools/*
+!frontend-angular/tools/diagnostico-visual/
+!frontend-angular/tools/diagnostico-visual/**
 
-frontend-angular/tools/
-
-
-# ============================================================
-# Temporary files
-# ============================================================
-
+# Temporales y registros
 tmp/
 temp/
 .tmp/
 .cache/
-
 *.tmp
 *.temp
 *.bak
 *.backup
 *.old
-
 *.log
 logs/
 **/logs/
 
-
-# ============================================================
-# Java / Maven
-# ============================================================
-
+# Java y Maven
 target/
 **/target/
-
 *.class
 *.jar
 *.war
 *.ear
-
 .mvn/timing.properties
 dependency-reduced-pom.xml
-
 hs_err_pid*
 replay_pid*
-
-# Maven Wrapper binaries are intentionally versioned
+# El binario del Maven Wrapper es una fuente técnica permitida.
 !.mvn/wrapper/maven-wrapper.jar
+!**/.mvn/wrapper/maven-wrapper.jar
 
-
-# ============================================================
-# Angular / Node
-# ============================================================
-
+# Angular y Node
 node_modules/
 **/node_modules/
-
 .angular/
 **/.angular/
-
 dist/
 **/dist/
-
 out-tsc/
 **/out-tsc/
-
 coverage/
 **/coverage/
-
 .nyc_output/
-
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
 .eslintcache
-
 .angular-cache/
 
-
-# ============================================================
-# Test / runtime output
-# ============================================================
-
+# Resultados de pruebas y ejecución
 test-results/
 TestResults/
 TestResult*/
-
 playwright-report/
 blob-report/
-
 screenshots/
 videos/
-
 *.pid
 *.pid.lock
 
-
-# ============================================================
-# PostgreSQL / database local artifacts
-# ============================================================
-
+# Copias y datos locales de PostgreSQL
 *.dump
-*.backup
 *.sql.gz
-
 pgdata/
 postgres-data/
 data/postgres/
 
-
-# ============================================================
-# Docker local overrides
-# ============================================================
-
+# Configuración local de Docker y estado de infraestructura
 docker-compose.override.yml
 docker-compose.local.yml
 docker-compose.*.local.yml
-
-
-# ============================================================
-# Terraform / infrastructure local state
-# ============================================================
-
 .terraform/
-
 terraform.tfstate
 terraform.tfstate.*
 *.tfvars
 *.tfvars.json
-
 .terraform.lock.hcl.backup
-
 cdk.out/
 
-
-# ============================================================
-# Operating system files
-# ============================================================
-
+# Archivos del sistema operativo
 .DS_Store
 .AppleDouble
 .LSOverride
-
 Thumbs.db
 Thumbs.db:encryptable
 Desktop.ini
-
 $RECYCLE.BIN/
 
-
-# ============================================================
-# Miscellaneous generated artifacts
-# ============================================================
-
+# Artefactos generados
 artifacts/
 build/
 generated/
-
 *.orig
 *.rej
 
-# ============================================================
-# Documentation policy
-# Keep the root README plus one per module (backend-spring, frontend-angular, kairos-service)
-# ============================================================
+# Almacenes y exportaciones privados de ejecución
+# Rutas ancladas a la raíz o a módulos reales, sin ocultar paquetes fuente.
+/almacen/
+/almacen-dev/
+/almacen-e2e/
+/uploads/
+/exportaciones/
+/backend-spring/almacen/
+/backend-spring/almacen-dev/
+/backend-spring/almacen-e2e/
+/backend-spring/uploads/
+/backend-spring/exportaciones/
+/backend-spring/controllocal-app/almacen/
+/backend-spring/controllocal-app/almacen-dev/
+/backend-spring/controllocal-app/almacen-e2e/
+/backend-spring/controllocal-app/uploads/
+/backend-spring/controllocal-app/exportaciones/
+/backend-spring/controllocal-domain/almacen/
+/backend-spring/controllocal-domain/almacen-dev/
+/backend-spring/controllocal-domain/almacen-e2e/
+/backend-spring/controllocal-domain/uploads/
+/backend-spring/controllocal-domain/exportaciones/
+/backend-spring/controllocal-persistence/almacen/
+/backend-spring/controllocal-persistence/almacen-dev/
+/backend-spring/controllocal-persistence/almacen-e2e/
+/backend-spring/controllocal-persistence/uploads/
+/backend-spring/controllocal-persistence/exportaciones/
+/backend-spring/controllocal-service/almacen/
+/backend-spring/controllocal-service/almacen-dev/
+/backend-spring/controllocal-service/almacen-e2e/
+/backend-spring/controllocal-service/uploads/
+/backend-spring/controllocal-service/exportaciones/
+/backend-spring/controllocal-web/almacen/
+/backend-spring/controllocal-web/almacen-dev/
+/backend-spring/controllocal-web/almacen-e2e/
+/backend-spring/controllocal-web/uploads/
+/backend-spring/controllocal-web/exportaciones/
+/frontend-angular/almacen/
+/frontend-angular/almacen-dev/
+/frontend-angular/almacen-e2e/
+/frontend-angular/uploads/
+/frontend-angular/exportaciones/
+/kairos-service/almacen/
+/kairos-service/almacen-dev/
+/kairos-service/almacen-e2e/
+/kairos-service/uploads/
+/kairos-service/exportaciones/
 
-**/README.md
-!/README.md
-!/backend-spring/README.md
-!/frontend-angular/README.md
-!/kairos-service/README.md
-# ============================================================
-# BROX � Canonical repository verification sources
-# Added before main integration
-# ============================================================
+# Documentación privada: sin excepciones dentro de /docs/
+# La instrucción humana de privacidad prevalece sobre la antigua lista de inclusiones.
+# Que una prueba dependa de un documento no autoriza publicarlo.
+# Los gates que leen /docs/ requieren reconciliación antes de usar un clon público.
+# Prevalece sobre las inclusiones técnicas anteriores. No se permite ningún README.
+# Las clases de letras cubren extensiones en mayúsculas y combinaciones de caja.
+/docs/
+AGENTS.md
+CLAUDE.md
+[rR][eE][aA][dD][mM][eE]
+[rR][eE][aA][dD][mM][eE].*
+*.[rR][sS][tT]
+*.[rR][eE][sS][tT]
+*.[aA][dD][oO][cC]
+*.[aA][sS][cC][iI][iI][dD][oO][cC]
+*.[mM][dD]
+*.[mM][dD][xX]
+*.[dD][oO][cC]
+*.[dD][oO][cC][xX]
+*.[dD][oO][cC][mM]
+*.[dD][oO][tT]
+*.[dD][oO][tT][xX]
+*.[dD][oO][tT][mM]
+*.[pP][dD][fF]
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[xX][lL][sS][mM]
+*.[xX][lL][sS][bB]
+*.[xX][lL][tT]
+*.[xX][lL][tT][xX]
+*.[xX][lL][tT][mM]
+*.[pP][pP][tT]
+*.[pP][pP][tT][xX]
+*.[pP][pP][tT][mM]
+*.[pP][oO][tT]
+*.[pP][oO][tT][xX]
+*.[pP][oO][tT][mM]
+*.[pP][pP][sS]
+*.[pP][pP][sS][xX]
+*.[pP][pP][sS][mM]
+*.[oO][dD][tT]
+*.[oO][dD][sS]
+*.[oO][dD][pP]
+*.[rR][tT][fF]
+*.[pP][uU][mM][lL]
+*.[mM][mM][dD]
+*.[dD][rR][aA][wW][iI][oO]
+*.[vV][sS][dD]
+*.[vV][sS][dD][xX]
+*.[vV][sS][dD][mM]
+*.[tT][xX][tT]
+*.[cC][sS][vV]
+*.[tT][sS][vV]
+*.[jJ][sS][oO][nN][lL]
+*.[nN][dD][jJ][sS][oO][nN]
+*.[tT][eE][xX]
+*.[bB][iI][bB]
 
-# Todas las suites E2E son c�digo de verificaci�n y deben viajar.
-!backend-spring/verificacion/e2e-*.ps1
+# Excepciones técnicas de texto: nombres concretos, fuera de /docs/.
+!CMakeLists.txt
+!requirements*.txt
+!LICENSE.txt
+!LICENCE.txt
+!NOTICE.txt
 
-# Fuentes auxiliares de verificaci�n.
-!backend-spring/verificacion/generar-datos-demo.sh
-!backend-spring/verificacion/sanear-residuo-de-pruebas.sql
-!backend-spring/verificacion/v6-dos-organizaciones.sql
-!backend-spring/verificacion/v6-rollback.sql
-
-# README de verificaci�n.
-!backend-spring/verificacion/README.md
-
-# Herramientas reales del frontend, no output generado.
-!frontend-angular/tools/
-frontend-angular/tools/*
-!frontend-angular/tools/diagnostico-visual/
-!frontend-angular/tools/diagnostico-visual/**
-
-# Estas excepciones deben quedar despu�s de **/README.md.
-!/backend-spring/verificacion/README.md
-!/frontend-angular/tools/diagnostico-visual/README.md
-
-
-# ============================================================
-# BROX � Operational source
-# ============================================================
-
-!backend-spring/operacion/
-backend-spring/operacion/*
-
-!backend-spring/operacion/respaldo.ps1
-!backend-spring/operacion/restaurar-verificar.ps1
-
-# README exception; this block is at the end so it wins over **/README.md
-!backend-spring/operacion/README.md
-
-
-# ============================================================
-# BROX � Canonical agent instructions
-# ============================================================
-
-!AGENTS.md
-!CLAUDE.md
-
-
-# ============================================================
-# BROX - Indice de autoridad de docs/ai  (N41, 2026-09-05)
-#
-# `docs/ai/README.md` dice cual de estos documentos gobierna codigo hoy y cual
-# es historia, y a que apunta ahora cada documento retirado. Viaja porque las
-# decisiones que viajan lo citan, y una referencia a un fichero que el clon no
-# tiene es la misma averia que este bloque existe para evitar.
-#
-# Esta linea va AQUI, al final, porque tiene que ganar a `docs/ai/*` y tambien
-# a `**/README.md`: en git manda la ultima regla que casa.
-# ============================================================
-
-!docs/ai/README.md
+# Evidencias y artefactos locales; no forman parte del código publicable.
+/work/
+/outputs/

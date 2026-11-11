@@ -38,7 +38,7 @@ class MigracionAlmacenTest {
     Path raizOrigen;
 
     /** Destino en memoria: el comportamiento de S3 ya lo cubre AlmacenS3Test. */
-    private static final class AlmacenEnMemoria implements AlmacenDocumentos {
+    private static final class AlmacenEnMemoria implements AlmacenDocumentos { public String identidadTecnica(){return AlmacenDocumentos.huellaIdentidad("TEST_MIGRACION","memoria");}
         final Map<String, byte[]> objetos = new LinkedHashMap<>();
         /** Claves que deben fallar al escribir, para probar el camino del fallo. */
         final Set<String> rompeAlEscribir = new LinkedHashSet<>();
@@ -47,10 +47,6 @@ class MigracionAlmacenTest {
 
         @Override public String proveedor() {
             return "MEMORIA";
-        }
-
-        @Override public ArchivoGuardado guardar(String c, String n, byte[] b, String t) {
-            throw new UnsupportedOperationException("la migracion no acuña claves nuevas");
         }
 
         @Override public void guardarEnClave(String clave, byte[] contenido, String contentType) {

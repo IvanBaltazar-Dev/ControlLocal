@@ -7,7 +7,7 @@ import {
   Captacion,
   CaptacionesService,
 } from '../../core/api/captaciones.service';
-import { Local, LocalesService } from '../../core/api/locales.service';
+import { FichaPropiedad, PropiedadesService } from '../../core/api/propiedades.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { CaptacionReview } from './captacion-review';
 
@@ -23,10 +23,16 @@ const CAPTACION: Captacion = {
 const CANDIDATOS: CandidatoAgente[] = [
   { idAgente: 31, nombre: 'Javier Ruiz', codigoAgente: 'AGE-031', zonaAsignada: 'Lima Norte' },
 ];
-const LOCAL: Local = { id: 7, codigoLocal: 'LOC-0007', direccion: 'Av. Larco 700', monedaReferencial: 'PEN' };
+const PROPIEDAD: FichaPropiedad = {
+  id: 7, codigo: 'PROP-0007', tipoPropiedad: 'LOCAL', tipoRotulo: 'Local comercial',
+  ubicacion: { direccion: 'Av. Larco 700', distrito: 'Miraflores' },
+  titulares: [], atributos: [], encargos: [], atributosQueFaltan: [], faltanParaPublicar: [],
+};
 const PROSPECCION: Prospeccion = { id: 4, codigoProspeccion: 'PRO-0004', estado: 'T' };
 
 interface AccesoReview {
+  mensaje(): string | null;
+  errorAccion(): string | null;
   observacion: { setValue(valor: string): void };
   agenteNuevo: { setValue(valor: number): void };
   motivoReasignacion: { setValue(valor: string): void };
@@ -38,7 +44,7 @@ interface AccesoReview {
 
 describe('CaptacionReview', () => {
   let api: jasmine.SpyObj<CaptacionesService>;
-  let locales: jasmine.SpyObj<LocalesService>;
+  let propiedades: jasmine.SpyObj<PropiedadesService>;
   let prospecciones: jasmine.SpyObj<ProspeccionesService>;
   let router: jasmine.SpyObj<Router>;
 
@@ -48,10 +54,11 @@ describe('CaptacionReview', () => {
     ]);
     api.obtenerPorCodigo.and.resolveTo({ ...CAPTACION });
     api.decidir.and.resolveTo({ ...CAPTACION, estado: 'A' });
-    api.reasignar.and.resolveTo({ ...CAPTACION, idAgente: 31, agenteNombre: 'Javier Ruiz' });
+    api.reasignar.and.resolveTo({ id: 9, codigoCaptacion: 'CAP-0009', estado: 'P',
+      idAgenteAnterior: 30, idAgente: 31, idReasignacion: 4 });
     api.candidatosReasignacion.and.resolveTo(pagina(CANDIDATOS));
-    locales = jasmine.createSpyObj<LocalesService>('LocalesService', ['obtener']);
-    locales.obtener.and.resolveTo(LOCAL);
+    propiedades = jasmine.createSpyObj<PropiedadesService>('PropiedadesService', ['consultar']);
+    propiedades.consultar.and.resolveTo(PROPIEDAD);
     prospecciones = jasmine.createSpyObj<ProspeccionesService>('ProspeccionesService', ['pagina']);
     prospecciones.pagina.and.resolveTo(pagina([PROSPECCION]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
@@ -97,6 +104,7 @@ describe('CaptacionReview', () => {
     // Y el cuarto argumento es el agente que la pantalla estaba MOSTRANDO
     // (D-P0-9): sin él, la reasignación no sabría de dónde parte.
     expect(api.reasignar).toHaveBeenCalledOnceWith(9, 31, 'Balance de cartera', 30);
+    expect(api.obtenerPorCodigo).toHaveBeenCalledTimes(2);
   });
 
   /**
@@ -118,6 +126,30 @@ describe('CaptacionReview', () => {
 
     expect(texto(fixture)).toContain('hoy lo lleva 31');
     expect(api.obtenerPorCodigo).toHaveBeenCalledTimes(2);
+  });
+
+  it('conserva el éxito de gobierno si falla la consulta comercial posterior', async () => {
+    const fixture = await montar();
+    api.obtenerPorCodigo.and.rejectWith(new ApiError(403, 'La lectura ya no está autorizada.'));
+    const acceso = fixture.componentInstance as unknown as AccesoReview;
+    acceso.agenteNuevo.setValue(31);
+    acceso.motivoReasignacion.setValue('Balance de cartera');
+    await acceso.confirmarReasignacion();
+    expect(api.reasignar).toHaveBeenCalledOnceWith(9, 31, 'Balance de cartera', 30);
+    expect(acceso.mensaje()).toContain('Captación reasignada.');
+    expect(acceso.errorAccion()).toBeNull();
+  });
+
+  it('el resultado de gobierno no provoca una consulta comercial sin su capacidad', async () => {
+    api.obtenerPorCodigo.and.resolveTo({ ...CAPTACION,
+      capacidades: { puedeEditar: false, puedeRevisar: false, puedeCerrar: false, puedeReasignar: true } });
+    const fixture = await montar();
+    const acceso = fixture.componentInstance as unknown as AccesoReview;
+    acceso.agenteNuevo.setValue(31);
+    acceso.motivoReasignacion.setValue('Cruce de equipos');
+    await acceso.confirmarReasignacion();
+    expect(api.obtenerPorCodigo).toHaveBeenCalledTimes(1);
+    expect(acceso.mensaje()).toContain('Captación reasignada.');
   });
 
   /**
@@ -154,7 +186,7 @@ describe('CaptacionReview', () => {
       imports: [CaptacionReview],
       providers: [
         { provide: CaptacionesService, useValue: api },
-        { provide: LocalesService, useValue: locales },
+        { provide: PropiedadesService, useValue: propiedades },
         { provide: ProspeccionesService, useValue: prospecciones },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ codigo: 'CAP-0009' }) } } },
         { provide: Router, useValue: router },

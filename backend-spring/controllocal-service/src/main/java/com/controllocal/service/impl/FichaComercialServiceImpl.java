@@ -2,10 +2,10 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.domain.comercial.InteraccionComercial;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.Prospeccion;
-import com.controllocal.domain.comercial.RequerimientoCliente;
+import com.controllocal.service.RequerimientoService;
+import com.controllocal.service.RequerimientoService.FichaRequerimiento;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.comercial.Visita;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
@@ -18,14 +18,16 @@ import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleClienteRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
-import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.InteraccionService.FichaInteraccion;
+import com.controllocal.service.InteraccionService.FinalidadLectura;
+import com.controllocal.service.soporte.PresentacionDeInteraccion;
 import com.controllocal.service.ClienteService;
 import com.controllocal.service.FichaComercialService;
 import com.controllocal.service.PropietarioService;
@@ -72,11 +74,11 @@ public class FichaComercialServiceImpl implements FichaComercialService {
 
     private final DetalleClienteRepository clientes;
     private final PersonaRolRepository roles;
-    private final RequerimientoClienteRepository requerimientos;
+    private final RequerimientoService requerimientos;
     private final ProspeccionRepository prospecciones;
     private final CaptacionRepository captaciones;
     private final OportunidadComercialRepository oportunidades;
-    private final InteraccionComercialRepository interacciones;
+    private final InteraccionService interacciones;
     private final VisitaRepository visitas;
     private final SolicitudAlquilerRepository solicitudes;
     private final ContratoAlquilerRepository contratos;
@@ -85,11 +87,11 @@ public class FichaComercialServiceImpl implements FichaComercialService {
 
     public FichaComercialServiceImpl(DetalleClienteRepository clientes,
                                      PersonaRolRepository roles,
-                                     RequerimientoClienteRepository requerimientos,
+                                     RequerimientoService requerimientos,
                                      ProspeccionRepository prospecciones,
                                      CaptacionRepository captaciones,
                                      OportunidadComercialRepository oportunidades,
-                                     InteraccionComercialRepository interacciones,
+                                     InteraccionService interacciones,
                                      VisitaRepository visitas,
                                      SolicitudAlquilerRepository solicitudes,
                                      ContratoAlquilerRepository contratos,
@@ -116,14 +118,15 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         DatosCliente datos = datosCliente(idCliente, contexto);
         int tamanoValido = tamano(tamano);
         Map<String, SeccionFicha> sections = new LinkedHashMap<>();
-        sections.put("requerimientos",
+        if(actor.esAgente())sections.put("requerimientos",
                 pagina("requerimientos", filasCliente(datos, "requerimientos", contexto), 1, tamanoValido));
         for (String section : SECCIONES_CLIENTE) {
+            if("requerimientos".equals(section)&&!actor.esAgente())continue;
             sections.putIfAbsent(section, pendiente(section, tamanoValido));
         }
-        boolean activo = datos.requerimientos().stream()
-                .anyMatch(RequerimientoCliente::estaActivo);
-        String cta = activo && actor.esAgente()
+        Boolean activo = actor.esAgente()?datos.requerimientos().stream()
+                .anyMatch(r->"A".equals(r.estado())):null;
+        String cta = Boolean.TRUE.equals(activo) && actor.esAgente()
                 ? "/oportunidad-form?clienteId=" + idCliente
                 : "";
         return new FichaCliente(ficha(datos.cliente()), activo, cta, sections);
@@ -153,6 +156,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     @Transactional(readOnly = true)
     public SeccionFicha seccionCliente(long idCliente, String seccion, int pagina, int tamano, Actor actor) {
         Contexto contexto = contexto(actor);
+        if("requerimientos".equals(normal(seccion))&&!actor.esAgente())throw new AccesoNoAutorizadoException();
         DatosCliente datos = datosCliente(idCliente, contexto);
         String clave = normal(seccion);
         return pagina(clave, filasCliente(datos, clave, contexto), pagina, tamano);
@@ -174,9 +178,9 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 .orElseThrow(() -> new NoEncontradoException("Cliente"));
         DatosCliente datos = new DatosCliente(
                 cliente,
-                requerimientos.listarPorCliente(organizacion, idCliente),
+                contexto.actor().esAgente()?requerimientos.listarPorCliente(idCliente,contexto.actor()):List.of(),
                 oportunidades.listarFichaPorCliente(organizacion, idCliente),
-                interacciones.listarFichaPorCliente(organizacion, idCliente),
+                interacciones.porCliente(idCliente, contexto.actor(), FinalidadLectura.FICHA_CONTACTO),
                 visitas.listarFichaPorCliente(organizacion, idCliente),
                 solicitudes.listarFichaPorCliente(organizacion, idCliente),
                 contratos.listarFichaPorCliente(organizacion, idCliente));
@@ -207,7 +211,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         return datos.oportunidades().stream().anyMatch(o -> visible(o, contexto))
                 || datos.solicitudes().stream().anyMatch(s -> visible(s, contexto))
                 || datos.visitas().stream().anyMatch(v -> visible(v, contexto))
-                || datos.interacciones().stream().anyMatch(i -> visible(i, contexto))
+                || !datos.interacciones().isEmpty()
                 || datos.contratos().stream().anyMatch(c -> visible(c.getSolicitud(), contexto));
     }
 
@@ -222,13 +226,13 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     private List<FilaFicha> filasCliente(DatosCliente datos, String clave, Contexto contexto) {
         List<FilaFicha> filas = switch (clave) {
             case "requerimientos" -> datos.requerimientos().stream()
-                    .map(this::filaRequerimiento).sorted(orden()).toList();
+                    .map(r->filaRequerimiento(r,datos.cliente())).sorted(orden()).toList();
             case "propiedades" -> filasPropiedadesCliente(datos, contexto);
             case "oportunidades" -> datos.oportunidades().stream()
                     .filter(o -> visible(o, contexto)).map(this::filaOportunidad)
                     .sorted(orden()).toList();
             case "interacciones" -> datos.interacciones().stream()
-                    .filter(i -> visible(i, contexto)).map(this::filaInteraccion)
+                    .map(i -> filaInteraccion(i, datos.cliente()))
                     .sorted(orden()).toList();
             case "visitas" -> datos.visitas().stream()
                     .filter(v -> visible(v, contexto)).map(this::filaVisita)
@@ -326,8 +330,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 .forEach(s -> putAgente(agentes, s.getAgente(), "Solicitud", dia(s.getFechaRegistro())));
         datos.visitas().stream().filter(v -> visible(v, contexto))
                 .forEach(v -> putAgente(agentes, v.getAgente(), "Visita", dia(v.getFechaVisita())));
-        datos.interacciones().stream().filter(i -> visible(i, contexto))
-                .forEach(i -> putAgente(agentes, agente(i), "Interaccion", local(i.getFechaHora())));
+        datos.interacciones().forEach(i -> putAgente(agentes, i));
         return agentes.values().stream().sorted(orden()).toList();
     }
 
@@ -390,18 +393,17 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         return cierres;
     }
 
-    private FilaFicha filaRequerimiento(RequerimientoCliente r) {
-        DetalleCliente cliente = r.getCliente();
+    private FilaFicha filaRequerimiento(FichaRequerimiento r,DetalleCliente cliente) {
         return new FilaFicha(
-                textoId(r.getId()), texto("REQ-" + textoId(r.getId())),
-                "Requerimiento", texto(r.getRubro(), "Perfil de busqueda"),
+                textoId(r.id()), texto("REQ-" + textoId(r.id())),
+                "Requerimiento", texto(r.rubro(), "Perfil de busqueda"),
                 requerimientoResumen(r), "-", distritos(r),
                 nombre(cliente), cliente != null ? cliente.getId() : null,
-                "-", null, "-", estadoRequerimiento(r.getEstado()),
-                fecha(local(r.getFechaActualizacion()), local(r.getFechaCreacion())),
+                "-", null, "-", estadoRequerimiento(r.estado()),
+                fecha(r.fechaActualizacion(),r.fechaCreacion()),
                 cliente != null && cliente.getId() != null ? "cliente-detail/" + cliente.getId() : "",
-                "target", r.estaActivo() ? "green" : "gray",
-                primera(local(r.getFechaActualizacion()), local(r.getFechaCreacion())));
+                "target", "A".equals(r.estado()) ? "green" : "gray",
+                primera(r.fechaActualizacion(),r.fechaCreacion()));
     }
 
     private FilaFicha filaProspeccion(Prospeccion p) {
@@ -455,17 +457,16 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 "fileText", "gray", primera(actualizacion, registro));
     }
 
-    private FilaFicha filaInteraccion(InteraccionComercial i) {
-        OportunidadComercial oportunidad = i.getOportunidad();
-        DetalleCliente cliente = cliente(i);
-        LocalDateTime fecha = local(i.getFechaHora());
-        return filaBase(textoId(i.getId()),
-                oportunidad != null ? texto(oportunidad.getCodigoOportunidad()) : textoId(i.getId()),
-                "Interaccion", texto(canal(i.getCanalContacto()), "Contacto comercial"),
-                texto(resultado(i.getResultado()), i.getObservaciones()),
-                local(oportunidad), cliente, agente(i), resultado(i.getResultado()),
-                fecha(fecha), i.getId() != null ? "interaccion-detail/" + i.getId() : "",
-                "activity", "blue", fecha);
+    private FilaFicha filaInteraccion(FichaInteraccion i, DetalleCliente cliente) {
+        LocalDateTime orden = dia(i.fechaHecho());
+        String resultado = PresentacionDeInteraccion.resultado(i);
+        // El permiso del contacto fue comprobado por el puerto para esta finalidad.
+        // No se sigue un ID de propiedad para obtener titular, contacto o nota adicional.
+        return new FilaFicha(textoId(i.id()), textoId(i.id()), "Interaccion",
+                PresentacionDeInteraccion.titulo(i), texto(PresentacionDeInteraccion.detalle(i), resultado),
+                "-", "-", nombre(cliente), cliente.getId(), "-", null,
+                texto(i.agenteNombre()), texto(resultado), texto(fecha(i.fechaHecho())),
+                "interaccion-detail/" + i.id(), "activity", "blue", orden);
     }
 
     private FilaFicha filaVisita(Visita v) {
@@ -568,6 +569,15 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 fecha(fechaOrden), "", "user", "gray", fechaOrden));
     }
 
+    private void putAgente(Map<Long, FilaFicha> agentes, FichaInteraccion interaccion) {
+        LocalDateTime orden = dia(interaccion.fechaHecho());
+        String nombre = texto(interaccion.agenteNombre());
+        agentes.putIfAbsent(interaccion.idAgente(), new FilaFicha(
+                textoId(interaccion.idAgente()), "-", "Agente", nombre,
+                "Vinculado por Interaccion", "-", "-", "-", null, "-", null,
+                nombre, "-", fecha(interaccion.fechaHecho()), "", "user", "gray", orden));
+    }
+
     private List<FilaFicha> privacidad(
             List<FilaFicha> filas, String seccion, Contexto contexto) {
         if (!contexto.actor().esAgente()) {
@@ -593,9 +603,6 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     }
 
     private boolean visible(Captacion c, Contexto contexto) {
-        if (contexto.actor().esTenantAdmin()) {
-            return true;
-        }
         return c != null && (visible(c.getAgente(), contexto)
                 || (esBroker(contexto.actor()) && c.getBrokerRevisor() != null
                         && Objects.equals(c.getBrokerRevisor().getId(),
@@ -614,22 +621,13 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         return v != null && (visible(v.getAgente(), contexto) || visible(captacion(v), contexto));
     }
 
-    private boolean visible(InteraccionComercial i, Contexto contexto) {
-        return i != null && (i.getOportunidad() != null
-                ? visible(i.getOportunidad(), contexto)
-                : visible(i.getAgente(), contexto));
-    }
-
     private boolean visible(DetalleAgente agente, Contexto contexto) {
-        if (contexto.actor().esTenantAdmin()) {
-            return true;
-        }
         return agente != null && agente.getId() != null
                 && contexto.agentesVisibles().contains(agente.getId());
     }
 
     private static boolean esBroker(Actor actor) {
-        return !actor.esTenantAdmin() && !actor.esAgente();
+        return actor.esBroker();
     }
 
     private static SeccionFicha pagina(
@@ -702,22 +700,24 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 Math.max(0, cantidadLocales));
     }
 
-    private static String requerimientoResumen(RequerimientoCliente r) {
+    private static String requerimientoResumen(FichaRequerimiento r) {
         List<String> partes = new ArrayList<>();
-        if (r.getTipoInmueble() != null) {
-            partes.add(r.getTipoInmueble().replace('_', ' '));
+        if (r.tipoInmueble() != null) {
+            partes.add(r.tipoInmueble().replace('_', ' '));
         }
-        if (r.getRentaMin() != null || r.getRentaMax() != null) {
-            partes.add("Renta " + rango(r.getRentaMin(), r.getRentaMax(), moneda(r.getMoneda())));
+        if (r.presupuestoMin() != null || r.presupuestoMax() != null) {
+            partes.add(("VENTA".equals(r.operacion())?"Presupuesto de compra ":"Presupuesto ") + rango(r.presupuestoMin(), r.presupuestoMax(), moneda(r.moneda())));
         }
-        if (r.getMetrajeMin() != null || r.getMetrajeMax() != null) {
-            partes.add("Area " + rango(r.getMetrajeMin(), r.getMetrajeMax(), "m2"));
+        if (r.metrajeMin() != null || r.metrajeMax() != null) {
+            partes.add("Superficie por precisar " + rango(r.metrajeMin(), r.metrajeMax(), ""));
         }
-        if (r.getFrenteMinimo() != null) {
-            partes.add("Frente desde " + numero(r.getFrenteMinimo()) + " m");
+        if (r.frenteMinimo() != null) {
+            partes.add("Frente desde " + numero(r.frenteMinimo()) + " m");
         }
-        if (partes.isEmpty() && r.getObservaciones() != null) {
-            partes.add(r.getObservaciones());
+        if(r.criterios()!=null&&!r.criterios().isEmpty())partes.add("Criterios: "+r.criterios().stream()
+                .map(c->c.rotulo()==null?c.clave():c.rotulo()).collect(Collectors.joining(", ")));
+        if (partes.isEmpty() && r.observaciones() != null) {
+            partes.add(r.observaciones());
         }
         return partes.isEmpty() ? "Sin parametros registrados" : String.join(" | ", partes);
     }
@@ -732,10 +732,10 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         return "hasta " + numero(maximo) + " " + unidad;
     }
 
-    private static String distritos(RequerimientoCliente r) {
-        return r.getDistritos() == null || r.getDistritos().isEmpty()
+    private static String distritos(FichaRequerimiento r) {
+        return r.distritos() == null || r.distritos().isEmpty()
                 ? "-"
-                : r.getDistritos().stream().map(Distrito::getNombre)
+                : r.distritos().stream()
                         .filter(Objects::nonNull).collect(Collectors.joining(", "));
     }
 
@@ -799,26 +799,6 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     private static DetalleCliente cliente(Visita visita) {
         OportunidadComercial oportunidad = visita != null ? visita.getOportunidad() : null;
         return oportunidad != null ? oportunidad.getCliente() : null;
-    }
-
-    private static DetalleCliente cliente(InteraccionComercial interaccion) {
-        if (interaccion == null) {
-            return null;
-        }
-        return interaccion.getCliente() != null
-                ? interaccion.getCliente()
-                : interaccion.getOportunidad() != null
-                        ? interaccion.getOportunidad().getCliente() : null;
-    }
-
-    private static DetalleAgente agente(InteraccionComercial interaccion) {
-        if (interaccion == null) {
-            return null;
-        }
-        return interaccion.getAgente() != null
-                ? interaccion.getAgente()
-                : interaccion.getOportunidad() != null
-                        ? interaccion.getOportunidad().getAgente() : null;
     }
 
     private static String texto(String... valores) {
@@ -1061,19 +1041,6 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         };
     }
 
-    private static String canal(String codigo) {
-        return switch (texto(codigo)) {
-            case "L" -> "Llamada";
-            case "W" -> "WhatsApp";
-            case "E" -> "Email";
-            case "P" -> "Presencial";
-            case "R" -> "Reunion";
-            case "T" -> "Portal";
-            case "O" -> "Otro";
-            default -> texto(codigo);
-        };
-    }
-
     private static String resultado(String codigo) {
         return switch (texto(codigo)) {
             case "P" -> "Pendiente";
@@ -1108,9 +1075,9 @@ public class FichaComercialServiceImpl implements FichaComercialService {
 
     private record DatosCliente(
             DetalleCliente cliente,
-            List<RequerimientoCliente> requerimientos,
+            List<FichaRequerimiento> requerimientos,
             List<OportunidadComercial> oportunidades,
-            List<InteraccionComercial> interacciones,
+            List<FichaInteraccion> interacciones,
             List<Visita> visitas,
             List<SolicitudAlquiler> solicitudes,
             List<ContratoAlquiler> contratos) {

@@ -1,7 +1,10 @@
 package com.controllocal.web.controlador;
 
+import com.controllocal.service.FotoPropiedadService;
+import com.controllocal.service.FotoPropiedadService.FotoDePropiedad;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.web.almacen.GaleriaDeFotos;
 import com.controllocal.web.seguridad.ProcedenciaDeCabeceras;
 import jakarta.servlet.http.HttpServletRequest;
 import com.controllocal.web.http.PageResponse;
@@ -9,6 +12,9 @@ import com.controllocal.web.dto.PropiedadUniversalDtos.AsignarResponsableRequest
 import com.controllocal.web.dto.PropiedadUniversalDtos.CandidatoResponsableResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.EdicionRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
+import com.controllocal.web.dto.PropiedadUniversalDtos.FotoRequest;
+import com.controllocal.web.dto.PropiedadUniversalDtos.FotoResponse;
+import com.controllocal.web.dto.PropiedadUniversalDtos.OrdenFotosRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroResponse;
@@ -20,6 +26,7 @@ import com.controllocal.web.seguridad.SesionActual;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -64,13 +71,17 @@ public class PropiedadesUniversalesController {
     /** Lo que se VIO del mercado. Serie propia: observar no es un hecho comercial (V76). */
     private final ObservacionMercadoService observaciones;
     private final ProcedenciaDeCabeceras procedencias;
+    /** La galeria, compartida con {@code /locales/{id}/fotos} (WP-C). */
+    private final GaleriaDeFotos galeria;
 
     public PropiedadesUniversalesController(PropiedadUniversalService propiedades,
                                             ProcedenciaDeCabeceras procedencias,
-                                            ObservacionMercadoService observaciones) {
+                                            ObservacionMercadoService observaciones,
+                                            GaleriaDeFotos galeria) {
         this.propiedades = propiedades;
         this.procedencias = procedencias;
         this.observaciones = observaciones;
+        this.galeria = galeria;
     }
 
     /**
@@ -106,16 +117,19 @@ public class PropiedadesUniversalesController {
      * observacion es un hecho fechado y corregirla borraria la muestra. Si el
      * precio cambio, se observa otra vez.
      */
+    @com.controllocal.web.capacidades.CapacidadReconocida("registrar_observacion_mercado")
     @PostMapping("{id}/observaciones")
     @PreAuthorize("hasRole('AGENTE')")
     @ResponseStatus(HttpStatus.CREATED)
     public ObservacionResponse observar(@PathVariable long id,
-                                        @RequestBody ObservacionRequest dto) {
+                                        @RequestBody ObservacionRequest dto,
+                                        @RequestHeader(value="Idempotency-Key",required=false) String clave,
+                                        jakarta.servlet.http.HttpServletRequest peticion) {
         if (dto == null) {
             throw new ReglaNegocioException("Los datos de la observacion son obligatorios.");
         }
         return ObservacionResponse.desde(
-                observaciones.registrar(dto.aDatos(id), SesionActual.actor()));
+                observaciones.registrar(dto.aDatos(id),SesionActual.actor(),clave,procedencias.de(peticion)));
     }
 
     /** Lo observado de una propiedad, de lo mas reciente a lo mas antiguo. */
@@ -123,6 +137,86 @@ public class PropiedadesUniversalesController {
     public List<ObservacionResponse> observaciones(@PathVariable long id) {
         return observaciones.listarDe(id, SesionActual.actor()).stream()
                 .map(ObservacionResponse::desde)
+                .toList();
+    }
+
+    // ------------------------------------------------------------------
+    // La galeria de fotos (WP-C)
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Las fotos de la propiedad, en su orden.</b> La de {@code orden = 1} es
+     * la portada.
+     *
+     * <p>Cada elemento lleva su {@code clave} y el {@code proveedor} que la
+     * sirve; <b>la URL la arma el cliente</b> con
+     * {@code /documentos/contenido?clave=}. El Core no publica URLs absolutas
+     * porque tendria que saber por donde se le llega desde fuera —dominio,
+     * prefijo, puerto—, que es configuracion del despliegue y cambia sin que
+     * cambie ningun dato.
+     *
+     * <p>Es la misma galeria que {@code GET /locales/{id}/fotos}: misma tabla,
+     * mismo servicio, mismas fotos. Lo que cambia es la forma —aqui viaja
+     * {@code orden}— y el tope de escritura.
+     */
+    @GetMapping("{id}/fotos")
+    public List<FotoResponse> fotos(@PathVariable long id) {
+        return galeria.listar(id, SesionActual.actor()).stream()
+                .map(FotoResponse::desde)
+                .toList();
+    }
+
+    /**
+     * Sube una foto: llega en base64, el binario va al almacen y aqui queda su
+     * clave. <b>Maximo 12</b> por propiedad.
+     *
+     * <p>Se aceptan PNG y JPG hasta 5 MB, comprobando la <b>firma binaria</b> y
+     * no solo la extension. Quien puede es quien puede editar la propiedad
+     * ({@code AutoridadDePropiedad.exigirEdicion}): una foto es la ficha del
+     * inmueble, no un adjunto suelto.
+     */
+    @PostMapping("{id}/fotos")
+    @PreAuthorize("hasRole('AGENTE')")
+    public ResponseEntity<FotoResponse> subirFoto(@PathVariable long id,
+                                                  @RequestBody(required = false) FotoRequest dto) {
+        if (dto == null) {
+            throw new ReglaNegocioException("La foto es obligatoria.");
+        }
+        var actor = SesionActual.actor();
+        FotoDePropiedad foto = galeria.agregar(id, dto.nombreArchivo(), dto.contenidoBase64(),
+                FotoPropiedadService.TOPE_UNIVERSAL, actor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(FotoResponse.desde(foto));
+    }
+
+    /**
+     * Quita una foto y su binario. Las siguientes se recolocan: la galeria
+     * vuelve a ser 1..N y la portada sigue siendo la foto 1.
+     */
+    @DeleteMapping("{id}/fotos/{idFoto}")
+    @PreAuthorize("hasRole('AGENTE')")
+    public ResponseEntity<Void> eliminarFoto(@PathVariable long id, @PathVariable long idFoto) {
+        galeria.eliminar(idFoto, SesionActual.actor());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * <b>El orden que decide la persona</b>, y con el la portada.
+     *
+     * <p>Es {@code PUT} y no {@code PATCH} porque reemplaza el orden <b>entero</b>:
+     * el cuerpo nombra las fotos de la galeria completa, en su nueva posicion.
+     * Un cuerpo parcial obligaria al Core a decidir donde van las que faltan, y
+     * cualquiera de las dos respuestas seria una invencion sobre la intencion de
+     * quien reordeno.
+     */
+    @PutMapping("{id}/fotos/orden")
+    @PreAuthorize("hasRole('AGENTE')")
+    public List<FotoResponse> reordenarFotos(@PathVariable long id,
+                                             @RequestBody(required = false) OrdenFotosRequest dto) {
+        if (dto == null || dto.ids() == null || dto.ids().isEmpty()) {
+            throw new ReglaNegocioException("Hay que decir el orden de las fotos.");
+        }
+        return galeria.reordenar(id, dto.ids(), SesionActual.actor()).stream()
+                .map(FotoResponse::desde)
                 .toList();
     }
 
@@ -141,6 +235,7 @@ public class PropiedadesUniversalesController {
      * filtro que sirve para encontrar exactamente esas.
      */
     @GetMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida({"buscar_propiedades"})
     public PageResponse<FilaPropiedadResponse> listar(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer pagina,
@@ -177,8 +272,10 @@ public class PropiedadesUniversalesController {
 
     /** La propiedad leida por el modelo universal: titulares, atributos y encargos. */
     @GetMapping("{id}")
+    @com.controllocal.web.capacidades.CapacidadReconocida({"estado_de_propiedad"})
     public PropiedadResponse consultar(@PathVariable long id) {
-        return PropiedadResponse.desde(propiedades.consultar(id, SesionActual.actor()));
+        return PropiedadResponse.desde(propiedades.consultar(id, SesionActual.actor()),
+                galeria.proveedor());
     }
 
     /**
@@ -187,7 +284,8 @@ public class PropiedadesUniversalesController {
      */
     @PutMapping("{id}")
     @PreAuthorize("hasRole('AGENTE')")
-    public PropiedadResponse editar(
+    @com.controllocal.web.capacidades.CapacidadReconocida({"editar_propiedad"})
+    public PropiedadUniversalService.ResultadoEdicion editar(
             @PathVariable long id,
             @RequestBody(required = false) EdicionRequest dto,
             @RequestHeader(value = "Idempotency-Key", required = false) String claveIdempotencia,
@@ -195,8 +293,8 @@ public class PropiedadesUniversalesController {
         if (dto == null) {
             throw new ReglaNegocioException("Los datos de la propiedad son obligatorios.");
         }
-        return PropiedadResponse.desde(
-                propiedades.editar(id, dto.aDatos(claveIdempotencia, procedencias.de(peticion)), SesionActual.actor()));
+        return propiedades.editar(id,dto.aDatos(claveIdempotencia,procedencias.de(peticion)),
+                SesionActual.actor());
     }
 
     // ------------------------------------------------------------------

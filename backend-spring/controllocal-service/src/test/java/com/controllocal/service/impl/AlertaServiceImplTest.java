@@ -1,518 +1,268 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Alerta;
-import com.controllocal.domain.comercial.Prospeccion;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
+import com.controllocal.domain.comercial.HechoAsunto;
+import com.controllocal.domain.persona.*;
 import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.repositorio.AlertaRepository;
-import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
-import com.controllocal.persistence.repositorio.ProspeccionRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService.DatosAlerta;
-import com.controllocal.service.AlertaService.FichaAlerta;
-import com.controllocal.service.Pagina;
-import com.controllocal.service.excepcion.NoEncontradoException;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.Alcances.Alcance;
-import com.controllocal.service.soporte.Transiciones;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.persistence.repositorio.AlertaRepository.Cabecera;
+import com.controllocal.service.*;
+import com.controllocal.service.ProspeccionService.RevisionSeguimiento;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion.Necesidad;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.service.soporte.*;
+import com.controllocal.service.soporte.FuentesAsuntos.*;
+import com.controllocal.persistence.repositorio.FuentesAsuntosRepository.Recurso;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.test.util.ReflectionTestUtils;
-
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
+import java.time.Instant;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda la campana (F6). El service es corto a proposito —la sustancia son las
- * once emisiones repartidas por el flujo—, pero tiene cuatro comportamientos
- * que hay que fijar porque son cable real y se "arreglan" con facilidad:
- *
- * <ol>
- *   <li>{@code emitir} se salta la emision <b>en silencio</b> si falta el agente
- *       o la entidad: la v1 tampoco rompe la operacion de negocio por un aviso;</li>
- *   <li>{@code atender} distingue <b>404 de false</b> mirando el tenant (D-F6-3):
- *       "no la alcanzo" y "ya estaba atendida" no son lo mismo;</li>
- *   <li>{@code INMUEBLE} y {@code CAPTACION} viajan con <b>ruta null</b> —caen en
- *       el {@code default} del switch de la v1— y su alerta se muestra sin
- *       enlace (D-F6-4). No es un olvido que tapar;</li>
- *   <li>un BROKER sin equipo ve la campana <b>vacia</b>, no un 403.</li>
- * </ol>
- */
+/** Permisos antes de mensaje/página/conteo, y R27 como fuente única de las presentaciones. */
 class AlertaServiceImplTest {
+    private final AlertaRepository repo=mock(AlertaRepository.class);
+    private final Alcances alcances=mock(Alcances.class);
+    private final SeguimientoDeProspeccion seguimiento=mock(SeguimientoDeProspeccion.class);
+    private final FuentesAsuntos fuentes=mock(FuentesAsuntos.class);
+    private final FuentesAsuntosRepository origenes=mock(FuentesAsuntosRepository.class);
+    private final ContextosDeActividad contexto=mock(ContextosDeActividad.class);
+    private final AutoridadAsuntos autoridad=mock(AutoridadAsuntos.class);
+    private final AlertaServiceImpl service=new AlertaServiceImpl(repo,alcances,seguimiento,fuentes,origenes,contexto,autoridad);
+    private final Actor actor=new Actor(1,2,30,"AGENTE");
+    private static final String A="a".repeat(64),B="b".repeat(64);
+    private static final Documentos JSON_C7=new Documentos(JsonMapper.builder().findAndAddModules().build());
 
-    private static final long ORG = 1L;
-    private static final long ROL_AGENTE = 30L;
-
-    private final AlertaRepository alertas = mock(AlertaRepository.class);
-    private final ProspeccionRepository prospecciones = mock(ProspeccionRepository.class);
-    private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
-
-    private final AlertaServiceImpl service =
-            new AlertaServiceImpl(alertas, prospecciones, agentes, alcances);
-
-    private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
-    private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
-
-    // ------------------------------------------------------------------
-    // Emision
-    // ------------------------------------------------------------------
-
-    @Test
-    void emitirSeSaltaLaEmisionEnSILENCIOSiFaltaElAgenteOLaEntidad() {
-        // Un aviso que no se puede atar a nadie no debe tumbar la operacion de
-        // negocio que lo dispara (misma decision que la v1).
-        service.emitir(null, agente);
-        service.emitir(datos(null, 5L), agente);
-        service.emitir(datos(ROL_AGENTE, null), agente);
-        service.emitir(datos(ROL_AGENTE, 0L), agente);
-        service.emitir(datos(ROL_AGENTE, -1L), agente);
-
-        verifyNoInteractions(alertas);
-        verifyNoInteractions(agentes);
+    @BeforeEach void fuentesDePruebaDeclaradas(){
+        MontajeAsuntosC7.fuentesDeclaradas(fuentes,autoridad,actor);
+        when(origenes.decisionesActualesEncargo(anyLong(),anyCollection())).thenReturn(List.of());
+        when(origenes.contextos(eq(1L),anyCollection())).thenAnswer(i->{
+            Collection<Recurso> recursos=i.getArgument(1);var salida=new HashMap<Recurso,FuentesAsuntosRepository.Contexto>();
+            for(var r:recursos)salida.put(r,new FuentesAsuntosRepository.Contexto(r,30L,30L,null,null,null));
+            return Map.copyOf(salida);
+        });
+        when(repo.nombresDeAgentes(eq(1L),anyCollection())).thenAnswer(i->{
+            Collection<Long> ids=i.getArgument(1);return ids.stream().map(id->(AlertaRepository.NombreAgente)new NombreDeclarado(id,"Valentina Mora")).toList();
+        });
     }
 
-    @Test
-    void emitirEstampaElTenantDelACTORYDejaLaAlertaActiva() {
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        service.emitir(new DatosAlerta(Alerta.SOLICITUD_REENVIADA, Alerta.MEDIA,
-                "SOLICITUD_ALQUILER", 5L, ROL_AGENTE, "Revisa la solicitud."), agente);
-
-        Alerta guardada = alertaGuardada();
-        assertEquals(ORG, guardada.getOrganizacionId());
-        assertEquals(Alerta.SOLICITUD_REENVIADA, guardada.getTipo());
-        assertEquals(Alerta.MEDIA, guardada.getSeveridad());
-        assertEquals("SOLICITUD_ALQUILER", guardada.getEntidadTipo());
-        assertEquals(5L, guardada.getEntidadId());
-        assertEquals(Alerta.ACTIVA, guardada.getEstado());
-        assertEquals("Revisa la solicitud.", guardada.getMensaje());
+    @Test void emitirConservaLosDatosDelEmisorYNoLosConvierteEnRecontacto() {
+        var causa=causa("SOLICITUD_ALQUILER",5,30);var origen=causa.origen();
+        when(fuentes.resolver(eq(causa.recurso()),eq(causa.finalidad()),eq(origen),eq(actor))).thenReturn(causa);
+        service.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_EVALUADA,Alerta.INFO,"SOLICITUD_ALQUILER",5L,30L,"Mensaje conocido",origen),actor);
+        verify(repo).crearCausaC7(eq(1L),eq(Alerta.SOLICITUD_EVALUADA),eq(Alerta.INFO),eq("SOLICITUD_ALQUILER"),eq(5L),eq(30L),
+                eq("Mensaje conocido"),eq(huella(causa)),eq(JSON_C7.objetoCanonico(causa)),isNull());
+        verify(repo,never()).crearRecontacto(anyLong(),anyLong(),anyLong(),anyString());verify(repo,never()).save(any());
+    }
+    @Test void datosIncompletosDelEmisorNoFabricanAviso() {
+        assertThrows(ReglaNegocioException.class,()->service.emitir(null,actor));
+        assertThrows(ReglaNegocioException.class,()->service.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_EVALUADA,Alerta.INFO,"SOLICITUD_ALQUILER",5L,null,"m",Origen.de("EVALUACION_SOLICITUD",1)),actor));
+        assertThrows(ReglaNegocioException.class,()->service.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_EVALUADA,Alerta.INFO,"SOLICITUD_ALQUILER",0L,30L,"m",Origen.de("EVALUACION_SOLICITUD",1)),actor));
+        assertThrows(ReglaNegocioException.class,()->service.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_EVALUADA,Alerta.INFO,"SOLICITUD_ALQUILER",5L,30L,"m",null),actor));
+        assertThrows(ReglaNegocioException.class,()->service.emitir(new AlertaService.DatosAlerta(Alerta.SIN_AVANCE,Alerta.INFO,"SOLICITUD_ALQUILER",5L,30L,"m",Origen.de("EVALUACION_SOLICITUD",1)),actor));
+        verifyNoInteractions(repo,fuentes,autoridad);
+    }
+    @Test void filtraRecontactoAntesDeHidratarContarYPaginar() {
+        alcance();
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(necesidad(11,A,30,true)));
+        when(repo.cabecerasActivas(eq(1L),eq(false),anyCollection())).thenReturn(List.of(
+                cabecera(4,11,30,A,Alerta.ACTIVA,true),cabecera(5,12,30,B,Alerta.ACTIVA,true)));
+        var visible=alerta("PROSPECCION",11);visible.setTipo(Alerta.SIN_RESPUESTA);visible.setMarcaCausa(A);
+        when(repo.buscarAutorizadas(eq(1L),eq(List.of(4L)),any())).thenReturn(new PageImpl<>(List.of(visible)));
+        var resultado=service.listar(1,20,actor);
+        assertEquals(1,resultado.total());assertEquals(1,resultado.items().size());
+        var orden=inOrder(seguimiento,repo);orden.verify(repo).cabecerasActivas(eq(1L),eq(false),anyCollection());
+        orden.verify(seguimiento).necesidadesVencidas(actor);
+        orden.verify(repo).buscarAutorizadas(eq(1L),eq(List.of(4L)),any());
+    }
+    @Test void unRecontactoSinPermisoNoLlegaAlConteoNiAlMensaje() {
+        alcance();when(repo.cabecerasActivas(eq(1L),eq(false),anyCollection()))
+                .thenReturn(List.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        assertTrue(service.listar(1,20,actor).items().isEmpty());
+        verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+    }
+    @Test void paginaYNombreActualDeLosOtrosAvisosConservanElContrato() {
+        alcance();when(repo.cabecerasActivas(eq(1L),eq(false),anyCollection()))
+                .thenReturn(List.of(cabecera(4,5,30,null,Alerta.ACTIVA,false)));
+        var almacenada=spy(alerta("SOLICITUD_ALQUILER",5));var recurso=new Recurso("SOLICITUD_ALQUILER",5);
+        var original=almacenada.getAgente();
+        doThrow(new AssertionError("La entrega no materializa al agente histórico ni su persona")).when(almacenada).getAgente();
+        when(repo.buscarAutorizadas(eq(1L),eq(List.of(4L)),any())).thenReturn(new PageImpl<>(List.of(almacenada)));
+        when(origenes.contextos(eq(1L),anyCollection())).thenReturn(Map.of(recurso,new FuentesAsuntosRepository.Contexto(recurso,33L,null,null,null,null)));
+        when(repo.nombresDeAgentes(eq(1L),eq(Set.of(33L)))).thenReturn(List.of(new NombreDeclarado(33L,"Responsable actual TEST")));
+        var resultado=service.listar(0,9999,actor);var ficha=resultado.items().getFirst();
+        assertEquals("Responsable actual TEST",ficha.agenteNombre());assertEquals(33L,ficha.idAgente());assertEquals("solicitud-detail/5",ficha.ruta());
+        assertEquals(30L,original.getId());verify(origenes,times(2)).contextos(eq(1L),anyCollection());
+        var pagina=org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(repo).buscarAutorizadas(eq(1L),eq(List.of(4L)),pagina.capture());
+        assertEquals(0,pagina.getValue().getPageNumber());assertEquals(100,pagina.getValue().getPageSize());
+        verify(seguimiento).necesidadesActuales(actor);
+        verify(seguimiento).marcasActuales(actor);
+    }
+    @Test void rutasNoSustituidasNoSeInventan() {
+        // Obligación de representación, sin fabricar un productor para INMUEBLE.
+        for(String entidad:List.of("INMUEBLE","CAPTACION")) {
+            assertNull(ReflectionTestUtils.invokeMethod(service,"ruta",entidad,5L));
+        }
+        verifyNoInteractions(repo,fuentes,autoridad);
+    }
+    @Test void falloDeLaConciliacionNoSeDevuelveComoCampanaVacia(){
+        when(seguimiento.necesidadesActuales(actor)).thenThrow(new IllegalStateException("Fallo técnico TEST"));
+        assertThrows(IllegalStateException.class,()->service.listar(1,20,actor));
+        verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any(Pageable.class));
+    }
+    @Test void brokerSinEquipoRecibeVacioSinBuscarMensajes() {
+        var broker=new Actor(1,3,40,"BROKER");when(alcances.de(broker)).thenReturn(new Alcances.Alcance(1,false,List.of()));
+        assertTrue(service.listar(1,20,broker).items().isEmpty());verifyNoInteractions(repo,seguimiento);
+    }
+    @Test void atenderReautorizaAntesDeHidratar() {
+        alcance();when(repo.cabecera(1,4)).thenReturn(Optional.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(necesidad(11,A,30,true)));
+        when(repo.atenderSiActiva(1,4,A,null)).thenReturn(1);
+        assertTrue(service.atender(4,actor));
+        var orden=inOrder(seguimiento,repo);orden.verify(repo).cabecera(1,4);
+        orden.verify(seguimiento).necesidadesVencidas(actor);orden.verify(repo).atenderSiActiva(1,4,A,null);
+        orden.verify(seguimiento).necesidadesVencidas(actor);
+        verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());verify(repo,never()).save(any());
+    }
+    @Test void yaAtendidaDentroDelAmbitoDevuelveFalseSinHidratar() {
+        alcance();when(repo.cabecera(1,4)).thenReturn(Optional.of(cabecera(4,5,30,null,Alerta.ATENDIDA,false)));
+        assertFalse(service.atender(4,actor));verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+        verify(repo,never()).atenderSiActiva(anyLong(),anyLong(),nullable(String.class),nullable(String.class));
+    }
+    @Test void otroAgenteNoObtieneFalseComoOraculoDeExistencia() {
+        alcance();when(repo.cabecera(1,4)).thenReturn(Optional.of(cabecera(4,5,99,null,Alerta.ATENDIDA,false)));
+        when(autoridad.legibles(anyCollection(),eq(actor))).thenReturn(Set.of());
+        assertThrows(NoEncontradoException.class,()->service.atender(4,actor));
+        verify(fuentes,never()).leer(anyString());verify(repo,never()).atenderSiActiva(anyLong(),anyLong(),nullable(String.class),nullable(String.class));
+        verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+    }
+    @Test void otroTenantONoEncontradaNoHidrata() {
+        alcance();when(repo.cabecera(1,4)).thenReturn(Optional.empty());
+        assertThrows(NoEncontradoException.class,()->service.atender(4,actor));verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+        verify(repo,never()).atenderSiActiva(anyLong(),anyLong(),nullable(String.class),nullable(String.class));
+    }
+    @Test void revocacionDeContactoImpideAtenderAntesDeLeerMensaje() {
+        alcance();when(repo.cabecera(1,4)).thenReturn(Optional.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        assertThrows(NoEncontradoException.class,()->service.atender(4,actor));verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+        verify(repo,never()).atenderSiActiva(anyLong(),anyLong(),nullable(String.class),nullable(String.class));
+    }
+    @Test void causaCanceladaOAtendidaNoSeRegeneraYLaNuevaNoSeSuprime() {
+        var nueva=necesidad(11,B,30,true);
+        when(seguimiento.necesidadesActuales(actor)).thenReturn(List.of(nueva));
+        when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(B));
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(nueva));
+        when(repo.cabecerasRecontacto(eq(1L),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ATENDIDA,true)));
+        when(repo.crearRecontacto(1,11,30,B)).thenReturn(1,0);
+        assertEquals(1,service.sincronizarRecontacto(actor));assertEquals(0,service.sincronizarRecontacto(actor));
+        verify(repo,never()).retirarRecontactoSustituido(anyLong(),anyLong(),anyString());
+        // La exclusión mutua real de INSERT+índice se demuestra en PostgreSQL por Root.
+    }
+    @Test void mismaMarcaYaAtendidaConservaSuRegistroPorLaUnicidadEnTodosLosEstados() {
+        var n=necesidad(11,A,30,true);
+        when(seguimiento.necesidadesActuales(actor)).thenReturn(List.of(n));when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(A));
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(n));
+        when(repo.cabecerasRecontacto(eq(1L),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ATENDIDA,true)));
+        when(repo.crearRecontacto(1,11,30,A)).thenReturn(0);
+        assertEquals(0,service.sincronizarRecontacto(actor));verify(repo,never()).save(any());
+    }
+    @Test void dosDestinatariosConMismoRecursoMantienenDosMarcasSinElegirUna() {
+        var a=necesidad(11,A,33,true);var b=necesidad(11,B,33,true);
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(a,b));
+        when(repo.crearRecontacto(1,11,33,A)).thenReturn(1);when(repo.crearRecontacto(1,11,33,B)).thenReturn(1);
+        assertEquals(2,service.sincronizarRecontacto(actor));
+        verify(repo,never()).crearRecontacto(eq(1L),eq(11L),eq(30L),anyString());
+    }
+    @Test void fechaPlanificadaSinIntentoNoAcreditaSinRespuesta() {
+        when(seguimiento.necesidadesVencidas(actor)).thenReturn(List.of(necesidad(11,A,30,false)));
+        assertEquals(0,service.sincronizarRecontacto(actor));verify(repo,never()).crearRecontacto(anyLong(),anyLong(),anyLong(),anyString());
+    }
+    @Test void posponerORestringirLaMismaCausaNoEsResolverNiCrearOtroAviso() {
+        var n=necesidad(11,A,30,true);when(seguimiento.necesidadesActuales(actor)).thenReturn(List.of(n));
+        when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(A));
+        when(repo.cabecerasRecontacto(eq(1L),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        assertEquals(0,service.sincronizarRecontacto(actor));
+        verify(repo,never()).retirarRecontactoSustituido(anyLong(),anyLong(),anyString());
+        verify(repo,never()).crearRecontacto(anyLong(),anyLong(),anyLong(),anyString());
+    }
+    @Test void unaCausaAntiguaSeRetiraSoloConContextoActualAcreditado() {
+        var n=necesidad(11,B,30,true);when(seguimiento.necesidadesActuales(actor)).thenReturn(List.of(n));
+        when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(B));
+        when(repo.cabecerasRecontacto(eq(1L),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        service.sincronizarRecontacto(actor);verify(repo).retirarRecontactoSustituido(1,4,A);
+        verify(repo,never()).buscarAutorizadas(anyLong(),anyCollection(),any());
+    }
+    @Test void revocacionOEncargoFueraDeLaPoblacionNoFingenResolucion() {
+        when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(A));
+        assertEquals(0,service.sincronizarRecontacto(actor));
+        verify(repo,never()).cabecerasRecontacto(anyLong(),anyCollection());
+        verify(repo,never()).retirarRecontactoSustituido(anyLong(),anyLong(),anyString());
+    }
+    @Test void reasignacionCambiaSoloPresentacionSinRenovarFechasNiCausa() {
+        var n=necesidad(11,A,33,true);when(seguimiento.necesidadesActuales(actor)).thenReturn(List.of(n));
+        when(seguimiento.marcasActuales(actor)).thenReturn(Set.of(A));
+        when(repo.cabecerasRecontacto(eq(1L),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        service.sincronizarRecontacto(actor);verify(repo).actualizarResponsableRecontacto(1,4,A,33);
+        verify(repo,never()).retirarRecontactoSustituido(anyLong(),anyLong(),anyString());verify(repo,never()).save(any());
+    }
+    @Test void unFalloTecnicoNoEsCeroAvisosNiListaVacia() {
+        alcance();when(repo.cabecerasActivas(eq(1L),eq(false),anyCollection())).thenReturn(List.of(cabecera(4,11,30,A,Alerta.ACTIVA,true)));
+        when(seguimiento.necesidadesVencidas(actor)).thenThrow(new IllegalStateException("fallo R27"));
+        assertThrows(IllegalStateException.class,()->service.listar(1,20,actor));
+        assertThrows(IllegalStateException.class,()->service.sincronizarRecontacto(actor));
+    }
+    @Test void tenantAdminNoObtieneOperacionPorGobernar() {
+        var admin=new Actor(1,3,40,"TENANT_ADMIN");
+        assertThrows(AccesoNoAutorizadoException.class,()->service.listar(1,20,admin));
+        assertThrows(AccesoNoAutorizadoException.class,()->service.atender(4,admin));
+        assertThrows(AccesoNoAutorizadoException.class,()->service.sincronizarRecontacto(admin));
+        verifyNoInteractions(repo,seguimiento,alcances);
     }
 
-    // ------------------------------------------------------------------
-    // Lectura y alcance
-    // ------------------------------------------------------------------
-
-    @Test
-    void unBrokerSinEquipoVeLaCampanaVACIANoUn403() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, false, List.of()));
-
-        Pagina<FichaAlerta> pagina = service.listar(1, 20, broker);
-
-        assertEquals(0, pagina.total());
-        assertTrue(pagina.items().isEmpty());
-        verifyNoInteractions(alertas);
+    private void alcance(){when(alcances.de(actor)).thenReturn(new Alcances.Alcance(1,false,List.of(30L)));}
+    private static Necesidad necesidad(long prospeccion,String marca,long responsable,boolean intento) {
+        var r=new RevisionSeguimiento(marca.equals(A)?101:102,2,prospeccion,"Propietario o representante declarado","CADENCIA",
+                intento?LocalDate.of(2026,10,28):null,1,LocalDate.of(2026,10,30),"CADENCIA",null,null,false,false,false,null);
+        return new Necesidad(r,marca,responsable);
     }
-
-    @Test
-    void elTamanoSeAcotaEntre1Y100YLaPaginaEs1Based() {
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarConAgente(anyLong(), anyBoolean(), anyCollection(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        service.listar(0, 9999, agente);
-        verify(alertas).buscarConAgente(anyLong(), anyBoolean(), anyCollection(), pageable.capture());
-
-        assertEquals(100, pageable.getValue().getPageSize());
-        assertEquals(0, pageable.getValue().getPageNumber());
+    private static Cabecera cabecera(long id,long entidad,long responsable,String marca,String estado,boolean r27) {
+        var causa=r27?null:causa("SOLICITUD_ALQUILER",entidad,responsable);
+        return new CabeceraDePrueba(id,r27?Alerta.SIN_RESPUESTA:Alerta.SOLICITUD_EVALUADA,
+                r27?"PROSPECCION":"SOLICITUD_ALQUILER",entidad,responsable,marca,estado,
+                causa==null?null:huella(causa),causa==null?null:JSON_C7.objetoCanonico(causa),causa==null?null:"VIGENTE");
     }
-
-    @Test
-    void laFichaLlevaElNombreDelAgenteYLaRutaDeNavegacion() {
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarConAgente(anyLong(), anyBoolean(), anyCollection(), any(Pageable.class)))
-                .thenReturn(paginaCon(alerta("SOLICITUD_ALQUILER", 5L)));
-
-        FichaAlerta ficha = service.listar(1, 20, agente).items().get(0);
-
-        assertEquals(ROL_AGENTE, ficha.idAgente());
-        assertEquals("Valentina Mora", ficha.agenteNombre());
-        assertEquals("solicitud-detail/5", ficha.ruta());
+    private record CabeceraDePrueba(Long id,String tipo,String entidadTipo,Long entidadId,
+                                    Long idAgente,String marcaCausa,String estado,String huellaCausaC7,String fuenteCausaC7,String estadoCausaC7) implements Cabecera {
+        public Long getId(){return id;} public String getTipo(){return tipo;}
+        public String getEntidadTipo(){return entidadTipo;} public Long getEntidadId(){return entidadId;}
+        public Long getIdAgente(){return idAgente;} public String getMarcaCausa(){return marcaCausa;}
+        public String getEstado(){return estado;}
+        public String getHuellaCausaC7(){return huellaCausaC7;}public String getFuenteCausaC7(){return fuenteCausaC7;}
+        public String getEstadoCausaC7(){return estadoCausaC7;}
     }
-
-    @Test
-    void INMUEBLEyCAPTACIONviajanConRutaNULLYEsoESElCable() {
-        // D-F6-4: caen en el default del switch de la v1, asi que esas alertas
-        // se muestran SIN enlace. Si este test empieza a fallar, alguien
-        // "completo" el switch y rompio la paridad.
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarConAgente(anyLong(), anyBoolean(), anyCollection(), any(Pageable.class)))
-                .thenReturn(paginaCon(alerta("INMUEBLE", 8L), alerta("CAPTACION", 9L)));
-
-        List<FichaAlerta> fichas = service.listar(1, 20, agente).items();
-
-        assertNull(fichas.get(0).ruta());
-        assertNull(fichas.get(1).ruta());
+    private record NombreDeclarado(Long id,String nombre) implements AlertaRepository.NombreAgente{
+        public Long getId(){return id;}public String getNombre(){return nombre;}
     }
-
-    @Test
-    void unaEntidadSinIdValidoTampocoTieneRuta() {
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarConAgente(anyLong(), anyBoolean(), anyCollection(), any(Pageable.class)))
-                .thenReturn(paginaCon(alerta("OPORTUNIDAD", 0L)));
-
-        assertNull(service.listar(1, 20, agente).items().get(0).ruta());
+    private static Causa causa(String entidad,long id,long responsable){
+        return new Causa(1,new Recurso(entidad,id),Alerta.SOLICITUD_EVALUADA,new HechoAsunto("EVALUACION_SOLICITUD",100000+id,null),
+                Origen.de("EVALUACION_SOLICITUD",100000+id),Instant.parse("2026-11-04T14:00:00Z"),null,responsable,null);
     }
-
-    // ------------------------------------------------------------------
-    // Atender: 404 vs false (D-F6-3)
-    // ------------------------------------------------------------------
-
-    @Test
-    void atenderUnaAlertaVisibleLaMarcaYDevuelveTrue() {
-        Alerta activa = alerta("SOLICITUD_ALQUILER", 5L);
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarVisible(eq(ORG), eq(4L), eq(false), anyCollection()))
-                .thenReturn(Optional.of(activa));
-
-        assertTrue(service.atender(4L, agente));
-        assertEquals(Alerta.ATENDIDA, activa.getEstado());
-        verify(alertas).save(activa);
+    private static String huella(Causa causa){return Idempotencia.huellaExacta(JSON_C7.objetoCanonico(Map.of("organizacion",1L,"recurso",causa.recurso(),"hecho",causa.hecho(),"finalidad",causa.finalidad())));}
+    private static Alerta alerta(String entidad,long id) {
+        var a=new Alerta();a.setOrganizacionId(1L);a.setEntidadTipo(entidad);a.setEntidadId(id);a.setTipo(Alerta.SOLICITUD_EVALUADA);
+        if(!"PROSPECCION".equals(entidad)){var causa=causa(entidad,id,30);a.setHuellaCausaC7(huella(causa));a.setFuenteCausaC7(JSON_C7.objetoCanonico(causa));a.setEstadoCausaC7("VIGENTE");}
+        a.setSeveridad(Alerta.MEDIA);a.setMensaje("Mensaje");a.setAgente(detalle());a.nacer();ReflectionTestUtils.setField(a,"id",4L);return a;
     }
-
-    @Test
-    void unaAlertaYaAtendidaDevuelveFALSENoUn404() {
-        // buscarVisible solo trae ACTIVAs, asi que una ya atendida cae al
-        // orElseGet; existe dentro del tenant, luego es "false", no 404.
-        Alerta yaAtendida = alerta("SOLICITUD_ALQUILER", 5L);
-        yaAtendida.atender();
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarVisible(eq(ORG), eq(4L), eq(false), anyCollection()))
-                .thenReturn(Optional.empty());
-        when(alertas.findById(4L)).thenReturn(Optional.of(yaAtendida));
-
-        assertFalse(service.atender(4L, agente));
-        verify(alertas, never()).save(any(Alerta.class));
-    }
-
-    @Test
-    void unaAlertaDeOTRAOrganizacionResponde404NoFalse() {
-        // La frontera de tenant se comprueba a mano aqui porque findById no la
-        // lleva: sin este filtro, una alerta ajena respondería "false" y
-        // filtraría su existencia.
-        Alerta ajena = alerta("SOLICITUD_ALQUILER", 5L);
-        ajena.setOrganizacionId(99L);
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarVisible(eq(ORG), eq(4L), eq(false), anyCollection()))
-                .thenReturn(Optional.empty());
-        when(alertas.findById(4L)).thenReturn(Optional.of(ajena));
-
-        assertThrows(NoEncontradoException.class, () -> service.atender(4L, agente));
-    }
-
-    @Test
-    void unaAlertaInexistenteResponde404() {
-        when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
-        when(alertas.buscarVisible(eq(ORG), eq(4L), eq(false), anyCollection()))
-                .thenReturn(Optional.empty());
-        when(alertas.findById(4L)).thenReturn(Optional.empty());
-
-        assertThrows(NoEncontradoException.class, () -> service.atender(4L, agente));
-    }
-
-    @Test
-    void unBrokerSinEquipoNoPuedeAtenderNada() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, false, List.of()));
-
-        assertThrows(NoEncontradoException.class, () -> service.atender(4L, broker));
-        verifyNoInteractions(alertas);
-    }
-
-    // ------------------------------------------------------------------
-    // Barrido de recontacto
-    // ------------------------------------------------------------------
-
-    @Test
-    void elBarridoEsDelTENANTEnteroNoDelAlcanceDeQuienConsulta() {
-        // La v1 recorre TODAS las prospecciones por recontactar sin mirar quien
-        // abrio la campana; lo unico que se le anade es la frontera de tenant.
-        when(prospecciones.recontactables(eq(ORG), eq(true), eq(List.of(-1L)),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        service.sincronizarRecontacto(agente);
-
-        verify(prospecciones).recontactables(eq(ORG), eq(true), eq(List.of(-1L)),
-                eq(LocalDate.now().minusDays(7)), any(Pageable.class));
-        verify(alcances, never()).de(any());
-    }
-
-    @Test
-    void noSeDuplicaUnaAlertaDeRecontactoYaActiva() {
-        Prospeccion conAlerta = prospeccion(11L, "PRO-0001");
-        Prospeccion sinAlerta = prospeccion(12L, "PRO-0002");
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(conAlerta, sinAlerta)));
-        when(alertas.existeActivaDe(ORG, "PROSPECCION", 11L, Alerta.SIN_RESPUESTA)).thenReturn(true);
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        assertEquals(1, service.sincronizarRecontacto(agente));
-        verify(alertas, times(1)).save(any(Alerta.class));
-        assertEquals("Recontacta o evalua descartar la prospeccion PRO-0002.",
-                alertaGuardada().getMensaje());
-    }
-
-    @Test
-    void unaProspeccionSinAgenteSeSaltaSinRomperElBarrido() {
-        Prospeccion huerfana = prospeccion(11L, "PRO-0001");
-        huerfana.setAgente(null);
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(huerfana)));
-
-        assertEquals(0, service.sincronizarRecontacto(agente));
-        verify(alertas, never()).existeActivaDe(anyLong(), anyString(), anyLong(), anyString());
-    }
-
-    @Test
-    void sinCodigoDeProspeccionElMensajeCaeAlIdConAlmohadilla() {
-        Prospeccion sinCodigo = prospeccion(11L, "  ");
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(sinCodigo)));
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        service.sincronizarRecontacto(agente);
-
-        assertEquals("Recontacta o evalua descartar la prospeccion #11.",
-                alertaGuardada().getMensaje());
-    }
-
-    // ------------------------------------------------------------------
-    // Reconciliacion simetrica: la campana no puede contradecir a la cola
-    // ------------------------------------------------------------------
-
-    /**
-     * <b>El bug que esto cierra.</b> La tarea de la bandeja se auto-completa al
-     * reconciliar, asi que en cuanto alguien contactaba la prospeccion la tarea
-     * desaparecia y el aviso se quedaba activo: la campana enseñaba PRO-0003 y
-     * PRO-0005 mientras la cola iba por otras. Dos representaciones activas del
-     * mismo hecho, diciendo cosas distintas.
-     */
-    @Test
-    void elAvisoSeCierraSoloCuandoElRecontactoDejaDeEstarVencido() {
-        Alerta viva = alertaDeRecontacto(11L);
-        when(alertas.recontactosQueYaNoAplican(eq(ORG), eq("PROSPECCION"),
-                eq(Alerta.SIN_RESPUESTA), any(LocalDate.class)))
-                .thenReturn(List.of(viva));
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        assertEquals(0, service.sincronizarRecontacto(agente));
-
-        verify(alertas).save(viva);
-        assertEquals(Alerta.DESCARTADA, viva.getEstado());
-        assertNotNull(viva.getFechaResolucion(), "ck_alerta_resolucion la exige al cerrar");
-        assertFalse(viva.estaActiva());
-    }
-
-    /**
-     * <b>Cerrado por el sistema no es lo mismo que atendido por alguien.</b> Las
-     * dos apagan el aviso, pero la auditoria tiene que poder distinguir si una
-     * persona decidio o si el mundo cambio.
-     */
-    @Test
-    void elCierreAutomaticoNoSeDisfrazaDeAtendido() {
-        Alerta viva = alertaDeRecontacto(11L);
-        when(alertas.recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
-                any(LocalDate.class))).thenReturn(List.of(viva));
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        service.sincronizarRecontacto(agente);
-
-        assertNotEquals(Alerta.ATENDIDA, viva.getEstado());
-    }
-
-    /**
-     * El plazo de cierre es <b>el mismo</b> de la politica que el de creacion.
-     * Dos redacciones de la misma regla volverian a separarse: es exactamente
-     * lo que pasaba con el plazo de recontacto repetido en cinco sitios.
-     */
-    @Test
-    void abrirYCerrarUsanElMismoPlazoDeLaPolitica() {
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        service.sincronizarRecontacto(agente);
-
-        LocalDate limite = LocalDate.now().minusDays(7);
-        verify(alertas).recontactosQueYaNoAplican(ORG, "PROSPECCION", Alerta.SIN_RESPUESTA, limite);
-        verify(prospecciones).recontactables(eq(ORG), eq(true), eq(List.of(-1L)), eq(limite),
-                any(Pageable.class));
-    }
-
-    /**
-     * Se cierra ANTES de crear. Al reves, un aviso recien creado para una
-     * prospeccion justo en el limite podria caer en la misma pasada si las dos
-     * consultas vieran instantes distintos.
-     */
-    @Test
-    void primeroSeCierraLoQueSobraYDespuesSeCreaLoQueFalta() {
-        when(alertas.recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
-                any(LocalDate.class))).thenReturn(List.of(alertaDeRecontacto(11L)));
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(prospeccion(12L, "PRO-0002"))));
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        service.sincronizarRecontacto(agente);
-
-        InOrder orden = inOrder(alertas);
-        orden.verify(alertas).recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
-                any(LocalDate.class));
-        orden.verify(alertas).existeActivaDe(anyLong(), anyString(), anyLong(), anyString());
-    }
-
-    /**
-     * <b>Repetir el barrido no mueve nada.</b> `GET /alertas` sincroniza en cada
-     * lectura, asi que abrir la campana tres veces no puede dejar tres avisos ni
-     * reabrir el que se cerro.
-     */
-    @Test
-    void barridosRepetidosNoDuplicanNiReabren() {
-        Prospeccion vencida = prospeccion(12L, "PRO-0002");
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(vencida)));
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        assertEquals(1, service.sincronizarRecontacto(agente));
-
-        // Segunda pasada: ya hay una activa para esa prospeccion.
-        when(alertas.existeActivaDe(ORG, "PROSPECCION", 12L, Alerta.SIN_RESPUESTA)).thenReturn(true);
-        assertEquals(0, service.sincronizarRecontacto(agente));
-        assertEquals(0, service.sincronizarRecontacto(agente));
-
-        verify(alertas, times(1)).save(any(Alerta.class));
-    }
-
-    /**
-     * <b>Volver a vencer abre un ciclo nuevo, no reabre el viejo.</b> Es una
-     * decision, no un efecto: un recontacto vencido en agosto y otro en octubre
-     * son dos hechos, y reactivar el primero perderia que hubo un contacto en
-     * medio — que es justo lo que la auditoria necesita poder leer.
-     */
-    @Test
-    void siVuelveAVencerSeAbreUnCicloNuevo() {
-        Alerta delCicloAnterior = alertaDeRecontacto(12L);
-        delCicloAnterior.descartar();
-
-        Prospeccion vencidaOtraVez = prospeccion(12L, "PRO-0002");
-        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
-                any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(vencidaOtraVez)));
-        // Descartada no es activa, asi que el guardado de duplicados no la ve.
-        when(alertas.existeActivaDe(ORG, "PROSPECCION", 12L, Alerta.SIN_RESPUESTA)).thenReturn(false);
-        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
-
-        assertEquals(1, service.sincronizarRecontacto(agente));
-
-        Alerta nueva = alertaGuardada();
-        assertNotSame(delCicloAnterior, nueva, "el aviso viejo no se reabre");
-        assertTrue(nueva.estaActiva());
-        assertEquals(Alerta.DESCARTADA, delCicloAnterior.getEstado());
-    }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    /** Un aviso de recontacto vivo, del tipo y la entidad que barre la campana. */
-    private static Alerta alertaDeRecontacto(Long idProspeccion) {
-        Alerta alerta = alerta("PROSPECCION", idProspeccion);
-        alerta.setTipo(Alerta.SIN_RESPUESTA);
-        return alerta;
-    }
-
-    private static DatosAlerta datos(Long idRolAgente, Long entidadId) {
-        return new DatosAlerta(Alerta.SIN_AVANCE, Alerta.INFO, "PROSPECCION", entidadId,
-                idRolAgente, "mensaje");
-    }
-
-    private static Alerta alerta(String entidadTipo, Long entidadId) {
-        Alerta alerta = new Alerta();
-        alerta.setOrganizacionId(ORG);
-        alerta.setTipo(Alerta.SIN_AVANCE);
-        alerta.setSeveridad(Alerta.MEDIA);
-        alerta.setEntidadTipo(entidadTipo);
-        alerta.setEntidadId(entidadId);
-        alerta.setAgente(detalleAgente("Valentina Mora"));
-        alerta.setMensaje("mensaje");
-        alerta.nacer();
-        ReflectionTestUtils.setField(alerta, "id", 4L);
-        return alerta;
-    }
-
-    private static Prospeccion prospeccion(long id, String codigo) {
-        Prospeccion prospeccion = new Prospeccion();
-        prospeccion.setOrganizacionId(ORG);
-        prospeccion.setCodigoProspeccion(codigo);
-        prospeccion.setAgente(detalleAgente("Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .iniciar(prospeccion, Prospeccion.EN_SEGUIMIENTO);
-        ReflectionTestUtils.setField(prospeccion, "id", id);
-        return prospeccion;
-    }
-
-    private static DetalleAgente detalleAgente(String nombre) {
-        Persona persona = new Persona();
-        persona.setNombresORazonSocial(nombre);
-        PersonaRol rol = new PersonaRol();
-        rol.setPersona(persona);
-        rol.setTipoRol(TipoRol.AGENTE);
-
-        DetalleAgente detalle = new DetalleAgente();
-        detalle.setOrganizacionId(ORG);
-        detalle.setRol(rol);
-        detalle.setCodigoAgente("AGE-001");
-        ReflectionTestUtils.setField(detalle, "id", ROL_AGENTE);
-        return detalle;
-    }
-
-    private static Page<Alerta> paginaCon(Alerta... alertas) {
-        return new PageImpl<>(List.of(alertas));
-    }
-
-    private Alerta alertaGuardada() {
-        ArgumentCaptor<Alerta> guardada = ArgumentCaptor.forClass(Alerta.class);
-        verify(alertas, atLeastOnce()).save(guardada.capture());
-        return guardada.getValue();
+    private static DetalleAgente detalle() {
+        var persona=new Persona();persona.setNombresORazonSocial("Valentina Mora");var rol=new PersonaRol();rol.setPersona(persona);rol.setTipoRol(TipoRol.AGENTE);
+        var d=new DetalleAgente();d.setOrganizacionId(1L);d.setRol(rol);ReflectionTestUtils.setField(d,"id",30L);return d;
     }
 }

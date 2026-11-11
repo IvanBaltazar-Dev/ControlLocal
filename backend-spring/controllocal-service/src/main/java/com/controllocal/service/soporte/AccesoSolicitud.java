@@ -7,6 +7,8 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.*;
 
 /**
  * Carga de la solicitud CON el alcance del actor ya aplicado (F4 §7): las
@@ -52,8 +54,30 @@ public class AccesoSolicitud {
 
     public void exigir(SolicitudAlquiler solicitud, Actor actor) {
         DetalleAgente agente = solicitud.getAgente();
-        if (agente == null || !alcances.alcanza(actor, agente.getId())) {
+        exigirRolAgente(agente == null ? null : agente.getId(), actor);
+    }
+
+    /** Consulta de autoridad actual para entregar bytes después de esperar al proveedor. */
+    @Transactional(readOnly = true)
+    public void exigirConsultaActual(long idSolicitud, Actor actor) {
+        var actual = solicitudes.accesoActual(actor.idOrganizacion(), idSolicitud)
+                .orElseThrow(() -> new NoEncontradoException("Solicitud"));
+        exigirRolAgente(actual.getIdRolAgente(), actor);
+    }
+
+    private void exigirRolAgente(Long idRolAgente, Actor actor) {
+        if (!permiteResponsableActual(idRolAgente, actor)) {
             throw new AccesoNoAutorizadoException();
         }
     }
+
+    /** Sólo metadata actual obtenida por Core; misma política para ficha y selección por lote. */
+    public boolean permiteResponsableActual(Long idRolAgente, Actor actor) {
+        return permite(idRolAgente,alcances.de(actor).rolesAgente());
+    }
+    public Set<Long> permitidasActuales(Map<Long,Long> responsables,Actor actor){
+        var roles=Set.copyOf(alcances.de(actor).rolesAgente());var permitidas=new HashSet<Long>();
+        responsables.forEach((id,rol)->{if(permite(rol,roles))permitidas.add(id);});return Set.copyOf(permitidas);
+    }
+    private static boolean permite(Long responsable,Collection<Long> roles){return responsable!=null&&roles.contains(responsable);}
 }

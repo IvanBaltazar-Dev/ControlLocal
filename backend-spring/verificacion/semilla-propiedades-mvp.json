@@ -1,0 +1,47 @@
+{
+  "nombre": "semilla-propiedades-mvp",
+  "version": 1,
+  "proposito": "Datos reproducibles para validar el modelo universal de propiedad y operacion en desarrollo.",
+  "contrato": {
+    "alta": "POST /captura y POST /captura/{idBorrador}/ejecutar",
+    "lectura": "GET /captura/definicion y GET /propiedades/{id}",
+    "idempotencia": "Idempotency-Key deterministica por codigo de caso en la ejecucion",
+    "moneda": "Cada importe lleva su propia moneda; no se usa moneda global ni conversion",
+    "escritura": "Solo API HTTP; el script no ejecuta SQL"
+  },
+  "casos": [
+    {"codigo":"MVP-LOC-V","tipoPropiedad":"LOCAL","operaciones":["VENTA"],"metraje":90,"importes":{"VENTA":{"monto":390000,"moneda":"USD"}},"mantenimiento":{"monto":700,"moneda":"PEN"},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-LOC-A","tipoPropiedad":"LOCAL","operaciones":["ALQUILER"],"metraje":72,"importes":{"ALQUILER":{"monto":3600,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-LOC-VA","tipoPropiedad":"LOCAL","operaciones":["VENTA","ALQUILER"],"metraje":130,"importes":{"VENTA":{"monto":520000,"moneda":"USD"},"ALQUILER":{"monto":5100,"moneda":"PEN"}},"mantenimiento":{"monto":180,"moneda":"USD"},"incluirPartida":false,"fotos":["local-fachada.png"]},
+    {"codigo":"MVP-OFI-V","tipoPropiedad":"OFICINA","operaciones":["VENTA"],"metraje":110,"importes":{"VENTA":{"monto":265000,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-OFI-A","tipoPropiedad":"OFICINA","operaciones":["ALQUILER"],"metraje":85,"importes":{"ALQUILER":{"monto":4200,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-OFI-VA","tipoPropiedad":"OFICINA","operaciones":["VENTA","ALQUILER"],"metraje":160,"importes":{"VENTA":{"monto":410000,"moneda":"USD"},"ALQUILER":{"monto":6800,"moneda":"PEN"}},"mantenimiento":{"monto":950,"moneda":"PEN"},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-DEP-V","tipoPropiedad":"DEPARTAMENTO","operaciones":["VENTA"],"metraje":78,"importes":{"VENTA":{"monto":185000,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-DEP-A","tipoPropiedad":"DEPARTAMENTO","operaciones":["ALQUILER"],"metraje":64,"importes":{"ALQUILER":{"monto":2800,"moneda":"PEN"}},"mantenimiento":{"monto":420,"moneda":"PEN"},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-DEP-V-ALQUILER","tipoPropiedad":"DEPARTAMENTO","operaciones":["VENTA","ALQUILER"],"metraje":96,"importes":{"VENTA":{"monto":245000,"moneda":"USD"},"ALQUILER":{"monto":3900,"moneda":"PEN"}},"mantenimiento":{"monto":620,"moneda":"PEN"},"incluirPartida":true,"fotos":["departamento-fachada.png"]},
+    {"codigo":"MVP-CASA-V","tipoPropiedad":"CASA","operaciones":["VENTA"],"metraje":240,"importes":{"VENTA":{"monto":480000,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-CASA-A","tipoPropiedad":"CASA","operaciones":["ALQUILER"],"metraje":180,"importes":{"ALQUILER":{"monto":6200,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-CASA-V-ALQUILER","tipoPropiedad":"CASA","operaciones":["VENTA","ALQUILER"],"metraje":300,"importes":{"VENTA":{"monto":650000,"moneda":"USD"},"ALQUILER":{"monto":7800,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-TERR-V","tipoPropiedad":"TERRENO","operaciones":["VENTA"],"metraje":500,"importes":{"VENTA":{"monto":320000,"moneda":"USD"}},"incluirPartida":true,"fotos":[]},
+    {"codigo":"MVP-TERR-A","tipoPropiedad":"TERRENO","operaciones":["ALQUILER"],"metraje":700,"importes":{"ALQUILER":{"monto":4500,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-TERR-VA","tipoPropiedad":"TERRENO","operaciones":["VENTA","ALQUILER"],"metraje":900,"importes":{"VENTA":{"monto":550000,"moneda":"USD"},"ALQUILER":{"monto":7200,"moneda":"PEN"}},"incluirPartida":true,"fotos":[]},
+    {"codigo":"MVP-ALM-V","tipoPropiedad":"ALMACEN","operaciones":["VENTA"],"metraje":260,"importes":{"VENTA":{"monto":375000,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-ALM-A","tipoPropiedad":"ALMACEN","operaciones":["ALQUILER"],"metraje":210,"importes":{"ALQUILER":{"monto":8300,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-ALM-V-ALQUILER","tipoPropiedad":"ALMACEN","operaciones":["VENTA","ALQUILER"],"metraje":340,"importes":{"VENTA":{"monto":490000,"moneda":"USD"},"ALQUILER":{"monto":10500,"moneda":"USD"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-EST-V","tipoPropiedad":"ESTACIONAMIENTO","operaciones":["VENTA"],"metraje":14,"importes":{"VENTA":{"monto":18000,"moneda":"USD"}},"incluirPartida":true,"fotos":["estacionamiento.png"]},
+    {"codigo":"MVP-EST-A","tipoPropiedad":"ESTACIONAMIENTO","operaciones":["ALQUILER"],"metraje":14,"importes":{"ALQUILER":{"monto":380,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-EST-VA","tipoPropiedad":"ESTACIONAMIENTO","operaciones":["VENTA","ALQUILER"],"metraje":15,"importes":{"VENTA":{"monto":21000,"moneda":"USD"},"ALQUILER":{"monto":450,"moneda":"USD"}},"incluirPartida":true,"fotos":[]},
+    {"codigo":"MVP-OTR-V","tipoPropiedad":"OTRO","operaciones":["VENTA"],"metraje":55,"importes":{"VENTA":{"monto":90000,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-OTR-A","tipoPropiedad":"OTRO","operaciones":["ALQUILER"],"metraje":55,"importes":{"ALQUILER":{"monto":1500,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]},
+    {"codigo":"MVP-OTR-VA","tipoPropiedad":"OTRO","operaciones":["VENTA","ALQUILER"],"metraje":70,"importes":{"VENTA":{"monto":125000,"moneda":"USD"},"ALQUILER":{"monto":1900,"moneda":"PEN"}},"incluirPartida":false,"fotos":[]}
+  ],
+  "escenarios": [
+    {"codigo":"MVP-SIN-TITULAR","tipoPropiedad":"DEPARTAMENTO","operaciones":[],"objetivo":"Propiedad conocida sin encargo, titular ni partida; conserva una observacion de mercado."},
+    {"codigo":"MVP-TIT-DESPUES","tipoPropiedad":"DEPARTAMENTO","operaciones":[],"objetivo":"Crear la propiedad sin titular y despues agregar titular y partida por PUT /propiedades/{id}."}
+  ],
+  "bloqueados": [
+    {"codigo":"BUNDLE-DEPARTAMENTO-ESTACIONAMIENTO","estado":"BLOQUEADO","motivo":"V94 registra ESTACIONAMIENTO como propiedad fisica independiente, pero el modelo no tiene relacion propiedad-propiedad ni contrato de conjunto. No se simula un bundle."},
+    {"codigo":"DOCUMENTO-PROPIEDAD","estado":"BLOQUEADO","motivo":"La API vigente adjunta documentos a una Solicitud; no existe un endpoint universal de documento directo a propiedad. No se crea una solicitud artificial para fingir el vinculo."},
+    {"codigo":"CONTACTO-NO-PROPIETARIO-UNIVERSAL","estado":"BLOQUEADO","motivo":"La bitacora de interacciones exige prospeccion, captacion, oportunidad o cliente y no recibe idPropiedad. La observacion puede conservar el texto, pero no puede declarar un snapshot de contacto ligado a la propiedad."}
+  ]
+}

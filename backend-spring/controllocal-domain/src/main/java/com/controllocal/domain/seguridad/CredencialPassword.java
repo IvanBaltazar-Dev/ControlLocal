@@ -1,6 +1,6 @@
 package com.controllocal.domain.seguridad;
 
-import com.controllocal.domain.comun.EntidadDeOrganizacion;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -21,15 +21,15 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "credencial_password")
-public class CredencialPassword extends EntidadDeOrganizacion {
+public class CredencialPassword {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_password")
     private Long id;
 
-    @Column(name = "id_credencial", nullable = false)
-    private Long idCredencial;
+    @Column(name = "id_cuenta_acceso", nullable = false)
+    private Long idCuenta;
 
     @Column(name = "contrasena_hash", nullable = false, length = 255)
     private String contrasenaHash;
@@ -44,12 +44,12 @@ public class CredencialPassword extends EntidadDeOrganizacion {
         return id;
     }
 
-    public Long getIdCredencial() {
-        return idCredencial;
+    public Long getIdCuenta() {
+        return idCuenta;
     }
 
-    public void setIdCredencial(Long idCredencial) {
-        this.idCredencial = idCredencial;
+    public void setIdCuenta(Long idCuenta) {
+        this.idCuenta = idCuenta;
     }
 
     public String getContrasenaHash() {

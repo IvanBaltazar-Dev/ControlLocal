@@ -13,8 +13,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDate;
 
 /**
- * Detalle del rol BROKER. El broker administrador es UNICO en el sistema
- * (indice parcial uq_broker_admin_unico en la BD).
+ * Detalle del rol comercial BROKER. La administración pertenece exclusivamente a la membresía.
  */
 @Entity
 @Table(name = "detalle_broker")
@@ -37,9 +36,6 @@ public class DetalleBroker extends EntidadDeOrganizacion {
 
     @Column(name = "fecha_designacion", nullable = false)
     private LocalDate fechaDesignacion;
-
-    @Column(name = "es_administrador", nullable = false)
-    private boolean esAdministrador;
 
     public Long getId() {
         return id;
@@ -77,11 +73,4 @@ public class DetalleBroker extends EntidadDeOrganizacion {
         this.fechaDesignacion = fechaDesignacion;
     }
 
-    public boolean isEsAdministrador() {
-        return esAdministrador;
-    }
-
-    public void setEsAdministrador(boolean esAdministrador) {
-        this.esAdministrador = esAdministrador;
-    }
 }

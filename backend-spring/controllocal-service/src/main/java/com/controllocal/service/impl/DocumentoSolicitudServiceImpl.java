@@ -14,6 +14,9 @@ import com.controllocal.service.soporte.AccesoSolicitud;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.Vocabulario;
+import com.controllocal.service.soporte.FuentesAsuntos;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,16 +47,19 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
     private final Transiciones transiciones;
 
     private final AlertaService alertas;
+    private final FuentesAsuntos fuentesAsuntos;
+    private final EntityManager em;
 
     public DocumentoSolicitudServiceImpl(DocumentoSolicitudRepository documentos,
                                          TipoDocumentoRequeridoRepository tipos,
                                          AccesoSolicitud acceso, Transiciones transiciones,
-                                         AlertaService alertas) {
+                                         AlertaService alertas,FuentesAsuntos fuentesAsuntos,EntityManager em) {
         this.documentos = documentos;
         this.tipos = tipos;
         this.acceso = acceso;
         this.transiciones = transiciones;
         this.alertas = alertas;
+        this.fuentesAsuntos=fuentesAsuntos;this.em=em;
     }
 
     @Override
@@ -67,7 +73,18 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
 
     @Override
     @Transactional
+    public String prepararCarga(long idSolicitud,String tipoDocumento,Actor actor) {
+        acceso.exigirConsultaActual(idSolicitud,actor);
+        var solicitud=acceso.conAcceso(idSolicitud,actor);
+        var tipo=tipoDeCodigo(tipoDocumento);
+        return com.controllocal.service.soporte.Idempotencia.huellaExacta("DOCUMENTO-SOLICITUD\u0000"+actor.idOrganizacion()+"\u0000"+idSolicitud+"\u0000"+solicitud.getAgente().getId()+"\u0000"+solicitud.estadoActual()+"\u0000"+tipo.getId());
+    }
+
+    @Override
+    @Transactional
     public FichaDocumento registrar(long idSolicitud, DatosDocumento datos, Actor actor) {
+        // La carga binaria puede haber esperado a S3; no usar como autoridad una entidad de OEIV anterior.
+        acceso.exigirConsultaActual(idSolicitud, actor);
         SolicitudAlquiler solicitud = acceso.conAcceso(idSolicitud, actor);
         // Orden calcado del cable: primero el tipo, despues el nombre y solo
         // entonces se traduce el codigo a id de catalogo.
@@ -90,6 +107,7 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
         documento.setObservaciones(datos.observaciones());
         documento.registrarEntrega();
         transiciones.iniciar(documento, DocumentoSolicitud.REGISTRADO);
+        documento=documentos.saveAndFlush(documento);
         // Aviso al broker (§4 F6, punto 6), y SOLO si la solicitud esta en
         // revision: el mensaje no es "subio un documento", es "el expediente
         // cambio mientras lo evaluabas".
@@ -99,9 +117,10 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
                     "SOLICITUD_ALQUILER", idSolicitud,
                     solicitud.getAgente() != null ? solicitud.getAgente().getId() : null,
                     "El agente actualizo \"" + nombre + "\" en la solicitud "
-                            + solicitud.getCodigoSolicitud() + " mientras esta en evaluacion."), actor);
+                            + solicitud.getCodigoSolicitud() + " mientras esta en evaluacion.",
+                    com.controllocal.service.soporte.FuentesAsuntos.Origen.de("ENTREGA_DOCUMENTO",documento.getId())), actor);
         }
-        return ficha(documentos.save(documento));
+        return ficha(documento);
     }
 
     @Override
@@ -142,7 +161,8 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
     public List<FichaDocumento> conformarPendientes(long idSolicitud, Actor actor) {
         acceso.conAcceso(idSolicitud, actor);
         for (DocumentoSolicitud pendiente
-                : documentos.pendientesDeRevision(actor.idOrganizacion(), idSolicitud)) {
+                : documentos.pendientesDeRevision(actor.idOrganizacion(), idSolicitud).stream()
+                    .sorted(java.util.Comparator.comparing(DocumentoSolicitud::getId)).toList()) {
             // Conformar BORRA la observacion previa (asi lo hace la v1); los
             // observados no entran en la consulta, que es justo lo que los
             // protege: son un hallazgo deliberado del broker.
@@ -164,14 +184,17 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
      */
     private DocumentoSolicitud aplicarRevision(DocumentoSolicitud documento, String resultado,
                                                String observaciones, Actor actor) {
+        // Serializa la revisión real y relee su fuente antes de modificarla; no crea O->O.
+        em.refresh(documento,LockModeType.PESSIMISTIC_WRITE);
         documento.registrarRevision(resultado, observaciones);
         transiciones.aplicar(documento, documento.getId(),
                 DocumentoSolicitud.estadoSegunRevision(resultado), actor,
                 motivo(resultado, observaciones));
+        var origen=fuentesAsuntos.registrarRevisionDocumento(documento,actor);
         // Aviso al agente (§4 F6, punto 7), SOLO al observar: conformar no
         // avisa, porque no hay nada que subsanar.
         if (DocumentoSolicitud.REVISION_OBSERVADO.equals(resultado)) {
-            avisarDocumentoObservado(documento, observaciones, actor);
+            avisarDocumentoObservado(documento, observaciones, origen,actor);
         }
         return documentos.save(documento);
     }
@@ -182,7 +205,7 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
      * {@code ": " + observacion} cuando la hay, {@code "."} cuando no.
      */
     private void avisarDocumentoObservado(DocumentoSolicitud documento, String observaciones,
-                                          Actor actor) {
+                                          FuentesAsuntos.Origen origen,Actor actor) {
         SolicitudAlquiler solicitud = documento.getSolicitud();
         if (solicitud == null) {
             return;
@@ -196,7 +219,8 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
                 "SOLICITUD_ALQUILER", solicitud.getId(),
                 solicitud.getAgente() != null ? solicitud.getAgente().getId() : null,
                 "El broker observo el documento \"" + tipoDoc + "\" de la solicitud "
-                        + solicitud.getCodigoSolicitud() + detalle), actor);
+                        + solicitud.getCodigoSolicitud() + detalle,
+                origen), actor);
     }
 
     private static String motivo(String resultado, String observaciones) {
@@ -232,7 +256,9 @@ public class DocumentoSolicitudServiceImpl implements DocumentoSolicitudService 
                 d.getSolicitud() != null ? d.getSolicitud().getId() : null,
                 tipo != null ? TipoDocumentoRequerido.codigoDe(tipo.getId()) : null,
                 tipo != null ? tipo.getTipoDocumento() : null,
-                d.getNombreArchivo(), d.getRutaArchivo(), Fechas.local(d.getFechaEntrega()),
+                d.getNombreArchivo(), d.getRutaArchivo() == null || d.getRutaArchivo().isBlank()
+                        ? d.getRutaArchivo() : java.util.Objects.requireNonNull(d.getArchivoRef(),
+                        "El documento carece de referencia de archivo").toString(), Fechas.local(d.getFechaEntrega()),
                 d.estadoActual(), d.getResultadoRevision(), d.getObservaciones());
     }
 }

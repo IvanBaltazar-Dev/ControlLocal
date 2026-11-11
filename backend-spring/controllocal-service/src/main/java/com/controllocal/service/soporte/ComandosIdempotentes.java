@@ -52,6 +52,14 @@ public class ComandosIdempotentes {
         this.comandos = comandos;
     }
 
+    /** UC-K-07: consulta sin reemitir; sólo la actuación del mismo actor y tenant. */
+    public Optional<ComandoIdempotente> consultarResultado(Actor actor, String clave, String tipoComando) {
+        String normalizada = Idempotencia.exigirClave(clave);
+        return comandos.findByOrganizacionIdAndClaveIdempotencia(actor.idOrganizacion(), normalizada)
+                .filter(c -> tipoComando.equals(c.getTipoComando()))
+                .filter(c -> java.util.Objects.equals(c.getIdPersonaRol(), actor.idRolOperativo()));
+    }
+
     /**
      * ¿Este comando ya se ejecuto?
      *
@@ -74,6 +82,10 @@ public class ComandosIdempotentes {
             return Optional.empty();
         }
         ComandoIdempotente comando = previo.get();
+        if (!java.util.Objects.equals(comando.getIdPersonaRol(), actor.idRolOperativo())) {
+            throw new com.controllocal.service.excepcion.ConflictoException(
+                    "La clave ya identifica otra actuación; no puede reutilizarse en este contexto.");
+        }
         if (!comando.coincideCon(tipoComando, huella)) {
             throw new ReglaNegocioException(
                     "La clave de idempotencia \"" + normalizada + "\" ya se uso para otro comando "

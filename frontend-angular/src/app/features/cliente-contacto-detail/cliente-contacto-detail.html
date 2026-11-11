@@ -91,6 +91,7 @@
                   <th>Fecha</th>
                   <th>Canal</th>
                   <th>Resultado</th>
+                  <th>Interlocutor</th>
                   <th>Observaciones</th>
                   <th>Agente</th>
                 </tr>
@@ -101,6 +102,13 @@
                     <td class="fecha">{{ momento(interaccion.fechaHora) }}</td>
                     <td><span class="cl-badge">{{ canal(interaccion.canalContacto) }}</span></td>
                     <td>{{ resultado(interaccion.resultado) }}</td>
+                    <td>
+                      <strong>{{ interlocutor(interaccion) }}</strong>
+                      <span class="secundario">{{ rolInterlocutor(interaccion) }}</span>
+                      @if (telefonoInterlocutor(interaccion) !== '—') {
+                        <span class="secundario">{{ telefonoInterlocutor(interaccion) }}</span>
+                      }
+                    </td>
                     <td class="libre">{{ valor(interaccion.observaciones) }}</td>
                     <td>{{ valor(interaccion.agenteNombre) }}</td>
                   </tr>

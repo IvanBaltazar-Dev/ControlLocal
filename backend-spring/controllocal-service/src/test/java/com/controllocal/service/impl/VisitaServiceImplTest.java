@@ -1,423 +1,173 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.auditoria.HistorialEstado;
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.MotivoNoContinuidad;
-import com.controllocal.domain.comercial.OportunidadComercial;
-import com.controllocal.domain.comercial.Visita;
-import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleCliente;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
-import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.repositorio.PlanDeConsulta;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
-import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
-import com.controllocal.persistence.repositorio.VisitaRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.VisitaService.DatosVisita;
-import com.controllocal.service.VisitaService.DesenlaceVisita;
-import com.controllocal.service.VisitaService.FichaVisita;
-import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.Transiciones;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import com.controllocal.domain.comercial.*;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.service.*;
+import com.controllocal.service.VisitaService.*;
+import com.controllocal.service.excepcion.*;
+import java.time.*;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.springframework.data.domain.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda la maquina de la visita y sus mensajes. Ojo con cuales: el cable
- * responde con la guarda del BL ("No se puede {accion} una visita {estado}."),
- * no con la del modelo, porque el BL corta antes.
- *
- * <p>Cubre tambien el efecto lateral menos obvio del contrato: un desenlace de
- * NO CONTINUIDAD cierra la oportunidad en la misma transaccion.
- */
+/** RF043–045. Las visitas no se duplican como reuniones ni deciden no continuidad. */
 class VisitaServiceImplTest {
-
-    private static final long ORG = 1L;
-
-    private final VisitaRepository visitas = mock(VisitaRepository.class);
-    private final OportunidadComercialRepository oportunidades = mock(OportunidadComercialRepository.class);
-    private final MotivoNoContinuidadRepository motivos = mock(MotivoNoContinuidadRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
-    private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
-
-    private final VisitaServiceImpl service = new VisitaServiceImpl(
-            visitas, oportunidades, motivos, alcances, new Transiciones(historial), new PlanDeConsulta());
-
-    private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
-    private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
-
-    // ------------------------------------------------------------------
-    // Alta
-    // ------------------------------------------------------------------
-
-    @Test
-    void programarSinDatosRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.programar(null, agente));
-        assertEquals("Los datos de la visita son obligatorios.", error.getMessage());
+    ActividadDePrueba h;VisitaRepository visitas;VisitaServiceImpl servicio;
+    final Map<Long,Visita> filas=new HashMap<>();final Map<Long,Map<Long,String>> historia=new HashMap<>();
+    @BeforeEach void montar(){
+        h=new ActividadDePrueba();visitas=mock(VisitaRepository.class);
+        servicio=new VisitaServiceImpl(visitas,h.alcances,h.transiciones,mock(PlanDeConsulta.class),h.acceso,h.contextos,
+            h.entidades,h.documentos,h.recibosActividad);
+        var v=new Visita();v.setOrganizacionId(1L);ActividadDePrueba.id(v,50);v.setOportunidad(h.mesas.get(10L));v.setAgente(h.detalle);
+        v.setFechaVisita(LocalDate.of(2026,11,1));v.setHoraVisita(LocalTime.NOON);h.transiciones.iniciar(v,Visita.PROGRAMADA);filas.put(50L,v);
+        when(visitas.buscarFicha(anyLong(),anyLong())).thenAnswer(i->i.<Long>getArgument(0)==1L?Optional.ofNullable(filas.get(i.<Long>getArgument(1))):Optional.empty());
+        when(visitas.bloquear(anyLong(),anyLong())).thenAnswer(i->i.<Long>getArgument(0)==1L?Optional.ofNullable(filas.get(i.<Long>getArgument(1))):Optional.empty());
+        when(visitas.oportunidadDe(anyLong(),anyLong())).thenAnswer(i->i.<Long>getArgument(0)==1L?Optional.ofNullable(filas.get(i.<Long>getArgument(1))).map(vv->vv.getOportunidad().getId()):Optional.empty());
+        when(visitas.saveAndFlush(any())).thenAnswer(i->{var vv=i.<Visita>getArgument(0);
+            if(vv.getId()==null)ActividadDePrueba.id(vv,51);else ActividadDePrueba.version(vv,vv.getVersion()+1);filas.put(vv.getId(),vv);return vv;});
+        doAnswer(i->{historia.computeIfAbsent(i.getArgument(1),k->new TreeMap<>()).put(i.getArgument(3),i.getArgument(7));return null;})
+            .when(visitas).historizar(anyLong(),anyLong(),anyLong(),anyLong(),any(),anyString(),nullable(String.class),anyString());
+        when(visitas.fichaVersion(anyLong(),anyLong(),anyLong())).thenAnswer(i->Optional.ofNullable(historia.getOrDefault(i.<Long>getArgument(1),Map.of()).get(i.<Long>getArgument(2))));
     }
-
-    @Test
-    void elAltaExigeQueLaOportunidadSeaDelPropioAgente() {
-        // Sin alcance de broker: la comparacion es directa con el rol del actor.
-        OportunidadComercial ajena = oportunidad(99L);
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.of(ajena));
-
-        assertThrows(AccesoNoAutorizadoException.class, () -> service.programar(
-                new DatosVisita(8L, LocalDate.now(), LocalTime.of(16, 0), null), agente));
+    DatosVisita datos(){return new DatosVisita(10,0L,LocalDate.of(2026,11,1),LocalTime.NOON,"Agenda TEST",
+        List.of(new ParticipanteConocido("Interesado conocido TEST","Declaración TEST")),"Lugar declarado TEST");}
+    DesenlaceVisita resultado(long version,Ocurrencia ocurrencia,String motivo){return new DesenlaceVisita(version,ocurrencia,LocalDate.of(2026,10,30),
+        "Resultado observado TEST",null,null,null,null,null,motivo);}
+    FichaVisita realizada(){return servicio.registrarResultado(50,resultado(0,Ocurrencia.REALIZADA,null),h.agente,h.sid,h.procedencia);}
+    @Test void programarConservaUnaIdentidadYParticipantesDeclaradosSinAfirmarOcurrencia(){
+        var r=servicio.programar(datos(),h.agente,h.sid,h.procedencia);assertEquals(Visita.PROGRAMADA,r.estado());assertNull(r.resultado());assertNull(r.fechaHecho());
+        assertEquals("Lugar declarado TEST",r.lugarDeclarado());assertEquals(datos().participantes(),r.participantes());assertEquals(0,r.version());assertNotNull(r.procedencia());
+        assertNotNull(r.registradoEn());verifyNoInteractions(h.eventos);assertEquals(OportunidadComercial.ABIERTA,h.mesas.get(10L).estadoActual());
     }
-
-    @Test
-    void programarSinFechaUHoraRespondeElMensajeV1() {
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.of(oportunidad(30L)));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.programar(new DatosVisita(8L, LocalDate.now(), null, null), agente));
-        assertEquals("La visita debe tener fecha, hora y estado.", error.getMessage());
+    @Test void programarNoRequiereClienteFicticioNiEncargoHabilitado(){
+        var r=servicio.programar(datos(),h.agente,h.sid,h.procedencia);assertNull(r.idCliente());assertEquals("Interesado TEST",r.clienteNombre());assertEquals(Captacion.EN_PREPARACION,h.cap.estadoActual());
     }
-
-    @Test
-    void noSeAgendaSobreUnaOportunidadCerrada() {
-        OportunidadComercial cerrada = oportunidad(30L);
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .aplicar(cerrada, 8L, OportunidadComercial.NO_CONTINUA, null, null);
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.of(cerrada));
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.programar(
-                new DatosVisita(8L, LocalDate.now(), LocalTime.of(16, 0), null), agente));
-        assertEquals("La oportunidad comercial debe estar ABIERTA.", error.getMessage());
+    @Test void validarNoProgramaNiRegistraUnaReunion(){
+        servicio.validarProgramacion(datos(),h.agente);verify(visitas,never()).saveAndFlush(any());verifyNoInteractions(h.eventos);
     }
-
-    @Test
-    void elAltaQuedaProgramadaSinAuditarElAlta() {
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.of(oportunidad(30L)));
-        when(visitas.save(any(Visita.class))).thenAnswer(inv -> {
-            Visita guardada = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardada, "id", 4L);
-            return guardada;
-        });
-
-        FichaVisita ficha = service.programar(
-                new DatosVisita(8L, LocalDate.of(2026, 7, 30), LocalTime.of(16, 0), "Primera visita"), agente);
-
-        assertEquals("P", ficha.estado());
-        assertEquals(8L, ficha.idOportunidad());
-        assertEquals("OP-0001", ficha.codigoOportunidad());
-        assertEquals(30L, ficha.idAgente());
-        // Los datos del cliente y del local se derivan de la oportunidad.
-        assertEquals(50L, ficha.idCliente());
-        assertEquals("CAP-0001", ficha.codigoCaptacion());
-        assertEquals("Av. Larco 123", ficha.direccionLocal());
-        verifyNoInteractions(historial);
-
-        ArgumentCaptor<Visita> guardada = ArgumentCaptor.forClass(Visita.class);
-        verify(visitas).save(guardada.capture());
-        assertEquals(ORG, guardada.getValue().getOrganizacionId());
+    @Test void datosVersionFechaHoraDebenSerExplicitos(){
+        assertThrows(ReglaNegocioException.class,()->servicio.validarProgramacion(null,h.agente));
+        assertThrows(ReglaNegocioException.class,()->servicio.validarProgramacion(new DatosVisita(10,null,LocalDate.of(2026,11,1),LocalTime.NOON,null,List.of(),null),h.agente));
+        assertThrows(ReglaNegocioException.class,()->servicio.validarProgramacion(new DatosVisita(10,0L,null,LocalTime.NOON,null,List.of(),null),h.agente));
     }
-
-    // ------------------------------------------------------------------
-    // Agenda: mensajes de guarda del BL
-    // ------------------------------------------------------------------
-
-    @Test
-    void reprogramarSinFechaUHoraRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reprogramar(4L, null, LocalTime.of(9, 0), agente));
-        assertEquals("La nueva fecha y hora son obligatorias para reprogramar.", error.getMessage());
+    @Test void unaVersionDeContextoViejaNoEsReinterpretada(){
+        ActividadDePrueba.version(h.mesas.get(10L),1);assertThrows(ConflictoException.class,()->servicio.validarProgramacion(datos(),h.agente));
     }
-
-    @Test
-    void noSeReprogramaUnaVisitaCancelada() {
-        visitaEnEstado(Visita.CANCELADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reprogramar(4L, LocalDate.now(), LocalTime.of(9, 0), agente));
-        assertEquals("No se puede reprogramar una visita cancelada.", error.getMessage());
-        verifyNoInteractions(historial);
+    @Test void noSeProgramaParaOportunidadCerradaPorInferencia(){
+        h.transiciones.aplicar(h.mesas.get(10L),10,OportunidadComercial.NO_CONTINUA,h.agente,"TEST");
+        assertThrows(ReglaNegocioException.class,()->servicio.validarProgramacion(datos(),h.agente));
     }
-
-    @Test
-    void noSeMarcaComoRealizadaUnaVisitaYaRealizada() {
-        visitaEnEstado(Visita.REALIZADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.marcarRealizada(4L, agente));
-        assertEquals("No se puede marcar como realizada una visita realizada.", error.getMessage());
+    @Test void brokerYGobiernoNoProgramanComoSiFueranElAgente(){
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.validarProgramacion(datos(),h.broker));
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.validarProgramacion(datos(),h.gobierno));
     }
-
-    @Test
-    void reprogramarMueveLaAgendaYAudita() {
-        visitaEnEstado(Visita.PROGRAMADA);
-
-        FichaVisita ficha = service.reprogramar(4L, LocalDate.of(2026, 8, 5), LocalTime.of(10, 30), agente);
-
-        assertEquals("G", ficha.estado());
-        assertEquals(LocalDate.of(2026, 8, 5), ficha.fechaVisita());
-        assertEquals(LocalTime.of(10, 30), ficha.horaVisita());
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("VISITA", evento.getEntidadTipo());
-        assertEquals("P", evento.getEstadoAnterior());
-        assertEquals("G", evento.getEstadoNuevo());
-        assertEquals(3L, evento.getIdActor());
+    @Test void reprogramarConservaIdentidadYElAntecedente(){
+        var r=servicio.reprogramar(new Reprogramacion(50,0L,LocalDate.of(2026,11,2),LocalTime.of(14,0),"Acuerdo de otra hora TEST"),h.agente,h.sid,h.procedencia);
+        assertEquals(50,r.id());assertEquals(Visita.REPROGRAMADA,r.estado());assertEquals(LocalDate.of(2026,11,2),r.fechaVisita());assertEquals(1,r.version());
+        assertEquals(2,historia.get(50L).size());assertEquals(Visita.PROGRAMADA,h.documentos.comoObjeto(historia.get(50L).get(0L),FichaVisita.class).estado());verifyNoInteractions(h.eventos);
     }
-
-    @Test
-    void cancelarGuardaElMotivoEnObservaciones() {
-        visitaEnEstado(Visita.PROGRAMADA);
-
-        FichaVisita ficha = service.cancelar(4L, "  El cliente viaja  ", agente);
-
-        assertEquals("C", ficha.estado());
-        assertEquals("El cliente viaja", ficha.observaciones());
-        assertEquals("El cliente viaja", eventoAuditado().getMotivo());
+    @Test void laSegundaReprogramacionDelMismoCasConflicta(){
+        var d=new Reprogramacion(50,0L,LocalDate.of(2026,11,2),LocalTime.NOON,"TEST");servicio.reprogramar(d,h.agente,h.sid,h.procedencia);
+        assertThrows(ConflictoException.class,()->servicio.reprogramar(d,h.agente,h.sid,h.procedencia));
     }
-
-    @Test
-    void cancelarSinMotivoRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.cancelar(4L, " ", agente));
-        assertEquals("El motivo de cancelacion es obligatorio.", error.getMessage());
+    @Test void motivoDeReprogramacionNoSeInventa(){
+        assertThrows(ReglaNegocioException.class,()->servicio.validarReprogramacion(new Reprogramacion(50,0L,LocalDate.of(2026,11,2),LocalTime.NOON,null),h.agente));
     }
-
-    @Test
-    void noRealizadaSinMotivoRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.marcarNoRealizada(4L, null, agente));
-        assertEquals("El motivo de la visita no realizada es obligatorio.", error.getMessage());
+    @Test void cancelarEsActoSeparadoConFechaYMotivo(){
+        var r=servicio.cancelar(new Cancelacion(50,0L,"Propietario pidió cancelar TEST",LocalDate.of(2026,10,30)),h.agente,h.sid,"cancelar",h.procedencia);
+        assertEquals(Visita.CANCELADA,r.estado());assertNull(r.resultado());assertEquals(LocalDate.of(2026,10,30),r.fechaHecho());assertEquals(OportunidadComercial.ABIERTA,h.mesas.get(10L).estadoActual());
+        verify(h.eventos,times(1)).saveAndFlush(any());
     }
-
-    // ------------------------------------------------------------------
-    // Desenlace
-    // ------------------------------------------------------------------
-
-    @Test
-    void elDesenlaceExigeUnaVisitaRealizada() {
-        visitaEnEstado(Visita.PROGRAMADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.registrarResultado(
-                4L, new DesenlaceVisita("I", null, null, 4, null, null, null), agente));
-        assertEquals("Solo una visita realizada y sin resultado admite registrar el desenlace.",
-                error.getMessage());
+    @Test void cancelarConMismaClaveNoCreaOtroEventoNiVersion(){
+        var d=new Cancelacion(50,0L,"TEST",LocalDate.of(2026,10,30));var a=servicio.cancelar(d,h.agente,h.sid,"cancelar",h.procedencia);
+        assertEquals(a,servicio.cancelar(d,h.agente,h.sid,"cancelar",h.procedencia));assertEquals(1,filas.get(50L).getVersion());verify(h.eventos,times(1)).saveAndFlush(any());
     }
-
-    @Test
-    void elDesenlaceEsIrrepetible() {
-        visitaEnEstado(Visita.REALIZADA);
-        service.registrarResultado(4L, new DesenlaceVisita("I", null, null, 4, null, null, null), agente);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.registrarResultado(
-                4L, new DesenlaceVisita("S", null, null, 3, null, null, null), agente));
-        assertEquals("Solo una visita realizada y sin resultado admite registrar el desenlace.",
-                error.getMessage());
+    @Test void cancelarConOtraEntradaMismaClaveNoHaceOtroEfecto(){
+        servicio.cancelar(new Cancelacion(50,0L,"TEST",LocalDate.of(2026,10,30)),h.agente,h.sid,"cancelar",h.procedencia);
+        assertThrows(ConflictoException.class,()->servicio.cancelar(new Cancelacion(50,0L,"OTRO",LocalDate.of(2026,10,30)),h.agente,h.sid,"cancelar",h.procedencia));
     }
-
-    @Test
-    void elDesenlaceGuardaLaOpinionDelCliente() {
-        visitaEnEstado(Visita.REALIZADA);
-
-        FichaVisita ficha = service.registrarResultado(4L,
-                new DesenlaceVisita("I", "Le gusto el frente", null, 5, "P", "A", "V"), agente);
-
-        assertEquals("I", ficha.resultado());
-        assertEquals("Le gusto el frente", ficha.observaciones());
-        assertEquals(5, ficha.nivelInteres());
-        assertEquals("P", ficha.objecionPrincipal());
-        assertEquals("A", ficha.opinionPrecio());
-        assertEquals("V", ficha.proximaAccion());
-        // El desenlace NO es una transicion: la visita sigue realizada.
-        assertEquals("R", ficha.estado());
-        verifyNoInteractions(historial);
+    @Test void resultadoNoSeInfierePorLaFechaPasada(){
+        filas.get(50L).setFechaVisita(LocalDate.of(2020,1,1));assertEquals(Visita.PROGRAMADA,servicio.obtener(50,h.agente).estado());assertNull(servicio.obtener(50,h.agente).resultado());
     }
-
-    @Test
-    void unResultadoInvalidoRespondeElMensajeDelEnumV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.registrarResultado(
-                4L, new DesenlaceVisita("XYZ", null, null, null, null, null, null), agente));
-        assertEquals("Codigo invalido para ResultadoInteraccion: XYZ", error.getMessage());
+    @Test void ocurrenciaRealizadaEsDeclaradaYConservaFechaHechoRegistroSeparados(){
+        var r=realizada();assertEquals(Visita.REALIZADA,r.estado());assertEquals(LocalDate.of(2026,10,30),r.fechaHecho());assertNotNull(r.registradoEn());assertEquals(1,r.version());verifyNoInteractions(h.eventos);
     }
-
-    @Test
-    void noSeRegistraNivelDeInteresEnUnDesenlaceDeNoContinuidad() {
-        visitaEnEstado(Visita.REALIZADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.registrarResultado(
-                4L, new DesenlaceVisita("N", null, "P", 2, null, null, null), agente));
-        assertEquals("No se debe registrar nivel de interes cuando el resultado es de no continuidad.",
-                error.getMessage());
+    @Test void noRealizadaConservaResultadoContextualSinFingirOpinionesDeVisita(){
+        var r=servicio.registrarResultado(50,resultado(0,Ocurrencia.NO_REALIZADA,null),h.agente,h.sid,h.procedencia);
+        assertEquals(Visita.NO_REALIZADA,r.estado());assertEquals("Resultado observado TEST",r.resultado());assertNull(r.nivelInteres());assertNull(r.opinionPrecio());
     }
-
-    @Test
-    void unDesenlaceDeNoContinuidadExigeLaRazon() {
-        visitaEnEstado(Visita.REALIZADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () -> service.registrarResultado(
-                4L, new DesenlaceVisita("N", "No le convence", null, null, null, null, null), agente));
-        assertEquals("Debe indicar el motivo de no continuidad cuando el cliente no continua.",
-                error.getMessage());
+    @Test void resultadoQueDiceNoContinuidadNoCierraLaOportunidad(){
+        var d=new DesenlaceVisita(0L,Ocurrencia.REALIZADA,LocalDate.of(2026,10,30),"El interesado indicó que no continúa",null,null,null,null,null,null);
+        servicio.registrarResultado(50,d,h.agente,h.sid,h.procedencia);assertEquals(OportunidadComercial.ABIERTA,h.mesas.get(10L).estadoActual());
+        verify(h.oportunidades,never()).saveAndFlush(any());
     }
-
-    @Test
-    void unDesenlaceDeNoContinuidadCierraLaOportunidad() {
-        Visita visita = visitaEnEstado(Visita.REALIZADA);
-
-        FichaVisita ficha = service.registrarResultado(4L,
-                new DesenlaceVisita("N", "Prefiere otra zona", "U", null, null, null, null), agente);
-
-        assertEquals("N", ficha.resultado());
-        OportunidadComercial oportunidad = visita.getOportunidad();
-        assertEquals("N", oportunidad.estadoActual());
-        assertEquals("Ubicacion", oportunidad.getMotivoCierre());
-
-        ArgumentCaptor<MotivoNoContinuidad> motivo = ArgumentCaptor.forClass(MotivoNoContinuidad.class);
-        verify(motivos).save(motivo.capture());
-        assertEquals("U", motivo.getValue().getRazonPrincipal());
-        assertEquals(ORG, motivo.getValue().getOrganizacionId());
-
-        // Una sola fila de auditoria: la de la oportunidad (la visita no transiciona).
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("OPORTUNIDAD", evento.getEntidadTipo());
-        assertEquals("N", evento.getEstadoNuevo());
-        assertEquals("Ubicacion", evento.getMotivo());
+    @Test void opinionesDeVisitaNoRealizadaNoSeFabrican(){
+        var d=new DesenlaceVisita(0L,Ocurrencia.NO_REALIZADA,LocalDate.of(2026,10,30),"TEST",null,4,null,null,null,null);
+        assertThrows(ReglaNegocioException.class,()->servicio.validarResultado(50,d,h.agente));
     }
-
-    // ------------------------------------------------------------------
-    // Agenda por mes y alcance
-    // ------------------------------------------------------------------
-
-    @Test
-    void elMesFueraDeRangoRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.mes(1999, 5, agente));
-        assertEquals("El mes solicitado no es valido.", error.getMessage());
-        assertEquals("El mes solicitado no es valido.",
-                assertThrows(ReglaNegocioException.class, () -> service.mes(2026, 13, agente)).getMessage());
+    @Test void resultadoNoUsaElCatalogoComunicativoComoUnEnumDeVisita(){
+        var d=new DesenlaceVisita(0L,Ocurrencia.REALIZADA,LocalDate.of(2026,10,30),"Observación de visita con detalle contextual y más de treinta caracteres",null,4,"P","A","V",null);
+        assertEquals(d.resultado(),servicio.validarResultado(50,d,h.agente).resultado());
     }
-
-    @Test
-    void elBrokerAlcanzaLaVisitaPorLaCaptacionDeSuEquipo() {
-        visitaEnEstado(Visita.PROGRAMADA);
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(30L));
-
-        assertEquals("P", service.obtener(4L, broker).estado());
+    @Test void rectificarConservaElResultadoOriginal(){
+        var a=realizada();var d=new DesenlaceVisita(1L,Ocurrencia.REALIZADA,LocalDate.of(2026,10,30),"Resultado corregido TEST",null,null,null,null,null,"Se corrige declaración TEST");
+        var b=servicio.registrarResultado(50,d,h.agente,h.sid,h.procedencia);assertEquals(2,b.version());assertEquals("Resultado observado TEST",servicio.obtenerVersion(50,1,h.agente).resultado());
+        assertEquals("Resultado corregido TEST",b.resultado());assertEquals(a,servicio.obtenerVersion(50,1,h.agente));
     }
-
-    @Test
-    void elBrokerNoAlcanzaLaVisitaDeUnaCaptacionAjena() {
-        visitaEnEstado(Visita.PROGRAMADA);
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(77L));
-
-        assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(4L, broker));
+    @Test void rectificarUnaOcurrenciaExigeMotivoYNoReabreAgenda(){
+        realizada();assertThrows(ReglaNegocioException.class,()->servicio.validarResultado(50,resultado(1,Ocurrencia.NO_REALIZADA,null),h.agente));
+        var r=servicio.registrarResultado(50,resultado(1,Ocurrencia.NO_REALIZADA,"Declaración anterior equivocada TEST"),h.agente,h.sid,h.procedencia);
+        assertEquals(Visita.NO_REALIZADA,r.estado());assertEquals(Visita.REALIZADA,servicio.obtenerVersion(50,1,h.agente).estado());
     }
-
-    @Test
-    void laVisitaCanceladaLimpiaCualquierDesenlacePrevio() {
-        Visita visita = visitaEnEstado(Visita.PROGRAMADA);
-        visita.registrarDesenlace("I", null, null, 4, "P", "A", "V");
-
-        FichaVisita ficha = service.cancelar(4L, "Se cayo la cita", agente);
-
-        assertNull(ficha.resultado());
-        assertNull(ficha.nivelInteres());
-        assertNull(ficha.objecionPrincipal());
+    @Test void unaVisitaConOcurrenciaNoSeReprogramaComoSiSiguieraPendiente(){
+        realizada();assertThrows(ReglaNegocioException.class,()->servicio.validarReprogramacion(new Reprogramacion(50,1L,LocalDate.of(2026,11,2),LocalTime.NOON,"TEST"),h.agente));
     }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    /** Visita 4 del agente 30, sobre la oportunidad 8 (captacion del mismo agente). */
-    private Visita visitaEnEstado(String estado) {
-        Visita visita = new Visita();
-        visita.setOrganizacionId(ORG);
-        visita.setOportunidad(oportunidad(30L));
-        visita.setAgente(detalleAgente(30L, "Valentina Mora"));
-        visita.setFechaVisita(LocalDate.of(2026, 7, 30));
-        visita.setHoraVisita(LocalTime.of(16, 0));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(visita, estado);
-        ReflectionTestUtils.setField(visita, "id", 4L);
-        when(visitas.buscarFicha(ORG, 4L)).thenReturn(Optional.of(visita));
-        when(visitas.save(any(Visita.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(oportunidades.save(any(OportunidadComercial.class))).thenAnswer(inv -> inv.getArgument(0));
-        return visita;
+    @Test void unaCanceladaNoSeMarcaRealizadaPorOtraPuerta(){
+        servicio.cancelar(new Cancelacion(50,0L,"TEST",LocalDate.of(2026,10,30)),h.agente,h.sid,"cancelar",h.procedencia);
+        assertThrows(ReglaNegocioException.class,()->servicio.validarResultado(50,resultado(1,Ocurrencia.REALIZADA,null),h.agente));
     }
-
-    private static OportunidadComercial oportunidad(long idRolAgente) {
-        Propiedad propiedad = new Propiedad();
-        propiedad.setOrganizacionId(ORG);
-        propiedad.setDireccion("Av. Larco 123");
-        propiedad.setDistrito("Miraflores");
-        propiedad.setMetraje(new BigDecimal("120.00"));
-        ReflectionTestUtils.setField(propiedad, "id", 9L);
-
-        Captacion captacion = new Captacion();
-        captacion.setOrganizacionId(ORG);
-        captacion.setCodigoCaptacion("CAP-0001");
-        captacion.setPropiedad(propiedad);
-        captacion.setAgente(detalleAgente(idRolAgente, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(captacion, Captacion.ACTIVA);
-        ReflectionTestUtils.setField(captacion, "id", 7L);
-
-        OportunidadComercial oportunidad = new OportunidadComercial();
-        oportunidad.setOrganizacionId(ORG);
-        oportunidad.setCodigoOportunidad("OP-0001");
-        oportunidad.setCliente(detalleCliente(50L, "Mariana Delgado"));
-        oportunidad.setCaptacion(captacion);
-        oportunidad.setAgente(detalleAgente(idRolAgente, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .iniciar(oportunidad, OportunidadComercial.ABIERTA);
-        ReflectionTestUtils.setField(oportunidad, "id", 8L);
-        return oportunidad;
+    @Test void ocurrenciaFechaYVersionAusentesNoSonCerosODefaults(){
+        assertThrows(ReglaNegocioException.class,()->servicio.validarResultado(50,new DesenlaceVisita(null,Ocurrencia.REALIZADA,LocalDate.of(2026,10,30),"TEST",null,null,null,null,null,null),h.agente));
+        assertThrows(ReglaNegocioException.class,()->servicio.validarResultado(50,new DesenlaceVisita(0L,null,LocalDate.of(2026,10,30),"TEST",null,null,null,null,null,null),h.agente));
     }
-
-    private static DetalleCliente detalleCliente(long idRol, String nombre) {
-        DetalleCliente cliente = new DetalleCliente();
-        cliente.setOrganizacionId(ORG);
-        cliente.setRol(personaRol(nombre, TipoRol.CLIENTE));
-        ReflectionTestUtils.setField(cliente, "id", idRol);
-        return cliente;
+    @Test void reciboDeCancelacionSeReautorizaConLaSesionActual(){
+        var d=new Cancelacion(50,0L,"TEST",LocalDate.of(2026,10,30));servicio.cancelar(d,h.agente,h.sid,"cancelar",h.procedencia);
+        doThrow(new AccesoNoAutorizadoException()).when(h.sesiones).exigirContexto(anyString(),anyLong(),any());
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.cancelar(d,h.agente,h.sid,"cancelar",h.procedencia));verify(h.eventos,times(1)).saveAndFlush(any());
     }
-
-    private static DetalleAgente detalleAgente(long idRol, String nombre) {
-        DetalleAgente detalle = new DetalleAgente();
-        detalle.setRol(personaRol(nombre, TipoRol.AGENTE));
-        detalle.setCodigoAgente("AGE-001");
-        ReflectionTestUtils.setField(detalle, "id", idRol);
-        return detalle;
+    @Test void obtenerVersionDevuelveParticipantesYLugarOriginalesNoLosActuales(){
+        var a=servicio.programar(datos(),h.agente,h.sid,h.procedencia);
+        // Alteración técnica de la fila más reciente como doble de persistencia: no afirma otra API.
+        filas.get(a.id()).setLugarDeclarado("Otro lugar actual TEST");
+        filas.get(a.id()).setParticipantesJson(h.documentos.lista(List.of(new ParticipanteConocido("Otro participante TEST",null))));
+        var original=servicio.obtenerVersion(a.id(),a.version(),h.agente);
+        assertEquals(a,original);assertEquals("Lugar declarado TEST",original.lugarDeclarado());assertEquals(datos().participantes(),original.participantes());
     }
-
-    private static PersonaRol personaRol(String nombre, TipoRol tipo) {
-        Persona persona = new Persona();
-        persona.setNombresORazonSocial(nombre);
-        PersonaRol rol = new PersonaRol();
-        rol.setPersona(persona);
-        rol.setTipoRol(tipo);
-        return rol;
+    @Test void unPadreActualPermitidoNoAutorizaSnapshotDeOtroEncargo(){
+        var a=servicio.programar(datos(),h.agente,h.sid,h.procedencia);
+        var json=h.documentos.comoMapa(h.documentos.objetoCanonico(a));var alterado=new LinkedHashMap<String,Object>(json);alterado.put("idCaptacion",999L);
+        historia.get(a.id()).put(a.version(),h.documentos.objetoCanonico(alterado));
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.obtenerVersion(a.id(),a.version(),h.agente));
     }
-
-    private HistorialEstado eventoAuditado() {
-        ArgumentCaptor<HistorialEstado> evento = ArgumentCaptor.forClass(HistorialEstado.class);
-        verify(historial).save(evento.capture());
-        return evento.getValue();
+    @Test void quienPierdeAccesoNoRecibeSnapshotOriginal(){
+        var a=servicio.programar(datos(),h.agente,h.sid,h.procedencia);
+        when(h.oportunidades.contextoOperativoActual(anyLong(),anyLong(),anyLong(),anyString(),any())).thenReturn(false);
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.obtenerVersion(a.id(),a.version(),h.agente));
+    }
+    @Test void versionHistoricaInexistenteNoSeReemplazaPorLaActual(){
+        assertThrows(NoEncontradoException.class,()->servicio.obtenerVersion(50,99,h.agente));
+    }
+    @Test void gobiernoNoConsultaVisitasPorAdministrar(){
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.obtener(50,h.gobierno));
+    }
+    @Test void consultaAgendaNoDeclaraQueLasVisitasSeRealizaron(){
+        when(visitas.agenda(anyLong(),anyBoolean(),anyBoolean(),anyCollection(),isNull(),isNull(),isNull(),any(),any(),any()))
+            .thenReturn(new PageImpl<>(List.of(filas.get(50L)),PageRequest.of(0,20),1));
+        when(visitas.buscarFichaPorIds(1,List.of(50L))).thenReturn(List.of(filas.get(50L)));
+        var r=servicio.agenda(new ConsultaAgenda(LocalDate.of(2026,10,1),LocalDate.of(2026,11,30),null,null,1,20),h.agente);
+        assertEquals(1,r.total());assertEquals(Visita.PROGRAMADA,r.items().getFirst().estado());verify(visitas,never()).saveAndFlush(any());
     }
 }

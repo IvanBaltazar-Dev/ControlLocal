@@ -17,19 +17,10 @@ package com.controllocal.service;
  *       desde la membresia: {@code AGENTE | BROKER | TENANT_ADMIN}.</li>
  * </ul>
  *
- * <p><b>El rol efectivo no es el rol del token</b> (Bloque 5, D-S0-8). El
- * token sigue diciendo {@code ADMIN} porque su formato esta congelado y solo
- * admite tres valores mientras GlassFish conviva (R1); la banda de verdad la
- * resuelve el backend en cada peticion, igual que ya hacia con el tenant. Dos
- * consecuencias que conviene tener presentes:
- * <ul>
- *   <li>{@code TENANT_ADMIN} <b>no</b> es el {@code ADMIN} de antes. Aquel era
- *       un broker con un booleano y entraba por herencia a 18 operaciones
- *       comerciales; este gobierna la organizacion y no firma hechos del
- *       negocio (D-S0-7, matriz D-S0-17).</li>
- *   <li>Degradar a alguien surte efecto en la siguiente peticion, sin esperar
- *       a que caduque su token.</li>
- * </ul>
+ * <p>La cuenta global no equivale a Persona ni concede por sí sola un contexto.
+ * Core resuelve la pertenencia actual y la atribución seleccionada; la sesión durable
+ * y su revisión se comprueban antes de operar. TENANT_ADMIN gobierna; BROKER opera
+ * dentro de su equipo. Quien acumula ambas atribuciones elige la que ejerce y traza.
  */
 public record Actor(long idOrganizacion, long idPersona, long idRolOperativo, String rolEfectivo) {
 

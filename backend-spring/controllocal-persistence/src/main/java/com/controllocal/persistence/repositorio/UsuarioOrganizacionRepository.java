@@ -6,55 +6,102 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.time.LocalDate;
 
-/**
- * Membresia de un usuario en una organizacion. Existia la tabla desde V6 y
- * <b>nadie la leia</b> (H-14): el codigo derivaba la banda de
- * {@code detalle_broker.es_administrador}, que es exactamente la confusion
- * entre rol operativo y gobierno que cierra el Bloque 5 (D-S0-8).
- *
- * <p>El camino de lectura es {@code usuario_organizacion.id_usuario} ->
- * {@code persona_rol} del USUARIO_INTERNO -> {@code persona}. Durante la
- * convivencia {@code id_usuario} apunta al rol interno (1:1 con el login);
- * cuando exista la cuenta global (D-22) cambiara el destino del salto, no
- * estas consultas.
- */
+/** Pertenencia local de una CuentaAcceso, con Persona contextual y gobierno separado del principal. */
 public interface UsuarioOrganizacionRepository extends JpaRepository<UsuarioOrganizacion, Long> {
-
-    /**
-     * Banda activa de una persona en el tenant, o vacio si no tiene membresia.
-     *
-     * <p>Vacio <b>no</b> es un error: significa "sin banda declarada", y el
-     * llamador cae al rol operativo. Lo que nunca se deduce de la ausencia es
-     * gobierno — un usuario sin membresia no es administrador de nada.
-     */
     @Query("""
-            select uo.rol
-              from UsuarioOrganizacion uo, PersonaRol r
-            where uo.organizacionId = :idOrganizacion
-              and uo.idUsuario = r.id
-              and uo.estado = 'A'
-              and r.persona.id = :idPersona
-              and r.tipoRol = com.controllocal.domain.persona.enums.TipoRol.USUARIO_INTERNO
-            """)
-    Optional<String> bandaActivaDePersona(@Param("idOrganizacion") long idOrganizacion,
-                                          @Param("idPersona") long idPersona);
+       select new com.controllocal.persistence.repositorio.PertenenciaDeBajaFila(u.id,u.idUsuario,
+       u.organizacionId,u.idPersona,u.estado,u.rol,u.administrar,u.version,u.altaRealEn,u.bajaRealEn)
+       from UsuarioOrganizacion u where u.id=:id and u.organizacionId=:org
+       """)
+    Optional<PertenenciaDeBajaFila> paraBaja(@Param("org") long org,@Param("id") long id);
 
-    /**
-     * Todas las bandas activas del tenant, en pares {@code (idUsuario, rol)}.
-     *
-     * <p>Existe para el padron de gobierno: pedirlas de una vez y cruzarlas en
-     * memoria evita tanto una consulta por cuenta como el {@code left join} a
-     * una entidad sin relacion declarada, que es lo que colapsaba el padron a
-     * una sola fila.
-     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from UsuarioOrganizacion u where u.id=:id and u.organizacionId=:org")
+    Optional<UsuarioOrganizacion> bloquearParaBaja(@Param("org") long org,@Param("id") long id);
+
     @Query("""
-            select uo.idUsuario, uo.rol
-              from UsuarioOrganizacion uo
-             where uo.organizacionId = :idOrganizacion
-               and uo.estado = 'A'
-            """)
-    java.util.List<Object[]> bandasActivas(@Param("idOrganizacion") long idOrganizacion);
+       select u.idUsuario from UsuarioOrganizacion u,Persona p,PersonaRol r,CuentaAcceso c
+       where u.organizacionId=:org and u.idPersona=:persona and u.estado='A' and u.administrar=true
+       and exists(select o.id from Organizacion o where o.id=u.organizacionId and o.estado='A'
+         and o.modalidad in ('INDIVIDUAL','EMPRESARIAL'))
+       and p.id=u.idPersona and p.organizacionId=u.organizacionId and p.estado='A'
+       and r.id=:rol and r.persona.id=p.id and r.organizacionId=u.organizacionId
+       and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.ADMIN
+       and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
+       and c.id=u.idUsuario and c.estado='A' and c.correoConfirmadoEn is not null
+       and c.debeCambiarContrasena=false and c.debeEnrolarMfa=false
+       and exists(select f.id from FactorAutenticacion f where f.idCuenta=c.id and f.estado='A')
+       """)
+    Optional<Long> cuentaDeGobiernoActual(@Param("org") long org,@Param("persona") long persona,@Param("rol") long rol,@Param("hoy") LocalDate hoy);
+
+    @Query("""
+       select count(u) from UsuarioOrganizacion u,CuentaAcceso c,Persona p,PersonaRol r
+       where u.organizacionId=:org and u.estado='A' and u.id<>:excluir and u.rol='BROKER'
+         and c.id=u.idUsuario and c.estado='A' and c.correoConfirmadoEn is not null
+         and p.id=u.idPersona and p.organizacionId=u.organizacionId and p.estado='A'
+         and r.persona.id=p.id and r.organizacionId=u.organizacionId
+         and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.BROKER
+         and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
+       """)
+    long otrosBrokersVigentes(@Param("org") long org,@Param("excluir") long excluir,@Param("hoy") LocalDate hoy);
+
+    @Query("""
+       select count(u) from UsuarioOrganizacion u,CuentaAcceso c,Persona p,PersonaRol r
+       where u.organizacionId=:org and u.estado='A' and u.id<>:excluir and u.administrar=true
+         and c.id=u.idUsuario and c.estado='A' and c.correoConfirmadoEn is not null
+         and p.id=u.idPersona and p.organizacionId=u.organizacionId and p.estado='A'
+         and r.persona.id=p.id and r.organizacionId=u.organizacionId
+         and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.ADMIN
+         and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
+       """)
+    long otrosAdministradoresVigentes(@Param("org") long org,@Param("excluir") long excluir,@Param("hoy") LocalDate hoy);
+
+    @Query("""
+       select count(a) from UsuarioOrganizacion a,PersonaRol ra,PersonaRol rb,SupervisionAgente s
+       where a.organizacionId=:org and a.estado='A' and a.rol='AGENTE'
+         and ra.persona.id=a.idPersona and ra.organizacionId=a.organizacionId
+         and ra.tipoRol=com.controllocal.domain.persona.enums.TipoRol.AGENTE and ra.vigenciaHasta is null
+         and s.idRolAgente=ra.id and s.organizacionId=a.organizacionId and s.fechaFin is null
+         and rb.id=s.idRolBroker and rb.organizacionId=a.organizacionId and rb.persona.id=:personaBroker
+       """)
+    long agentesActivosDeBroker(@Param("org") long org,@Param("personaBroker") long personaBroker);
+    @Query("select u from UsuarioOrganizacion u where u.organizacionId=:org and u.idUsuario=:cuenta")
+    Optional<UsuarioOrganizacion> buscarPorCuenta(@Param("org") long org,@Param("cuenta") long cuenta);
+    @Query("""
+       select distinct u.organizacionId from UsuarioOrganizacion u,Persona p,PersonaRol r,Organizacion o
+       where u.idUsuario=:cuenta and u.estado='A' and u.administrar=true
+         and p.id=u.idPersona and p.organizacionId=u.organizacionId and p.estado='A'
+         and r.persona.id=p.id and r.organizacionId=u.organizacionId
+         and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.ADMIN and r.vigenciaHasta is null
+         and r.vigenciaDesde<=:hoy and o.id=u.organizacionId and o.estado='A'
+       """)
+    java.util.List<Long> gobiernosActualesDeCuenta(@Param("cuenta") long cuenta,@Param("hoy") LocalDate hoy);
+    @Query("select u.idUsuario from UsuarioOrganizacion u where u.organizacionId=:org and u.idPersona=:persona and u.estado='A'")
+    java.util.List<Long> cuentasActivasDePersona(@Param("org") long org,@Param("persona") long persona);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
+    @Query("select u from UsuarioOrganizacion u where u.id=:id and u.idUsuario=:cuenta")
+    Optional<UsuarioOrganizacion> bloquearParaContexto(@Param("id") long id,@Param("cuenta") long cuenta);
+
+    /** Una lectura actual, sin filtrar pertenencias que la defensa de exclusividad debe contar. */
+    @Query("""
+       select new com.controllocal.persistence.repositorio.ContextoCuentaFila(u.id,u.organizacionId,
+       u.idPersona,u.rol,u.administrar,u.estado,o.estado,o.nombre,o.modalidad,
+       r.id,p.estado,r.tipoRol,r.vigenciaDesde,r.vigenciaHasta)
+       from UsuarioOrganizacion u join Organizacion o on o.id=u.organizacionId
+       left join Persona p on p.id=u.idPersona and p.organizacionId=u.organizacionId
+       left join PersonaRol r on r.persona.id=p.id and r.organizacionId=u.organizacionId
+       where u.idUsuario=:cuenta
+       """)
+    java.util.List<ContextoCuentaFila> lecturaContextosDeCuenta(@Param("cuenta") long cuenta);
+
+    @Query("""
+       select new com.controllocal.persistence.repositorio.MembresiaContextoFila(u.id,u.idUsuario,
+       u.organizacionId,u.idPersona,u.rol,u.administrar,u.estado,o.estado,o.nombre,o.modalidad)
+       from UsuarioOrganizacion u,Organizacion o where u.idUsuario=:cuenta and o.id=u.organizacionId
+       """)
+    java.util.List<MembresiaContextoFila> contextosDeCuenta(@Param("cuenta") long cuenta);
 
     /** Membresia activa por cuenta, para modificarla (alta, baja, cambio de banda). */
     @Query("""
@@ -65,21 +112,6 @@ public interface UsuarioOrganizacionRepository extends JpaRepository<UsuarioOrga
             """)
     Optional<UsuarioOrganizacion> buscarActivaPorCuenta(@Param("idOrganizacion") long idOrganizacion,
                                                         @Param("idCuenta") long idCuenta);
-
-    /**
-     * Cuantos usuarios activos tiene esa banda en el tenant. Es el recuento del
-     * invariante "una organizacion nunca sin administrador" (D-S0-9): lo hace la
-     * guarda de aplicacion para dar un mensaje, y el trigger deferred de V34 lo
-     * repite como garantia.
-     */
-    @Query("""
-            select count(uo) from UsuarioOrganizacion uo
-            where uo.organizacionId = :idOrganizacion
-              and uo.rol = :rol
-              and uo.estado = 'A'
-            """)
-    long contarActivosConBanda(@Param("idOrganizacion") long idOrganizacion,
-                               @Param("rol") String rol);
 
     /**
      * Administradores <b>OPERATIVOS</b> del tenant, excluyendo una cuenta
@@ -107,20 +139,36 @@ public interface UsuarioOrganizacionRepository extends JpaRepository<UsuarioOrga
     @Query("""
             select count(uo)
               from UsuarioOrganizacion uo,
-                   CredencialUsuario cu,
-                   FactorAutenticacion f
+                   CuentaAcceso cu,
+                   FactorAutenticacion f,Persona p,PersonaRol r
              where uo.organizacionId = :idOrganizacion
                and uo.estado = 'A'
-               and uo.rol = com.controllocal.domain.organizacion.UsuarioOrganizacion.ROL_TENANT_ADMIN
+               and uo.administrar = true
                and cu.id = uo.idUsuario
-               and cu.organizacionId = uo.organizacionId
                and cu.id <> :idCredencialExcluida
-               and cu.estadoAdministrativo = 'A'
+               and cu.estado = 'A'
+               and cu.correoConfirmadoEn is not null
+               and p.id=uo.idPersona and p.organizacionId=uo.organizacionId and p.estado='A'
+               and r.persona.id=p.id and r.organizacionId=uo.organizacionId
+               and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.ADMIN
+               and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
                and cu.debeCambiarContrasena = false
                and cu.debeEnrolarMfa = false
-               and f.idCredencial = cu.id
+               and f.idCuenta = cu.id
                and f.estado = com.controllocal.domain.seguridad.FactorAutenticacion.ACTIVO
             """)
     long contarAdministradoresOperativos(@Param("idOrganizacion") long idOrganizacion,
-                                         @Param("idCredencialExcluida") long idCredencialExcluida);
+                                         @Param("idCredencialExcluida") long idCredencialExcluida,@Param("hoy") LocalDate hoy);
+
+    @Query("select u from UsuarioOrganizacion u where u.organizacionId=:org and u.idPersona=:persona")
+    java.util.List<UsuarioOrganizacion> dePersona(@Param("org") long org,@Param("persona") long persona);
+
+    @Query("select u.idPersona,u.estado from UsuarioOrganizacion u where u.organizacionId=:org and u.idPersona in :personas and u.rol=:principal")
+    java.util.List<Object[]> estadosDePersonasDelRol(@Param("org") long org,@Param("personas") java.util.Collection<Long> personas,@Param("principal") String principal);
+
+    @Query("select u.idPersona,u.administrar from UsuarioOrganizacion u where u.organizacionId=:org and u.idPersona in :personas")
+    java.util.List<Object[]> administracionesDePersonas(@Param("org") long org,@Param("personas") java.util.Collection<Long> personas);
+
+    @Query("select count(u) from UsuarioOrganizacion u where u.idUsuario=:cuenta and u.estado='A' and u.organizacionId<>:org")
+    long contarOtrasPertenenciasActivas(@Param("cuenta") long cuenta,@Param("org") long org);
 }

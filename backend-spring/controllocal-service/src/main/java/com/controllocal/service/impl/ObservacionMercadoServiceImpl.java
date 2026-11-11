@@ -5,7 +5,15 @@ import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.persistence.repositorio.ObservacionMercadoRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
-import com.controllocal.persistence.repositorio.PropiedadRepository;
+import com.controllocal.persistence.repositorio.ComandoIdempotenteRepository;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
+import com.controllocal.service.soporte.ComandosIdempotentes;
+import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.service.soporte.Idempotencia;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Clock;
+import java.time.ZoneId;
 import com.controllocal.service.Actor;
 import com.controllocal.service.ObservacionMercadoService;
 import com.controllocal.service.excepcion.NoEncontradoException;
@@ -46,45 +54,66 @@ public class ObservacionMercadoServiceImpl implements ObservacionMercadoService 
     private static final int MAX_FUENTE = 30;
 
     private final ObservacionMercadoRepository observaciones;
-    private final PropiedadRepository propiedades;
+    private final AutoridadDePropiedad autoridad;
+    private final ComandosIdempotentes comandos;
+    private final ComandoIdempotenteRepository registros;
+    private final ObjectMapper json;
+    private final Clock reloj;
     private final PersonaRolRepository roles;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ObservacionMercadoServiceImpl(ObservacionMercadoRepository observaciones,
-                                         PropiedadRepository propiedades,
-                                         PersonaRolRepository roles) {
-        this.observaciones = observaciones;
-        this.propiedades = propiedades;
-        this.roles = roles;
+            AutoridadDePropiedad autoridad,PersonaRolRepository roles,ComandosIdempotentes comandos,
+            ComandoIdempotenteRepository registros,ObjectMapper json) {
+        this(observaciones,autoridad,roles,comandos,registros,json,Clock.systemUTC());
+    }
+    ObservacionMercadoServiceImpl(ObservacionMercadoRepository observaciones,
+            AutoridadDePropiedad autoridad,PersonaRolRepository roles,ComandosIdempotentes comandos,
+            ComandoIdempotenteRepository registros,ObjectMapper json,Clock reloj) {
+        this.observaciones=observaciones;this.autoridad=autoridad;this.roles=roles;
+        this.comandos=comandos;this.registros=registros;this.json=json;this.reloj=reloj;
     }
 
     @Override
     @Transactional
-    public FichaObservacion registrar(DatosObservacion datos, Actor actor) {
+    public FichaObservacion registrar(DatosObservacion datos, Actor actor,String claveIdempotencia,Procedencia procedente) {
         if (datos == null || datos.idPropiedad() == null) {
             throw new ReglaNegocioException("La observacion tiene que decir de que inmueble es.");
         }
-        Propiedad propiedad = propiedades
-                .findByOrganizacionIdAndId(actor.idOrganizacion(), datos.idPropiedad())
-                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
-
+        if(!actor.esAgente())throw new AccesoNoAutorizadoException();
+        exigirLectura(datos.idPropiedad(),actor);
+        String clave=Idempotencia.normalizar(claveIdempotencia);Procedencia procedencia=Procedencia.oPantalla(procedente);
+        String huella=Idempotencia.huellaExacta(escribir(Map.of("datos",datos,"procedencia",procedencia)));
+        if(clave!=null){
+            String identidad=Idempotencia.huellaExacta("BROX-COMANDO\u0000"+actor.idOrganizacion()+"\u0000"+clave);
+            registros.bloquearIdentidad(Long.parseUnsignedLong(identidad.substring(0,16),16));
+            var previo=comandos.buscar(actor,clave,"REGISTRAR_OBSERVACION_MERCADO",huella);
+            if(previo.isPresent())return leerResultado(previo.get().getResultado());
+        }
         OperacionInmobiliaria operacion = operacionDeclarada(datos.operacion());
         LocalDate fecha = fechaObservada(datos.fechaObservada());
-        BigDecimal importe = importeObservado(datos.importe(), operacion);
-        String moneda = CondicionesEconomicas.moneda(datos.moneda(), "de la observacion");
+        BigDecimal importe = datos.importe()==null?null:importeObservado(datos.importe(), operacion);
+        if(importe==null&&datos.moneda()!=null&&!datos.moneda().isBlank())
+            throw new ReglaNegocioException("Una moneda sin importe no acredita un precio observado.");
+        String moneda = importe==null?null:CondicionesEconomicas.moneda(datos.moneda(), "de la observacion");
         String fuente = fuenteDeclarada(datos.fuente());
 
         ObservacionMercado observacion = new ObservacionMercado(actor.idOrganizacion(),
-                propiedad.getId(), fecha, operacion.codigo(), importe, moneda, fuente,
+                datos.idPropiedad(), fecha, operacion.codigo(), importe, moneda, fuente,
                 recorte(datos.detalle()), actor.idRolOperativo());
-        observaciones.save(observacion);
-        return ficha(observacion, Map.of());
+        observacion.conProcedencia(escribir(procedencia));
+        observaciones.saveAndFlush(observacion);
+        var resultado=ficha(observacion,Map.of());
+        if(clave!=null)comandos.registrar(actor,clave,"REGISTRAR_OBSERVACION_MERCADO",huella,
+                "OBSERVACION_MERCADO",observacion.getId(),procedencia,escribir(resultado));
+        return resultado;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<FichaObservacion> listarDe(long idPropiedad, Actor actor) {
-        propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
-                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
+        if(!actor.esAgente()&&!actor.esBroker())throw new AccesoNoAutorizadoException();
+        exigirLectura(idPropiedad,actor);
         List<ObservacionMercado> filas =
                 observaciones.findByIdPropiedadOrderByFechaObservadaDescIdDesc(idPropiedad);
         // Los nombres de quien observo, en UNA consulta. Preguntarlos por fila
@@ -94,6 +123,18 @@ public class ObservacionMercadoServiceImpl implements ObservacionMercadoService 
     }
 
     // ------------------------------------------------------------------
+
+    private void exigirLectura(long id,Actor actor){
+        if(!autoridad.puedeLeer(actor,id))throw new NoEncontradoException("Propiedad");
+    }
+    private String escribir(Object valor){
+        try{return json.writer().with(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsString(valor);}
+        catch(Exception error){throw new IllegalStateException("No se pudo conservar la observación.",error);}
+    }
+    private FichaObservacion leerResultado(String valor){
+        try{return json.readValue(valor,FichaObservacion.class);}
+        catch(Exception error){throw new IllegalStateException("El resultado conservado de observación no es válido.",error);}
+    }
 
     private Map<Long, String> nombresDe(List<ObservacionMercado> filas) {
         List<Long> ids = filas.stream().map(ObservacionMercado::getIdRolActor).distinct().toList();
@@ -145,13 +186,13 @@ public class ObservacionMercadoServiceImpl implements ObservacionMercadoService 
      * puede comparar con nada, y una fecha por venir no es una observacion sino
      * una expectativa.
      */
-    private static LocalDate fechaObservada(LocalDate fecha) {
+    private LocalDate fechaObservada(LocalDate fecha) {
         if (fecha == null) {
             throw new ReglaNegocioException(
                     "Falta la fecha en que se observo. Un precio sin fecha no se puede comparar "
                             + "con ningun otro: es lo que hace util a la serie.");
         }
-        if (fecha.isAfter(LocalDate.now())) {
+        if (fecha.isAfter(LocalDate.now(reloj.withZone(ZoneId.of("America/Lima"))))) {
             throw new ReglaNegocioException(
                     "No se observa lo que todavia no ha pasado. Una fecha futura no es una "
                             + "observacion: es una expectativa, y esa no es evidencia.");

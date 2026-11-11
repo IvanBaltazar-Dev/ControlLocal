@@ -1,104 +1,54 @@
 package com.controllocal.service;
 
-import java.time.OffsetDateTime;
-import java.util.List;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.service.excepcion.ReglaNegocioException;
+import java.time.*;
+import java.util.*;
 
-/**
- * Fijar, proponer y revisar las metas mensuales.
- *
- * <h2>Quién decide, y por qué así</h2>
- *
- * <p><b>Un agente no baja su meta porque va perdiendo.</b> Si pudiera, el
- * indicador sería manipulable: voy al 60 %, bajo la meta y vuelvo a verde. Pero
- * una meta inmutable tampoco sirve —vacaciones, altas a mitad de mes, cambios de
- * cartera, bajas—, así que la regla no es «nadie la toca» sino «la toca quien
- * dirige»:
- *
- * <ul>
- *   <li><b>AGENTE</b> — ve las suyas y <b>propone</b> un ajuste, con motivo.</li>
- *   <li><b>BROKER</b> — las <b>fija</b> y <b>decide</b> sobre lo que le proponen.</li>
- *   <li><b>TENANT_ADMIN</b> — <b>no fija objetivos comerciales.</b> Administrar
- *       usuarios no es dirigir producción, y es la misma frontera entre gobernar
- *       y operar que el resto del sistema ya respeta. Puede <b>leerlas</b>,
- *       porque gobierno sin visibilidad no puede responder por qué un equipo
- *       está en rojo. Un administrador que además dirija comercialmente lo hace
- *       con su rol de broker, no con el de gobierno.</li>
- * </ul>
- *
- * <h2>Y ninguna revisión sobrescribe a la anterior</h2>
- *
- * <p>Toda escritura deja su rastro en la serie: de cuánto a cuánto, cuándo,
- * quién y por qué. Sin eso, dentro de tres meses la base diría que la meta
- * siempre fue 6 y el gráfico de cumplimiento mentiría.
- */
+/** RF074–077/CAT-E30 y catálogo20.10. Proponer no decide; C/P/S/F sólo son historia. */
 public interface MetaComercialService {
-
-    /**
-     * Las metas del mes que el actor alcanza, con su propuesta viva —si la
-     * hay— y su historial de revisiones.
-     */
-    List<MetaDeAgente> del(String mes, Actor actor);
-
-    /**
-     * Fija —o revisa— metas. <b>Solo el broker.</b>
-     *
-     * <p>Es idempotente por (agente, KPI, mes) y **exige motivo**: es lo único
-     * que quedará para entender el cambio dentro de seis meses. Una meta ausente
-     * en la petición no se borra; se deja como estaba.
-     */
-    List<MetaDeAgente> fijar(String mes, List<Asignacion> asignaciones, Actor actor);
-
-    /**
-     * El agente propone un ajuste de <b>su</b> meta. No la cambia: queda en
-     * espera de que el broker decida.
-     *
-     * <p>Como mucho una propuesta viva por KPI y mes: insistir no debe llegarle
-     * al broker como diez avisos de lo mismo.
-     */
-    List<MetaDeAgente> proponer(String mes, Propuesta propuesta, Actor actor);
-
-    /** Lo que el broker tiene pendiente de decidir sobre su equipo. */
-    List<PropuestaPendiente> propuestasPendientes(Actor actor);
-
-    /**
-     * El broker acepta o rechaza una propuesta. Aceptar aplica el valor
-     * propuesto; rechazar deja la meta como estaba. En los dos casos queda
-     * escrito quién decidió y por qué.
-     */
-    List<MetaDeAgente> resolver(long idRevision, boolean acepta, String motivo, Actor actor);
-
-    /**
-     * Una meta con quien la tiene, lo que se propuso sobre ella y cómo se llegó
-     * a su valor.
-     *
-     * @param valor {@code null} si nadie la fijó. No es cero: cero significaría
-     *              que este mes no se pide ese resultado, que es una decisión
-     *              distinta de no haber decidido
-     */
-    record MetaDeAgente(long idRolAgente, String nombreAgente, String kpi, String rotuloKpi,
-                        Integer valor, PropuestaPendiente propuesta, List<Revision> historial) {
+    record Categoria(String codigo,String rotulo,String unidad,List<String> operaciones) { }
+    record Definicion(String version,List<Categoria> categorias,String historia) { }
+    Definicion definicion(Actor actor);
+    boolean puedeDecidir(Actor actor);
+    record CapacidadMeta(long id,long version,long responsable,String estado,Long reemplazadaPor,boolean puedeDecidir) { }
+    CapacidadMeta capacidadSobrePropuesta(long propuesta,Actor actor);
+    record Asignacion(Long idRolAgente,String kpi,String operacion,Long versionEsperada,Integer valor,
+                      List<LocalDate> calendario,String motivo) {
+        @com.fasterxml.jackson.annotation.JsonAnySetter public void desconocido(String k,Object v){throw new ReglaNegocioException("Campo de meta no admitido.");}
     }
-
-    /** Un ajuste que el agente pidió y el broker todavía no ha resuelto. */
-    record PropuestaPendiente(long idRevision, long idRolAgente, String nombreAgente,
-                              String kpi, String rotuloKpi, Integer valorVigente,
-                              int valorPropuesto, String motivo, OffsetDateTime fecha) {
+    record Establecer(String mes,List<Asignacion> asignaciones) {
+        @com.fasterxml.jackson.annotation.JsonAnySetter public void desconocido(String k,Object v){throw new ReglaNegocioException("Campo de decisión de metas no admitido.");}
     }
-
-    /**
-     * Un paso del historial, ya redactado para poder leerlo de corrido:
-     * «Meta inicial 8 → revisada a 6 el 18 de agosto · agente incorporado tarde».
-     */
-    record Revision(long id, String origen, String estado, Integer valorAnterior,
-                    int valorPropuesto, String motivo, String autor, OffsetDateTime fecha,
-                    String decisor, String motivoDecision) {
+    record Propuesta(String kpi,String operacion,Long versionMetaEsperada,Long propuestaAnterior,Long versionPropuestaAnterior,
+                     Integer valor,List<LocalDate> calendario,String motivo) {
+        @com.fasterxml.jackson.annotation.JsonAnySetter public void desconocido(String k,Object v){throw new ReglaNegocioException("Campo de propuesta de meta no admitido.");}
     }
-
-    /** Lo que el broker fija: a quién, qué KPI, cuánto y por qué. */
-    record Asignacion(long idRolAgente, String kpi, int valor, String motivo) {
+    enum TipoDecision { APROBAR,OBSERVAR,RECHAZAR }
+    record Decision(Long propuesta,Long versionEsperada,TipoDecision decision,Integer valorAprobado,String motivo) {
+        @com.fasterxml.jackson.annotation.JsonAnySetter public void desconocido(String k,Object v){throw new ReglaNegocioException("Campo de decisión no admitido.");}
     }
-
-    /** Lo que el agente propone sobre su propia meta. */
-    record Propuesta(String kpi, int valor, String motivo) {
+    record Revision(long id,Long version,String origen,String estado,Integer valorAnterior,int valorPropuesto,
+                    String motivo,long autor,Instant fecha,Long decisor,String motivoDecision,Instant fechaDecision,
+                    Long reemplazadaPor,Long versionMetaEsperada,List<LocalDate> calendario,Integer valorAprobado) { }
+    record PropuestaMeta(long idRevision,Long version,long idRolAgente,String nombreAgente,String kpi,String operacion,
+                              String rotuloKpi,Integer valorVigente,int valorPropuesto,Long versionMetaEsperada,
+                              List<LocalDate> calendario,String motivo,Instant fecha,String definicion,Long versionMetaActual,Revision constancia) { }
+    record MetaDeAgente(long idRolAgente,String nombreAgente,String kpi,String operacion,String rotuloKpi,String unidad,
+                        String definicion,Long idMeta,Long version,Integer valor,List<LocalDate> calendario,
+                        boolean historica,PropuestaMeta propuesta,List<Revision> historial) {
+        public MetaDeAgente {calendario=calendario==null?null:List.copyOf(calendario);historial=List.copyOf(historial);}
     }
+    record Resultado(List<MetaDeAgente> metas) {public Resultado{metas=List.copyOf(metas);}}
+    List<MetaDeAgente> del(String mes,Actor actor);
+    List<PropuestaMeta> propuestasPendientes(Actor actor);
+    PropuestaMeta consultarPropuesta(long id,Actor actor);
+    Establecer validarEstablecimiento(Establecer d,Actor actor);
+    void exigirLecturaEstablecimiento(Establecer d,Actor actor);
+    Decision validarDecision(Decision d,Actor actor);
+    Resultado fijar(Establecer datos,Actor actor,ContextoSesion sesion,String clave,Procedencia origen);
+    Resultado proponer(String mes,Propuesta datos,Actor actor,ContextoSesion sesion,String clave,Procedencia origen);
+    Resultado resolver(Decision datos,Actor actor,ContextoSesion sesion,String clave,Procedencia origen);
+    Optional<Resultado> resultado(String capacidad,String clave,Actor actor);
 }

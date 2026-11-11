@@ -16,6 +16,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 class TransicionesTest {
+    @Test void cierreConservaResponsableDelHechoYRevisionC5SeparadosDelActor(){
+        var oportunidad=new com.controllocal.domain.comercial.OportunidadComercial();oportunidad.setOrganizacionId(1L);
+        var agente=mock(com.controllocal.domain.persona.DetalleAgente.class);org.mockito.Mockito.when(agente.getId()).thenReturn(31L);oportunidad.setAgente(agente);
+        transiciones.iniciar(oportunidad,com.controllocal.domain.comercial.OportunidadComercial.ABIERTA);
+        transiciones.aplicar(oportunidad,9L,com.controllocal.domain.comercial.OportunidadComercial.FINALIZADA_EXITOSA,
+                new Actor(1L,99L,990L,"AGENTE"),"Hecho C5 confirmado",java.time.LocalDate.of(2026,11,8),123L);
+        var evento=ArgumentCaptor.forClass(HistorialEstado.class);verify(historial).save(evento.capture());
+        assertEquals(31L,evento.getValue().getIdRolResponsable());assertEquals(99L,evento.getValue().getIdActor());
+        assertEquals(123L,evento.getValue().getIdRevisionHito());assertEquals(java.time.LocalDate.of(2026,11,8),evento.getValue().getFechaEfectiva());
+    }
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
     private static final long ORG = 1L;

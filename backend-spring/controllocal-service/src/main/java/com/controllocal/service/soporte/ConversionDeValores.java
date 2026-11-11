@@ -45,6 +45,32 @@ public final class ConversionDeValores {
     private ConversionDeValores() {
     }
 
+    /** Interpretación tipada sin sujeto persistido: la usan propuesta privada y escritor gobernado. */
+    public static ValorLogico interpretar(CatalogoAtributo definicion,ValorEntrante entrada){
+        String clave=entrada.clave();
+        if(entrada.valores()!=null){
+            if(entrada.valor()!=null||entrada.moneda()!=null)throw new ReglaNegocioException("Un multivalor no se mezcla con un valor suelto.");
+            if(!definicion.tipo().esMultivalor())throw new ReglaNegocioException("El atributo \""+clave+"\" no admite varios valores.");
+            if(new java.util.HashSet<>(entrada.valores()).size()!=entrada.valores().size())throw new ReglaNegocioException("Una opción no se repite en la misma respuesta.");
+            for(String valor:entrada.valores()){
+                if(valor==null||valor.isBlank())throw new ReglaNegocioException("Una opción múltiple no puede estar vacía.");
+                exigirDelVocabulario(definicion,enLongitud(definicion,valor));
+            }
+            return ValorLogico.deValores(entrada.valores().stream().sorted().toList());
+        }
+        String valor=exigirValor(clave,entrada.valor());
+        return switch(definicion.tipo()){
+            case ENTERO->ValorLogico.deNumero(enRango(definicion,entero(clave,valor)));
+            case DECIMAL->ValorLogico.deNumero(enRango(definicion,decimal(clave,valor)));
+            case IMPORTE->ValorLogico.deImporte(enRango(definicion,decimal(clave,valor)),exigirMoneda(clave,entrada.moneda()));
+            case BOOLEANO->ValorLogico.deBooleano(booleano(clave,valor));
+            case FECHA->ValorLogico.deFecha(fecha(clave,valor));
+            case TEXTO->ValorLogico.deTexto(enLongitud(definicion,valor));
+            case LISTA->ValorLogico.deTexto(exigirDelVocabulario(definicion,enLongitud(definicion,valor)));
+            case LISTA_MULTIPLE->throw new ReglaNegocioException("El atributo \""+clave+"\" requiere una lista de valores.");
+        };
+    }
+
     /**
      * Un atributo sin responder se OMITE, no se guarda vacio.
      *

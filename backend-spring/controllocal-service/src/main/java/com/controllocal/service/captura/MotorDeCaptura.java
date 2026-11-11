@@ -4,6 +4,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.soporte.Procedencia;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +38,36 @@ import java.util.Map;
  * estado transaccional es de BROX y no.
  */
 public interface MotorDeCaptura {
+    record Respuesta(String valor, SuficienciaInmueble.EstadoDato estado, String evidenciaRef,
+                      String concepto, String referenciaCatalogo, String versionDefinicion,
+                      LocalDate observadoEn, boolean noSabe) {
+        public static Respuesta conocida(String valor) {
+            return new Respuesta(valor, valor == null || valor.isBlank()
+                    ? SuficienciaInmueble.EstadoDato.FALTANTE : SuficienciaInmueble.EstadoDato.CONOCIDO,
+                    null, null, null, null, null, false);
+        }
+    }
+    /** Metadatos de la respuesta; el valor tiene una sola autoridad: conocido. */
+    record MetadatoRespuesta(SuficienciaInmueble.EstadoDato estado, String evidenciaRef,
+                              String concepto, String referenciaCatalogo, String versionDefinicion,
+                              LocalDate observadoEn, boolean noSabe,
+                              String valorEnRevision, String incidencia) {
+        public MetadatoRespuesta(SuficienciaInmueble.EstadoDato estado, String evidenciaRef,
+                                 String concepto, String referenciaCatalogo, String versionDefinicion,
+                                 LocalDate observadoEn, boolean noSabe) {
+            this(estado, evidenciaRef, concepto, referenciaCatalogo, versionDefinicion,
+                    observadoEn, noSabe, null, null);
+        }
+    }
+    record Avance(String intencion, Long idBorrador, Integer versionEsperada,
+                   Map<String, Respuesta> respuestas, SuficienciaInmueble.Contexto contexto) {
+        public Avance { respuestas = respuestas == null ? Map.of() : Map.copyOf(respuestas); }
+    }
+    record CapacidadSobreCaptura(String etapa, boolean editable, boolean ejecutado, boolean listoParaEjecutar,
+                                 List<String> operaciones, String motivoAtributo) { }
+
+    /** Misma definición contextual que el motor; no persiste un avance ni adivina tipo u operación. */
+    CapacidadSobreCaptura capacidadSobre(long idBorrador, String operacion, String atributo, Actor actor);
 
     /** La unica intencion de esta tanda. Crece con los casos de uso. */
     String REGISTRAR_PROPIEDAD = "REGISTRAR_PROPIEDAD";
@@ -59,7 +90,19 @@ public interface MotorDeCaptura {
 
     record Pregunta(String clave, String rotulo, String seccion, String familia, String control,
                     String tipoDato, String unidad, List<Opcion> opciones, String exigencia,
-                    boolean obligatoria, String ayuda, int orden, Restricciones restricciones) {
+                    boolean obligatoria, String ayuda, int orden, Restricciones restricciones,
+                    String referenciaCatalogo, String versionDefinicion) {
+        /** Pregunta estructural sin definición de catálogo asociada. */
+        public Pregunta(String clave,String rotulo,String seccion,String familia,String control,
+                        String tipoDato,String unidad,List<Opcion> opciones,String exigencia,
+                        boolean obligatoria,String ayuda,int orden,Restricciones restricciones) {
+            this(clave,rotulo,seccion,familia,control,tipoDato,unidad,opciones,exigencia,
+                    obligatoria,ayuda,orden,restricciones,null,null);
+        }
+        public Pregunta conDefinicion(String referencia,String version) {
+            return new Pregunta(clave,rotulo,seccion,familia,control,tipoDato,unidad,opciones,
+                    exigencia,obligatoria,ayuda,orden,restricciones,referencia,version);
+        }
 
         /**
          * A qué SECCIÓN del guion pertenece. Decide qué se conserva al cambiar
@@ -88,7 +131,7 @@ public interface MotorDeCaptura {
         /** La misma pregunta, colocada en su seccion y su orden. */
         public Pregunta en(String seccion, int orden) {
             return new Pregunta(clave, rotulo, seccion, familia, control, tipoDato, unidad,
-                    opciones, exigencia, obligatoria, ayuda, orden, restricciones);
+                    opciones, exigencia, obligatoria, ayuda, orden, restricciones, referenciaCatalogo, versionDefinicion);
         }
 
         /** La misma pregunta con lo que declara el catalogo: familia, ayuda y exigencia. */
@@ -96,7 +139,7 @@ public interface MotorDeCaptura {
                                     List<Opcion> opciones) {
             return new Pregunta(clave, rotulo, seccion, familia,
                     controlDe(tipoDato, unidad, opciones), tipoDato, unidad, opciones,
-                    exigencia, "ALT".equals(exigencia), ayuda, orden, restricciones);
+                    exigencia, "ALT".equals(exigencia), ayuda, orden, restricciones, referenciaCatalogo, versionDefinicion);
         }
 
         /**
@@ -175,7 +218,11 @@ public interface MotorDeCaptura {
     record EstadoCaptura(Long idBorrador, String codigo, String intencion, String estado,
                          String canal, Map<String, Object> conocido, List<String> faltante,
                          Pregunta siguiente, boolean listoParaEjecutar, String entidadTipo,
-                         Long idEntidad, LocalDateTime actualizadoEn) {
+                         Long idEntidad, LocalDateTime actualizadoEn, int version,
+                         SuficienciaInmueble.Contexto contexto,
+                         Map<String, MetadatoRespuesta> metadatos, RetornoCaptura retorno,
+                         SuficienciaInmueble.Evaluacion suficiencia,
+                         List<SuficienciaInmueble.Evaluacion> suficienciasEncargo) {
     }
 
     /** Lo que produjo una captura ejecutada. */
@@ -199,8 +246,10 @@ public interface MotorDeCaptura {
      *       vivienda, rubro en un local, zonificación en un terreno. Al cambiar
      *       el tipo, <b>lo que ya no aplica se descarta</b>: dejarlo oculto con
      *       su valor guardaría el rubro de un terreno.</li>
-     *   <li>{@code deLaOperacion} — <b>un bloque por encargo</b>: el importe, su
-     *       moneda y la exclusividad. El importe existe en las dos operaciones
+     *   <li>{@code deLaOperacion} — <b>un bloque por encargo</b>: el importe
+     *       compuesto y la exclusividad. La moneda acompaña al importe como
+     *       {@code moneda:VENTA} o {@code moneda:ALQUILER}, pero no se publica
+     *       como una segunda pregunta. El importe existe en las dos operaciones
      *       pero no significa lo mismo, y por eso {@code rotulo} viene
      *       calculado: «Precio de venta» o «Renta mensual», nunca un genérico
      *       que obligue a adivinar.</li>
@@ -246,8 +295,11 @@ public interface MotorDeCaptura {
      * @param operacion VENTA o ALQUILER — el vocabulario del dominio, sin
      *                  valores combinados
      * @param rotulo    cómo se titula la sección: «Condición de venta»
-     * @param preguntas el importe, su moneda y la exclusividad, con las claves
-     *                  ya calificadas ({@code importe:VENTA})
+     * @param preguntas el importe compuesto, la exclusividad y las condiciones
+     *                  del catálogo. La moneda del importe estructural viaja
+     *                  como {@code moneda:VENTA}; la de un IMPORTE de condición
+     *                  usa {@code moneda:<clave-calificada>} y no se publica
+     *                  como una segunda condición.
      */
     record BloqueOperacion(String operacion, String rotulo, List<Pregunta> preguntas) {
     }
@@ -255,6 +307,12 @@ public interface MotorDeCaptura {
     record Ejecucion(Long idBorrador, Long idPropiedad, String codigoPropiedad,
                      List<Long> idsEncargos, boolean reintento) {
     }
+
+    enum EstadoDelResultado { EXITO, NO_LOCALIZABLE }
+    /** NO_LOCALIZABLE mantiene incertidumbre: no acredita rechazo, rollback o ausencia de efecto. */
+    record ResultadoConsultado(EstadoDelResultado estado, Ejecucion resultado) { }
+
+    ResultadoConsultado consultarResultado(long idBorrador, String claveIdempotencia, Actor actor);
 
     /**
      * Abre una captura o continua una existente incorporando lo que se acaba de
@@ -268,13 +326,17 @@ public interface MotorDeCaptura {
      * @param idBorrador  {@code null} para empezar uno nuevo
      * @param datos       pares clave/valor; las claves estructurales estan en
      *                    {@link GuionRegistroPropiedad} y las de atributo salen
-     *                    del catalogo
+     *                    del catalogo. Un IMPORTE de propiedad viaja con su
+     *                    compañera {@code moneda:<clave>}; un IMPORTE de
+     *                    condición de encargo usa
+     *                    {@code moneda:<clave-calificada>}. El importe
+     *                    estructural conserva {@code importe:VENTA} y
+     *                    {@code moneda:VENTA} (o ALQUILER).
      * @param procedencia por donde entro. Si trae conversacion, el borrador se
      *                    queda con ella: es lo que permite retomar diciendo
      *                    "sigamos con lo de ayer" en vez de con un id
      */
-    EstadoCaptura avanzar(String intencion, Long idBorrador, Map<String, String> datos,
-                          Procedencia procedencia, Actor actor);
+    EstadoCaptura avanzar(Avance comando, Procedencia procedencia, Actor actor);
 
     /** Donde se quedo una captura. */
     EstadoCaptura consultar(long idBorrador, Actor actor);
@@ -294,7 +356,7 @@ public interface MotorDeCaptura {
      *                    se registra una vez y se encarga dos
      */
     DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operaciones,
-                                 Actor actor);
+                                 String jurisdiccion, Actor actor);
 
     /**
      * <b>Lo que hay que decidir antes de que exista un plan de preguntas.</b>
@@ -314,7 +376,7 @@ public interface MotorDeCaptura {
      */
     List<Pregunta> apertura(String intencion, Actor actor);
 
-    /** Lo que el tenant tiene a medias. Un borrador es de la organizacion, no de quien tecleo. */
+    /** Capturas en curso propias del actor en su organización; no lista los borradores de todo el tenant. */
     List<EstadoCaptura> enCurso(Actor actor);
 
     /**
@@ -324,9 +386,12 @@ public interface MotorDeCaptura {
      * @throws com.controllocal.service.excepcion.ReglaNegocioException si
      *         todavia falta algo, con la lista de lo que falta
      */
-    Ejecucion ejecutar(long idBorrador, String claveIdempotencia, Procedencia procedencia,
+    Ejecucion ejecutar(long idBorrador, Integer versionEsperada, String claveIdempotencia, Procedencia procedencia,
                        Actor actor);
 
     /** Abandonada a proposito. No se borra: que alguien la empezara tambien es un hecho. */
-    EstadoCaptura descartar(long idBorrador, Actor actor);
+    EstadoCaptura descartar(long idBorrador, Integer versionEsperada, Procedencia procedencia, Actor actor);
+
+    EstadoCaptura posponerRevision(long idBorrador, Integer versionEsperada,
+                                   LocalDate hasta, String motivo, Procedencia procedencia, Actor actor);
 }

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>BROX · Ficha V08</title>
+<link rel="icon" href="marca/favicon-32.png">
+<link rel="stylesheet" href="ficha.css">
+<script src="catalogo-core.js" defer></script>
+<script src="perfiles.js" defer></script>
+<script src="validar.js" defer></script>
+<script src="formato.js" defer></script>
+<script src="qrcodegen.js" defer></script>
+<script src="temas.js" defer></script>
+<script src="ficha.js" defer></script>
+</head>
+<body data-vista="digital">
+<main id="raiz" aria-live="polite"><p class="cargando">Esperando los datos de la ficha</p></main>
+<dialog class="visor" id="visor" aria-labelledby="visor-titulo" data-modo="foto">
+  <div class="visor-cabeza">
+    <div><small id="visor-antetitulo">Explorar</small><strong id="visor-titulo"></strong></div>
+    <button type="button" class="visor-cerrar" id="visor-cerrar">Cerrar<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
+  </div>
+  <nav class="visor-ambientes" id="visor-ambientes" aria-label="Ambientes"></nav>
+  <div class="visor-lienzo" id="visor-lienzo" tabindex="0"><span class="visor-marco"><img id="visor-imagen" alt=""><span class="mapa-capa" id="visor-capa"></span></span></div>
+  <ul class="visor-lugares" id="visor-lugares"></ul>
+  <div class="visor-pie">
+    <button type="button" class="visor-flecha" id="visor-anterior" aria-label="Fotografía anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>
+    <div><strong id="visor-rotulo"></strong><p id="visor-fuente"></p></div>
+    <button type="button" class="visor-flecha" id="visor-siguiente" aria-label="Fotografía siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+  </div>
+  <div class="visor-miniaturas" id="visor-miniaturas" aria-label="Fotografías del ambiente"></div>
+</dialog>
+</body>
+</html>

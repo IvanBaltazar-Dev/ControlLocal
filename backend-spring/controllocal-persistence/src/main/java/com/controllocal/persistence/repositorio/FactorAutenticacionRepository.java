@@ -11,21 +11,23 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FactorAutenticacionRepository extends JpaRepository<FactorAutenticacion, Long> {
+    @Query("select count(f)>0 from FactorAutenticacion f where f.idCuenta=:cuenta and f.estado=com.controllocal.domain.seguridad.FactorAutenticacion.ACTIVO")
+    boolean activoDeCuenta(@Param("cuenta") long cuenta);
 
     @Query("""
             select f from FactorAutenticacion f
-             where f.idCredencial = :idCredencial
+             where f.idCuenta = :idCuenta
                and f.estado = com.controllocal.domain.seguridad.FactorAutenticacion.ACTIVO
             """)
-    Optional<FactorAutenticacion> buscarActivo(@Param("idCredencial") long idCredencial);
+    Optional<FactorAutenticacion> buscarActivo(@Param("idCuenta") long idCuenta);
 
     @Query("""
             select f from FactorAutenticacion f
-             where f.idCredencial = :idCredencial
+             where f.idCuenta = :idCuenta
                and f.estado = com.controllocal.domain.seguridad.FactorAutenticacion.PENDIENTE
              order by f.id desc
             """)
-    List<FactorAutenticacion> pendientesDe(@Param("idCredencial") long idCredencial);
+    List<FactorAutenticacion> pendientesDe(@Param("idCuenta") long idCuenta);
 
     /**
      * <b>Anti-replay ATOMICO (D-S0-31).</b> Este es el corazon de la validacion
@@ -57,30 +59,6 @@ public interface FactorAutenticacionRepository extends JpaRepository<FactorAuten
     int consumirPaso(@Param("idFactor") long idFactor,
                      @Param("paso") long paso,
                      @Param("ahora") OffsetDateTime ahora);
-
-    /**
-     * Cuantos codigos de respaldo SIN USAR le quedan a cada credencial con
-     * factor activo, para el padron de gobierno.
-     *
-     * <p>Es una consulta agregada de verdad —{@code group by} explicito—, y no
-     * dos subconsultas dentro del {@code SELECT} del padron: eso ultimo hace que
-     * Hibernate trate la consulta entera como agregada y devuelva una sola fila.
-     *
-     * <p>Una credencial que NO aparece en el resultado es una credencial <b>sin
-     * factor activo</b>: el filtro por estado esta en el {@code from}, asi que
-     * la ausencia significa algo y el service la lee como "sin MFA".
-     */
-    @Query("""
-            select f.idCredencial, count(k)
-              from FactorAutenticacion f
-              left join CodigoRespaldoMfa k
-                     on k.idFactor = f.id
-                    and k.usadoEn is null
-             where f.organizacionId = :idOrganizacion
-               and f.estado = com.controllocal.domain.seguridad.FactorAutenticacion.ACTIVO
-             group by f.idCredencial
-            """)
-    List<Object[]> codigosDisponiblesPorCredencial(@Param("idOrganizacion") long idOrganizacion);
 
     /** Limpieza de enrolamientos abandonados: un PENDIENTE viejo no vale nada. */
     @Modifying

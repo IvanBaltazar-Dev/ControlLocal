@@ -3,6 +3,7 @@ package com.controllocal.service.impl;
 import com.controllocal.domain.auditoria.HistorialEstado;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.domain.inmueble.FotoPropiedad;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.enums.TipoRol;
@@ -27,7 +28,7 @@ import com.controllocal.service.LocalComercialService.PosibleDuplicado;
 import com.controllocal.service.LocalComercialService.ResumenLocales;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.ProspeccionService;
-import com.controllocal.service.PublicacionService;
+import com.controllocal.persistence.query.AlquilerLocalParaLectura;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +74,6 @@ class LocalComercialServiceImplTest {
     private final DistritoRepository distritos = mock(DistritoRepository.class);
     private final FotoPropiedadRepository fotos = mock(FotoPropiedadRepository.class);
     private final PrecioPropiedadRepository precios = mock(PrecioPropiedadRepository.class);
-    private final PublicacionService publicaciones = mock(PublicacionService.class);
     private final ProspeccionService prospecciones = mock(ProspeccionService.class);
     private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
@@ -122,7 +122,7 @@ class LocalComercialServiceImplTest {
     private final MotorBusquedaInmobiliaria motor = mock(MotorBusquedaInmobiliaria.class);
 
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
-            propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,
+            propiedades, roles, distritos, fotos, precios, prospecciones,
             captaciones, new Transiciones(historial), mock(AlertaService.class),
             lector, gobierno, autoridad, motor);
 
@@ -144,6 +144,16 @@ class LocalComercialServiceImplTest {
     private static final long ORG = 1L;
 
     private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
+
+    @Test void portadaIndividualPublicaReferenciaCoreSinFallbackAClaveProveedor() {
+        var propiedad=propiedadExistente();
+        when(propiedades.buscarParaLectura(ORG,7L,"{30}")).thenReturn(Optional.of(propiedad));
+        var foto=new FotoPropiedad();foto.setClave("privado/tenant/portada.jpg");
+        when(fotos.deLaPropiedad(ORG,7L)).thenReturn(List.of(foto));
+        assertEquals(foto.getArchivoRef().toString(),service.buscarPorId(7L,agente).orElseThrow().fotoPortadaClave());
+        org.springframework.test.util.ReflectionTestUtils.setField(foto,"archivoRef",null);
+        assertThrows(NullPointerException.class,()->service.buscarPorId(7L,agente));
+    }
 
     private static DatosLocal datos(String estado, String tipoInmueble, String uso,
                                     BigDecimal metraje, BigDecimal precio) {
@@ -217,7 +227,6 @@ class LocalComercialServiceImplTest {
         LocalListado fila = filaListado();
         when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(7L), 137L));
         when(propiedades.buscarPorIds(anyLong(), any())).thenReturn(List.of(fila));
-        when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
 
         Pagina<FichaLocal> pagina = service.listar(new FiltrosLocal("camana", "N", 3, 20), agente);
 
@@ -226,6 +235,26 @@ class LocalComercialServiceImplTest {
         assertEquals(137, pagina.total());
         assertEquals(1, pagina.items().size());
         assertEquals("LOC-0100", pagina.items().getFirst().codigoLocal());
+        assertNull(pagina.items().getFirst().precioReferencial(), "no hereda el precio físico ambiguo");
+        assertNull(pagina.items().getFirst().estadoPublicacion(), "no inventa el estado de un Encargo ajeno");
+    }
+
+    @Test void listadoLegadoUsaSoloCondicionDelAlquilerAutorizadoPorLote() {
+        LocalListado fila = filaListado();
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(7L), 1));
+        when(propiedades.buscarPorIds(anyLong(), any())).thenReturn(List.of(fila));
+        AlquilerLocalParaLectura alquiler = mock(AlquilerLocalParaLectura.class);
+        when(alquiler.getIdPropiedad()).thenReturn(7L);
+        when(alquiler.getImporte()).thenReturn(new BigDecimal("2100"));
+        when(alquiler.getMoneda()).thenReturn("USD");
+        when(alquiler.getEstadoPublicacion()).thenReturn("P");
+        when(captaciones.alquileresParaLectura(ORG, List.of(7L), "{30}")).thenReturn(List.of(alquiler));
+
+        FichaLocal resultado = service.listar(new FiltrosLocal(null, null, 1, 10), agente).items().getFirst();
+        assertEquals(new BigDecimal("2100"), resultado.precioReferencial());
+        assertEquals("USD", resultado.monedaReferencial());
+        assertEquals("P", resultado.estadoPublicacion());
+        verify(captaciones).alquileresParaLectura(ORG, List.of(7L), "{30}");
     }
 
     /**
@@ -343,7 +372,7 @@ class LocalComercialServiceImplTest {
         assertEquals(List.of(), pagina.items());
         assertEquals(4, pagina.total());
         verify(fotos, never()).portadas(any());
-        verify(publicaciones, never()).codigosEstadoPublicacion(any());
+        verify(captaciones, never()).alquileresParaLectura(anyLong(), any(), any());
     }
 
     @Test
@@ -386,7 +415,7 @@ class LocalComercialServiceImplTest {
         candidato.setInteriorUnidad("Tienda 4");
         candidato.setPiso("1");
         candidato.setMetraje(new BigDecimal("124.90"));
-        when(propiedades.findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(ORG, 9L, -1L))
+        when(propiedades.candidatosDuplicadosParaLectura(ORG, 9L, -1L, "{30}"))
                 .thenReturn(List.of(candidato));
 
         DatosLocal propuesta = new DatosLocal("BORRADOR", "Avenida Prueba 123", "Miraflores",
@@ -402,7 +431,7 @@ class LocalComercialServiceImplTest {
         assertEquals(List.of("mismo propietario", "dirección equivalente",
                 "misma unidad/interior", "mismo piso", "metraje aproximado"),
                 resultado.getFirst().criteriosCoincidentes());
-        verify(propiedades).findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(ORG, 9L, -1L);
+        verify(propiedades).candidatosDuplicadosParaLectura(ORG, 9L, -1L, "{30}");
         verify(propiedades, never()).save(any());
     }
 
@@ -412,7 +441,7 @@ class LocalComercialServiceImplTest {
 
         // datosValidos sí tiene dirección, propietario y metraje: demuestra
         // que al editar se excluye exactamente el registro actual.
-        verify(propiedades).findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(ORG, 9L, 7L);
+        verify(propiedades).candidatosDuplicadosParaLectura(ORG, 9L, 7L, "{30}");
     }
     private static LocalListado filaListado() {
         LocalListado fila = mock(LocalListado.class);

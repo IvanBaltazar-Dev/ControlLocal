@@ -48,6 +48,8 @@ const FICHA: FichaAgente = {
 
 function sesion(rol: RolSesion): Sesion {
   return {
+      idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+      modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
     token: 't',
     expiraEnSegundos: 3600,
     rol,

@@ -6,6 +6,7 @@ import com.controllocal.domain.comun.EstadosDominio.EstadoOportunidad;
 import com.controllocal.domain.comun.Transicionable;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleCliente;
+import com.controllocal.domain.persona.Persona;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -17,8 +18,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -58,9 +61,37 @@ public class OportunidadComercial extends EntidadDeOrganizacion implements Trans
     @Column(name = "estado", nullable = false, length = 1)
     private String estado;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_rol_cliente", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_rol_cliente")
     private DetalleCliente cliente;
+
+    /** RF003/RF040: contacto real sin convertirlo en un rol CLIENTE. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_persona_interesada")
+    private Persona personaInteresada;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
+    @Column(name="interesado_contexto_json")
+    private String interesadoContextoJson;
+    @Column(name="origen",length=20)
+    private String origen;
+    @Column(name="id_demanda")
+    private Long idDemanda;
+    @Column(name="version_demanda")
+    private Long versionDemanda;
+    @Column(name="referencia_consulta",length=64)
+    private String referenciaConsulta;
+    @Column(name="referencia_coincidencia",length=64)
+    private String referenciaCoincidencia;
+    @Column(name="evidencia_interes_json")
+    private String evidenciaInteresJson;
+    @Column(name="procedencia_json")
+    private String procedenciaJson;
+    @Column(name="fecha_no_continuidad")
+    private LocalDate fechaNoContinuidad;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_captacion", nullable = false)
@@ -124,6 +155,8 @@ public class OportunidadComercial extends EntidadDeOrganizacion implements Trans
         return estado;
     }
 
+    @Override public Long responsableDelHecho() { return agente == null ? null : agente.getId(); }
+
     @Override
     public void transicionarA(String nuevoEstado) {
         this.estado = EstadoOportunidad.desde(nuevoEstado).codigo();
@@ -154,6 +187,32 @@ public class OportunidadComercial extends EntidadDeOrganizacion implements Trans
     public boolean estaAbierta() {
         return ABIERTA.equals(estado);
     }
+
+    public long getVersion(){return version;}
+    public Persona getPersonaInteresada(){return personaInteresada;}
+    public void setPersonaInteresada(Persona persona){personaInteresada=persona;}
+    public String getInteresadoContextoJson(){return interesadoContextoJson;}
+    public void setInteresadoContextoJson(String valor){interesadoContextoJson=valor;}
+    public String getOrigen(){return origen;}
+    public void setOrigen(String valor){origen=valor;}
+    public Long getIdDemanda(){return idDemanda;}
+    public void setIdDemanda(Long valor){idDemanda=valor;}
+    public Long getVersionDemanda(){return versionDemanda;}
+    public void setVersionDemanda(Long valor){versionDemanda=valor;}
+    public String getReferenciaConsulta(){return referenciaConsulta;}
+    public void setReferenciaConsulta(String valor){referenciaConsulta=valor;}
+    public String getReferenciaCoincidencia(){return referenciaCoincidencia;}
+    public void setReferenciaCoincidencia(String valor){referenciaCoincidencia=valor;}
+    public String getEvidenciaInteresJson(){return evidenciaInteresJson;}
+    public void setEvidenciaInteresJson(String valor){evidenciaInteresJson=valor;}
+    public String getProcedenciaJson(){return procedenciaJson;}
+    public void setProcedenciaJson(String valor){procedenciaJson=valor;}
+    public LocalDate getFechaNoContinuidad(){return fechaNoContinuidad;}
+    public void registrarNoContinuidad(LocalDate fecha,OffsetDateTime registrado,String motivo,String procedencia){
+        fechaNoContinuidad=fecha;fechaCierre=registrado;fechaActualizacion=registrado;
+        motivoCierre=motivo;procedenciaJson=procedencia;
+    }
+    public void fijarRegistro(OffsetDateTime registrado){fechaRegistro=registrado;fechaActualizacion=registrado;}
 
     public Long getId() {
         return id;

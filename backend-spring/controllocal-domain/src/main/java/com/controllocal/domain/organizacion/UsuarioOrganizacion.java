@@ -10,40 +10,21 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.time.OffsetDateTime;
 
 /**
- * Membresia de un usuario en una organizacion (D-26): dice CON QUE banda
- * operativa entra una cuenta a un tenant. Separa la CUENTA (global, D-22, que
- * nace en el corte de GlassFish) de su pertenencia a la corredora.
- *
- * <p>Durante la convivencia {@code idUsuario} apunta al {@code persona_rol.id}
- * del usuario interno (1:1 con el login de {@code credencial_usuario}); cuando
- * exista la cuenta global pasara a referenciarla sin tocar esta tabla.
- *
- * <p>{@code idPersona} es OPCIONAL: solo se llena si el usuario ademas es
- * actor del dominio (p. ej. un agente que alquila para si). No otorga permisos.
+ * Pertenencia local de una cuenta global (CAT-E01/R19, C1). El principal
+ * AGENTE/BROKER y la capacidad administrativa se ejercen en contextos separados.
+ * La persona siempre pertenece a la misma organización; su enlace no amplía permisos.
  */
 @Entity
 @Table(name = "usuario_organizacion")
 public class UsuarioOrganizacion extends EntidadDeOrganizacion {
 
-    /**
-     * Banda del usuario dentro del tenant, AUTORITATIVA desde V33 (D-S0-8).
-     * El vocabulario lo fija {@code ck_usuario_org_rol}.
-     *
-     * <p>{@code TENANT_ADMIN} sustituye al {@code ADMIN} de V6 y <b>no es un
-     * renombrado</b>: aquel se derivaba de {@code detalle_broker.es_administrador}
-     * y arrastraba toda la semantica de broker; este gobierna la organizacion y
-     * no opera en el proceso comercial (D-S0-7, matriz D-S0-17).
-     *
-     * <p>{@code PLATFORM_ADMIN} esta reservado en el vocabulario pero todavia
-     * no se emite: su mecanismo es la concesion temporal por tenant, que no
-     * entra en este bloque.
-     */
+    /** Atribución de gobierno, ejercida con persona_rol ADMIN y administrar=true. */
     public static final String ROL_TENANT_ADMIN = "TENANT_ADMIN";
-    public static final String ROL_PLATFORM_ADMIN = "PLATFORM_ADMIN";
     public static final String ROL_BROKER = "BROKER";
     public static final String ROL_AGENTE = "AGENTE";
 
@@ -55,14 +36,21 @@ public class UsuarioOrganizacion extends EntidadDeOrganizacion {
     @Column(name = "id_usuario_organizacion")
     private Long id;
 
-    /** Cuenta de acceso (transitorio: persona_rol.id del usuario interno). */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
+    /** Cuenta personal global; no es la identidad de una Persona local. */
     @Column(name = "id_usuario", nullable = false)
     private Long idUsuario;
 
-    @Column(name = "rol", nullable = false, length = 20)
+    @Column(name = "rol", length = 20)
     private String rol;
 
-    @Column(name = "nombre_visible", length = 120)
+    @Column(name = "administrar", nullable = false)
+    private boolean administrar;
+
+    @Column(name = "nombre_visible", length = 150)
     private String nombreVisible;
 
     @Column(name = "estado", nullable = false, length = 1)
@@ -75,6 +63,14 @@ public class UsuarioOrganizacion extends EntidadDeOrganizacion {
     @Column(name = "fecha_alta", insertable = false, updatable = false)
     private OffsetDateTime fechaAlta;
 
+    /** Inicio real del intervalo aceptado actual; no es una fecha programada. */
+    @Column(name = "alta_real_en", nullable = false)
+    private OffsetDateTime altaRealEn;
+
+    /** Baja formal efectiva del intervalo actual; nunca es un fin programado. */
+    @Column(name = "baja_real_en")
+    private OffsetDateTime bajaRealEn;
+
     public boolean estaActiva() {
         return estadoTipado() == EstadoActivoInactivo.ACTIVO;
     }
@@ -82,6 +78,8 @@ public class UsuarioOrganizacion extends EntidadDeOrganizacion {
     public Long getId() {
         return id;
     }
+
+    public long getVersion() { return version; }
 
     public Long getIdUsuario() {
         return idUsuario;
@@ -94,6 +92,9 @@ public class UsuarioOrganizacion extends EntidadDeOrganizacion {
     public String getRol() {
         return rol;
     }
+
+    public boolean isAdministrar() { return administrar; }
+    public void setAdministrar(boolean valor) { administrar=valor; }
 
     public void setRol(String rol) {
         this.rol = rol;
@@ -131,4 +132,9 @@ public class UsuarioOrganizacion extends EntidadDeOrganizacion {
     public OffsetDateTime getFechaAlta() {
         return fechaAlta;
     }
+
+    public OffsetDateTime getAltaRealEn() { return altaRealEn; }
+    public void setAltaRealEn(OffsetDateTime instante) { altaRealEn=instante; }
+    public OffsetDateTime getBajaRealEn() { return bajaRealEn; }
+    public void setBajaRealEn(OffsetDateTime instante) { bajaRealEn=instante; }
 }

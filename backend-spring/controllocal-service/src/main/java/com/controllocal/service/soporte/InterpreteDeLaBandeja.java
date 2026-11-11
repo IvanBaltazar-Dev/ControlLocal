@@ -1,15 +1,16 @@
 package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.Tarea;
-import com.controllocal.domain.comun.EstadosDominio;
+
 import com.controllocal.domain.inmueble.PrecioPropiedad;
-import com.controllocal.persistence.query.ExpedienteDeLaProspeccion;
 import com.controllocal.persistence.query.ExpedienteDeLaPropiedad;
 import com.controllocal.persistence.query.RangoDeRenta;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContrasteRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
-import com.controllocal.persistence.repositorio.ProspeccionRepository;
+import com.controllocal.service.Actor;
+import com.controllocal.service.ProspeccionService.RevisionSeguimiento;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Avance;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.ComoEsta;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Hecho;
@@ -63,16 +64,16 @@ public class InterpreteDeLaBandeja {
     private final PrecioPropiedadRepository precios;
 
     private final ContrasteRepository contrastes;
-    private final ProspeccionRepository prospecciones;
+    private final SeguimientoDeProspeccion seguimiento;
 
     public InterpreteDeLaBandeja(CaptacionRepository captaciones,
                                  PrecioPropiedadRepository precios,
                                  ContrasteRepository contrastes,
-                                 ProspeccionRepository prospecciones) {
+                                 SeguimientoDeProspeccion seguimiento) {
         this.captaciones = captaciones;
         this.precios = precios;
         this.contrastes = contrastes;
-        this.prospecciones = prospecciones;
+        this.seguimiento = seguimiento;
     }
 
     /**
@@ -87,7 +88,7 @@ public class InterpreteDeLaBandeja {
                            Map<Long, ExpedienteDeLaPropiedad> expedientes,
                            Map<Long, List<BigDecimal>> series,
                            Map<Long, Contraste> contrastes,
-                           Map<Long, ExpedienteDeLaProspeccion> prospecciones) {
+                           Map<String, RevisionSeguimiento> seguimientos) {
 
         public static Contexto vacio() {
             return new Contexto(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
@@ -103,10 +104,12 @@ public class InterpreteDeLaBandeja {
     }
 
     /** Carga el contexto de una página. Tres consultas, y ninguna dentro del bucle. */
-    public Contexto contextoDe(long idOrganizacion, Collection<AsuntoADescribir> asuntos) {
+    public Contexto contextoDe(Actor actor, Collection<AsuntoADescribir> asuntos) {
+        asuntos=asuntos.stream().filter(a->!Tarea.ENTIDAD_FOTO_ORIGINAL_C6.equals(a.entidadTipo())).toList();
         if (asuntos.isEmpty()) {
             return Contexto.vacio();
         }
+        long idOrganizacion=actor.idOrganizacion();
         Map<String, Long> porAsunto = new HashMap<>();
         for (Object[] fila : captaciones.propiedadPorAsunto(idOrganizacion)) {
             porAsunto.put(Contexto.clave((String) fila[0], numero(fila[1])), numero(fila[2]));
@@ -119,7 +122,7 @@ public class InterpreteDeLaBandeja {
                 .toList();
         if (idsPropiedad.isEmpty()) {
             return new Contexto(porAsunto, Map.of(), Map.of(), Map.of(),
-                    prospeccionesDe(idOrganizacion, asuntos));
+                    seguimientosDe(actor, asuntos));
         }
 
         // La consulta devuelve una fila por CAPTACION y una propiedad puede tener
@@ -152,7 +155,7 @@ public class InterpreteDeLaBandeja {
         }
         return new Contexto(porAsunto, expedientes, series,
                 contrastesDe(idOrganizacion, expedientes),
-                prospeccionesDe(idOrganizacion, asuntos));
+                seguimientosDe(actor, asuntos));
     }
 
     /**
@@ -195,29 +198,29 @@ public class InterpreteDeLaBandeja {
     }
 
     /**
-     * El expediente de las prospecciones de la pagina, en UNA consulta.
+     * Revisiones autorizadas de los asuntos R27, identificadas por su marca material.
      *
-     * <p>Mismo patron que el contexto de propiedad, y por la misma razon: dentro
-     * del bucle serian cinco consultas por pagina.
+     * <p>Una lectura por página; no se consultan contactos ni fechas de la proyección anterior.
      *
      * <p><b>Una prospeccion no pasa por `propiedadPorAsunto`</b>, y no es un
      * olvido: todavia no hay encargo, asi que resolverla como inmueble daria los
      * cuatro renglones de una captacion que no existe.
      */
-    private Map<Long, ExpedienteDeLaProspeccion> prospeccionesDe(
-            long idOrganizacion, Collection<AsuntoADescribir> asuntos) {
-        List<Long> ids = asuntos.stream()
+    private Map<String, RevisionSeguimiento> seguimientosDe(
+            Actor actor, Collection<AsuntoADescribir> asuntos) {
+        var marcas = asuntos.stream()
                 .filter(a -> Tarea.ENTIDAD_PROSPECCION.equals(a.entidadTipo()))
-                .map(AsuntoADescribir::entidadId)
+                .map(AsuntoADescribir::marcaCausa)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        if (ids.isEmpty()) {
+        if (marcas.isEmpty()) {
             return Map.of();
         }
-        Map<Long, ExpedienteDeLaProspeccion> porId = new HashMap<>();
-        for (ExpedienteDeLaProspeccion fila : prospecciones.expedientesDe(idOrganizacion, ids)) {
-            porId.put(fila.getIdProspeccion(), fila);
+        Map<String, RevisionSeguimiento> porId = new HashMap<>();
+        for (var necesidad : seguimiento.necesidadesActuales(actor)) {
+            if(marcas.contains(necesidad.marcaCausa()))
+                porId.put(necesidad.marcaCausa(), necesidad.revision());
         }
         return porId;
     }
@@ -225,13 +228,16 @@ public class InterpreteDeLaBandeja {
     /** Lo mínimo que hace falta saber de un asunto para describirlo. */
     public record AsuntoADescribir(String tipo, String entidadTipo, Long entidadId,
                                    String descripcion, Integer diasSinAccion,
-                                   LocalDate fechaVencimiento, boolean dependeDeMi) {
+                                   LocalDate fechaVencimiento, boolean dependeDeMi, String marcaCausa) {
     }
 
     // ==================================================================
 
     /** La interpretación de un asunto, con el contexto ya cargado. */
     public Interpretacion de(AsuntoADescribir asunto, Contexto contexto, LocalDate hoy) {
+        if(Tarea.ENTIDAD_FOTO_ORIGINAL_C6.equals(asunto.entidadTipo()))return new Interpretacion(
+                ComoEsta.de(null,List.of(new Hecho(EstadoDelHecho.DATO,asunto.descripcion()))),List.of(),
+                "Usar, guardar como alternativa o descartar un temporal son acciones distintas. Revisar este aviso no cambia el vencimiento.");
         Long idPropiedad = contexto.propiedadDe(asunto.entidadTipo(), asunto.entidadId());
         ExpedienteDeLaPropiedad datos = idPropiedad == null ? null
                 : contexto.expedientes().get(idPropiedad);
@@ -239,11 +245,15 @@ public class InterpreteDeLaBandeja {
         // Todo asunto lleva cuatro renglones; QUE cuatro depende de su etapa.
         // Una prospeccion es anterior a la captacion, asi que los suyos hablan de
         // la prospeccion y no de un encargo que todavia no existe.
+        var revision=asunto.marcaCausa()==null?null:contexto.seguimientos().get(asunto.marcaCausa());
+        if(Tarea.ENTIDAD_PROSPECCION.equals(asunto.entidadTipo())&&revision!=null
+                &&!java.util.Objects.equals(asunto.entidadId(),revision.idProspeccion()))
+            throw new IllegalStateException("La revisión no pertenece al asunto de prospección.");
         List<Renglon> expediente = Tarea.ENTIDAD_PROSPECCION.equals(asunto.entidadTipo())
-                ? expedienteDeProspeccion(contexto.prospecciones().get(asunto.entidadId()), hoy)
+                ? expedienteDeProspeccion(revision, hoy)
                 : expediente(datos, contexto.series().get(idPropiedad),
                         contexto.contrastes().get(idPropiedad), hoy);
-        return new Interpretacion(comoEsta(asunto, hoy), expediente, lectura(datos, hoy));
+        return new Interpretacion(comoEsta(asunto, hoy, revision), expediente, lectura(datos, hoy));
     }
 
     // ==================================================================
@@ -258,17 +268,18 @@ public class InterpreteDeLaBandeja {
      * lo que impide que un asunto en rojo pinte de rojo también sus buenas
      * noticias.
      */
-    private static ComoEsta comoEsta(AsuntoADescribir asunto, LocalDate hoy) {
+    private static ComoEsta comoEsta(AsuntoADescribir asunto, LocalDate hoy, RevisionSeguimiento revision) {
         List<Hecho> hechos = new ArrayList<>();
         String tipo = asunto.tipo() == null ? "" : asunto.tipo();
 
         // 1 · lo que ya esta
         if (!asunto.dependeDeMi()) {
-            hechos.add(new Hecho(EstadoDelHecho.HECHO, "Tu parte esta hecha"));
+            hechos.add(new Hecho(EstadoDelHecho.HECHO, revision==null?"Tu parte esta hecha":"Actuación asignada al responsable"));
         }
 
         // 2 · lo que falta, dicho como lo que hay que hacer
-        hechos.add(new Hecho(EstadoDelHecho.FALTA, loQueFalta(tipo, asunto)));
+        hechos.add(new Hecho(EstadoDelHecho.FALTA, revision!=null&&revision.revisarContinuidad()
+                ? "Revisa si continuar, pausar o cerrar este seguimiento" : loQueFalta(tipo, asunto)));
 
         // 3 · el plazo, si lo hay
         if (asunto.fechaVencimiento() != null) {
@@ -379,87 +390,20 @@ public class InterpreteDeLaBandeja {
      * <p>Los tres primeros salen de fechas que pueden faltar, y cuando faltan se
      * dice: «Sin contacto registrado» informa, y un renglón en blanco no.
      */
-    private static List<Renglon> expedienteDeProspeccion(ExpedienteDeLaProspeccion datos,
-                                                         LocalDate hoy) {
-        if (datos == null) {
-            return List.of();
-        }
-        List<Renglon> renglones = new ArrayList<>(4);
-        renglones.add(prospeccion(datos, hoy));
-        renglones.add(contacto(datos, hoy));
-        renglones.add(avance(datos, hoy));
-        renglones.add(propietarioDeLaProspeccion(datos));
-        return List.copyOf(renglones);
-    }
-
-    /** Desde cuándo existe y en qué punto está. */
-    private static Renglon prospeccion(ExpedienteDeLaProspeccion datos, LocalDate hoy) {
-        LocalDate alta = datos.getFechaRegistro();
-        var etapa = EstadosDominio.EstadoProspeccion.desde(datos.getEstado());
-        String valor = InterpretacionDelAsunto.frase(
-                alta == null ? null : "Abierta el " + dia(alta),
-                etapa == null ? null : etapa.descripcion());
-        return Renglon.historial("Prospección", valor.isBlank() ? "Sin fecha de alta" : valor);
-    }
-
-    /**
-     * Cuándo se le habló por última vez.
-     *
-     * <p>Sin contacto **no es un fallo**: era el estado de 42 de las 63
-     * prospecciones de la base el 2026-08-19. Se dice, y lleva señal porque una
-     * prospección sin contactar es precisamente lo que hay que mirar.
-     */
-    private static Renglon contacto(ExpedienteDeLaProspeccion datos, LocalDate hoy) {
-        LocalDate contacto = datos.getFechaContacto();
-        if (contacto == null) {
-            return Renglon.conSenal("Contacto", "Sin contacto registrado", Renglon.OJO);
-        }
-        long dias = ChronoUnit.DAYS.between(contacto, hoy);
-        String valor = "Último el " + dia(contacto)
-                + (dias <= 0 ? " · hoy" : " · hace " + dias + (dias == 1 ? " día" : " días"));
-        // El umbral vive en la politica; aqui solo se pregunta.
-        String estado = contacto.isBefore(PoliticaComercial.limiteDeRecontacto(hoy))
-                ? Renglon.OJO : Renglon.BIEN;
-        return Renglon.conSenal("Contacto", valor, estado);
-    }
-
-    /**
-     * El último hito comercial alcanzado, y el próximo vencimiento conocido.
-     *
-     * <p><b>«Avance» y no «Propuesta»</b>: una prospección recién contactada o con
-     * reunión registrada tendría un renglón permanentemente vacío bajo el nombre
-     * más específico, aunque sí exista actividad. Así se expresa el último hecho
-     * real sin inventar una fase que no ocurrió.
-     */
-    private static Renglon avance(ExpedienteDeLaProspeccion datos, LocalDate hoy) {
-        String hito;
-        if (datos.getFechaPropuesta() != null) {
-            hito = "Propuesta entregada el " + dia(datos.getFechaPropuesta());
-        } else if (datos.getFechaReunion() != null) {
-            hito = "Reunión registrada el " + dia(datos.getFechaReunion());
-        } else {
-            hito = "Sin reunión ni propuesta registrada";
-        }
-
-        LocalDate proximo = datos.getFechaRecontacto();
-        String valor = InterpretacionDelAsunto.frase(hito,
-                proximo == null ? null : "recontacto previsto para el " + dia(proximo));
-
-        // Rojo solo cuando lo previsto ya venció: es un hecho, no una opinión
-        // sobre si la prospección va bien.
-        String estado = proximo != null && proximo.isBefore(hoy) ? Renglon.MAL
-                : datos.getFechaPropuesta() != null ? Renglon.BIEN : null;
-        return estado == null ? Renglon.historial("Avance", valor)
-                : Renglon.conSenal("Avance", valor, estado);
-    }
-
-    /** Con quién se está tratando, y sobre qué inmueble. */
-    private static Renglon propietarioDeLaProspeccion(ExpedienteDeLaProspeccion datos) {
-        String donde = InterpretacionDelAsunto.frase(datos.getDireccion(), datos.getDistrito());
-        String valor = InterpretacionDelAsunto.frase(datos.getPropietario(),
-                donde.isBlank() ? null : donde);
-        return Renglon.historial("Propietario",
-                valor.isBlank() ? "Sin propietario identificado" : valor);
+    private static List<Renglon> expedienteDeProspeccion(RevisionSeguimiento revision,LocalDate hoy) {
+        if(revision==null)throw new com.controllocal.service.excepcion.AccesoNoAutorizadoException();
+        String contacto=revision.fechaUltimoIntento()==null
+                ? "Sin último intento fechado en este seguimiento"
+                : "Último intento el "+dia(revision.fechaUltimoIntento());
+        String proxima=revision.proximaFecha()==null?"Sin próxima fecha declarada"
+                :"Próxima actuación el "+dia(revision.proximaFecha());
+        if(revision.pospuestaHasta()!=null)proxima=InterpretacionDelAsunto.frase(proxima,
+                "Posposición hasta el "+dia(revision.pospuestaHasta()));
+        return List.of(
+                Renglon.historial("Prospección","Revisión privada de recontacto"),
+                Renglon.historial("Contacto",contacto),
+                Renglon.historial("Avance",proxima),
+                Renglon.historial("Destinatario",revision.destinatario()));
     }
 
     private static List<Renglon> expediente(ExpedienteDeLaPropiedad datos,

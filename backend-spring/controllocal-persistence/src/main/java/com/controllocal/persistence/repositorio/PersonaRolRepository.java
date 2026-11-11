@@ -14,6 +14,12 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PersonaRolRepository extends JpaRepository<PersonaRol, Long> {
+    @Query("select r.persona.id from PersonaRol r where r.organizacionId=:org and r.id=:id and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.PROPIETARIO")
+    Optional<Long> personaDePropietario(@Param("org") long org,@Param("id") long id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
+    @Query("select r from PersonaRol r where r.id=:id")
+    Optional<PersonaRol> bloquearParaContexto(@Param("id") long id);
 
     @Query("""
             select r from PersonaRol r

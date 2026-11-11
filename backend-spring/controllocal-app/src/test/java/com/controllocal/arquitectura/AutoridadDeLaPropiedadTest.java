@@ -7,7 +7,6 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaFieldAccess;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -89,13 +88,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class AutoridadDeLaPropiedadTest {
 
-    private static final JavaClasses CLASES = new ClassFileImporter()
-            .withImportOption(new ImportOption.DoNotIncludeTests())
+    private static final JavaClasses CLASES = ImportacionesDeProducto.importador()
             .importPackages("com.controllocal");
 
     private static final String AUTORIDAD = "com.controllocal.service.soporte.AutoridadDePropiedad";
     private static final String PROPIEDAD = "com.controllocal.domain.inmueble.Propiedad";
+    private static final String SERVICIO_DEL_ORIGEN = "com.controllocal.service.impl.UnidadRelacionadaServiceImpl";
     private static final String TRANSICIONES = "com.controllocal.service.soporte.Transiciones";
+    private static final String FOTOS_COMERCIALES="com.controllocal.service.documentos.FotosComercialesService";
+    private static final String PIEZAS_COMERCIALES="com.controllocal.service.documentos.PiezasComercialesServiceImpl";
+    private static final String COPIA_COMERCIAL="com.controllocal.domain.inmueble.CopiaComercialFoto";
+    private static final String PIEZA_COMERCIAL="com.controllocal.domain.inmueble.PiezaComercial";
+    private static final String HISTORIADOR_PUBLICACION="com.controllocal.service.publicacion.HistoriadorPublicacion";
+    private static final String PUBLICACIONES="com.controllocal.service.impl.PublicacionServiceImpl";
 
     private static final String REPOSITORIO_DEL_RASTRO =
             "com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository";
@@ -138,26 +143,10 @@ class AutoridadDeLaPropiedadTest {
      * canonica</b>. Anadir un quinto obliga a escribir su razon aqui, donde
      * cualquiera la va a leer.
      */
-    private static final Map<String, String> PUEDEN_FIJAR_EL_AGENTE = Map.of(
-            "com.controllocal.service.impl.CaptacionServiceImpl#registrar",
-            "ALTA sobre una propiedad que ya existe. Fija el agente ANTES del primer save, o "
-                    + "sea en el INSERT, y lo toma de actor.idRolOperativo() -- no de un id del "
-                    + "cuerpo",
-
-            "com.controllocal.service.impl.ProspeccionServiceImpl#captar",
-            "ALTA: convierte una prospeccion en encargo. El agente es el de la prospeccion, que "
-                    + "ya tiene su propia autoridad (cargarEnProceso exige que sea del actor), y "
-                    + "se fija antes del primer save",
-
-            "com.controllocal.service.impl.PropiedadUniversalServiceImpl#abrirEncargo",
-            "ALTA: abre el encargo al registrar la propiedad. Mismo INSERT, mismo momento, y el "
-                    + "agente es quien registra",
-
-            PUERTA_CANONICA_DEL_ENCARGO,
-            "LA PUERTA CANONICA. Es el unico que lo cambia sobre un encargo que ya existe, y lo "
-                    + "hace entero: banda y alcance (D-S0-17 fila 6), elegibilidad del destino "
-                    + "(D-P0-7), estado observado mas compare-and-set (D-P0-9) y fila en "
-                    + "reasignacion_captacion, todo en la misma transaccion (D-P0-10)");
+    private static final Map<String,String> PUEDEN_FIJAR_EL_AGENTE=Map.of(
+            "com.controllocal.service.encargo.EncargoServiceImpl#abrir",
+            "C2: único INSERT de episodio, responsable explícito igual al actor AGENTE y propiedad autorizada. "
+            +"Los adaptadores de registro/prospección delegan aquí. La reasignación sólo usa el CAS vigilado aparte.");
 
     /**
      * Un mapa {@code clave -> motivo} escrito como pares consecutivos.
@@ -214,7 +203,8 @@ class AutoridadDeLaPropiedadTest {
             REPOSITORIOS + "FotoPropiedadRepository", "foto_propiedad",
             REPOSITORIOS + "TitularidadPropiedadRepository", "titularidad_propiedad",
             REPOSITORIOS + "AtributoPropiedadRepository", "atributo_propiedad",
-            REPOSITORIOS + "ValorMultipleAtributoRepository", "atributo_propiedad_opcion");
+            REPOSITORIOS + "ValorMultipleAtributoRepository", "atributo_propiedad_opcion",
+            REPOSITORIOS + "UnidadRelacionadaRepository", "unidad_relacionada");
 
     /**
      * <b>Los hechos que son del ENCARGO</b>, que es otro universo con OTRA
@@ -242,11 +232,18 @@ class AutoridadDeLaPropiedadTest {
      * {@code PUT /captaciones/{id}}, que reescribe la condicion economica
      * entera sin dejar hito.
      */
-    private static final Map<String, String> TABLAS_DEL_ENCARGO = Map.of(
+    private static final Map<String, String> TABLAS_DEL_ENCARGO = mapa(
             REPOSITORIOS + "PrecioPropiedadRepository", "precio_propiedad",
             REPOSITORIOS + "AtributoEncargoRepository", "atributo_encargo",
             REPOSITORIOS + "ValorMultipleEncargoRepository", "atributo_encargo_opcion",
-            REPOSITORIOS + "CaptacionRepository", "captacion");
+            REPOSITORIOS + "CaptacionRepository", "captacion",
+            REPOSITORIOS + "DocumentoEncargoRepository", "documento_encargo",
+            REPOSITORIOS + "ArchivoEncargoRepository", "archivo_encargo",
+            REPOSITORIOS + "PeticionRevisionEncargoRepository", "peticion_revision_encargo",
+            REPOSITORIOS + "SolicitudFinalizacionEncargoRepository", "solicitud_finalizacion_encargo",
+            REPOSITORIOS + "RevisionEncargoRepository", "revision_encargo",
+            REPOSITORIOS + "ComposicionEncargoRepository", "composicion_encargo",
+            REPOSITORIOS + "CargaArchivoContextualRepository", "carga_archivo_contextual");
 
     /**
      * <b>Lo que vive en el paquete del inmueble y NO es un hecho gobernado
@@ -262,10 +259,26 @@ class AutoridadDeLaPropiedadTest {
      * alguien decida cual de las dos cosas es.
      */
     private static final Map<String, String> FUERA_DE_LOS_DOS_UNIVERSOS = mapa(
+            "copia_comercial_foto",
+            "Artefacto saneado de Documentos, no un atributo físico ni un pacto. FotosComercialesService.preparar "
+                    +"es el único escritor y exige AGENTE, lectura actual de propiedad/original y linaje. "
+                    +"Su censo por repositorio y mutadores y sus guardas se comprueban en copiasComercialesTienenUnEscritorConLecturaActual.",
+            "pieza_comercial",
+            "Versión y salidas de Documentos sobre SU Encargo, no edición de datos físicos ni condiciones pactadas. "
+                    +"PiezasComercialesServiceImpl prepara/regenera con C1 y responsable del Encargo; generar sólo llega desde "
+                    +"preview/difusión guardados, con selección Core y PUB para DIF. Censo y guardas propios en piezasTienenEscritoresYEntradasCerrados.",
             "asignacion_responsable_propiedad",
             "es el rastro de QUIEN puede escribir, no un hecho escrito. Tiene su propio "
                     + "gate -- unSoloEscritorDelRastroDeTraspasos -- que es mas estricto: "
                     + "un unico escritor, no una guarda",
+
+            "perfil_catalogo_opciones",
+            "vocabulario jurisdiccional privado del tenant, subordinado a una definición. "
+                    +"GobiernoCatalogoCapturaServiceImpl exige TENANT_ADMIN actual, versión y snapshot; no escribe un inmueble",
+
+            "revision_catalogo_gobernado",
+            "snapshot inmutable del gobierno del vocabulario, no del dato de un inmueble. "
+                    +"GobiernoCatalogoCapturaServiceImpl conserva autor y versiones de definiciones/perfiles",
 
             "catalogo_atributo",
             "es el vocabulario de la organizacion, no un dato de ningun inmueble. Lo "
@@ -276,10 +289,10 @@ class AutoridadDeLaPropiedadTest {
                     + "pertenece a ninguna",
 
             "observacion_mercado",
-            "es lo que se VIO del mercado (V76), y BROX no lo autorizo, ni lo publico, ni "
-                    + "lo negocio. Es append-only y a proposito NO escribe la propiedad: "
-                    + "exigir aqui la autoridad de edicion impediria observar un inmueble "
-                    + "ajeno, que es justo para lo que existe",
+            "AC054: hecho observado append-only, separado del físico y del pacto. "
+                    + "ObservacionMercadoServiceImpl exige AGENTE y lectura física actual para registrar; "
+                    + "AGENTE/BROKER autorizados para consultar. No exige ser editor del físico, "
+                    + "ni abre una propiedad sin lectura. Sus guardas se comprueban aparte",
 
             "publicacion",
             "es el anuncio de un ENCARGO, no un hecho del inmueble. Su autoridad es la del "
@@ -326,10 +339,33 @@ class AutoridadDeLaPropiedadTest {
                     + "revisarDisponibilidad, que esta declarado arriba",
 
             "comision_liquidacion",
-            "es el dinero de un CONTRATO firmado, no del encargo: nace al registrar el "
-                    + "contrato y la gobierna ComisionServiceImpl con la frontera de tenant "
-                    + "(actor.idOrganizacion() en todas sus consultas) y la banda del "
-                    + "controlador. No toca importe, exclusividad ni vigencia de ningun encargo",
+            "raíz del resultado económico C5, no una edición física ni un pacto. ComisionServiceImpl "
+                    +"exige contexto/tenant y decisión financiera competente por Actuaciones, MANDATORY/CAS; "
+                    +"evaluaciones y recibos son distintos, con PG/T4 propios. No cambia términos firmados",
+
+            "comision_evaluacion",
+            "historia inmutable del agregado comisión, no un atributo físico. ComisionServiceImpl "
+                    +"evalúa fuentes/pacto exactos dentro del hito competente; FK tenant/contexto/versión y conservación SQL",
+
+            "comision_tramo",
+            "parte explícita del pacto económico de comisión, nunca depósito sintético. ComisionServiceImpl "
+                    +"lo materializa desde el pacto autorizado bajo contexto y transacción; no edición física",
+
+            "expediente_operacion",
+            "agregado propio C5 de formalización. FormalizacionServiceImpl exige contexto de oferta/Encargo, "
+                    +"responsable para presentar y decisión competente para evaluar/confirmar mediante Actuaciones",
+
+            "revision_expediente_operacion",
+            "historia inmutable del expediente C5, no estado físico. FormalizacionServiceImpl conserva "
+                    +"la revisión humana con cobertura, actor, tenant y versiones; no autoriza datos ajenos",
+
+            "hito_contractual",
+            "hecho del agregado de formalización C5. FormalizacionServiceImpl confirma sólo por autoridad "
+                    +"competente y actuación humana; callback comercial/financiero atómico, PG/T4 propios",
+
+            "revision_hito_contractual",
+            "historia inmutable de hito y rectificación, no atributo físico. FormalizacionServiceImpl "
+                    +"conserva fecha efectiva/registro/evidencia/tenant/versiones bajo la misma decisión competente",
 
             "comision_movimiento",
             "son los movimientos de esa misma liquidacion -mismo agregado, mismo servicio, "
@@ -369,14 +405,20 @@ class AutoridadDeLaPropiedadTest {
             "es lo que el cliente BUSCA -zona, metraje, presupuesto-, el reverso de la oferta. "
                     + "Vive en el expediente del cliente y lo escribe RequerimientoServiceImpl",
 
+            "requerimiento_criterio",
+            "son los criterios del mismo agregado REQUERIMIENTO_CLIENTE, no hechos de una "
+                    + "propiedad. RequerimientoServiceImpl los escribe junto con el requerimiento "
+                    + "consultado por tenant; RequerimientosController exige AGENTE en su puerta. "
+                    + "Su autoridad no es AutoridadDePropiedad ni la de un encargo",
+
             "interaccion_comercial",
             "es lo que se HIZO -llamada, mensaje, reunion-, no lo que la propiedad es ni lo "
-                    + "que se pacto. InteraccionServiceImpl decide con cargarConAcceso y el "
-                    + "alcance de supervision",
+                    + "que se pacto. InteraccionServiceImpl autoriza cada vínculo, participante y campo "
+                    + "con ContextosDeInteraccion antes de hidratar, contar o devolver historia",
 
             "visita",
             "es una visita al inmueble: actividad comercial fechada, no un hecho suyo. "
-                    + "VisitaServiceImpl decide con cargarConAcceso y el alcance",
+                    + "VisitaServiceImpl reutiliza AccesoOportunidad y conserva versiones, participantes y alcance actual",
 
             "motivo_no_continuidad",
             "es por que se dejo de seguir una oportunidad. Pertenece al cierre del recorrido "
@@ -507,6 +549,11 @@ class AutoridadDeLaPropiedadTest {
 
     private static final Set<String> MUTADORES_DE_LA_PROPIEDAD = mutadoresDe(PROPIEDAD);
     private static final Set<String> MUTADORES_DEL_ENCARGO = mutadoresDe(ENCARGO);
+    private static final Map<String,Set<String>> MUTADORES_DE_AGREGADOS_ENCARGO=java.util.stream.Stream.of(
+            "DocumentoEncargo","ArchivoEncargo","PeticionRevisionEncargo","SolicitudFinalizacionEncargo",
+            "RevisionEncargo","ComposicionEncargo","CargaArchivoContextual").collect(java.util.stream.Collectors.toUnmodifiableMap(
+                    n->PAQUETE_COMERCIAL+"."+n,n->mutadoresDe(PAQUETE_COMERCIAL+"."+n)));
+
 
     /**
      * <b>La guarda de los hechos de la PROPIEDAD: los metodos que DENIEGAN.</b>
@@ -554,23 +601,11 @@ class AutoridadDeLaPropiedadTest {
      *       anotacion, <b>despues</b> del anterior para conservar el 404.</li>
      * </ul>
      */
-    private static final String SERVICIO_DEL_ENCARGO =
-            "com.controllocal.service.impl.CaptacionServiceImpl";
-    private static final Set<String> GUARDAS_DEL_CICLO_DEL_ENCARGO =
-            Set.of("cargarConAcceso", "exigirBandaComercial");
-
-    private static final Map<String, String> CICLO_DEL_ENCARGO = mapa(
-            SERVICIO_DEL_ENCARGO + "#decidir",
-            "aprobar, observar o rechazar un encargo: escribe la revision -el broker y su "
-                    + "observacion- y mueve el estado. Es la decision del BROKER sobre el "
-                    + "encargo de OTRO, que es justamente lo que exigirEdicionDelEncargo "
-                    + "prohibiria",
-
-            SERVICIO_DEL_ENCARGO + "#cerrar",
-            "cierra el encargo por decision del BROKER: escribe fecha, motivo y detalle de "
-                    + "cierre y transiciona a CERRADA. No toca importe, exclusividad ni "
-                    + "vigencia. Aparecio con N43: muta la Captacion gestionada y deja que el "
-                    + "flush la vuelque, asi que el predicado por repositorio no la veia");
+    private static final String SERVICIO_DEL_ENCARGO="com.controllocal.service.encargo.EncargoServiceImpl";
+    private static final String ACCESO_ENCARGO="com.controllocal.service.encargo.AccesoEncargo";
+    /** Sólo métodos que deniegan: puedeDecidir y facultades NO son guardas. */
+    private static final Set<String> GUARDAS_CONTEXTUALES_ENCARGO=Set.of(
+            "exigirResponsable","exigirEditor","exigirDecision","modificarContenido");
 
     /**
      * <b>El censo de llamadores que sostiene tres exenciones</b>, comprobado
@@ -594,8 +629,28 @@ class AutoridadDeLaPropiedadTest {
             "com.controllocal.service.impl.LocalComercialServiceImpl#resolverDistrito",
             Set.of(),
 
-            SERVICIO_DEL_ENCARGO + "#cerrarPorContrato",
-            Set.of());
+            "com.controllocal.service.soporte.AtributosDeEncargo#escribir",
+            Set.of("com.controllocal.service.encargo.CondicionesDinamicasEncargo#aplicar"),
+            "com.controllocal.service.soporte.AtributosDeEncargo#retirar",
+            Set.of("com.controllocal.service.encargo.CondicionesDinamicasEncargo#aplicar"),
+            "com.controllocal.service.encargo.CondicionesDinamicasEncargo#aplicar",
+            Set.of("com.controllocal.service.encargo.EncargoServiceImpl#abrir",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#editar",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#activarAdenda"),
+            "com.controllocal.service.impl.ContratoServiceImpl#cerrarComposicionConfirmada",
+            Set.of("com.controllocal.service.impl.ContratoServiceImpl#cerrarResultadoConfirmado"),
+            "com.controllocal.service.impl.ContratoServiceImpl#cerrarResultadoConfirmado",
+            Set.of("com.controllocal.service.impl.ContratoServiceImpl#confirmarHito"),
+            "com.controllocal.service.encargo.EncargoServiceImpl#verificarEvidencias",
+            Set.of("com.controllocal.service.encargo.EncargoServiceImpl#comprobarDecision",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#solicitarFin",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#presentar",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#validarPartes",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#vigencia",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#aplicarFin"),
+            "com.controllocal.service.encargo.EncargoServiceImpl#comprobarDecision",
+            Set.of("com.controllocal.service.encargo.EncargoServiceImpl#validarDecision",
+                    "com.controllocal.service.encargo.EncargoServiceImpl#decidir"));
 
     /**
      * <b>Los metodos que PREGUNTAN por la autoridad para PINTAR, no para
@@ -625,12 +680,6 @@ class AutoridadDeLaPropiedadTest {
      * aqui, por su nombre y con su motivo — igual que las exenciones.
      */
     private static final Map<String, String> PREGUNTAN_NO_IMPIDEN = Map.of(
-            "com.controllocal.service.impl.CaptacionServiceImpl#autoridadDelEncargo",
-            "envuelve exigirEdicionDelEncargo en un try/catch para responder un booleano de la "
-                    + "ficha (D-P0-12). No impide nada: si la autoridad dice que no, devuelve "
-                    + "false y la escritura sigue su camino. Contarlo como guarda dejaba pasar "
-                    + "el sabotaje que quita la guarda de PUT /captaciones/{id}",
-
             // EL GEMELO, que estaba fuera. Mismo patron, misma guarda, otra
             // clase: la ficha universal calcula el `puedeEditar` de cada
             // encargo igual que la ficha individual. Y esta clase es la de
@@ -667,7 +716,8 @@ class AutoridadDeLaPropiedadTest {
      */
     private static final Set<String> ESCRIBEN = Set.of(
             "save", "saveAndFlush", "delete", "deleteById", "saveAll",
-            "deleteByIdPropiedadAndClave", "deleteByIdCaptacionAndClave", "borrarDe");
+            "deleteByIdPropiedadAndClave", "deleteByIdCaptacionAndClave", "borrarDe",
+            "incrementarVersionFisicaSi");
 
     /**
      * <b>Las excepciones del universo PROPIEDAD, con su motivo.</b>
@@ -701,6 +751,12 @@ class AutoridadDeLaPropiedadTest {
                     + "Pedirle ademas la autoridad de edicion haria imposible asignar "
                     + "responsable a una propiedad FALTANTE, que es justo para lo que existe",
 
+            "com.controllocal.service.encargo.EncargoServiceImpl#decidir",
+            "C2: revisión competente del Encargo, no edición física. Sólo proyecta disponibilidad D "
+                    + "tras aprobar la cobertura exacta y el precio autorizado. El control específico "
+                    + "exige comando/exigirDecision y limita todos sus efectos físicos a aplicarDisponibilidad; "
+                    + "cualquier setter, repositorio físico u otro auxiliar que los introduzca pone ese control rojo.",
+
             "com.controllocal.service.impl.ProspeccionServiceImpl#captar",
             "es el ciclo del ENCARGO, no la edicion de la ficha. Ya tiene su autoridad "
                     + "-cargarEnProceso exige que la prospeccion sea del actor- y las tres "
@@ -708,10 +764,11 @@ class AutoridadDeLaPropiedadTest {
                     + "entrada al mercado. Exigir aqui la de la propiedad impediria captar "
                     + "una propiedad FALTANTE, y FALTANTE no bloquea el encargo",
 
-            "com.controllocal.service.impl.ContratoServiceImpl#cerrarLocal",
-            "es el ciclo del CONTRATO, y lo ejecuta el BROKER, que por P0-1 nunca es "
-                    + "responsable de una propiedad: exigir la autoridad de edicion aqui "
-                    + "significaria que ningun contrato se puede cerrar jamas",
+            "com.controllocal.service.impl.ContratoServiceImpl#cerrarComposicionConfirmada",
+            "RF059/C5: consecuencia de un hito real sobre su composición exacta, no edición física. "
+                    +"Único camino privado cerrarResultadoConfirmado←confirmarHito, con exigirDecision del Encargo, "
+                    +"contexto/fuente/pacto verificados y MANDATORY. Censo exacto y prueba específica abajo; "
+                    +"no concede al broker editar datos físicos ni otras unidades",
 
             "com.controllocal.service.impl.ContratoServiceImpl#revisarDisponibilidad",
             "misma razon que cerrarLocal, al reves: recupera la disponibilidad cuando el "
@@ -795,81 +852,31 @@ class AutoridadDeLaPropiedadTest {
      * <p>Lista aparte de la de la propiedad, y esa separacion es la correccion:
      * una exencion concedida en un universo ya no vale en el otro.
      */
-    private static final Map<String, String> SIN_AUTORIDAD_DEL_ENCARGO = mapa(
-            "com.controllocal.service.impl.ContratoServiceImpl#cerrarLocal",
-            "cierra el contrato y con el la serie: escribe el hito 'C' del encargo que se "
-                    + "firmo. Lo ejecuta el BROKER, que nunca es agente de un encargo, asi "
-                    + "que exigirEdicionDelEncargo aqui significaria que ningun contrato se "
-                    + "puede cerrar. Es la MISMA exencion que en el universo de la "
-                    + "propiedad, y esta escrita dos veces a proposito: alli el motivo es la "
-                    + "disponibilidad del inmueble, aqui es el hito economico. Una sola "
-                    + "entrada para las dos ocultaba que son dos decisiones",
-
+    private static final Map<String,String> SIN_AUTORIDAD_DEL_ENCARGO=mapa(
+            "com.controllocal.service.encargo.EncargoServiceImpl#abrir",
+            "Único INSERT del episodio. AGENTE/responsable coinciden y buscarParaLectura autoriza el objeto; "
+                +"la transacción llamante es obligatoria. No autoriza mutar episodios existentes.",
             "com.controllocal.service.soporte.AtributosDeEncargo#escribir",
-            "no puede preguntar: recibe Comercializacion -un record con idCaptacion, tipo y "
-                    + "operacion-, no la entidad Captacion, y exigirEdicionDelEncargo "
-                    + "necesita la fila para saber de quien es. Sus DOS unicos llamadores "
-                    + "estan medidos y los dos responden: actualizarEncargo llama a "
-                    + "exigirEdicionDelEncargo antes, y el alta del encargo lo esta creando "
-                    + "en ese mismo instante. Deuda declarada: darle la Captacion para que "
-                    + "pueda exigirla por si mismo, como ya hace AtributosGobernados",
-
+            "Enrutador con linaje, sin la entidad Captacion necesaria para decidir su autoridad. "
+                +"Censo exacto: sólo CondicionesDinamicasEncargo.aplicar, consumido por apertura canónica "
+                +"o por la edición con SID/autoridad/CAS o activación privada de adenda tras decisión competente; "
+                +"censo exacto y controles específicos abajo.",
             "com.controllocal.service.soporte.AtributosDeEncargo#retirar",
-            "misma razon y mismos llamadores que escribir",
-
-            "com.controllocal.service.impl.PropiedadUniversalServiceImpl#abrirEncargo",
-            "ABRE el encargo: escribe su primer hito 'U' y las condiciones que se pactaron "
-                    + "al abrirlo. No hay agente anterior a quien respetar porque el encargo "
-                    + "nace aqui, y su agente es el actor. Este metodo aparecio al separar "
-                    + "los dos mapas de exenciones: hasta entonces lo cubria, por el camino "
-                    + "de sus llamadores, la exencion que `registrar` tenia declarada para "
-                    + "el universo de la PROPIEDAD -- una exencion de un universo tapando un "
-                    + "hueco del otro, que es justo lo que la separacion vino a impedir",
-
-            "com.controllocal.service.impl.ProspeccionServiceImpl#captar",
-            "convierte una prospeccion en encargo: tambien lo CREA. Ya tiene su autoridad "
-                    + "-cargarEnProceso exige que la prospeccion sea del actor- y el hito que "
-                    + "escribe es el de entrada al mercado del encargo que acaba de abrir. "
-                    + "Estaba declarado solo para el universo de la PROPIEDAD y se colaba en "
-                    + "este por el mapa unico",
-
-            "com.controllocal.service.impl.CaptacionServiceImpl#registrar",
-            "CREA el encargo sobre una propiedad que ya existe: no hay agente anterior a "
-                    + "quien respetar porque el encargo nace aqui, y su agente es el actor "
-                    + "-lo carga de actor.idRolOperativo(), no de un id del cuerpo-. Misma "
-                    + "familia que abrirEncargo y que captar",
-
+            "Enrutador de retirada con linaje. Sólo CondicionesDinamicasEncargo.aplicar lo invoca; "
+                +"la retirada se consume por la edición canónica del Encargo bajo autoridad y CAS, no por el físico.",
+            "com.controllocal.service.encargo.EncargoServiceImpl#verificarEvidencias",
+            "Auxiliar privado del ciclo C2. La rama de vínculo sólo vincula ArchivoEncargo al episodio "
+                +"tras validar tenant, finalidad, autor/origen y documento; presentar está dentro del comando "
+                +"responsable, decidir dentro de la decisión competente y sus consultas no vinculan. "
+                +"validarPartes se alcanza desde faltantes/presentación/cobertura de adenda y comprueba sin vincular. "
+                +"Censo exacto de seis llamadores y control de único mutador ArchivoEncargo.vincular; "
+                +"no permite otro hecho del episodio ni edición física.",
             "com.controllocal.service.impl.CaptacionServiceImpl#reasignar",
-            "gobierna QUIEN lleva el encargo, no que dice el encargo (D-S0-17 fila 6, H6). "
-                    + "Su autoridad es el alcance de supervision del broker, y el agente del "
-                    + "encargo es justamente a quien se sustituye: exigir que el actor SEA "
-                    + "ese agente haria imposible reasignar. No toca importe, exclusividad "
-                    + "ni vigencia -- solo el id del agente y su rastro",
-
-            "com.controllocal.service.impl.ContratoServiceImpl#registrar",
-            "es el ciclo del CONTRATO: cierra el encargo que se cumplio y no toca su "
-                    + "importe, su exclusividad ni su vigencia. Lo ejecuta el BROKER, que "
-                    + "nunca es agente de un encargo, asi que exigirEdicionDelEncargo aqui "
-                    + "significaria que ningun contrato se puede registrar. Misma familia "
-                    + "que la exencion de cerrarLocal",
-
-            "com.controllocal.service.impl.ContratoServiceImpl#firmar",
-            "misma razon que registrar, en el otro extremo del ciclo: al firmar se cierra "
-                    + "la operacion formalizada y con ella el encargo. Cubre tambien al "
-                    + "privado cerrarOperacionFormalizada, cuyo unico llamador es este",
-
-            // ---------------- El que aparecio con N43 ----------------
-            "com.controllocal.service.impl.CaptacionServiceImpl#cerrarPorContrato",
-            "cierra el encargo como CASCADA de un contrato, y por eso NO lleva "
-                    + "exigirBandaComercial: el propio codigo lo dice en `cerrar` -- exigirla "
-                    + "aqui dejaria contratos que no se pueden firmar. Lleva cargarConAcceso, "
-                    + "o sea tenant (404) y alcance sobre el agente del encargo. Y hay un "
-                    + "hecho medido el 2026-09-02 que hay que decir en vez de suponer: su censo "
-                    + "de llamadores esta VACIO -- ningun controlador ni servicio la invoca, ni "
-                    + "por la clase ni por CaptacionService; quien cierra el encargo al firmar "
-                    + "es ContratoServiceImpl, con su propia exencion. El gate vigila ese censo: "
-                    + "el dia que alguien la cablee esto se pone rojo y habra que decidir su "
-                    + "guarda con el caso de uso delante, no ahora sin el");
+            "Gobierno de responsabilidad con SID, alcance, destino elegible, versión y responsable observados, CAS y rastro atómicos. "
+                +"Las llamadas obligatorias y la unicidad de CAS/rastro se comprueban aparte, no se exime su autoridad.",
+            "com.controllocal.service.impl.ContratoServiceImpl#cerrarResultadoConfirmado",
+            "Cascada privada desde confirmarHito con exigirDecision, fuente exacta y MANDATORY. "
+                +"No modifica condiciones firmadas ni acredita dinero por cerrar. Censo medido arriba.");
 
     /**
      * <b>Los mutadores se DERIVAN, y el gate lo demuestra</b> (N43).
@@ -890,7 +897,7 @@ class AutoridadDeLaPropiedadTest {
                             + new java.util.TreeSet<>(MUTADORES_DE_LA_PROPIEDAD));
         }
         for (String imprescindible : List.of(
-                "setAgente", "setCondicionEconomica", "cerrar", "registrarRevision")) {
+                "setAgente", "setCondicionEconomica", "cerrar", "registrarRevisionAplicable")) {
             assertTrue(MUTADORES_DEL_ENCARGO.contains(imprescindible),
                     "no se derivo el mutador `" + imprescindible + "` de Captacion. Encontro: "
                             + new java.util.TreeSet<>(MUTADORES_DEL_ENCARGO));
@@ -917,7 +924,7 @@ class AutoridadDeLaPropiedadTest {
         List<String> conMutadores = nombresDe(escriturasDe(
                 AutoridadDeLaPropiedadTest::escribeLaSerie));
 
-        String porDirtyChecking = "com.controllocal.service.impl.CaptacionServiceImpl#cerrar";
+        String porDirtyChecking = "com.controllocal.service.encargo.EncargoServiceImpl#aplicarFin";
         assertFalse(porRepositorio.contains(porDirtyChecking),
                 "`cerrar` ya aparecia con el predicado viejo, asi que este control ha dejado de "
                         + "medir lo que dice: escoge otra escritura que solo exista por "
@@ -1253,7 +1260,17 @@ class AutoridadDeLaPropiedadTest {
         for (String imprescindible : List.of(
                 "com.controllocal.service.impl.PropiedadUniversalServiceImpl#editar",
                 "com.controllocal.service.impl.LocalComercialServiceImpl#desactivar",
-                "com.controllocal.service.impl.LocalComercialServiceImpl#agregarFoto")) {
+                // La foto: la via era `LocalComercialServiceImpl#agregarFoto` y
+                // desde WP-C es esta. **La galeria se movio, no desaparecio**, y
+                // el control positivo tiene que seguir nombrando una escritura
+                // que exista -- si nombrara la vieja, el `assertTrue` fallaria
+                // por ausencia y no por defecto, y el dia que alguien la quitara
+                // de verdad el mensaje diria lo mismo.
+                "com.controllocal.service.impl.FotoPropiedadServiceImpl#agregar",
+                // Y la mas irreversible de las tres, que antes no estaba
+                // nombrada: borrar una foto por su id no puede ser mas barato
+                // que borrarla por el id del inmueble.
+                "com.controllocal.service.impl.FotoPropiedadServiceImpl#eliminar")) {
             assertTrue(nombres.contains(imprescindible),
                     "el gate no ve " + imprescindible + ", que es una de las vias por las que "
                             + "empezo todo esto. Encontro: " + nombres);
@@ -1289,12 +1306,12 @@ class AutoridadDeLaPropiedadTest {
                 "el gate dejo de reconocer las escrituras de la SERIE ECONOMICA: encontro "
                         + nombres + ". Revisa REPOSITORIOS_DEL_ENCARGO antes de creerte el verde.");
         for (String imprescindible : List.of(
-                "com.controllocal.service.impl.PublicacionServiceImpl#registrarImportePublicado",
+                HISTORIADOR_PUBLICACION+"#guardar",
                 // La via mas directa al importe del encargo, y la que este gate
                 // no veia: `PUT /captaciones/{id}` reescribe la condicion
                 // economica entera -- importe, moneda y comision -- por cascada
                 // del save de `captacion`, sin pasar por precio_propiedad.
-                "com.controllocal.service.impl.CaptacionServiceImpl#actualizar")) {
+                "com.controllocal.service.encargo.EncargoServiceImpl#editar")) {
             assertTrue(nombres.contains(imprescindible),
                     "el gate no ve " + imprescindible + ", que es una de las vias que escriben "
                             + "el trato sin que nadie las hubiera inventariado. Encontro: "
@@ -1411,9 +1428,10 @@ class AutoridadDeLaPropiedadTest {
 
         // Y lo declarado no puede sobrar: una exclusion para una tabla que ya no
         // existe es ruido que hace creer que se penso en algo.
-        List<String> declaradasFantasma = java.util.stream.Stream.concat(
+        List<String> declaradasFantasma = java.util.stream.Stream.of(
                         FUERA_DE_LOS_DOS_UNIVERSOS.keySet().stream(),
                         VIGILADAS_POR_CASCADA.keySet().stream())
+                .flatMap(s -> s)
                 .filter(tabla -> !entidades.contains(tabla))
                 .sorted()
                 .toList();
@@ -1440,9 +1458,7 @@ class AutoridadDeLaPropiedadTest {
             boolean alguna = CLASES.stream()
                     .filter(clase -> clase.getPackageName().startsWith("com.controllocal.service"))
                     .flatMap(clase -> clase.getMethods().stream())
-                    .anyMatch(m -> m.getAccessesFromSelf().stream()
-                            .anyMatch(a -> entrada.getKey().equals(a.getTargetOwner().getFullName())
-                                    && ESCRIBEN.contains(a.getName())));
+                    .anyMatch(m -> escribeEnRepositorio(m, entrada.getKey()));
             assertTrue(alguna,
                     "el gate no encuentra NINGUNA escritura por " + entrada.getKey() + ", que "
                             + "declara vigilar la tabla `" + entrada.getValue() + "`. O el "
@@ -1452,22 +1468,96 @@ class AutoridadDeLaPropiedadTest {
         }
     }
 
+    @Test
+    @DisplayName("RF014: origen tiene un escritor y una confirmación canónica con doble autoridad física")
+    void elOrigenFisicoNoAbreOtraPuertaDeEscritura() throws IOException {
+        assertEquals(List.of(SERVICIO_DEL_ORIGEN+"#registrarOrigen"),
+                nombresDe(escriturasDe(m->escribeEnRepositorio(m,REPOSITORIOS+"UnidadRelacionadaRepository"))));
+        assertEquals(List.of("com.controllocal.service.actuacion.ActuacionesServiceImpl#confirmar"),
+                llamadoresDe(SERVICIO_DEL_ORIGEN+"#registrarOrigen"),
+                "Una ruta o servicio alterno no puede saltar la revisión humana exacta.");
+        JavaMethod registrar=metodo(SERVICIO_DEL_ORIGEN,"registrarOrigen");
+        for(String nombre:List.of("exigirAgente","iniciar","exigirLectura","autorizarEscritura","incrementar"))
+            assertTrue(llama(registrar,SERVICIO_DEL_ORIGEN,nombre),nombre);
+        assertTrue(llama(registrar,REPOSITORIOS+"UnidadRelacionadaRepository","bloquearGrafoOrigen"));
+        assertTrue(llama(registrar,REPOSITORIOS+"PropiedadRepository","bloquearParaEscritura"));
+        assertTrue(llama(registrar,"jakarta.persistence.EntityManager","refresh"));
+        for(String nombre:List.of("buscar","registrar"))
+            assertTrue(llama(registrar,"com.controllocal.service.soporte.ComandosIdempotentes",nombre));
+        assertTrue(llama(metodo(SERVICIO_DEL_ORIGEN,"autorizarEscritura"),AUTORIDAD,"exigirEdicion"));
+        assertTrue(llama(metodo(SERVICIO_DEL_ORIGEN,"exigirLectura"),AUTORIDAD,"buscarParaLectura"));
+        JavaMethod inicio=metodo(SERVICIO_DEL_ORIGEN,"iniciar");
+        assertTrue(llama(inicio,"com.controllocal.service.ContextosService","exigirContexto"));
+        assertTrue(llama(inicio,REPOSITORIOS+"CuentaAccesoRepository","bloquearCambioAcceso"));
+        assertTrue(llama(inicio,REPOSITORIOS+"UsuarioOrganizacionRepository","cuentasActivasDePersona"));
+        JavaMethod incrementar=metodo(SERVICIO_DEL_ORIGEN,"incrementar");
+        assertTrue(llama(incrementar,REPOSITORIOS+"PropiedadRepository","incrementarVersionFisicaSi"));
+        assertTrue(llama(incrementar,"jakarta.persistence.EntityManager","refresh"));
+
+        // ArchUnit verifica la llamada; el texto precisa AMBOS extremos incluso
+        // cuando dos invocaciones al mismo método comparten línea de bytecode.
+        String relativa="controllocal-service/src/main/java/com/controllocal/service/impl/UnidadRelacionadaServiceImpl.java";
+        Path fuente=List.of(Path.of("..",relativa),Path.of("backend-spring",relativa),Path.of(relativa)).stream()
+                .filter(Files::isRegularFile).findFirst().orElseThrow();
+        String codigo=Files.readString(fuente,StandardCharsets.UTF_8).replaceAll("\\s+","");
+        for(String obligatoria:List.of("autoridad.exigirEdicion(actor,matriz);","autoridad.exigirEdicion(actor,unidad);",
+                "exigirLectura(d.idMatriz(),actor);","exigirLectura(d.idUnidad(),actor);",
+                "matriz.getVersionFisica()!=d.versionMatrizEsperada()","unidad.getVersionFisica()!=d.versionUnidadEsperada()",
+                "incrementar(matriz,d.versionMatrizEsperada(),actor);","incrementar(unidad,d.versionUnidadEsperada(),actor);",
+                "exigirLectura(original.idMatriz(),actor);","exigirLectura(original.idUnidad(),actor);",
+                "newTreeSet<>(List.of(d.idMatriz(),d.idUnidad()))","ContextoSesion.de(vigente).equals(sesion)"))
+            assertTrue(codigo.contains(obligatoria),obligatoria);
+        assertEquals(List.of(SERVICIO_DEL_ORIGEN+"#registrarOrigen"),llamadoresDe(SERVICIO_DEL_ORIGEN+"#incrementar"));
+        assertFalse(CLASES.get(SERVICIO_DEL_ORIGEN).getMethods().stream().anyMatch(m->
+                m.getAccessesFromSelf().stream().anyMatch(a->
+                        REPOSITORIOS_DEL_ENCARGO.contains(a.getTargetOwner().getFullName())&&ESCRIBEN.contains(a.getName()))));
+    }
+
+    @Test
+    @DisplayName("el detector reconoce una escritura real de bytecode sobre la unidad relacionada")
+    void elDetectorDeLaPrimeraEscrituraTieneControlPositivo() {
+        JavaClass ejemplo = new ClassFileImporter().importClasses(EscrituraDeUnidadDelFixture.class)
+                .get(EscrituraDeUnidadDelFixture.class);
+        assertTrue(ejemplo.getMethods().stream().filter(m -> m.getName().equals("guardar"))
+                .anyMatch(m -> escribeEnRepositorio(m, REPOSITORIOS + "UnidadRelacionadaRepository")));
+        var precio=ejemplo.getMethods().stream().filter(m->m.getName().equals("guardarPrecioSinAutoridad")).findFirst().orElseThrow();
+        assertTrue(escribeLaSerie(precio));
+        assertFalse(cubierto(precio,GUARDAS_DEL_ENCARGO,Map.of(),Set.of(nombre(precio)),new HashSet<>()),
+                "Un escritor económico nuevo no hereda la cobertura del Historiador.");
+        var copia=ejemplo.getMethods().stream().filter(m->m.getName().equals("guardarCopia")).findFirst().orElseThrow();
+        assertTrue(escribeEnRepositorio(copia,REPOSITORIOS+"CopiaComercialFotoRepository"));
+        var pieza=ejemplo.getMethods().stream().filter(m->m.getName().equals("registrarArchivoPieza")).findFirst().orElseThrow();
+        assertTrue(invocaUnMutador(pieza,PIEZA_COMERCIAL,mutadoresDe(PIEZA_COMERCIAL)),
+                "La ausencia de save no puede ocultar un nuevo escritor del artefacto gestionado.");
+    }
+
+    private static boolean escribeEnRepositorio(JavaMethod metodo, String repositorio) {
+        return metodo.getAccessesFromSelf().stream()
+                .anyMatch(a -> repositorio.equals(a.getTargetOwner().getFullName()) && ESCRIBEN.contains(a.getName()));
+    }
+
+    static class EscrituraDeUnidadDelFixture {
+        void guardar(com.controllocal.persistence.repositorio.UnidadRelacionadaRepository repositorio,
+                     com.controllocal.domain.inmueble.UnidadRelacionada unidad) {
+            repositorio.save(unidad);
+        }
+        void guardarPrecioSinAutoridad(com.controllocal.persistence.repositorio.PrecioPropiedadRepository repositorio,
+                com.controllocal.domain.inmueble.PrecioPropiedad precio){repositorio.save(precio);}
+        void guardarCopia(com.controllocal.persistence.repositorio.CopiaComercialFotoRepository repositorio,
+                com.controllocal.domain.inmueble.CopiaComercialFoto copia){repositorio.save(copia);}
+        void registrarArchivoPieza(com.controllocal.domain.inmueble.PiezaComercial pieza){
+            pieza.registrarArchivo("REVISION_PRIVADA",java.util.UUID.randomUUID(),"TEST",null,null);
+        }
+    }
+
     /**
-     * <b>La decision que este gate protege tiene que VIAJAR con el codigo.</b>
+     * <b>La decisión ejecutable debe estar disponible junto al código.</b>
      *
-     * <h2>Por que es una comprobacion y no una nota</h2>
-     * `docs/ai/*` esta en `.gitignore` con una lista blanca de excepciones. Es
-     * deliberado —solo viaja lo que un clon limpio necesita— pero tiene un
-     * filo: <b>un documento que gobierna y no viaja no gobierna nada</b>. El
-     * clon no lo tiene, el auditor no lo ve, y la unica copia vive en el disco
-     * de una maquina.
-     *
-     * <p>Esta prueba cierra ese filo por el unico camino que no depende de que
-     * alguien se acuerde: <b>lee el fichero</b>. En el arbol de trabajo pasa
-     * siempre; en un <b>clon limpio</b> solo pasa si el documento esta en la
-     * lista blanca de `.gitignore`. Y la corrida de cierre se ejecuta tambien
-     * desde un clon limpio, asi que sacar la decision de la lista pone el
-     * cierre en <b>rojo</b> en vez de dejar la regla huerfana en silencio.
+     * <p>La política vigente mantiene privado el paquete documental. Esta prueba
+     * lee sus fuentes locales; en un traslado autorizado deben acompañar al
+     * código por el mecanismo privado correspondiente. Que un clon no las tenga
+     * exige aportar ese paquete, no publicarlo, cambiar .gitignore ni retirar
+     * el gate. ContinuidadDocumentalTest comprueba además las fuentes del corte.
      *
      * <h2>Lo que NO dice</h2>
      * No dice que el documento sea correcto ni que este al dia. Dice que
@@ -1476,7 +1566,7 @@ class AutoridadDeLaPropiedadTest {
      * integracion.
      */
     @Test
-    @DisplayName("la decision que gobierna esta autoridad viaja con el codigo")
+    @DisplayName("la decisión que gobierna esta autoridad está disponible en el paquete privado")
     void laAutoridadQueGobiernaViajaConElCodigo() throws IOException {
         for (String documento : List.of(
                 "decision-autoridad-de-edicion-de-la-propiedad.md",
@@ -1490,9 +1580,8 @@ class AutoridadDeLaPropiedadTest {
                 "decision-oferta-y-cierre-de-venta.md")) {
             Path ruta = RAIZ.resolve("docs/ai").resolve(documento);
             assertTrue(Files.isRegularFile(ruta),
-                    "falta " + ruta + ". O el documento se borro, o salio de la lista blanca "
-                            + "de .gitignore -- y entonces un clon limpio no lo tiene y la regla "
-                            + "que este gate protege se quedo sin autoridad escrita.");
+                    "Falta " + ruta + ". Aportar el paquete privado autorizado de documentación; "
+                            + "no publicar la fuente ni retirar el gate para sustituir su ausencia.");
             assertTrue(Files.readString(ruta, StandardCharsets.UTF_8).length() > 1000,
                     ruta + " esta practicamente vacio: existe el fichero pero no la decision.");
         }
@@ -1561,7 +1650,9 @@ class AutoridadDeLaPropiedadTest {
         boolean porRepositorio = metodo.getAccessesFromSelf().stream().anyMatch(a ->
                 REPOSITORIOS_DEL_ENCARGO.contains(a.getTargetOwner().getFullName())
                         && ESCRIBEN.contains(a.getName()));
-        return porRepositorio || invocaUnMutador(metodo, ENCARGO, MUTADORES_DEL_ENCARGO);
+        return porRepositorio || invocaUnMutador(metodo, ENCARGO, MUTADORES_DEL_ENCARGO)
+                || MUTADORES_DE_AGREGADOS_ENCARGO.entrySet().stream()
+                    .anyMatch(e->invocaUnMutador(metodo,e.getKey(),e.getValue()));
     }
 
     /**
@@ -1620,10 +1711,8 @@ class AutoridadDeLaPropiedadTest {
         if (exentos.containsKey(nombre(metodo))) {
             return true;
         }
+        if (GUARDAS_DEL_ENCARGO.equals(guardas) && historiadorConAutoridadDelegada(metodo)) return true;
         if (consultaLaAutoridad(metodo, guardas, escritores, new HashSet<>())) {
-            return true;
-        }
-        if (cubiertoPorElCicloDelEncargo(metodo, guardas)) {
             return true;
         }
         if (!visitados.add(metodo.getFullName())) {
@@ -1652,15 +1741,6 @@ class AutoridadDeLaPropiedadTest {
      * {@code exigirBandaComercial} ponga el gate en rojo en vez de quedar
      * tapado por una exencion.
      */
-    private static boolean cubiertoPorElCicloDelEncargo(JavaMethod metodo, Set<String> guardas) {
-        if (!GUARDAS_DEL_ENCARGO.equals(guardas) || !CICLO_DEL_ENCARGO.containsKey(nombre(metodo))) {
-            return false;
-        }
-        return GUARDAS_DEL_CICLO_DEL_ENCARGO.stream().allMatch(guarda ->
-                metodo.getAccessesFromSelf().stream().anyMatch(a ->
-                        SERVICIO_DEL_ENCARGO.equals(a.getTargetOwner().getFullName())
-                                && guarda.equals(a.getName())));
-    }
 
     /**
      * <b>Consulta LA guarda que le toca</b>, aunque sea a traves de un metodo
@@ -1680,8 +1760,8 @@ class AutoridadDeLaPropiedadTest {
      *
      * <h2>Ni por dentro de OTRO TRABAJO — la cuarta fuga (2026-09-02)</h2>
      * Es la misma leccion en su forma mas dificil de ver, y la encontro el
-     * sabotaje (a) de F3-3. {@code PropiedadUniversalServiceImpl#editar} escribe
-     * el ENCARGO por <b>dos</b> caminos independientes:
+     * sabotaje (a) de F3-3, anterior a C2. Entonces {@code PropiedadUniversalServiceImpl#editar}
+     * escribía el ENCARGO por <b>dos</b> caminos independientes:
      * {@code actualizarEncargo} —las operaciones— y {@code aplicarCondiciones}
      * &rarr; {@code aplicarCondicionesDe} —las condiciones pactadas—, y
      * <b>cada uno resuelve SU encargo y exige la autoridad sobre EL SUYO</b>.
@@ -1717,9 +1797,7 @@ class AutoridadDeLaPropiedadTest {
         }
         for (JavaAccess<?> llamada : metodo.getAccessesFromSelf()) {
             JavaClass destino = llamada.getTargetOwner();
-            if (AUTORIDAD.equals(destino.getFullName()) && guardas.contains(llamada.getName())) {
-                return true;
-            }
+            if (esGuardaQueDeniega(llamada,guardas)) return true;
             if (!destino.getFullName().equals(metodo.getOwner().getFullName())) {
                 continue;
             }
@@ -1738,10 +1816,11 @@ class AutoridadDeLaPropiedadTest {
     /**
      * ¿Este auxiliar termina escribiendo el universo que se esta midiendo?
      *
-     * <p>Se cuenta tanto la escritura propia como la delegada: {@code
-     * aplicarCondicionesDe} no toca ningun repositorio del encargo por si
-     * mismo, llama a {@code AtributosDeEncargo#escribir} — que <b>si</b> es un
-     * escritor, y ademas esta exento porque no puede preguntar. Mirar solo la
+     * <p>Se cuenta tanto la escritura propia como la delegada: antes de C2,
+     * {@code aplicarCondicionesDe} no tocaba ningún repositorio del encargo por sí
+     * mismo, sino {@code AtributosDeEncargo#escribir}, que <b>sí</b> es un
+     * escritor. C2 retiró esa ruta física y conserva el mismo control sobre el
+     * adaptador canónico CondicionesDinamicasEncargo. Mirar sólo la
      * escritura propia habria dejado la fuga abierta exactamente por donde
      * estaba.
      */
@@ -1770,4 +1849,380 @@ class AutoridadDeLaPropiedadTest {
         }
         return false;
     }
+    private static boolean esGuardaQueDeniega(JavaAccess<?> acceso,Set<String> guardas) {
+        if(AUTORIDAD.equals(acceso.getTargetOwner().getFullName())&&guardas.contains(acceso.getName())) return true;
+        return GUARDAS_DEL_ENCARGO.equals(guardas)&&ACCESO_ENCARGO.equals(acceso.getTargetOwner().getFullName())
+                &&GUARDAS_CONTEXTUALES_ENCARGO.contains(acceso.getName());
+    }
+    private static JavaMethod metodo(String tipo,String nombre) {
+        return CLASES.get(tipo).getMethods().stream().filter(m->m.getName().equals(nombre)).findFirst().orElseThrow();
+    }
+    private static boolean llama(JavaMethod m,String tipo,String nombre) {
+        return m.getAccessesFromSelf().stream().anyMatch(a->a.getTargetOwner().getFullName().equals(tipo)&&a.getName().equals(nombre));
+    }
+    /** Cobertura exclusiva de este delegado; guardar nunca se convierte en una guarda genérica. */
+    private static boolean historiadorConAutoridadDelegada(JavaMethod escritor) {
+        if(!nombre(escritor).equals(HISTORIADOR_PUBLICACION+"#guardar")||!mandatorio(escritor))return false;
+        if(!Set.copyOf(llamadoresDe(nombre(escritor))).equals(Set.of(PUBLICACIONES+"#borrador",PUBLICACIONES+"#ejecutar",HISTORIADOR_PUBLICACION+"#cerrarPorHito")))return false;
+        for(String entrada:List.of("borrador","ejecutar")){
+            var metodo=metodo(PUBLICACIONES,entrada);
+            if(!metodo.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE))return false;
+            for(String guarda:List.of("iniciar","escribir","exigirResponsable"))if(!llama(metodo,ACCESO_ENCARGO,guarda))return false;
+        }
+        for(String guarda:List.of("validarActuacion","exigirPublicabilidad"))if(!llama(metodo(PUBLICACIONES,"ejecutar"),PUBLICACIONES,guarda))return false;
+        if(!llama(metodo(PUBLICACIONES,"validarActuacion"),ACCESO_ENCARGO,"exigirResponsable")
+                ||!llama(metodo(PUBLICACIONES,"validarActuacion"),PUBLICACIONES,"exigirPublicabilidad"))return false;
+        var cierre=metodo(HISTORIADOR_PUBLICACION,"cerrarPorHito");
+        if(!mandatorio(cierre)||escribeEnRepositorio(cierre,REPOSITORIOS+"PrecioPropiedadRepository"))return false;
+        String venta="com.controllocal.service.impl.CierreVentaServiceImpl",alquiler="com.controllocal.service.impl.ContratoServiceImpl";
+        if(!Set.copyOf(llamadoresDe(HISTORIADOR_PUBLICACION+"#cerrarPorHito")).equals(Set.of(venta+"#retirarDelMercado",alquiler+"#cerrarComposicionConfirmada")))return false;
+        if(!llamadoresDe(venta+"#retirarDelMercado").equals(List.of(venta+"#confirmarHito"))
+                ||!llamadoresDe(alquiler+"#cerrarComposicionConfirmada").equals(List.of(alquiler+"#cerrarResultadoConfirmado"))
+                ||!llamadoresDe(alquiler+"#cerrarResultadoConfirmado").equals(List.of(alquiler+"#confirmarHito")))return false;
+        for(String tipo:List.of(venta,alquiler))if(!mandatorio(metodo(tipo,"confirmarHito"))||!llama(metodo(tipo,"confirmarHito"),ACCESO_ENCARGO,"exigirDecision"))return false;
+        return metodo(venta,"retirarDelMercado").getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE)
+                &&metodo(alquiler,"cerrarComposicionConfirmada").getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE)
+                &&metodo(alquiler,"cerrarResultadoConfirmado").getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE);
+    }
+    private static boolean mandatorio(JavaMethod metodo){
+        return metodo.isAnnotatedWith(org.springframework.transaction.annotation.Transactional.class)
+                &&metodo.getAnnotationOfType(org.springframework.transaction.annotation.Transactional.class).propagation()==org.springframework.transaction.annotation.Propagation.MANDATORY;
+    }
+    @Test void elHitoPublicadoConservaSuDelegadoYCadaCaminoDeAutoridad(){
+        assertTrue(historiadorConAutoridadDelegada(metodo(HISTORIADOR_PUBLICACION,"guardar")),
+                "El delegado necesita censo cerrado, TX padre y autoridad real Pub/C5, no una exención por nombre.");
+        assertFalse(GUARDAS_DEL_ENCARGO.contains("guardar"));
+        assertFalse(SIN_AUTORIDAD_DEL_ENCARGO.containsKey(HISTORIADOR_PUBLICACION+"#guardar"));
+        assertTrue(llama(metodo(HISTORIADOR_PUBLICACION,"guardar"),REPOSITORIOS+"PrecioPropiedadRepository","save"));
+        assertTrue(llama(metodo(HISTORIADOR_PUBLICACION,"cerrarPorHito"),HISTORIADOR_PUBLICACION,"guardar"));
+        // El comportamiento de cierre sin otro precio se demuestra además por
+        // PublicacionServiceImplTest.hitoContractualCierraConHistoriaSinExigirEdicionFisica.
+    }
+    private static Set<String> efectosFisicosDesde(JavaMethod metodo,Set<String> visitados){
+        Set<String> efectos=new java.util.TreeSet<>();
+        if(!visitados.add(metodo.getFullName()))return efectos;
+        for(JavaAccess<?> acceso:metodo.getAccessesFromSelf()){
+            String tipo=acceso.getTargetOwner().getFullName();String nombre=acceso.getName();
+            if(PROPIEDAD.equals(tipo)&&MUTADORES_DE_LA_PROPIEDAD.contains(nombre)
+                    ||REPOSITORIOS_DE_LA_PROPIEDAD.contains(tipo)&&ESCRIBEN.contains(nombre)
+                    ||TRANSICIONES.equals(tipo)&&"aplicarDisponibilidad".equals(nombre))
+                efectos.add(tipo+"#"+nombre);
+            if(tipo.equals(metodo.getOwner().getFullName()))
+                for(var propio:metodo.getOwner().getMethods())if(propio.getName().equals(nombre))
+                    efectos.addAll(efectosFisicosDesde(propio,visitados));
+        }
+        return efectos;
+    }
+    @Test
+    @DisplayName("C2: decidir sólo proyecta disponibilidad comercial tras la autoridad de revisión")
+    void laRevisionDelEncargoNoEximeNingunaEdicionFisica(){
+        JavaMethod decidir=metodo(SERVICIO_DEL_ENCARGO,"decidir");
+        assertTrue(llama(decidir,SERVICIO_DEL_ENCARGO,"comando"));
+        assertTrue(llama(decidir,ACCESO_ENCARGO,"exigirDecision"));
+        JavaMethod comprobar=metodo(SERVICIO_DEL_ENCARGO,"comprobarDecision");
+        assertTrue(comprobar.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE));
+        assertTrue(llama(decidir,SERVICIO_DEL_ENCARGO,"comprobarDecision"));
+        JavaMethod validar=metodo(SERVICIO_DEL_ENCARGO,"validarDecision");
+        assertTrue(llama(validar,ACCESO_ENCARGO,"leer"));
+        assertTrue(llama(validar,ACCESO_ENCARGO,"exigirDecision"));
+        assertTrue(llama(validar,SERVICIO_DEL_ENCARGO,"comprobarDecision"));
+        assertTrue(llama(comprobar,SERVICIO_DEL_ENCARGO,"version"));
+        assertTrue(llama(comprobar,SERVICIO_DEL_ENCARGO,"faltantes"));
+        assertTrue(llama(comprobar,SERVICIO_DEL_ENCARGO,"verificarEvidencias"));
+        assertTrue(llama(decidir,SERVICIO_DEL_ENCARGO,"registrarPrecioAutorizado"));
+        assertEquals(Set.of(TRANSICIONES+"#aplicarDisponibilidad"),efectosFisicosDesde(decidir,new HashSet<>()),
+                "La excepción comercial no puede cubrir un setter físico, CAS físico o repositorio del inmueble.");
+        var fixture=new ClassFileImporter().importClasses(EfectosRevisionFixture.class).get(EfectosRevisionFixture.class);
+        var permitido=fixture.getMethods().stream().filter(m->m.getName().equals("proyeccion")).findFirst().orElseThrow();
+        var invasivo=fixture.getMethods().stream().filter(m->m.getName().equals("proyeccionConEdicion")).findFirst().orElseThrow();
+        assertEquals(Set.of(TRANSICIONES+"#aplicarDisponibilidad"),efectosFisicosDesde(permitido,new HashSet<>()));
+        assertTrue(efectosFisicosDesde(invasivo,new HashSet<>()).contains(PROPIEDAD+"#setDescripcion"),
+                "Control negativo: también se detecta el setter escondido en un auxiliar propio.");
+    }
+    static class EfectosRevisionFixture{
+        void proyeccion(com.controllocal.service.soporte.Transiciones t,com.controllocal.domain.inmueble.Propiedad p,
+                        com.controllocal.service.Actor actor){
+            t.aplicarDisponibilidad(p,1L,com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial.DISPONIBLE,actor,"Fixture");
+        }
+        void proyeccionConEdicion(com.controllocal.service.soporte.Transiciones t,com.controllocal.domain.inmueble.Propiedad p,
+                                 com.controllocal.service.Actor actor){proyeccion(t,p,actor);editarFisico(p);}
+        private void editarFisico(com.controllocal.domain.inmueble.Propiedad p){p.setDescripcion("Edición que la proyección no autoriza");}
+    }
+    @Test
+    @DisplayName("C2: el auxiliar de evidencia sigue privado, vincula sólo el archivo y conserva entradas de comando guardadas")
+    void elVinculoTecnicoDeEvidenciaNoEsUnaExencionDeNegocio(){
+        JavaMethod verificar=metodo(SERVICIO_DEL_ENCARGO,"verificarEvidencias");
+        assertTrue(verificar.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE));
+        Set<String> mutaciones=new java.util.TreeSet<>();
+        verificar.getAccessesFromSelf().forEach(a->{
+            var permitidos=MUTADORES_DE_AGREGADOS_ENCARGO.get(a.getTargetOwner().getFullName());
+            if(permitidos!=null&&permitidos.contains(a.getName()))mutaciones.add(a.getTargetOwner().getFullName()+"#"+a.getName());
+        });
+        assertEquals(Set.of(PAQUETE_COMERCIAL+".ArchivoEncargo#vincular"),mutaciones);
+        assertFalse(invocaUnMutador(verificar,ENCARGO,MUTADORES_DEL_ENCARGO));
+        assertTrue(efectosFisicosDesde(verificar,new HashSet<>()).isEmpty());
+        assertFalse(verificar.getAccessesFromSelf().stream().anyMatch(a->
+                REPOSITORIOS_DEL_ENCARGO.contains(a.getTargetOwner().getFullName())&&ESCRIBEN.contains(a.getName())));
+        JavaMethod validar=metodo(SERVICIO_DEL_ENCARGO,"validarPartes");
+        assertTrue(validar.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE));
+        assertEquals(List.of(SERVICIO_DEL_ENCARGO+"#comprobarActivacionAdenda",
+                SERVICIO_DEL_ENCARGO+"#faltantes",SERVICIO_DEL_ENCARGO+"#presentar"),
+                llamadoresDe(SERVICIO_DEL_ENCARGO+"#validarPartes"));
+        assertTrue(llama(validar,SERVICIO_DEL_ENCARGO,"verificarEvidencias"));
+        assertFalse(invocaUnMutador(validar,ENCARGO,MUTADORES_DEL_ENCARGO));
+        assertTrue(efectosFisicosDesde(validar,new HashSet<>()).isEmpty());
+        assertFalse(validar.getAccessesFromSelf().stream().anyMatch(a->
+                MUTADORES_DE_AGREGADOS_ENCARGO.getOrDefault(a.getTargetOwner().getFullName(),Set.of()).contains(a.getName())
+                ||(REPOSITORIOS_DEL_ENCARGO.contains(a.getTargetOwner().getFullName())&&ESCRIBEN.contains(a.getName()))));
+        for(String entrada:List.of("presentar","corregirYReenviar","solicitarFin"))
+            assertTrue(CLASES.get(SERVICIO_DEL_ENCARGO).getMethods().stream().filter(m->m.getName().equals(entrada))
+                    .anyMatch(m->llama(m,SERVICIO_DEL_ENCARGO,"comando")&&llama(m,ACCESO_ENCARGO,"exigirResponsable")),entrada);
+        for(String entrada:List.of("decidir","decidirSolicitudFin","finalizar"))
+            assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,entrada),SERVICIO_DEL_ENCARGO,"comando")
+                    &&llama(metodo(SERVICIO_DEL_ENCARGO,entrada),ACCESO_ENCARGO,"exigirDecision"),entrada);
+        assertTrue(metodo(SERVICIO_DEL_ENCARGO,"activarAdenda").getModifiers()
+                .contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE));
+        assertEquals(List.of(SERVICIO_DEL_ENCARGO+"#decidir"),
+                llamadoresDe(SERVICIO_DEL_ENCARGO+"#activarAdenda"));
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"decidir"),SERVICIO_DEL_ENCARGO,"comprobarDecision"));
+    }
+    @Test
+    @DisplayName("C5: el efecto físico del alquiler sólo procede del hito competente y su transacción")
+    void laComposicionDelAlquilerNoEsUnaEdicionFisicaLibre() {
+        String tipo="com.controllocal.service.impl.ContratoServiceImpl";
+        var entrada=metodo(tipo,"confirmarHito");
+        assertTrue(llama(entrada,ACCESO_ENCARGO,"exigirDecision"));
+        assertEquals(org.springframework.transaction.annotation.Propagation.MANDATORY,
+                entrada.getAnnotationOfType(org.springframework.transaction.annotation.Transactional.class).propagation());
+        for(String nombre:List.of("cerrarResultadoConfirmado","cerrarComposicionConfirmada"))
+            assertTrue(metodo(tipo,nombre).getModifiers()
+                    .contains(com.tngtech.archunit.core.domain.JavaModifier.PRIVATE),nombre);
+        assertTrue(llama(metodo(tipo,"cerrarComposicionConfirmada"),
+                "com.controllocal.service.soporte.Transiciones","aplicarDisponibilidad"));
+    }
+    @Test
+    @DisplayName("C2: el físico conserva su CAS específico, lectura de replay y recibo sin mutador comercial")
+    void laEdicionFisicaNoComparteElEscritorNiLaVersionDelEncargo() throws ReflectiveOperationException {
+        String tipo="com.controllocal.service.impl.PropiedadUniversalServiceImpl";
+        JavaMethod editar=metodo(tipo,"editar");
+        assertTrue(llama(editar,AUTORIDAD,"exigirEdicion"));
+        assertTrue(llama(editar,tipo,"consultarPropiedad"),"También el replay exige lectura física actual.");
+        assertTrue(llama(editar,REPOSITORIOS+"PropiedadRepository","incrementarVersionFisicaSi"));
+        assertTrue(llama(editar,"jakarta.persistence.EntityManager","refresh"));
+        for(String m:List.of("buscar","registrar"))assertTrue(llama(editar,"com.controllocal.service.soporte.ComandosIdempotentes",m));
+        assertEquals(List.of(tipo+"#editar",SERVICIO_DEL_ORIGEN+"#incrementar"),
+                llamadoresDe(REPOSITORIOS+"PropiedadRepository#incrementarVersionFisicaSi"),
+                "Sólo edición física y origen RF014 incrementan con el CAS específico; ambos conservan su autoridad.");
+        assertFalse(CLASES.get(tipo).getMethods().stream().anyMatch(m->Set.of(
+                "aplicarCondiciones","aplicarCondicionesDe","huellaDeCondiciones").contains(m.getName())));
+        assertTrue(llamadoresDe("com.controllocal.service.soporte.AtributosDeEncargo#escribir").stream().noneMatch(n->n.startsWith(tipo+"#")));
+        assertTrue(llamadoresDe("com.controllocal.service.soporte.AtributosDeEncargo#retirar").stream().noneMatch(n->n.startsWith(tipo+"#")));
+        var contador=com.controllocal.domain.inmueble.Propiedad.class.getDeclaredField("versionFisica")
+                .getAnnotation(jakarta.persistence.Column.class);
+        assertFalse(contador.updatable(),"Un flush comercial no puede sobrescribir el contador nativo.");
+        var cas=com.controllocal.persistence.repositorio.PropiedadRepository.class
+                .getMethod("incrementarVersionFisicaSi",long.class,long.class,long.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Query.class);
+        String sql=cas.value().replaceAll("\\s+","");
+        assertTrue(cas.nativeQuery());
+        assertTrue(sql.contains("version_fisica=version_fisica+1"));
+        for(String precondicion:List.of("organizacion_id=:organizacion","id_propiedad=:id","version_fisica=:observada"))
+            assertTrue(sql.contains(precondicion),precondicion);
+    }
+    @Test
+    @DisplayName("C2: las condiciones dinámicas tienen un solo adaptador y entradas canónicas de apertura y edición")
+    void lasCondicionesDinamicasNoAbrenUnaSegundaRutaDeNegocio() {
+        String tipo="com.controllocal.service.encargo.CondicionesDinamicasEncargo";
+        JavaMethod aplicar=metodo(tipo,"aplicar");
+        for(String m:List.of("escribir","retirar"))assertTrue(llama(aplicar,"com.controllocal.service.soporte.AtributosDeEncargo",m));
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"abrir"),tipo,"aplicar"));
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"editar"),tipo,"aplicar"));
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"editar"),ACCESO_ENCARGO,"modificarContenido"));
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"editar"),SERVICIO_DEL_ENCARGO,"comando"));
+        assertFalse(llama(metodo(tipo,"propuesta"),"com.controllocal.service.soporte.AtributosDeEncargo","escribir"));
+        assertTrue(llama(metodo(tipo,"propuesta"),"com.controllocal.service.soporte.AtributosDeEncargo","interpretarPropuesta"));
+    }
+    @Test
+    @DisplayName("C2: observar el mercado exige lectura actual y conserva una serie separada e idempotente")
+    void laObservacionDeMercadoNoEsUnaEscrituraFisicaNiComercial() {
+        String tipo="com.controllocal.service.impl.ObservacionMercadoServiceImpl";
+        JavaMethod registrar=metodo(tipo,"registrar");
+        assertTrue(llama(registrar,"com.controllocal.service.Actor","esAgente"));
+        assertTrue(llama(registrar,tipo,"exigirLectura"));
+        assertTrue(llama(metodo(tipo,"listarDe"),tipo,"exigirLectura"));
+        assertTrue(llama(metodo(tipo,"exigirLectura"),AUTORIDAD,"puedeLeer"));
+        assertTrue(llama(registrar,REPOSITORIOS+"ObservacionMercadoRepository","saveAndFlush"));
+        assertTrue(llama(registrar,REPOSITORIOS+"ComandoIdempotenteRepository","bloquearIdentidad"));
+        for(String m:List.of("buscar","registrar"))assertTrue(llama(registrar,"com.controllocal.service.soporte.ComandosIdempotentes",m));
+        assertFalse(CLASES.get(tipo).getMethods().stream().anyMatch(m->escribeLaPropiedad(m)||escribeLaSerie(m)),
+                "Una observación no autoriza precio, disponibilidad, pacto ni una edición física.");
+    }
+    @Test
+    @DisplayName("C2: seleccionar fotos sólo observa galería autorizada y devuelve un valor privado sin persistir ni abrir originales")
+    void seleccionarFotosNoEsReordenarPublicarNiDescargar() throws ReflectiveOperationException {
+        String tipo="com.controllocal.service.documentos.SeleccionFotosContextualesService";
+        JavaClass servicio=CLASES.get(tipo);
+        assertTrue(llama(metodo(tipo,"observarAutorizado"),"com.controllocal.service.FotoPropiedadService","listar"));
+        assertTrue(llama(metodo(tipo,"seleccionar"),tipo,"observarAutorizado"));
+        assertFalse(llamaFotoFueraDeLecturas(servicio,Set.of("listar","originalPermitidoParaLectura")),"Seleccionar no muta la galería.");
+        assertFalse(servicio.getDirectDependenciesFromSelf().stream().anyMatch(d->{
+            String paquete=d.getTargetClass().getPackageName();
+            return paquete.startsWith("com.controllocal.persistence")||paquete.startsWith("com.controllocal.web.almacen")
+                    ||paquete.startsWith("java.nio.file")||paquete.startsWith("java.net");
+        }),"La selección no persiste ni abre bytes de proveedor, disco o red.");
+        var clase=com.controllocal.service.documentos.SeleccionFotosContextualesService.class;
+        for(var m:List.of(clase.getMethod("observar",long.class,com.controllocal.service.Actor.class),
+                clase.getMethod("seleccionar",long.class,
+                        com.controllocal.service.documentos.SeleccionFotosContextualesService.Solicitud.class,
+                        com.controllocal.service.Actor.class)))
+            assertTrue(m.getAnnotation(org.springframework.transaction.annotation.Transactional.class).readOnly());
+        String foto="com.controllocal.service.impl.FotoPropiedadServiceImpl",predicado="originalPermitidoParaLectura";
+        assertTrue(llama(metodo(tipo,predicado),"com.controllocal.service.FotoPropiedadService",predicado));
+        assertTrue(llama(metodo(tipo,"exigirLectura"),"com.controllocal.service.Actor","esAgente"));
+        assertTrue(llama(metodo(tipo,"exigirLectura"),"com.controllocal.service.Actor","esBroker"));
+        var lectura=metodo(foto,predicado);
+        assertTrue(lectura.getAnnotationOfType(org.springframework.transaction.annotation.Transactional.class).readOnly());
+        assertTrue(llama(lectura,AUTORIDAD,"buscarParaLectura"));
+        assertTrue(llama(lectura,REPOSITORIOS+"FotoPropiedadRepository","deLaPropiedad"));
+        assertFalse(alcanzaUnaEscritura(lectura,Set.copyOf(nombresDe(escriturasDe(AutoridadDeLaPropiedadTest::escribeLaPropiedad))),new HashSet<>()));
+        assertEquals(List.of(tipo+"#"+predicado),llamadoresDe("com.controllocal.service.FotoPropiedadService#"+predicado));
+        assertEquals(List.of("com.controllocal.service.materialia.FuentesMaterialIaCore#exigirRecursoDeLectura"),llamadoresDe(tipo+"#"+predicado));
+    }
+    private static boolean llamaFotoFueraDeLecturas(JavaClass tipo,Set<String> lecturas){
+        return tipo.getMethods().stream().flatMap(m->m.getAccessesFromSelf().stream())
+                .anyMatch(a->a.getTargetOwner().getFullName().equals("com.controllocal.service.FotoPropiedadService")&&!lecturas.contains(a.getName()));
+    }
+    /** Todos los paquetes Main, también Web: otro escritor no queda fuera por cambiar de capa. */
+    private static List<String> escritoresDeArtefacto(String repositorio,String entidad){
+        var mutadores=mutadoresDe(entidad);
+        return CLASES.stream().flatMap(c->c.getMethods().stream())
+                .filter(m->escribeEnRepositorio(m,repositorio)||invocaUnMutador(m,entidad,mutadores))
+                .map(AutoridadDeLaPropiedadTest::nombre).distinct().sorted().toList();
+    }
+    @Test void copiasComercialesTienenUnEscritorConLecturaActual(){
+        assertTrue(FUERA_DE_LOS_DOS_UNIVERSOS.containsKey("copia_comercial_foto"));
+        assertEquals(List.of(FOTOS_COMERCIALES+"#preparar"),escritoresDeArtefacto(REPOSITORIOS+"CopiaComercialFotoRepository",COPIA_COMERCIAL));
+        assertTrue(mutadoresDe(COPIA_COMERCIAL).contains("de"));
+        var preparar=metodo(FOTOS_COMERCIALES,"preparar");
+        assertTrue(escribeEnRepositorio(preparar,REPOSITORIOS+"CopiaComercialFotoRepository"));
+        assertTrue(llama(preparar,"com.controllocal.service.actividad.ContextosDeActividad","exigirAgente"));
+        assertTrue(llama(preparar,FOTOS_COMERCIALES,"exigirFoto"));
+        var exigirFoto=metodo(FOTOS_COMERCIALES,"exigirFoto");
+        assertTrue(llama(exigirFoto,"com.controllocal.service.actividad.ContextosDeActividad","exigirOperador"));
+        assertTrue(llama(exigirFoto,"com.controllocal.service.FotoPropiedadService","listar"));
+        // La galería aplica el mismo permiso SQL fresco, sin una prelectura EXISTS duplicada.
+        var listar=metodo("com.controllocal.service.impl.FotoPropiedadServiceImpl","listar");
+        assertTrue(llama(listar,AUTORIDAD,"buscarParaLectura"));
+        assertTrue(llama(metodo(AUTORIDAD,"buscarParaLectura"),REPOSITORIOS+"PropiedadRepository","buscarParaLectura"));
+        assertFalse(llamaFotoFueraDeLecturas(CLASES.get(FOTOS_COMERCIALES),Set.of("listar")));
+        assertFalse(CLASES.get(FOTOS_COMERCIALES).getMethods().stream().anyMatch(m->escribeLaPropiedad(m)||escribeLaSerie(m)),
+                "Una copia saneada no edita el original ni el pacto.");
+    }
+    @Test void piezasTienenEscritoresYEntradasCerrados(){
+        assertTrue(FUERA_DE_LOS_DOS_UNIVERSOS.containsKey("pieza_comercial"));
+        assertEquals(List.of(PIEZAS_COMERCIALES+"#generar",PIEZAS_COMERCIALES+"#preparar",PIEZAS_COMERCIALES+"#regenerar"),
+                escritoresDeArtefacto(REPOSITORIOS+"PiezaComercialRepository",PIEZA_COMERCIAL));
+        assertTrue(mutadoresDe(PIEZA_COMERCIAL).containsAll(Set.of("preparar","registrarArchivo")));
+        assertEquals(List.of(PIEZAS_COMERCIALES+"#obtenerParaDifusion",PIEZAS_COMERCIALES+"#previsualizar"),llamadoresDe(PIEZAS_COMERCIALES+"#generar"));
+        assertEquals(List.of(PIEZAS_COMERCIALES+"#obtenerParaDifusion",PIEZAS_COMERCIALES+"#previsualizar"),llamadoresDe(PIEZAS_COMERCIALES+"#paraGenerar"));
+        // C1/C6: consulta protegida del Encargo; DIF conserva el camino que sí protege emisión.
+        for(String entrada:List.of("preparar","regenerar","paraGenerar"))
+            for(String guarda:List.of("iniciarConLecturaProtegida","leerParaActuar","exigirResponsable"))
+                assertTrue(llama(metodo(PIEZAS_COMERCIALES,entrada),ACCESO_ENCARGO,guarda),entrada+"/"+guarda);
+        for(String guarda:List.of("iniciar","escribir"))
+            assertTrue(llama(metodo(PIEZAS_COMERCIALES,"paraGenerar"),ACCESO_ENCARGO,guarda),"DIF/"+guarda);
+        for(String entrada:List.of("preparar","regenerar","previsualizar","obtenerParaDifusion"))assertTrue(llama(metodo(PIEZAS_COMERCIALES,entrada),PIEZAS_COMERCIALES,"iniciar"),entrada);
+        assertTrue(llama(metodo(PIEZAS_COMERCIALES,"iniciar"),"com.controllocal.service.actividad.ContextosDeActividad","iniciar"));
+        assertTrue(llama(metodo(PIEZAS_COMERCIALES,"iniciar"),"com.controllocal.service.actividad.ContextosDeActividad","iniciarConLecturaProtegida"));
+        assertTrue(mandatorio(metodo(PIEZAS_COMERCIALES,"obtenerParaDifusion")));
+        var resolver=CLASES.get(PIEZAS_COMERCIALES).getMethods().stream()
+                .filter(m->m.getName().equals("contenido")&&m.getRawParameterTypes().size()==3).findFirst().orElseThrow();
+        assertTrue(llama(resolver,"com.controllocal.service.materialia.ResultadosMaterialIa","bloquearSeleccionesParaLectura"));
+        assertTrue(llama(resolver,FOTOS_COMERCIALES,"prepararCopias"));
+        assertEquals(List.of(PIEZAS_COMERCIALES+"#contenido"),llamadoresDe(FOTOS_COMERCIALES+"#prepararCopias"));
+        assertEquals(List.of(FOTOS_COMERCIALES+"#prepararCopias"),llamadoresDe(FOTOS_COMERCIALES+"#preparar"));
+        var lote=metodo(FOTOS_COMERCIALES,"prepararCopias");
+        assertTrue(mandatorio(lote));
+        assertTrue(llama(lote,REPOSITORIOS+"ComandoIdempotenteRepository","bloquearIdentidad"));
+        assertTrue(llama(lote,REPOSITORIOS+"ComandoIdempotenteRepository","bloquearLecturaIdentidad"));
+        assertTrue(llama(lote,REPOSITORIOS+"CopiaComercialFotoRepository","originalesConCopia"));
+        assertTrue(llama(metodo(PIEZAS_COMERCIALES,"generar"),PIEZAS_COMERCIALES,"bloquearSeleccionesNuevas"));
+        assertTrue(llama(metodo(PIEZAS_COMERCIALES,"generar"),"com.controllocal.service.PublicacionService","exigirPublicabilidadDePieza"));
+        assertFalse(CLASES.get(PIEZAS_COMERCIALES).getMethods().stream().anyMatch(m->escribeLaPropiedad(m)||escribeLaSerie(m)),
+                "Crear una pieza no modifica el inmueble ni sus condiciones pactadas.");
+    }
+    @Test
+    @DisplayName("C2: el comando único revalida SID, alcance y efecto antes de registrar el resultado")
+    void laFronteraDeComandosC2ConservaSusGuardas() {
+        JavaMethod comando=metodo(SERVICIO_DEL_ENCARGO,"comando");
+        for(String nombre:List.of("iniciar","escribir")) assertTrue(llama(comando,ACCESO_ENCARGO,nombre),nombre);
+        assertTrue(llama(comando,"com.controllocal.service.soporte.ComandosIdempotentes","buscar"));
+        assertTrue(llama(comando,"com.controllocal.service.soporte.ComandosIdempotentes","registrar"));
+        assertTrue(llama(comando,"jakarta.persistence.EntityManager","flush"));
+        assertTrue(llama(comando,"java.util.function.Consumer","accept"),"La autoridad específica debe ejecutarse, no sólo recibirse.");
+        assertTrue(llama(comando,"java.util.function.Function","apply"));
+        for(String nombre:List.of("declararComposicion","prepararDocumento","regenerarDocumento","cargarArchivo","adjuntarOReutilizar",
+                "presentar","corregirYReenviar","decidir","editar","solicitarFin","cancelarSolicitudFin","decidirSolicitudFin","finalizar")) {
+            assertTrue(CLASES.get(SERVICIO_DEL_ENCARGO).getMethods().stream().filter(m->m.getName().equals(nombre))
+                    .anyMatch(m->llama(m,SERVICIO_DEL_ENCARGO,"comando")),nombre+" no puede abrir otra vía de mutación.");
+        }
+        JavaMethod modificar=metodo(ACCESO_ENCARGO,"modificarContenido");
+        assertTrue(llama(modificar,ACCESO_ENCARGO,"exigirEditor"));
+        assertTrue(llama(modificar,ACCESO_ENCARGO,"contexto"));
+        assertTrue(llama(modificar,ENCARGO,"getVersion"));
+        assertTrue(llama(modificar,"java.util.function.BooleanSupplier","getAsBoolean"));
+        assertTrue(CLASES.get(ACCESO_ENCARGO).getMethods().stream().filter(m->m.getName().equals("iniciar"))
+                .anyMatch(m->llama(m,"com.controllocal.service.ContextosService","exigirContexto")
+                    &&llama(m,REPOSITORIOS+"CuentaAccesoRepository","bloquearCambioAcceso")
+                    &&llama(m,"com.controllocal.service.soporte.Alcances","exigirOperador")));
+    }
+    @Test
+    @DisplayName("C2: la única reasignación conserva contexto, CAS y trazabilidad")
+    void laReasignacionC2NoEsUnaExencionSinGuardas() {
+        JavaMethod m=metodo("com.controllocal.service.impl.CaptacionServiceImpl","reasignar");
+        for(String nombre:List.of("iniciarReasignacion","escribirParaReasignacion")) assertTrue(llama(m,ACCESO_ENCARGO,nombre),nombre);
+        assertTrue(llama(m,"com.controllocal.service.encargo.ReglasDeResponsableEncargo","exigirCambioOperativo"));
+        assertTrue(llama(m,"com.controllocal.service.soporte.ElegibilidadDeResponsable","exigirElegible"));
+        assertTrue(llama(m,REPOSITORIO_DEL_ENCARGO,CAS_DEL_AGENTE));
+        assertTrue(llama(m,REPOSITORIOS+"ReasignacionCaptacionRepository","saveAndFlush"));
+        assertTrue(llama(m,"com.controllocal.service.soporte.ComandosIdempotentes","buscar"));
+        assertTrue(llama(m,"com.controllocal.service.soporte.ComandosIdempotentes","registrar"));
+    }
+    @Test
+    @DisplayName("C2: preguntar capacidad no puede acreditar una guarda que deniega")
+    void elDetectorC2DistingueGuardaDePregunta() {
+        var ejemplo=new ClassFileImporter().importClasses(GuardasC2DelFixture.class).get(GuardasC2DelFixture.class);
+        assertTrue(ejemplo.getMethods().stream().filter(m->m.getName().equals("protegido"))
+                .flatMap(m->m.getAccessesFromSelf().stream()).anyMatch(a->esGuardaQueDeniega(a,GUARDAS_DEL_ENCARGO)));
+        assertFalse(ejemplo.getMethods().stream().filter(m->m.getName().equals("soloPregunta"))
+                .flatMap(m->m.getAccessesFromSelf().stream()).anyMatch(a->esGuardaQueDeniega(a,GUARDAS_DEL_ENCARGO)));
+        assertFalse(ejemplo.getMethods().stream().filter(m->m.getName().equals("sinGuarda"))
+                .flatMap(m->m.getAccessesFromSelf().stream()).anyMatch(a->esGuardaQueDeniega(a,GUARDAS_DEL_ENCARGO)));
+    }
+    static class GuardasC2DelFixture {
+        void protegido(com.controllocal.service.encargo.AccesoEncargo acceso,com.controllocal.domain.comercial.Captacion c,
+                com.controllocal.service.Actor actor){acceso.exigirEditor(c,actor);}
+        boolean soloPregunta(com.controllocal.service.encargo.AccesoEncargo acceso,com.controllocal.domain.comercial.Captacion c,
+                com.controllocal.service.Actor actor){return acceso.puedeDecidir(c,actor);}
+        void sinGuarda(com.controllocal.domain.comercial.Captacion c){c.setObservaciones("dato de prueba");}
+    }
+
+    @Test
+    @DisplayName("RF052: cargar y vincular conservan destino, versión y reautorización del original")
+    void lasCargasYVinculosNoConfundenOriginalConConformidad() {
+        for(String nombre:List.of("cargarArchivo","adjuntarOReutilizar")) {
+            var m=metodo(SERVICIO_DEL_ENCARGO,nombre);
+            assertTrue(llama(m,SERVICIO_DEL_ENCARGO,"comando"));
+            assertTrue(llama(m,SERVICIO_DEL_ENCARGO,"autorizarDestino"));
+            assertTrue(llama(m,SERVICIO_DEL_ENCARGO,"validarVersionDestino"));
+        }
+        var vinculo=metodo(SERVICIO_DEL_ENCARGO,"adjuntarOReutilizar");
+        String a04="com.controllocal.service.archivo.AccesoArchivoService";
+        for(String nombre:List.of("resolver","verificarContenido","revalidar")) assertTrue(llama(vinculo,a04,nombre),nombre);
+        assertTrue(llama(metodo(SERVICIO_DEL_ENCARGO,"cargarArchivo"),REPOSITORIOS+"CargaArchivoContextualRepository","save"));
+        assertTrue(llama(vinculo,REPOSITORIOS+"ArchivoEncargoRepository","save"));
+        assertFalse(CLASES.get(SERVICIO_DEL_ENCARGO).getMethods().stream().anyMatch(m->m.getName().equals("adjuntarEvidencia")),
+                "La antigua entrada que recibía bytes y vinculaba en un paso se retira tras migrar consumidores.");
+    }
+
 }

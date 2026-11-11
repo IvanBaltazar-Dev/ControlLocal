@@ -1,11 +1,13 @@
 package com.controllocal.web.controlador;
 
+import com.controllocal.service.Actor;
+import com.controllocal.service.FotoPropiedadService;
+import com.controllocal.service.FotoPropiedadService.FotoDePropiedad;
 import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PrecioLocalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.web.almacen.AlmacenDocumentos;
-import com.controllocal.web.almacen.AlmacenException;
+import com.controllocal.web.almacen.GaleriaDeFotos;
 import com.controllocal.web.dto.FotoLocalRequest;
 import com.controllocal.web.dto.FotoLocalResponse;
 import com.controllocal.web.dto.LocalRequest;
@@ -45,17 +47,16 @@ import java.util.List;
 @RequestMapping("locales")
 public class LocalesController {
 
-    private static final long TAMANO_MAXIMO_FOTO = 5L * 1024 * 1024; // 5 MB
-
     private final LocalComercialService locales;
     private final PrecioLocalService precios;
-    private final AlmacenDocumentos almacen;
+    /** La galeria, compartida con {@code /propiedades/{id}/fotos} (WP-C). */
+    private final GaleriaDeFotos galeria;
 
     public LocalesController(LocalComercialService locales,
-                             PrecioLocalService precios, AlmacenDocumentos almacen) {
+                             PrecioLocalService precios, GaleriaDeFotos galeria) {
         this.locales = locales;
         this.precios = precios;
-        this.almacen = almacen;
+        this.galeria = galeria;
     }
 
     // =========================================================
@@ -207,11 +208,29 @@ public class LocalesController {
     // y se sirve por GET /documentos/contenido?clave= (URL tipo capability).
     // =========================================================
 
+    /**
+     * <b>La misma galeria que {@code /propiedades/{id}/fotos}</b>, con la forma
+     * de respuesta de la v1 y su tope de 6 (WP-C).
+     *
+     * <p>Las tres operaciones delegan en {@link GaleriaDeFotos}, que es el unico
+     * sitio donde se valida el binario, y de ahi en
+     * {@code FotoPropiedadService}, que es el unico escritor de
+     * {@code foto_propiedad}. <b>Una foto subida por aqui se ve por la ruta
+     * universal y al reves</b>: es la misma propiedad y la misma tabla.
+     *
+     * <p>Lo que <b>no</b> cambia es el tope: esta puerta prometia 6 y sigue
+     * prometiendo 6. La consecuencia, dicha en vez de descubierta: una
+     * propiedad con 6 o mas fotos subidas por la ruta universal rechaza aqui la
+     * siguiente, aunque el tope universal sea 12.
+     *
+     * <p>Y {@code orden} no viaja en esta respuesta, que es la de la v1. Quien
+     * lo necesite —o quiera reordenar— usa {@code /propiedades/{id}/fotos}: la
+     * puerta heredada conserva su forma, no gana capacidades nuevas.
+     */
     @GetMapping("{id}/fotos")
     public List<FotoLocalResponse> listarFotos(@PathVariable long id) {
-        String proveedor = almacen.proveedor();
-        return locales.listarFotos(id).stream()
-                .map(f -> new FotoLocalResponse(f.idFoto(), f.clave(), f.nombreArchivo(), proveedor))
+        return galeria.listar(id, SesionActual.actor()).stream()
+                .map(f -> new FotoLocalResponse(f.id(), f.clave(), f.nombreArchivo(), f.proveedor(),f.utilidad()))
                 .toList();
     }
 
@@ -219,67 +238,20 @@ public class LocalesController {
     @PreAuthorize("hasRole('AGENTE')")
     public ResponseEntity<FotoLocalResponse> subirFoto(@PathVariable long id,
                                                        @RequestBody(required = false) FotoLocalRequest dto) {
-        if (dto == null || dto.nombreArchivo() == null || dto.nombreArchivo().isBlank()
-                || dto.contenidoBase64() == null || dto.contenidoBase64().isBlank()) {
+        if (dto == null) {
             throw new ReglaNegocioException("La foto es obligatoria.");
         }
-        String contentType = contentTypeImagen(dto.nombreArchivo());
-        if (contentType == null) {
-            throw new ReglaNegocioException("Solo se permiten imagenes PNG o JPG.");
-        }
-        byte[] contenido;
-        try {
-            contenido = Base64.getDecoder().decode(dto.contenidoBase64());
-        } catch (IllegalArgumentException error) {
-            throw new ReglaNegocioException("El contenido de la imagen (base64) es invalido.");
-        }
-        if (contenido.length == 0) {
-            throw new ReglaNegocioException("La imagen esta vacia.");
-        }
-        if (contenido.length > TAMANO_MAXIMO_FOTO) {
-            throw new ReglaNegocioException(
-                    "La imagen supera el maximo de " + (TAMANO_MAXIMO_FOTO / 1024 / 1024) + " MB.");
-        }
-        // Firma binaria real (magic bytes), no solo la extension: rechaza
-        // archivos no-imagen renombrados a .png/.jpg (igual que la v1).
-        if (!firmaImagenValida(contenido, contentType)) {
-            throw new ReglaNegocioException("El archivo no es una imagen PNG o JPG valida.");
-        }
-
-        AlmacenDocumentos.ArchivoGuardado guardado;
-        try {
-            guardado = almacen.guardar(
-                    AlmacenDocumentos.carpetaDeTenant(SesionActual.actor().idOrganizacion(),
-                            "locales/" + id),
-                    dto.nombreArchivo(), contenido, contentType);
-        } catch (AlmacenException error) {
-            throw new ErrorAlmacenException("No se pudo guardar la foto en el almacen: " + error.getMessage());
-        }
-        LocalComercialService.FotoLocal foto;
-        try {
-            foto = locales.agregarFoto(id, guardado.clave(), guardado.nombre(), SesionActual.actor());
-        } catch (RuntimeException error) {
-            // El registro fallo (local inexistente, tope de 6): se limpia el
-            // binario recien subido para no dejar huerfanos en el almacen.
-            almacen.eliminar(guardado.clave());
-            throw error;
-        }
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new FotoLocalResponse(foto.idFoto(), foto.clave(), foto.nombreArchivo(), almacen.proveedor()));
+        Actor actor = SesionActual.actor();
+        FotoDePropiedad foto = galeria.agregar(id, dto.nombreArchivo(), dto.contenidoBase64(),
+                FotoPropiedadService.TOPE_DEL_LOCAL, actor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(new FotoLocalResponse(
+                foto.id(), foto.clave(), foto.nombreArchivo(), foto.proveedor(),foto.utilidad()));
     }
 
     @DeleteMapping("{id}/fotos/{idFoto}")
     @PreAuthorize("hasRole('AGENTE')")
     public ResponseEntity<Void> eliminarFoto(@PathVariable long id, @PathVariable long idFoto) {
-        String clave = locales.eliminarFoto(idFoto, SesionActual.actor())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Foto"));
-        // Borra el binario del almacen best-effort: si ya no esta, la
-        // operacion no debe fallar (el registro ya se elimino).
-        try {
-            almacen.eliminar(clave);
-        } catch (RuntimeException ignorada) {
-            // huerfano tolerado.
-        }
+        galeria.eliminar(idFoto, SesionActual.actor());
         return ResponseEntity.noContent().build();
     }
 
@@ -287,31 +259,5 @@ public class LocalesController {
         if (dto == null) {
             throw new ReglaNegocioException("Los datos del local son obligatorios.");
         }
-    }
-
-    private static String contentTypeImagen(String nombre) {
-        String n = nombre == null ? "" : nombre.toLowerCase();
-        if (n.endsWith(".png")) {
-            return "image/png";
-        }
-        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) {
-            return "image/jpeg";
-        }
-        return null;
-    }
-
-    // Firma binaria: PNG = 89 50 4E 47 ; JPG = FF D8 FF.
-    private static boolean firmaImagenValida(byte[] c, String contentType) {
-        if (c == null || c.length < 4) {
-            return false;
-        }
-        if ("image/png".equals(contentType)) {
-            return (c[0] & 0xFF) == 0x89 && (c[1] & 0xFF) == 0x50
-                    && (c[2] & 0xFF) == 0x4E && (c[3] & 0xFF) == 0x47;
-        }
-        if ("image/jpeg".equals(contentType)) {
-            return (c[0] & 0xFF) == 0xFF && (c[1] & 0xFF) == 0xD8 && (c[2] & 0xFF) == 0xFF;
-        }
-        return false;
     }
 }

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Contrato CONGELADO del EvaluacionRest Jakarta: la decision del broker sobre
- * la solicitud. Recurso de BROKER/ADMIN — el agente no entra (403, §7); el
+ * la solicitud. Recurso comercial de BROKER; administrar no concede lectura. El
  * broker ve solo las que firmo y el historial por solicitud vive en
  * {@code GET /solicitudes/{id}/evaluaciones}, que si alcanza el agente dueno.
  *
@@ -43,20 +43,21 @@ public class EvaluacionesController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @PreAuthorize("hasRole('BROKER')")
     public PageResponse<EvaluacionResponse> listar(@RequestParam(defaultValue = "1") int pagina,
                                                    @RequestParam(defaultValue = "10") int tamano) {
         return pagina(evaluaciones.listar(pagina, tamano, SesionActual.actor()), pagina, tamano);
     }
 
     @GetMapping("{id}")
-    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @PreAuthorize("hasRole('BROKER')")
     public EvaluacionResponse obtener(@PathVariable long id) {
         return EvaluacionResponse.desde(evaluaciones.obtener(id, SesionActual.actor()));
     }
 
     @PostMapping
     @PreAuthorize("hasRole('BROKER')")
+    @com.controllocal.web.capacidades.CapacidadReconocida({"evaluar_solicitud"})
     public ResponseEntity<EvaluacionResponse> registrar(
             @RequestBody(required = false) EvaluacionRequest dto) {
         EvaluacionResponse creada = EvaluacionResponse.desde(

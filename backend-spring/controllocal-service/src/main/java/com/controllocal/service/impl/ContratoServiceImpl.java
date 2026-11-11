@@ -2,9 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.ComisionLiquidacion;
 import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.domain.comercial.Oferta;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.RevisionDisponibilidad;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
@@ -20,11 +18,10 @@ import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.SupervisionAgente;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.OfertaRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.PublicacionRepository;
+import com.controllocal.service.publicacion.HistoriadorPublicacion;
 import com.controllocal.persistence.repositorio.RevisionDisponibilidadRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
@@ -35,6 +32,20 @@ import com.controllocal.service.TareaService;
 import com.controllocal.service.ComisionService.FichaComision;
 import com.controllocal.service.ContratoService;
 import com.controllocal.service.Pagina;
+import com.controllocal.service.PreparacionesDeContrato;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.encargo.AccesoEncargo;
+import com.controllocal.service.formalizacion.HitosConfirmados.*;
+import com.controllocal.service.formalizacion.FormalizacionService.AcuerdoFinalDocumentado;
+import com.controllocal.service.soporte.AccesoContrato;
+import com.controllocal.service.soporte.ComandosIdempotentes;
+import com.controllocal.service.soporte.Documentos;
+import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.persistence.repositorio.ComandoIdempotenteRepository;
+import com.controllocal.persistence.repositorio.MesaNegociacionRepository;
+import com.controllocal.domain.comercial.TipoHitoContractual;
+import jakarta.persistence.EntityManager;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ConflictoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
@@ -44,13 +55,12 @@ import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Idempotencia;
 import com.controllocal.service.soporte.Transiciones;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -58,30 +68,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.*;
+import java.util.function.Supplier;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Reglas y mensajes calcados de {@code ContratosRest} +
- * {@code ContratoAlquilerBusinessLogicImpl} (contrato congelado F4 §5 y §6).
- *
- * <p>{@link #registrar} es la operacion mas pesada del sistema: una sola
- * transaccion que toca <b>siete</b> entidades y cierra el ciclo comercial.
- * Las CUATRO que cambian de estado —oportunidad, solicitud, captacion y
- * propiedad— pasan por {@link Transiciones}, asi que el cierre deja cuatro
- * filas en {@code historial_estado} con actor y motivo. La v1 movia esos
- * estados a mano y no auditaba nada (MEJ-01).
- *
- * <p><b>El alcance del BROKER aqui es por CAPTACION</b> (las captaciones de
- * su equipo), no por el agente de la solicitud como en
- * {@code SolicitudServiceImpl}. Son dos reglas distintas del cable y no se
- * unifican; el parametro {@code porAgente} del repositorio distingue las
- * ramas.
- *
- * <p>Los dos gates de comision son del BROKER supervisor, <b>sin ADMIN</b>
- * (el admin solo lee): el rol lo exige el controlador, el alcance se
- * comprueba aqui.
- */
+/** RF058/059: preparación privada y resultado del hito confirmado, sin producir dinero. */
 @Service
 public class ContratoServiceImpl implements ContratoService {
 
@@ -95,7 +87,7 @@ public class ContratoServiceImpl implements ContratoService {
     private final CaptacionRepository captaciones;
     private final PropiedadRepository propiedades;
     private final PrecioPropiedadRepository precios;
-    private final PublicacionRepository publicaciones;
+    private final HistoriadorPublicacion publicaciones;
     private final ComisionService comisiones;
     private final Alcances alcances;
     private final Transiciones transiciones;
@@ -103,28 +95,32 @@ public class ContratoServiceImpl implements ContratoService {
     private final AlertaService alertas;
     private final SupervisionAgenteRepository supervisiones;
     private final RevisionDisponibilidadRepository revisiones;
-    /**
-     * La mesa de negociacion (WP-A). La lee para atar el hito {@code C} del
-     * alquiler a la vuelta que lo produjo, igual que hace el cierre de venta.
-     */
-    private final OfertaRepository ofertas;
-    /** Proxy de si mismo: la relectura tras la carrera necesita transaccion NUEVA. */
-    private final ContratoService autoinvocado;
+    private final AccesoContrato accesoContratos;
+    private final PreparacionesDeContrato preparaciones;
+    private final ContextosDeActividad contextos;
+    private final ComandosIdempotentes comandos;
+    private final ComandoIdempotenteRepository recibos;
+    private final Documentos documentos;
+    private final EntityManager entidades;
+    private final AccesoEncargo accesoEncargos;
+    private final MesaNegociacionRepository mesas;
 
     public ContratoServiceImpl(ContratoAlquilerRepository contratos,
                                SolicitudAlquilerRepository solicitudes,
                                OportunidadComercialRepository oportunidades,
                                CaptacionRepository captaciones, PropiedadRepository propiedades,
-                               PrecioPropiedadRepository precios, PublicacionRepository publicaciones,
+                               PrecioPropiedadRepository precios, HistoriadorPublicacion publicaciones,
                                ComisionService comisiones, Alcances alcances,
                                Transiciones transiciones, TareaService tareas,
                                AlertaService alertas, SupervisionAgenteRepository supervisiones,
                                RevisionDisponibilidadRepository revisiones,
-                               OfertaRepository ofertas,
-                               @Lazy ContratoService autoinvocado) {
-        this.ofertas = ofertas;
+                               AccesoContrato accesoContratos,PreparacionesDeContrato preparaciones,
+                               ContextosDeActividad contextos,ComandosIdempotentes comandos,ComandoIdempotenteRepository recibos,
+                               Documentos documentos,EntityManager entidades,AccesoEncargo accesoEncargos,MesaNegociacionRepository mesas) {
+        this.accesoContratos=accesoContratos;this.preparaciones=preparaciones;this.contextos=contextos;
+        this.comandos=comandos;this.recibos=recibos;this.documentos=documentos;this.entidades=entidades;
+        this.accesoEncargos=accesoEncargos;this.mesas=mesas;
         this.revisiones = revisiones;
-        this.autoinvocado = autoinvocado;
         this.tareas = tareas;
         this.alertas = alertas;
         this.supervisiones = supervisiones;
@@ -138,6 +134,131 @@ public class ContratoServiceImpl implements ContratoService {
         this.comisiones = comisiones;
         this.alcances = alcances;
         this.transiciones = transiciones;
+    }
+
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public long confirmarHito(ContextoEconomico ctx,FuenteHitoConfirmado hito,FuenteEconomicaFinal fuente,
+                               AcuerdoFinalDocumentado revisado,Actor actor,PreparacionContrato preparacionRevisada) {
+        if(ctx==null||hito==null||fuente==null||revisado==null||hito.fechaEfectiva()==null)
+            throw new ReglaNegocioException("La confirmación conserva hito, fecha efectiva y fuente económica exacta.");
+        if(ctx.organizacion()!=actor.idOrganizacion()||ctx.operacion()!=OperacionInmobiliaria.ALQUILER
+                ||hito.tipo()!=TipoHitoContractual.CONTRATO_ALQUILER||!Objects.equals(ctx.referencia(),hito.contexto())
+                ||!Objects.equals(ctx.pacto(),hito.pacto())||!Objects.equals(fuente.referencia(),hito.fuenteEconomica()))
+            throw new ConflictoException("El hito no pertenece a ese contexto económico de alquiler.");
+        if(ctx.oportunidad()==null)throw new ReglaNegocioException("La confirmación de este alquiler necesita su mesa real acreditada.");
+        var encargo=accesoEncargos.leer(ctx.encargo(),actor);accesoEncargos.exigirDecision(encargo,actor);
+        var oportunidad=oportunidades.buscarFicha(actor.idOrganizacion(),ctx.oportunidad()).orElseThrow(()->new NoEncontradoException("Oportunidad"));
+        if(oportunidad.getCaptacion()==null||!Objects.equals(oportunidad.getCaptacion().getId(),ctx.encargo()))
+            throw new ConflictoException("La oportunidad no pertenece al Encargo confirmado.");
+        if(fuente.rentaMensual()==null||fuente.rentaMensual().importe()==null||fuente.rentaMensual().importe().signum()<=0)
+            throw new ReglaNegocioException("Conserva la renta mensual final acreditada para el objeto contratado.");
+        String moneda=CondicionesEconomicas.moneda(fuente.rentaMensual().moneda(),"de la renta mensual final");
+        if(fuente.objeto()==null||!Objects.equals(fuente.objeto().encargo(),ctx.encargo())
+                ||fuente.objeto().unidades()==null||fuente.objeto().unidades().isEmpty())
+            throw new ReglaNegocioException("Conserva la composición exacta cubierta por el hito.");
+        var terminos=revisado.terminosAlquiler();
+        LocalDate inicio=terminos==null?(preparacionRevisada==null?null:preparacionRevisada.inicio()):terminos.inicio();
+        LocalDate fin=terminos==null?(preparacionRevisada==null?null:preparacionRevisada.fin()):terminos.fin();
+        if(inicio==null||fin==null||!fin.isAfter(inicio))
+            throw new ReglaNegocioException("El contrato confirmado necesita sus fechas inicial y final acreditadas; no se inventan desde la firma.");
+        SolicitudAlquiler solicitud=null;
+        if(ctx.solicitudAlquiler()!=null) {
+            solicitud=solicitudes.buscarFicha(actor.idOrganizacion(),ctx.solicitudAlquiler()).orElseThrow(()->new NoEncontradoException("Solicitud"));
+            if(solicitud.getOportunidad()==null||!Objects.equals(solicitud.getOportunidad().getId(),oportunidad.getId()))
+                throw new ConflictoException("La solicitud no pertenece a la mesa del hito.");
+        }
+        ContratoAlquiler contrato;ContratoAlquiler anterior=null;
+        if(ctx.contratoAlquiler()!=null) {
+            var meta=preparaciones.consultar(ctx.contratoAlquiler(),actor);
+            SortedSet<Long> ids=new TreeSet<>();ids.add(meta.id());if(meta.contratoAnterior()!=null)ids.add(meta.contratoAnterior());
+            Map<Long,ContratoAlquiler> bloqueados=new HashMap<>();
+            for(long id:ids) {
+                var c=contratos.bloquear(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Contrato"));
+                entidades.refresh(c,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);bloqueados.put(id,c);
+            }
+            contrato=bloqueados.get(meta.id());anterior=meta.contratoAnterior()==null?null:bloqueados.get(meta.contratoAnterior());
+            var actual=preparaciones.consultar(meta.id(),actor);
+            if(actual.encargo()!=ctx.encargo()||actual.oportunidad()!=ctx.oportunidad()
+                    ||!Objects.equals(actual.solicitud(),ctx.solicitudAlquiler()))throw new ConflictoException("Cambió el contexto del contrato preparado.");
+            if(hito.rectifica()==null) {
+                if(preparacionRevisada==null||preparacionRevisada.id()!=actual.id()
+                        ||!Objects.equals(preparacionRevisada.huella(),actual.huella())||!EstadoContrato.EN_PROCESO.codigo().equals(actual.estado()))
+                    throw new ConflictoException("La confirmación no cubre la preparación exacta revisada.");
+            } else if(EstadoContrato.EN_PROCESO.codigo().equals(actual.estado()))
+                throw new ConflictoException("Una rectificación no confirma por primera vez una preparación.");
+        } else {
+            if(hito.rectifica()!=null)throw new ConflictoException("Falta el contrato original de la rectificación.");
+            if(preparacionRevisada!=null)throw new ConflictoException("El contexto no identifica el contrato preparado revisado.");
+            if(contratos.existeDeOportunidad(actor.idOrganizacion(),oportunidad.getId()))throw new ConflictoException("La mesa ya conserva un contrato; identifica su contexto original.");
+            contrato=new ContratoAlquiler();contrato.setOrganizacionId(actor.idOrganizacion());contrato.setOportunidad(oportunidad);contrato.setSolicitud(solicitud);
+        }
+        boolean rectificacion=hito.rectifica()!=null;
+        if(!rectificacion&&anterior!=null) {
+            accesoContratos.exigir(anterior,actor);
+            if(anterior.getOportunidad()==null||!Objects.equals(anterior.getOportunidad().getId(),ctx.oportunidad()))
+                throw new ConflictoException("El contrato anterior no pertenece a la mesa de esta renovación.");
+            if(!EstadoContrato.VIGENTE.codigo().equals(anterior.estadoActual()))throw new ConflictoException("El contrato anterior ya no está vigente.");
+            transiciones.aplicar(anterior,anterior.getId(),EstadoContrato.RENOVADO.codigo(),actor,"Renovación contractual confirmada",hito.fechaEfectiva());
+            anterior.setFechaEfectivaEstado(hito.fechaEfectiva());contratos.saveAndFlush(anterior);
+        }
+        contrato.setFechaCierre(hito.fechaEfectiva());contrato.setFechaInicioContrato(inicio);contrato.setFechaFinContrato(fin);
+        contrato.setRentaContractual(fuente.rentaMensual().importe());contrato.setMoneda(moneda);
+        if(!rectificacion) {
+            Long profesional=contrato.getIdRolAgenteCierre()!=null?contrato.getIdRolAgenteCierre():solicitud!=null&&solicitud.getAgente()!=null?solicitud.getAgente().getId():encargo.getAgente().getId();
+            contrato.atribuir(profesional,actor.esBroker()?actor.idRolOperativo():null,encargo.getId(),encargo.getPropiedad().getId(),
+                    oportunidad.getCliente()==null?null:oportunidad.getCliente().getId());
+            if(contrato.getId()==null)transiciones.iniciar(contrato,EstadoContrato.FIRMADO.codigo());
+            else transiciones.aplicar(contrato,contrato.getId(),EstadoContrato.FIRMADO.codigo(),actor,"Hito contractual confirmado",hito.fechaEfectiva());
+            contrato.setFechaEfectivaEstado(hito.fechaEfectiva());
+        }
+        contrato=contratos.saveAndFlush(contrato);
+        if(!rectificacion)cerrarResultadoConfirmado(encargo,oportunidad,solicitud,anterior!=null,fuente,hito.fechaEfectiva(),hito.referencia().revision(),actor);
+        // Formalización guarda este ID y evalúa comisión después; no existe un segundo productor monetario aquí.
+        return contrato.getId();
+    }
+
+    private void cerrarResultadoConfirmado(Captacion encargo,OportunidadComercial oportunidad,SolicitudAlquiler solicitud,
+            boolean renovacion,FuenteEconomicaFinal fuente,LocalDate fecha,long revisionHito,Actor actor) {
+        String motivo=renovacion?"Renovación de alquiler confirmada":"Contrato de alquiler confirmado";
+        if(!renovacion) {
+            if(!OPORTUNIDAD_ABIERTA_AL_CONTRATO.contains(oportunidad.estadoActual()))throw new ReglaNegocioException("La mesa ya tiene un resultado; conserva su episodio legítimo.");
+            oportunidad.marcarCierreExitoso();transiciones.aplicar(oportunidad,oportunidad.getId(),OportunidadComercial.FINALIZADA_EXITOSA,actor,motivo,fecha,revisionHito);oportunidades.save(oportunidad);
+            if(solicitud!=null&&!SolicitudAlquiler.CERRADA.equals(solicitud.estadoActual())) {
+                transiciones.aplicar(solicitud,solicitud.getId(),SolicitudAlquiler.CERRADA,actor,motivo,fecha);solicitudes.save(solicitud);
+            }
+            if(Captacion.esVivo(encargo.estadoActual())) {
+                transiciones.aplicar(encargo,encargo.getId(),Captacion.FINALIZADO,actor,motivo,fecha);encargo.cerrar(fecha,"A",motivo);captaciones.save(encargo);
+            }
+            tareas.resolverPorCierreConfirmado(revisionHito,actor);
+        }
+        cerrarComposicionConfirmada(encargo,fuente,fecha,actor,motivo);
+        alertas.emitir(new AlertaService.DatosAlerta(Alerta.OPORTUNIDAD_CERRADA,Alerta.INFO,"OPORTUNIDAD",oportunidad.getId(),
+                encargo.getAgente().getId(),motivo+" de la oportunidad "+oportunidad.getCodigoOportunidad()+".",
+                com.controllocal.service.soporte.FuentesAsuntos.Origen.de("REVISION_HITO",revisionHito)),actor);
+    }
+    private void cerrarComposicionConfirmada(Captacion encargo,FuenteEconomicaFinal fuente,LocalDate fecha,Actor actor,String motivo) {
+        var ids=new TreeSet<>(fuente.objeto().unidades());
+        if(ids.size()!=fuente.objeto().unidades().size())throw new ReglaNegocioException("La composición no repite unidades.");
+        for(long id:ids) {
+            var p=propiedades.bloquearParaEscritura(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Unidad contratada"));
+            entidades.refresh(p,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            transiciones.aplicarDisponibilidad(p,id,DisponibilidadComercial.ALQUILADO,actor,motivo);propiedades.save(p);
+        }
+        if(fuente.objeto().tipo()==com.controllocal.service.OfertaService.TipoObjeto.UNIDAD) {
+            if(ids.size()!=1||!Objects.equals(fuente.objeto().propiedad(),ids.first()))throw new ConflictoException("La renta individual no identifica la unidad exacta.");
+            var precio=new PrecioPropiedad();precio.setOrganizacionId(actor.idOrganizacion());precio.setIdPropiedad(ids.first());
+            precio.setOperacion(OperacionInmobiliaria.ALQUILER);precio.setHito(PrecioPropiedad.HITO_CIERRE);
+            precio.setMonto(fuente.rentaMensual().importe());precio.setMoneda(fuente.rentaMensual().moneda());precio.setFecha(fecha);precio.delEncargo(encargo.getId());
+            if(fuente.acuerdoC4()!=null) {
+                if(fuente.versionAcuerdoC4()==null)throw new IllegalStateException("Falta la versión del acuerdo del cierre.");
+                var acuerdo=mesas.acuerdoExacto(actor.idOrganizacion(),fuente.acuerdoC4(),fuente.versionAcuerdoC4())
+                        .orElseThrow(()->new IllegalStateException("Falta el acuerdo exacto del cierre."));
+                precio.deLaOferta(acuerdo.oferta());
+            }
+            precios.save(precio);
+        }
+        // El importe del paquete permanece en contrato/fuente: no se asigna a cada inmueble.
+        publicaciones.cerrarPorHito(encargo,actor);
     }
 
     @Override
@@ -211,13 +332,12 @@ public class ContratoServiceImpl implements ContratoService {
     /** Una sola lectura de comisiones para toda la pagina, nunca N+1. */
     private Pagina<FichaContrato> paginaDe(List<ContratoAlquiler> contenido, long total,
                                             Actor actor) {
-        Map<Long, FichaComision> comisionPorContrato = comisiones.porContratos(
+        Map<Long, FichaComision> comisionPorContrato = comisiones.porContratosAlquiler(
                 contenido.stream().map(ContratoAlquiler::getId).filter(Objects::nonNull).toList(),
                 actor);
-        boolean verNeto = verNeto(actor);
         return new Pagina<>(
                 contenido.stream()
-                        .map(c -> ficha(c, comisionPorContrato.get(c.getId()), verNeto))
+                        .map(c -> ficha(c, comisionPorContrato.get(c.getId())))
                         .toList(),
                 total);
     }
@@ -247,84 +367,35 @@ public class ContratoServiceImpl implements ContratoService {
         if (alcance.vacio()) {
             return resumenVacio();
         }
-        // Con texto, los cuatro agregados salen del MISMO conjunto de
-        // candidatos que pagina la lista; sin texto, del mismo WHERE. Nunca de
-        // dos criterios distintos, o el KPI y la tabla dirian cosas diferentes.
-        // En ambos casos se calculan en la BD sobre TODO el universo filtrado,
-        // no sobre la pagina visible.
-        String texto = limpiar(filtros.texto());
-        String distrito = limpiar(filtros.distrito());
-        String rolesArray = texto == null ? null : alcance.paramRolesArray();
-        var r = texto != null
-                ? contratos.resumenCierresPorTexto(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), rolesArray, texto, distrito, filtros.idAgente())
-                : contratos.resumenCierres(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), alcance.paramRoles(), distrito, filtros.idAgente());
-        if (r == null) {
-            return resumenVacio();
-        }
-        List<ImportePorMoneda> importes = (texto != null
-                ? contratos.comisionesGeneradasPorTexto(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), rolesArray, texto, distrito, filtros.idAgente())
-                : contratos.comisionesGeneradas(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), alcance.paramRoles(), distrito, filtros.idAgente()))
-                .stream()
-                .map(i -> new ImportePorMoneda(i.getMoneda(), i.getMonto()))
-                .toList();
-        Map<String, BigDecimal> generadas = importes.stream().collect(
-                java.util.stream.Collectors.toMap(ImportePorMoneda::moneda, ImportePorMoneda::monto));
-        Map<String, BigDecimal> partesAgente = (texto != null
-                ? contratos.repartosPorMonedaPorTexto(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), rolesArray, texto, distrito, filtros.idAgente())
-                : contratos.repartosPorMoneda(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), alcance.paramRoles(), distrito, filtros.idAgente()))
-                .stream()
-                .collect(java.util.stream.Collectors.toMap(i -> i.getMoneda(),
-                        i -> cero(i.getParteAgente())));
-        var evidencia = texto != null
-                ? contratos.movimientosPorMonedaPorTexto(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), rolesArray, texto, distrito, filtros.idAgente())
-                : contratos.movimientosPorMoneda(alcance.idOrganizacion(), alcance.global(),
-                        actor.esAgente(), alcance.paramRoles(), distrito, filtros.idAgente());
-        Map<String, BigDecimal> cobradas = evidencia.stream().collect(
-                java.util.stream.Collectors.toMap(i -> i.getMoneda(),
-                        i -> cero(i.getMontoCobrado()).max(BigDecimal.ZERO)));
-        Map<String, BigDecimal> pagadasAgente = evidencia.stream().collect(
-                java.util.stream.Collectors.toMap(i -> i.getMoneda(),
-                        i -> cero(i.getMontoPagadoAgente()).max(BigDecimal.ZERO)));
-        return new ResumenCierres(
-                r.getCierres() == null ? 0 : r.getCierres(),
-                importes,
-                importes(cobradas),
-                diferencia(generadas, cobradas),
-                importes(pagadasAgente),
-                diferencia(partesAgente, pagadasAgente),
-                r.getPorLiquidar() == null ? 0 : r.getPorLiquidar(),
-                r.getSinLiquidacion() == null ? 0 : r.getSinLiquidacion());
+        String texto=limpiar(filtros.texto());
+        var filas=texto==null
+                ?contratos.finanzasDeCierres(alcance.idOrganizacion(),alcance.global(),actor.esAgente(),alcance.paramRolesArray(),limpiar(filtros.distrito()),filtros.idAgente())
+                :contratos.finanzasDeCierresPorTexto(alcance.idOrganizacion(),alcance.global(),actor.esAgente(),alcance.paramRolesArray(),texto,limpiar(filtros.distrito()),filtros.idAgente());
+        var cabeceras=filas.stream().filter(f->"CONTADORES".equals(f.getDimension())).toList();
+        if(cabeceras.size()!=1||!Boolean.FALSE.equals(cabeceras.getFirst().getAnomalia()))
+            throw new IllegalStateException("La evidencia financiera del conjunto no es íntegra.");
+        var c=cabeceras.getFirst();
+        return new ResumenCierres(contador(c.getCierres()),contador(c.getConLecturaFinanciera()),contador(c.getSinEvaluacion()),
+                importes(filas,"CALCULADO"),importes(filas,"DEVENGADO"),importes(filas,"RECIBIDO"),importes(filas,"SALDO"));
     }
 
+    private static long contador(Long valor) {
+        if(valor==null||valor<0)throw new IllegalStateException("El agregado no acredita su población.");
+        return valor;
+    }
     private static ResumenCierres resumenVacio() {
-        return new ResumenCierres(0, List.of(), List.of(), List.of(), List.of(), List.of(), 0, 0);
+        return new ResumenCierres(0,0,0,List.of(),List.of(),List.of(),List.of());
     }
-
-    private static BigDecimal cero(BigDecimal valor) {
-        return valor == null ? BigDecimal.ZERO : valor;
+    private static List<ImportePorMoneda> importes(List<ContratoAlquilerRepository.FinanzasCierres> filas,String dimension) {
+        return filas.stream().filter(f->dimension.equals(f.getDimension())).map(f->{
+            long conocidos=contador(f.getDeterminados()),pendientes=contador(f.getPendientes());
+            if(f.getMoneda()!=null&&!CondicionesEconomicas.MONEDAS.contains(f.getMoneda()))
+                throw new IllegalStateException("La evidencia financiera contiene una moneda ilegible.");
+            if((f.getMonto()==null)!=(conocidos==0)||(f.getMonto()!=null&&f.getMoneda()==null))
+                throw new IllegalStateException("El agregado no distingue importes conocidos y pendientes.");
+            return new ImportePorMoneda(f.getMoneda(),f.getMonto(),conocidos,pendientes);
+        }).toList();
     }
-
-    private static List<ImportePorMoneda> importes(Map<String, BigDecimal> valores) {
-        return valores.entrySet().stream().sorted(Map.Entry.comparingByKey())
-                .map(e -> new ImportePorMoneda(e.getKey(), e.getValue()))
-                .toList();
-    }
-
-    private static List<ImportePorMoneda> diferencia(Map<String, BigDecimal> total,
-                                                      Map<String, BigDecimal> pagado) {
-        return total.entrySet().stream().sorted(Map.Entry.comparingByKey())
-                .map(e -> new ImportePorMoneda(e.getKey(),
-                        cero(e.getValue()).subtract(cero(pagado.get(e.getKey()))).max(BigDecimal.ZERO)))
-                .toList();
-    }
-
     @Override
     @Transactional(readOnly = true)
     public List<String> distritosDeCierres(FiltrosContrato filtros, Actor actor) {
@@ -368,162 +439,33 @@ public class ContratoServiceImpl implements ContratoService {
         ContratoAlquiler contrato = contratos
                 .buscarPorOportunidad(actor.idOrganizacion(), idOportunidad)
                 .orElseThrow(() -> new NoEncontradoException("Contrato"));
-        exigirAlcance(contrato, actor);
-        return ficha(contrato, comisiones.porContrato(contrato.getId(), actor).orElse(null),
-                verNeto(actor));
+        accesoContratos.exigir(contrato, actor);
+        return ficha(contrato, comisiones.porContratosAlquiler(List.of(contrato.getId()),actor).get(contrato.getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FichaContrato obtener(long idContrato, Actor actor) {
+        ContratoAlquiler contrato = accesoContratos.leer(idContrato, actor);
+        return ficha(contrato, comisiones.porContratosAlquiler(List.of(contrato.getId()),actor).get(contrato.getId()));
     }
 
     // ------------------------------------------------------------------
     // §6 — la cascada del cierre
     // ------------------------------------------------------------------
 
-    @Override
-    @Transactional
-    public FichaContrato registrar(DatosContrato datos, Actor actor) {
-        if (datos == null || datos.idSolicitud() == null || datos.idSolicitud() <= 0) {
-            throw new ReglaNegocioException("Selecciona la solicitud aprobada que se va a alquilar.");
-        }
-        SolicitudAlquiler solicitud = solicitudes
-                .buscarFicha(actor.idOrganizacion(), datos.idSolicitud())
-                .orElseThrow(() -> new NoEncontradoException("Solicitud"));
-        // Aqui el contrato SI exige que la solicitud sea del agente que cierra
-        // (a diferencia del alta de la solicitud, que no mira la oportunidad).
-        if (solicitud.getAgente() == null
-                || solicitud.getAgente().getId() != actor.idRolOperativo()) {
-            throw new AccesoNoAutorizadoException();
-        }
-        String estadoCierre = estadoDeCierre(datos.estadoContrato());
-        LocalDate cierre = datos.fechaCierre() != null ? datos.fechaCierre() : LocalDate.now();
-        if (cierre.isAfter(LocalDate.now())) {
-            throw new ReglaNegocioException("La fecha de cierre no puede ser futura.");
-        }
-
-        // --- Precondiciones de la cascada ---
-        if (!solicitud.estaAprobada()) {
-            throw new ReglaNegocioException(
-                    "Solo se puede registrar el alquiler de una solicitud aprobada.");
-        }
-        OportunidadComercial oportunidad = solicitud.getOportunidad();
-        if (oportunidad == null) {
-            throw new ReglaNegocioException("Oportunidad comercial no encontrada.");
-        }
-        if (!OPORTUNIDAD_ABIERTA_AL_CONTRATO.contains(oportunidad.estadoActual())) {
-            throw new ReglaNegocioException(
-                    "La oportunidad ya esta cerrada; no admite un nuevo contrato.");
-        }
-        if (contratos.existeDeOportunidad(actor.idOrganizacion(), oportunidad.getId())) {
-            throw new ReglaNegocioException(
-                    "Esta operacion ya tiene un contrato de alquiler registrado.");
-        }
-        Captacion captacion = oportunidad.getCaptacion();
-        if (captacion == null) {
-            throw new ReglaNegocioException("Captacion no encontrada.");
-        }
-        BigDecimal renta = solicitud.getMontoPropuesto();
-        String moneda = solicitud.getMoneda();
-        String motivo = "Alquiler concretado con la solicitud " + solicitud.getCodigoSolicitud() + ".";
-
-        // 1) El contrato: vinculo + formalizacion. Las condiciones del trato
-        //    viven en la solicitud y NO se copian aqui.
-        ContratoAlquiler contrato = new ContratoAlquiler();
-        contrato.setOrganizacionId(solicitud.getOrganizacionId());
-        contrato.setOportunidad(oportunidad);
-        contrato.setSolicitud(solicitud);
-        contrato.setFechaCierre(cierre);
-        completarSnapshot(contrato, solicitud, estadoCierre);
-        atribuir(contrato, solicitud, oportunidad);
-        contrato.setIncidencias(texto(datos.incidencias()));
-        transiciones.iniciar(contrato, estadoCierre);
-        ContratoAlquiler guardado = contratos.save(contrato);
-
-        // 2) La comision, PENDIENTE y con la bruta calculada sobre la renta.
-        FichaComision comision = comisiones.crearPendienteNormalizada(
-                guardado, captacion.getCondicionEconomica(), renta, moneda, actor);
-
-        // 3) La oportunidad se cierra como EXITOSA. Esto es exactamente lo que
-        //    faltaba en la v2 y el motivo de que /cierre-exitoso responda 400.
-        oportunidad.marcarCierreExitoso();
-        transiciones.aplicar(oportunidad, oportunidad.getId(),
-                OportunidadComercial.FINALIZADA_EXITOSA, actor, motivo);
-        oportunidades.save(oportunidad);
-
-        // 4) La solicitud queda CERRADA: el alquiler se concreto y no se reabre.
-        transiciones.aplicar(solicitud, solicitud.getId(), SolicitudAlquiler.CERRADA, actor, motivo);
-        solicitudes.save(solicitud);
-
-        // 5) La captacion cumplio su objetivo. El hecho de cierre se registra
-        //    aparte del plazo pactado para conservar ambas fechas.
-        transiciones.aplicar(captacion, captacion.getId(), Captacion.CERRADA, actor, motivo);
-        captacion.cerrar(cierre, "A", motivo);
-        captaciones.save(captacion);
-
-        // 6) El local alquilado sale del mercado: NO DISPONIBLE, precio con
-        //    hito 'C' (cerrado real) y publicaciones dadas de baja.
-        cerrarLocal(captacion, oportunidad, renta, moneda, actor, motivo);
-
-        // 7) Cerrado con F6/F7: se dan por hechas las tareas abiertas de las
-        //    cuatro entidades de la operacion y se avisa al broker.
-        //    OJO con el local: la tarea/alerta lo nombran INMUEBLE, que es como
-        //    lo llama el cable; en la v2 la entidad se llama PROPIEDAD
-        //    (MEJ-12/31, D-F6-4). No unificar hasta retirar el legado.
-        tareas.resolverDeEntidad("OPORTUNIDAD", oportunidad.getId(), actor);
-        tareas.resolverDeEntidad("SOLICITUD_ALQUILER", solicitud.getId(), actor);
-        tareas.resolverDeEntidad("CAPTACION", captacion.getId(), actor);
-        if (captacion.getPropiedad() != null) {
-            tareas.resolverDeEntidad("INMUEBLE", captacion.getPropiedad().getId(), actor);
-        }
-        // El aviso se ata al AGENTE de la solicitud —siempre poblado—; el
-        // broker lo ve a traves de la supervision.
-        alertas.emitir(new AlertaService.DatosAlerta(Alerta.OPORTUNIDAD_CERRADA, Alerta.INFO,
-                "OPORTUNIDAD", oportunidad.getId(),
-                solicitud.getAgente() != null ? solicitud.getAgente().getId() : null,
-                "El agente concreto el alquiler de la oportunidad "
-                        + oportunidad.getCodigoOportunidad() + "."), actor);
-
-        return ficha(guardado, comision, verNeto(actor));
+    @Override @Transactional
+    public FichaContrato iniciarEnProceso(DatosContrato datos,Actor actor,ContextoSesion sesion,String clave,Procedencia procedencia) {
+        return prepararOperacion("PREPARAR_CONTRATO_ALQUILER",datos,actor,sesion,clave,procedencia,()->{
+            var solicitud=solicitudAprobadaPropia(datos,actor);var oportunidad=solicitud.getOportunidad();
+            if(!OPORTUNIDAD_ABIERTA_AL_CONTRATO.contains(oportunidad.estadoActual()))throw new ReglaNegocioException("La oportunidad ya está cerrada.");
+            if(contratos.existeDeOportunidad(actor.idOrganizacion(),oportunidad.getId()))throw new ConflictoException("La oportunidad ya tiene un contrato preparado o confirmado.");
+            var contrato=new ContratoAlquiler();contrato.setOrganizacionId(actor.idOrganizacion());contrato.setSolicitud(solicitud);contrato.setOportunidad(oportunidad);
+            contrato.setIncidencias(texto(datos.incidencias()));
+            completarSnapshot(contrato,solicitud,EstadoContrato.EN_PROCESO.codigo());atribuir(contrato,solicitud,oportunidad);
+            transiciones.iniciar(contrato,EstadoContrato.EN_PROCESO.codigo());return contratos.saveAndFlush(contrato);
+        });
     }
-
-    @Override
-    @Transactional
-    public FichaContrato iniciarEnProceso(DatosContrato datos, Actor actor) {
-        SolicitudAlquiler solicitud = solicitudAprobadaPropia(datos, actor);
-        OportunidadComercial oportunidad = solicitud.getOportunidad();
-        if (!OPORTUNIDAD_ABIERTA_AL_CONTRATO.contains(oportunidad.estadoActual())) {
-            throw new ReglaNegocioException("La oportunidad ya esta cerrada; no admite un nuevo contrato.");
-        }
-        if (contratos.existeDeOportunidad(actor.idOrganizacion(), oportunidad.getId())) {
-            throw new ReglaNegocioException("Esta operacion ya tiene un contrato de alquiler registrado.");
-        }
-
-        LocalDate fecha = fechaNoFutura(datos.fechaCierre(), "La fecha de cierre no puede ser futura.");
-        ContratoAlquiler contrato = new ContratoAlquiler();
-        contrato.setOrganizacionId(solicitud.getOrganizacionId());
-        contrato.setOportunidad(oportunidad);
-        contrato.setSolicitud(solicitud);
-        contrato.setFechaCierre(fecha);
-        contrato.setIncidencias(texto(datos.incidencias()));
-        completarSnapshot(contrato, solicitud, EstadoContrato.EN_PROCESO.codigo());
-        atribuir(contrato, solicitud, oportunidad);
-        transiciones.iniciar(contrato, EstadoContrato.EN_PROCESO.codigo());
-        ContratoAlquiler guardado = contratos.save(contrato);
-        return ficha(guardado, null, verNeto(actor));
-    }
-
-    @Override
-    @Transactional
-    public FichaContrato firmar(long idContrato, DatosTransicion datos, Actor actor) {
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
-        exigirCambioReal(contrato, EstadoContrato.FIRMADO);
-        LocalDate fecha = fechaTransicion(datos);
-        completarSnapshot(contrato, contrato.getSolicitud(), EstadoContrato.FIRMADO.codigo());
-        contrato.setFechaEfectivaEstado(fecha);
-        transiciones.aplicar(contrato, idContrato, EstadoContrato.FIRMADO.codigo(), actor,
-                motivo(datos, "Contrato firmado"), fecha);
-        contratos.save(contrato);
-        FichaComision comision = cerrarOperacionFormalizada(contrato, fecha, actor);
-        return ficha(contrato, comision, verNeto(actor));
-    }
-
     @Override
     @Transactional
     public FichaContrato activar(long idContrato, DatosTransicion datos, Actor actor) {
@@ -548,75 +490,49 @@ public class ContratoServiceImpl implements ContratoService {
         return transicionarContrato(idContrato, EstadoContrato.ANULADO, datos, actor, false);
     }
 
-    @Override
-    @Transactional
-    public FichaContrato renovar(long idContrato, DatosRenovacion datos, Actor actor) {
-        ContratoAlquiler anterior = cargarConAcceso(idContrato, actor);
-        if (contratos.existsByOrganizacionIdAndContratoAnteriorId(
-                actor.idOrganizacion(), idContrato)) {
-            throw new ReglaNegocioException("El contrato ya tiene una renovacion registrada.");
-        }
-        if (datos == null || datos.fechaInicioContrato() == null || datos.fechaFinContrato() == null
-                || !datos.fechaFinContrato().isAfter(datos.fechaInicioContrato())) {
-            throw new ReglaNegocioException("La renovacion requiere fechas inicial y final validas.");
-        }
-        if (datos.rentaContractual() == null || datos.rentaContractual().signum() <= 0) {
-            throw new ReglaNegocioException("La renta contractual debe ser mayor que cero.");
-        }
-        String moneda = CondicionesEconomicas.moneda(datos.moneda(), "de la renovacion");
-        LocalDate fecha = datos.fechaInicioContrato();
-        transiciones.aplicar(anterior, idContrato, EstadoContrato.RENOVADO.codigo(), actor,
-                texto(datos.motivo()) != null ? texto(datos.motivo()) : "Contrato renovado", fecha);
-        anterior.setFechaEfectivaEstado(fecha);
-        // saveAndFlush, no save: `uq_contrato_vivo_por_propiedad` es un indice
-        // PARCIAL y PostgreSQL no puede diferir su validacion, asi que se
-        // evalua en el INSERT del sucesor. Hibernate ordena los INSERT ANTES
-        // que los UPDATE dentro del mismo flush, de modo que sin este flush
-        // explicito el sucesor nacia 'D' mientras el anterior seguia 'V' en la
-        // base y la renovacion moria contra el indice. El orden logico
-        // -primero libero, despues ocupo- tiene que llegar a la BD en ese
-        // mismo orden.
-        contratos.saveAndFlush(anterior);
-
-        ContratoAlquiler renovacion = new ContratoAlquiler();
-        renovacion.setOrganizacionId(anterior.getOrganizacionId());
-        renovacion.setOportunidad(anterior.getOportunidad());
-        renovacion.setSolicitud(anterior.getSolicitud());
-        renovacion.setContratoAnterior(anterior);
-        renovacion.setFechaCierre(fecha);
-        renovacion.setFechaInicioContrato(datos.fechaInicioContrato());
-        renovacion.setFechaFinContrato(datos.fechaFinContrato());
-        renovacion.setRentaContractual(datos.rentaContractual());
-        renovacion.setMoneda(moneda);
-        renovacion.setFechaEfectivaEstado(fecha);
-        // La renovacion es el MISMO alquiler continuando: hereda la atribucion
-        // del contrato que renueva, salvo el broker, que se resuelve al
-        // renovar. Derivarla otra vez de la cadena daria lo mismo hoy y algo
-        // distinto tras una reasignacion, que es justo lo que V27 evita.
-        renovacion.atribuir(anterior.getIdRolAgenteCierre(),
-                brokerDe(anterior.getIdRolAgenteCierre(), anterior.getOrganizacionId()),
-                anterior.getIdCaptacion(), anterior.getIdPropiedad(), anterior.getIdRolCliente());
-        transiciones.iniciar(renovacion, EstadoContrato.FIRMADO.codigo());
-        ContratoAlquiler guardada = contratos.save(renovacion);
-        Captacion captacion = captacionDe(guardada);
-        FichaComision comision = comisiones.crearPendienteNormalizada(guardada,
-                captacion.getCondicionEconomica(), datos.rentaContractual(), moneda, actor);
-        return ficha(guardada, comision, verNeto(actor));
+    @Override @Transactional
+    public FichaContrato renovar(long idContrato,DatosRenovacion datos,Actor actor,ContextoSesion sesion,String clave,Procedencia procedencia) {
+        if(datos==null)throw new ReglaNegocioException("Conserva las condiciones declaradas de la renovación.");
+        Map<String,Object> entrada=new LinkedHashMap<>();entrada.put("contrato",idContrato);entrada.put("datos",datos);
+        return prepararOperacion("PREPARAR_RENOVACION_ALQUILER",entrada,actor,sesion,clave,procedencia,()->{
+            accesoContratos.actualAutorizada(idContrato,actor);
+            var anterior=contratos.bloquear(actor.idOrganizacion(),idContrato).orElseThrow(()->new NoEncontradoException("Contrato"));
+            entidades.refresh(anterior,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            accesoContratos.exigir(anterior,actor);
+            if(!EstadoContrato.VIGENTE.codigo().equals(anterior.estadoActual()))throw new ReglaNegocioException("Se prepara la renovación del contrato vigente.");
+            if(contratos.existsByOrganizacionIdAndContratoAnteriorId(actor.idOrganizacion(),idContrato))throw new ConflictoException("El contrato ya tiene un sucesor preparado o confirmado.");
+            if(datos.fechaInicioContrato()==null||datos.fechaFinContrato()==null||!datos.fechaFinContrato().isAfter(datos.fechaInicioContrato()))
+                throw new ReglaNegocioException("Conserva las fechas inicial y final declaradas de la renovación.");
+            if(datos.rentaContractual()==null||datos.rentaContractual().signum()<=0)throw new ReglaNegocioException("La renta declarada debe ser mayor que cero.");
+            String moneda=CondicionesEconomicas.moneda(datos.moneda(),"de la renovación");
+            var nueva=new ContratoAlquiler();nueva.setOrganizacionId(actor.idOrganizacion());nueva.setOportunidad(anterior.getOportunidad());nueva.setSolicitud(anterior.getSolicitud());
+            nueva.setContratoAnterior(anterior);nueva.setFechaInicioContrato(datos.fechaInicioContrato());nueva.setFechaFinContrato(datos.fechaFinContrato());
+            nueva.setRentaContractual(datos.rentaContractual());nueva.setMoneda(moneda);nueva.setIncidencias(texto(datos.motivo()));
+            nueva.atribuir(anterior.getIdRolAgenteCierre(),null,anterior.getIdCaptacion(),anterior.getIdPropiedad(),anterior.getIdRolCliente());
+            transiciones.iniciar(nueva,EstadoContrato.EN_PROCESO.codigo());return contratos.saveAndFlush(nueva);
+        });
     }
-
-    /**
-     * <b>Repetir una operacion es un error, no un no-op.</b>
-     *
-     * <p>{@code Transiciones.aplicar} ignora en silencio una transicion hacia
-     * el mismo estado, y eso es correcto <i>en general</i>: da idempotencia a
-     * captacion, solicitud, oportunidad y publicacion. Pero en el contrato
-     * significaba que finalizar dos veces respondia 200 sin cambiar nada, como
-     * si hubiera funcionado — y quien lo pulsa cree que acaba de cerrar algo.
-     *
-     * <p>Por eso el rechazo vive AQUI, en el caso de uso, y no en
-     * {@code Transiciones}: bajarlo alli cambiaria el comportamiento de las
-     * otras cuatro entidades de golpe.
-     */
+    private FichaContrato prepararOperacion(String tipo,Object entrada,Actor actor,ContextoSesion sesion,String clave,
+                                             Procedencia origen,Supplier<ContratoAlquiler> efecto) {
+        if(entrada==null||origen==null)throw new ReglaNegocioException("Conserva los datos y procedencia de la preparación.");
+        contextos.iniciar(actor,sesion);String key=Idempotencia.exigirClave(clave);
+        String identidad=Idempotencia.huellaExacta("BROX-COMANDO\u0000"+actor.idOrganizacion()+"\u0000"+key);
+        recibos.bloquearIdentidad(Long.parseUnsignedLong(identidad.substring(0,16),16));
+        Map<String,Object> dato=new LinkedHashMap<>();dato.put("tipo",tipo);dato.put("actor",actor);dato.put("entrada",entrada);
+        String hash=Idempotencia.huellaExacta(documentos.objetoCanonico(dato));
+        var previo=comandos.buscar(actor,key,tipo,hash);
+        if(previo.isPresent()) {
+            var original=documentos.comoObjeto(previo.get().getResultado(),FichaContrato.class);var actual=accesoContratos.leer(original.id(),actor);
+            if(!Objects.equals(original.idOportunidad(),actual.getOportunidad().getId())
+                    ||!Objects.equals(original.idSolicitud(),actual.getSolicitud()==null?null:actual.getSolicitud().getId())
+                    ||!Objects.equals(original.idContratoAnterior(),actual.getContratoAnterior()==null?null:actual.getContratoAnterior().getId()))
+                throw new ConflictoException("Los vínculos originales del resultado preparado ya no están autorizados.");
+            return original;
+        }
+        var contrato=efecto.get();entidades.flush();var resultado=ficha(contrato,null);
+        comandos.registrar(actor,key,tipo,hash,"CONTRATO_ALQUILER",contrato.getId(),origen,documentos.objetoCanonico(resultado));
+        return resultado;
+    }
     private static void exigirCambioReal(ContratoAlquiler contrato, EstadoContrato destino) {
         if (destino.codigo().equals(contrato.estadoActual())) {
             throw new ReglaNegocioException("El contrato ya esta en estado "
@@ -627,7 +543,7 @@ public class ContratoServiceImpl implements ContratoService {
     private FichaContrato transicionarContrato(long idContrato, EstadoContrato destino,
                                                 DatosTransicion datos, Actor actor,
                                                 boolean revisarInmueble) {
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
+        ContratoAlquiler contrato = accesoContratos.leer(idContrato, actor);
         // Se valida ANTES de tocar nada: ni historial, ni tareas, ni comision.
         // La transicion ilegal la corta `MaquinasEstado` dentro de `aplicar`;
         // esto cubre el unico caso que aquella deja pasar.
@@ -637,13 +553,6 @@ public class ContratoServiceImpl implements ContratoService {
                 motivo(datos, "Contrato " + destino.descripcion().toLowerCase(Locale.ROOT)), fecha);
         contrato.setFechaEfectivaEstado(fecha);
         contratos.save(contrato);
-        // Anular el contrato arrastra su liquidacion: la comision nace al
-        // FIRMAR y un contrato firmado todavia se anula, asi que sin esto
-        // quedaba viva y cobrable la comision de un contrato inexistente.
-        // Si ya se cobro, esto RECHAZA la anulacion y la transaccion revierte.
-        if (destino == EstadoContrato.ANULADO) {
-            comisiones.anularPorContratoAnulado(idContrato, actor);
-        }
         if (revisarInmueble) {
             Captacion captacion = captacionDe(contrato);
             if (captacion != null && captacion.getPropiedad() != null) {
@@ -653,45 +562,7 @@ public class ContratoServiceImpl implements ContratoService {
                         idContrato, actor);
             }
         }
-        return ficha(contrato, comisiones.porContrato(idContrato, actor).orElse(null), verNeto(actor));
-    }
-
-    private FichaComision cerrarOperacionFormalizada(ContratoAlquiler contrato,
-                                                      LocalDate fecha, Actor actor) {
-        SolicitudAlquiler solicitud = contrato.getSolicitud();
-        OportunidadComercial oportunidad = contrato.getOportunidad();
-        Captacion captacion = captacionDe(contrato);
-        if (solicitud == null || oportunidad == null || captacion == null) {
-            throw new ReglaNegocioException("El contrato no tiene una operacion comercial completa.");
-        }
-        if (!OPORTUNIDAD_ABIERTA_AL_CONTRATO.contains(oportunidad.estadoActual())) {
-            throw new ReglaNegocioException("La oportunidad ya esta cerrada.");
-        }
-        String motivo = "Alquiler concretado con la solicitud " + solicitud.getCodigoSolicitud() + ".";
-        FichaComision comision = comisiones.crearPendienteNormalizada(contrato,
-                captacion.getCondicionEconomica(), contrato.getRentaContractual(), contrato.getMoneda(), actor);
-        transiciones.aplicar(oportunidad, oportunidad.getId(),
-                OportunidadComercial.FINALIZADA_EXITOSA, actor, motivo, fecha);
-        oportunidades.save(oportunidad);
-        transiciones.aplicar(solicitud, solicitud.getId(), SolicitudAlquiler.CERRADA, actor, motivo, fecha);
-        solicitudes.save(solicitud);
-        transiciones.aplicar(captacion, captacion.getId(), Captacion.CERRADA, actor, motivo, fecha);
-        captacion.cerrar(fecha, "A", motivo);
-        captaciones.save(captacion);
-        cerrarLocal(captacion, oportunidad, contrato.getRentaContractual(),
-                contrato.getMoneda(), actor, motivo);
-        tareas.resolverDeEntidad("OPORTUNIDAD", oportunidad.getId(), actor);
-        tareas.resolverDeEntidad("SOLICITUD_ALQUILER", solicitud.getId(), actor);
-        tareas.resolverDeEntidad("CAPTACION", captacion.getId(), actor);
-        if (captacion.getPropiedad() != null) {
-            tareas.resolverDeEntidad("INMUEBLE", captacion.getPropiedad().getId(), actor);
-        }
-        alertas.emitir(new AlertaService.DatosAlerta(Alerta.OPORTUNIDAD_CERRADA, Alerta.INFO,
-                "OPORTUNIDAD", oportunidad.getId(),
-                solicitud.getAgente() != null ? solicitud.getAgente().getId() : null,
-                "El agente concreto el alquiler de la oportunidad "
-                        + oportunidad.getCodigoOportunidad() + "."), actor);
-        return comision;
+        return ficha(contrato, comisiones.porContratosAlquiler(List.of(idContrato),actor).get(idContrato));
     }
 
     private SolicitudAlquiler solicitudAprobadaPropia(DatosContrato datos, Actor actor) {
@@ -768,191 +639,6 @@ public class ContratoServiceImpl implements ContratoService {
                 .orElse(null);
     }
 
-    /**
-     * La vuelta de la negociacion de la que sale este cierre, o {@code null}
-     * (WP-A, D-N-5).
-     *
-     * <p>{@code null} es una respuesta y no un hueco: significa que esa mesa no
-     * tuvo ninguna oferta ACEPTADA, que es hoy el caso normal —el alquiler se
-     * cierra por solicitud aprobada y negociar es opcional—. No significa que
-     * se desconozca de donde salio la cifra.
-     */
-    private Long idDeLaOfertaAceptada(Long idOrganizacion, OportunidadComercial oportunidad) {
-        if (idOrganizacion == null || oportunidad == null || oportunidad.getId() == null) {
-            return null;
-        }
-        return ofertas.aceptadaDe(idOrganizacion, oportunidad.getId())
-                .map(Oferta::getId)
-                .orElse(null);
-    }
-
-    /**
-     * Efecto 6 de la cascada. El precio de cierre conserva la moneda de la
-     * renta final y usa la fecha de HOY —no la de cierre—, como la v1.
-     *
-     * <h2>Por que esta via no pide la autoridad de la propiedad (P0)</h2>
-     * Escribe {@code disponibilidad_comercial} y un hito {@code C}, y aun asi
-     * no llama a {@code AutoridadDePropiedad}. No es un hueco:
-     * <ul>
-     *   <li>Es el <b>ciclo del contrato</b>, no la edicion de la ficha. Lo
-     *       ejecuta el BROKER —que por P0-1 nunca es responsable de una
-     *       propiedad— dentro de un flujo con su propia autoridad, la de
-     *       decidir sobre el contrato. Exigir aqui la de la propiedad
-     *       significaria que <b>ningun contrato se puede cerrar</b>, porque
-     *       quien lo cierra jamas podra pasar esa comprobacion.</li>
-     *   <li>Lo que escribe no es una declaracion sobre el inmueble sino la
-     *       <b>consecuencia</b> de un hecho ya decidido: el inmueble esta
-     *       alquilado porque hay contrato, y el hito {@code C} es el ultimo de
-     *       la serie de <b>ese</b> encargo, del que nace.</li>
-     *   <li>Y bloquearlo cerraria una puerta que este P0 no decide: una
-     *       propiedad FALTANTE dejaria de poder cerrar su contrato.</li>
-     * </ul>
-     * Registrado en la lista explicita de {@code AutoridadDeLaPropiedadTest},
-     * que es donde tiene que estar para que se vea.
-     */
-    private void cerrarLocal(Captacion captacion, OportunidadComercial oportunidad,
-                             BigDecimal renta, String moneda, Actor actor, String motivo) {
-        Propiedad propiedad = captacion == null ? null : captacion.getPropiedad();
-        if (propiedad == null || propiedad.getId() == null) {
-            return;
-        }
-        transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
-                DisponibilidadComercial.ALQUILADO, actor, motivo);
-        propiedades.save(propiedad);
-
-        PrecioPropiedad precio = new PrecioPropiedad();
-        precio.setOrganizacionId(propiedad.getOrganizacionId());
-        precio.setIdPropiedad(propiedad.getId());
-        // Un ContratoAlquiler cierra un alquiler; el cierre de una venta es el
-        // expediente de compraventa (V51), que tiene sus propios hitos. La
-        // operacion se declara, no se hereda de ningun defecto.
-        precio.setOperacion(OperacionInmobiliaria.ALQUILER);
-        precio.setHito(PrecioPropiedad.HITO_CIERRE);
-        precio.setMoneda(moneda);
-        precio.setMonto(renta);
-        precio.setFecha(LocalDate.now());
-        // De QUE encargo es este cierre (V76). Es el ultimo hito de su serie, y
-        // sin el id la fila quedaba colgando de la propiedad: dos alquileres
-        // sucesivos del mismo inmueble mezclaban sus cierres en una sola linea.
-        // Lo detecto `tg_precio_exige_encargo`, que es exactamente su trabajo.
-        precio.delEncargo(captacion.getId());
-        // Y de QUE VUELTA de la negociacion, si hubo una (WP-A, D-N-5). Un
-        // alquiler tambien se negocia: si la mesa llego a tener una oferta
-        // ACEPTADA, el cierre sale de ella y la serie tiene que poder decirlo.
-        // Sin esto, la serie de una VENTA se podia leer por negociacion y la de
-        // un ALQUILER no -- dos verdades distintas para el mismo dato.
-        //
-        // NULL cuando no hubo mesa con oferta aceptada, que es hoy el caso
-        // normal: el alquiler se cierra por solicitud aprobada y la negociacion
-        // es opcional. NULL aqui significa «no salio de ninguna oferta
-        // registrada», no «se desconoce».
-        precio.deLaOferta(idDeLaOfertaAceptada(propiedad.getOrganizacionId(), oportunidad));
-        precios.save(precio);
-
-        for (Publicacion publicacion
-                : publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(propiedad.getId())) {
-            if (!Publicacion.ESTADO_CERRADO.equals(publicacion.getEstado())) {
-                publicacion.setEstado(Publicacion.ESTADO_CERRADO);
-                publicacion.setFechaBaja(OffsetDateTime.now());
-                publicaciones.save(publicacion);
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // §5 — los dos gates de comision (BROKER supervisor, sin ADMIN)
-    // ------------------------------------------------------------------
-
-    @Override
-    @Transactional
-    public FichaContrato asignarComision(long idContrato, BigDecimal montoAgente, Actor actor) {
-        // El cable valida el cuerpo ANTES de buscar el contrato: con el monto
-        // ausente responde 400 aunque el contrato no exista.
-        if (montoAgente == null) {
-            throw new ReglaNegocioException("Indica el monto del agente.");
-        }
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
-        FichaComision comision = comisiones.asignarMontoAgente(idContrato, montoAgente, actor);
-        // Estos dos endpoints son de BROKER, asi que el neto SIEMPRE viaja.
-        return ficha(contrato, comision, true);
-    }
-
-    @Override
-    @Transactional
-    public FichaContrato registrarCobroComision(long idContrato, String estado, LocalDate fechaCobro,
-                                                String formaPago, Actor actor) {
-        if (estado == null || estado.isBlank()) {
-            throw new ReglaNegocioException("Indica el estado del cobro (Cobrada o Anulada).");
-        }
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
-        FichaComision comision = comisiones.registrarCobro(
-                idContrato, estado, fechaCobro, formaPago, actor);
-        return ficha(contrato, comision, true);
-    }
-
-    /**
-     * <b>Sin {@code @Transactional} a proposito.</b>
-     *
-     * <p>La carrera de dos peticiones simultaneas con la MISMA clave la corta
-     * el indice unico {@code uq_movimiento_idempotencia}: una gana y la otra
-     * recibe una violacion de unicidad. Para poder responderle con el
-     * resultado de la que gano hay que LEER despues, y eso es imposible dentro
-     * de la transaccion que acaba de marcarse como rollback-only. Por eso la
-     * transaccion vive en el metodo interno y el reintento se resuelve aqui
-     * fuera, en una lectura nueva.
-     *
-     * <p>La comprobacion previa que hace {@code ComisionServiceImpl} no
-     * sustituye al indice: solo resuelve el caso normal —un reintento que
-     * llega cuando el primero ya termino— sin llegar a intentar el INSERT.
-     */
-    @Override
-    public FichaContrato registrarMovimientoComision(long idContrato, String tipo, BigDecimal monto,
-                                                      String moneda, LocalDate fecha, String formaPago,
-                                                      String observacion, String claveIdempotencia,
-                                                      Actor actor) {
-        try {
-            return registrarMovimientoComisionEnTransaccion(idContrato, tipo, monto, moneda,
-                    fecha, formaPago, observacion, claveIdempotencia, actor);
-        } catch (DataIntegrityViolationException carrera) {
-            if (Idempotencia.normalizar(claveIdempotencia) == null) {
-                throw carrera;
-            }
-            // Perdio la carrera: el movimiento lo creo la peticion gemela. Se
-            // devuelve SU resultado, que es exactamente lo que el cliente
-            // habria recibido si su reintento hubiera llegado un poco despues.
-            return autoinvocado.registrarMovimientoComisionEnTransaccion(idContrato, tipo, monto,
-                    moneda, fecha, formaPago, observacion, claveIdempotencia, actor);
-        }
-    }
-
-    @Override
-    @Transactional
-    public FichaContrato registrarMovimientoComisionEnTransaccion(
-            long idContrato, String tipo, BigDecimal monto, String moneda, LocalDate fecha,
-            String formaPago, String observacion, String claveIdempotencia, Actor actor) {
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
-        return ficha(contrato, comisiones.registrarMovimiento(idContrato, tipo, monto, moneda,
-                fecha, formaPago, observacion, claveIdempotencia, actor), true);
-    }
-
-    // ------------------------------------------------------------------
-    // §7.3.2 — recuperacion de disponibilidad tras terminar el contrato
-    // ------------------------------------------------------------------
-
-    /**
-     * <b>Terminar un contrato NO devuelve el local al mercado.</b> `F` y `S`
-     * dejan la propiedad ALQUILADA y crean una tarea de revision; esta
-     * operacion es la decision humana que cierra esa tarea, y lo unico que
-     * toca es la disponibilidad comercial.
-     *
-     * <p>Lo que deliberadamente NO hace, aunque el local vuelva al mercado:
-     * no reabre la captacion cerrada, no revive publicaciones, no toca
-     * oportunidad, solicitud ni liquidacion. Esas filas son la evidencia del
-     * ciclo comercial que produjo el contrato anterior; volver a comercializar
-     * es empezar un ciclo NUEVO, no resucitar el viejo. Sin esta regla una
-     * captacion pasaria a ser una entidad que muere y revive, y se perderia el
-     * limite de cada periodo de comercializacion.
-     */
     @Override
     @Transactional
     public FichaRevisionDisponibilidad revisarDisponibilidad(long idContrato, String resultado,
@@ -964,7 +650,7 @@ public class ContratoServiceImpl implements ContratoService {
         }
         // 1) Contrato con tenant y alcance: un contrato de otra organizacion es
         //    404, no 403 (convencion del cable).
-        ContratoAlquiler contrato = cargarConAcceso(idContrato, actor);
+        ContratoAlquiler contrato = accesoContratos.leer(idContrato, actor);
 
         // 2) Estado: solo un contrato que dejo de ocupar el inmueble se revisa.
         if (!ESTADOS_REVISABLES.contains(contrato.estadoActual())) {
@@ -1084,43 +770,9 @@ public class ContratoServiceImpl implements ContratoService {
     // Alcance por rol: BROKER por CAPTACION (§7), no por agente.
     // ------------------------------------------------------------------
 
-    private ContratoAlquiler cargarConAcceso(long id, Actor actor) {
-        ContratoAlquiler contrato = contratos.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Contrato"));
-        exigirAlcance(contrato, actor);
-        return contrato;
-    }
-
-    private void exigirAlcance(ContratoAlquiler contrato, Actor actor) {
-        if (!alcanza(contrato, actor)) {
-            throw new AccesoNoAutorizadoException();
-        }
-    }
-
-    private boolean alcanza(ContratoAlquiler contrato, Actor actor) {
-        if (actor.esTenantAdmin()) {
-            return true;
-        }
-        SolicitudAlquiler solicitud = contrato.getSolicitud();
-        if (actor.esAgente()) {
-            // El agente llega por SU solicitud, no por la captacion.
-            return solicitud != null && solicitud.getAgente() != null
-                    && solicitud.getAgente().getId() == actor.idRolOperativo();
-        }
-        Captacion captacion = captacionDe(contrato);
-        return captacion != null && captacion.getAgente() != null
-                && alcances.supervisados(actor.idOrganizacion(), actor.idRolOperativo())
-                        .contains(captacion.getAgente().getId());
-    }
-
     private static Captacion captacionDe(ContratoAlquiler contrato) {
         OportunidadComercial oportunidad = contrato.getOportunidad();
         return oportunidad != null ? oportunidad.getCaptacion() : null;
-    }
-
-    /** Solo ADMIN y BROKER ven el reparto agente/empresa de la liquidacion (§5). */
-    private static boolean verNeto(Actor actor) {
-        return !actor.esAgente();
     }
 
     // ------------------------------------------------------------------
@@ -1133,24 +785,6 @@ public class ContratoServiceImpl implements ContratoService {
      * texto distinto ("El contrato solo puede cerrarse como Firmado o
      * Vigente.") que nunca llega al cable.
      */
-    private static String estadoDeCierre(String codigo) {
-        if (codigo == null || codigo.isBlank()) {
-            return ContratoAlquiler.VIGENTE;
-        }
-        String estado = codigo.trim().toUpperCase(Locale.ROOT);
-        if (!ContratoAlquiler.ESTADOS.contains(estado)) {
-            throw new ReglaNegocioException("Estado de contrato invalido.");
-        }
-        if (!ContratoAlquiler.ESTADOS_DE_CIERRE.contains(estado)) {
-            throw new ReglaNegocioException("El cierre solo admite los estados Firmado o Vigente.");
-        }
-        return estado;
-    }
-
-    /**
-     * Plazo en meses: de la solicitud y, si falta, parseado del texto libre
-     * ("24 meses" -> 24). Es lo que hace el DTO de la v1.
-     */
     private static Integer plazoMeses(SolicitudAlquiler solicitud) {
         if (solicitud == null) {
             return null;
@@ -1158,12 +792,7 @@ public class ContratoServiceImpl implements ContratoService {
         if (solicitud.getPlazoContratoMeses() != null) {
             return solicitud.getPlazoContratoMeses();
         }
-        String texto = solicitud.getPlazoTentativo();
-        if (texto == null) {
-            return null;
-        }
-        String digitos = texto.replaceAll("\\D", "");
-        return digitos.isEmpty() ? null : Integer.valueOf(digitos);
+        return null; // Texto tentativo permanece en Solicitud; no acredita un número de meses.
     }
 
     private static String texto(String valor) {
@@ -1174,60 +803,26 @@ public class ContratoServiceImpl implements ContratoService {
         return Math.max(1, Math.min(100, tamano));
     }
 
-    private static FichaContrato ficha(ContratoAlquiler c, FichaComision comision, boolean verNeto) {
-        SolicitudAlquiler solicitud = c.getSolicitud();
-        OportunidadComercial oportunidad = solicitud != null && solicitud.getOportunidad() != null
-                ? solicitud.getOportunidad()
-                : c.getOportunidad();
-        DetalleCliente cliente = oportunidad != null ? oportunidad.getCliente() : null;
-        Captacion captacion = oportunidad != null ? oportunidad.getCaptacion() : null;
-        Propiedad propiedad = captacion != null ? captacion.getPropiedad() : null;
-        PersonaRol propietario = propiedad != null ? propiedad.getRolPropietario() : null;
-        // El agente publicado es el ATRIBUIDO al cerrar (V27), no el que hoy
-        // cuelgue de la cadena. Hasta V27 salia de la solicitud; para toda fila
-        // existente el backfill dejo el mismo valor, asi que el cable no cambia
-        // —cambia el dia que alguien reasigna, que es de lo que se trata—.
-        DetalleAgente agente = c.getAgenteCierre() != null
-                ? c.getAgenteCierre()
-                : (solicitud != null ? solicitud.getAgente() : null);
-        Integer plazo = plazoMeses(solicitud);
-        LocalDate inicio = solicitud != null ? solicitud.getFechaInicioContrato() : null;
-        return new FichaContrato(
-                c.getId(),
-                solicitud != null ? solicitud.getId() : null,
-                solicitud != null ? solicitud.getCodigoSolicitud() : null,
-                oportunidad != null ? oportunidad.getId() : null,
-                oportunidad != null ? oportunidad.getCodigoOportunidad() : null,
-                nombre(cliente != null ? cliente.getRol() : null),
-                propiedad != null ? propiedad.getDireccion() : null,
-                propiedad != null ? propiedad.getDistrito() : null,
-                propiedad != null ? propiedad.estadoLegado() : null,
-                captacion != null ? captacion.getCodigoCaptacion() : null,
-                nombre(agente != null ? agente.getRol() : null),
-                c.getRentaContractual(), c.getMoneda(),
-                plazo,
-                comision != null ? comision.monto() : null,
-                comision != null ? comision.moneda() : null,
-                c.getFechaInicioContrato(), c.getFechaFinContrato(),
-                c.getFechaCierre(),
-                c.estadoActual(),
-                comision != null ? comision.estado() : null,
-                c.getIncidencias(),
-                comision != null ? comision.id() : null,
-                agente != null ? agente.getId() : null,
-                propietario != null ? propietario.getId() : null,
-                nombre(propietario),
-                verNeto && comision != null ? comision.montoAgente() : null,
-                verNeto && comision != null ? comision.montoEmpresa() : null,
-                comision != null ? comision.formaPago() : null,
-                comision != null ? comision.fechaCobro() : null,
-                c.getContratoAnterior() != null ? c.getContratoAnterior().getId() : null,
-                comision != null ? comision.montoCobrado() : null,
-                comision != null ? comision.saldoCobro() : null,
-                comision != null ? comision.montoPagadoAgente() : null,
-                comision != null ? comision.saldoPagoAgente() : null);
+    private static FichaContrato ficha(ContratoAlquiler c,FichaComision comision) {
+        SolicitudAlquiler s=c.getSolicitud();OportunidadComercial o=c.getOportunidad();
+        Captacion cap=o==null?null:o.getCaptacion();Propiedad p=cap==null?null:cap.getPropiedad();
+        PersonaRol propietario=p==null?null:p.getRolPropietario();DetalleCliente cliente=o==null?null:o.getCliente();
+        DetalleAgente agente=c.getAgenteCierre()!=null?c.getAgenteCierre():s==null?null:s.getAgente();
+        // Dos fechas no declaran por sí solas un plazo comercial expresado en meses.
+        return new FichaContrato(c.getId(),s==null?null:s.getId(),s==null?null:s.getCodigoSolicitud(),
+                o==null?null:o.getId(),o==null?null:o.getCodigoOportunidad(),nombre(cliente==null?null:cliente.getRol()),
+                p==null?null:p.getDireccion(),p==null?null:p.getDistrito(),p==null?null:p.estadoLegado(),
+                cap==null?null:cap.getCodigoCaptacion(),nombre(agente==null?null:agente.getRol()),c.getRentaContractual(),c.getMoneda(),
+                plazoCompatible(c,s),c.getFechaInicioContrato(),c.getFechaFinContrato(),c.getFechaCierre(),c.estadoActual(),c.getIncidencias(),
+                c.getIdRolAgenteCierre()!=null?c.getIdRolAgenteCierre():agente==null?null:agente.getId(),propietario==null?null:propietario.getId(),nombre(propietario),
+                c.getContratoAnterior()==null?null:c.getContratoAnterior().getId(),comision);
     }
-
+    private static Integer plazoCompatible(ContratoAlquiler c,SolicitudAlquiler s) {
+        Integer plazo=plazoMeses(s);
+        if(s==null||plazo==null||s.getFechaInicioContrato()==null)return null;
+        return Objects.equals(c.getFechaInicioContrato(),s.getFechaInicioContrato())
+                &&Objects.equals(c.getFechaFinContrato(),s.getFechaInicioContrato().plusMonths(plazo))?plazo:null;
+    }
     private static void completarSnapshot(ContratoAlquiler contrato, SolicitudAlquiler solicitud,
                                            String estado) {
         LocalDate inicio = solicitud.getFechaInicioContrato();

@@ -97,7 +97,8 @@ public class ContratoAlquiler extends EntidadDeOrganizacion implements Transicio
     @JoinColumn(name = "id_solicitud")
     private SolicitudAlquiler solicitud;
 
-    @Column(name = "fecha_cierre", nullable = false)
+    /** P conserva la firma desconocida; RF059 fija la fecha real al confirmar el hito. */
+    @Column(name = "fecha_cierre")
     private LocalDate fechaCierre;
 
     @Column(name = "estado_contrato", nullable = false, length = 1)
@@ -152,7 +153,8 @@ public class ContratoAlquiler extends EntidadDeOrganizacion implements Transicio
     @Column(name = "id_propiedad", nullable = false)
     private Long idPropiedad;
 
-    @Column(name = "id_rol_cliente", nullable = false)
+    /** RF003: una parte real de la mesa no necesita adquirir un rol CLIENTE ficticio. */
+    @Column(name = "id_rol_cliente")
     private Long idRolCliente;
 
     @Column(name = "incidencias")

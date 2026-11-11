@@ -1,17 +1,16 @@
 -- =====================================================================
 -- GATE DEL MODELO UNIVERSAL, CONTRA LA BASE REAL (D-E4-1, V46-V52)
 --
---   docker exec -i controllocal-postgres-v2 \
---       psql -U controllocal -d controllocal_dev -v ON_ERROR_STOP=1 \
---            -f /tmp/gate-modelo-universal.sql
+-- Ejecutar mediante Invoke-GateModeloUniversal.ps1, en DB efímera propia
+-- verificada y con snapshot auténtico anterior a V71. Sin defaults de dev.
 --
 -- No comprueba que las tablas existan -- eso ya lo diria Flyway. Comprueba que
 -- las INVARIANTES del contrato se cumplen de verdad, incluidas las que solo se
 -- pueden probar intentando romperlas: mete datos malos y exige que la base los
 -- rechace.
 --
--- Todo ocurre dentro de una transaccion que se deshace al final, asi que se
--- puede correr contra la base de desarrollo sin ensuciarla.
+-- La transacción revierte el montaje y los sabotajes. Eso no autoriza una DB
+-- compartida: también hay locks. El harness verifica destino y conserva el rojo.
 -- =====================================================================
 
 \set ON_ERROR_STOP on
@@ -23,6 +22,27 @@
 \set ANCHO_PRUEBA 78
 
 BEGIN;
+SET LOCAL standard_conforming_strings=on;
+
+CREATE TEMP TABLE gate_snapshot_v71(datos jsonb NOT NULL);
+-- BROX_GATE_INPUT_V71
+-- El harness sustituye exactamente la línea anterior por el INSERT del JSON
+-- validado/escapado, sin introducir SQL procedente del snapshot.
+DO $snapshot$
+BEGIN
+    IF (SELECT count(*) FROM gate_snapshot_v71) <> 1 THEN
+        RAISE EXCEPTION 'Falta el snapshot real previo V71; ejecutar el harness del gate';
+    END IF;
+    IF (SELECT datos->>'formato' FROM gate_snapshot_v71) IS DISTINCT FROM 'BROX_GATE_SNAPSHOT_V71_1'
+       OR (SELECT datos->>'base' FROM gate_snapshot_v71) IS DISTINCT FROM current_database()
+       OR (SELECT datos->>'version_previa' FROM gate_snapshot_v71) IS DISTINCT FROM '70'
+       OR coalesce((SELECT datos->>'sha_v71' FROM gate_snapshot_v71),'') !~ '^[0-9a-f]{64}$'
+       OR (SELECT jsonb_array_length(datos->'propiedades')>0
+                  AND jsonb_array_length(datos->'originales_espejo')>0 FROM gate_snapshot_v71)
+          IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION 'Snapshot V71 ausente, vacío o de otra base/fase';
+    END IF;
+END $snapshot$;
 
 -- `nota` lleva la CIFRA que una comprobacion mide de paso y su nombre no puede
 -- cargar sin estorbar: por ejemplo el tamano real del universo que la
@@ -77,21 +97,8 @@ RETURNS text LANGUAGE sql AS $$ SELECT CASE WHEN $1 THEN 'OK' ELSE 'FALLO' END $
 -- Silencio hasta el informe: cada comprobacion devolveria una fila vacia.
 \o /dev/null
 
--- Datos de apoyo: una organizacion, un propietario y una propiedad reales.
---
--- La propiedad de apoyo se elige CON TITULAR a proposito (V76). Desde que
--- `id_rol_propietario` admite NULL -- una propiedad puede conocerse sin saber
--- de quien es --, `min(id_propiedad)` podia devolver una sin titular y las
--- pruebas de titularidad que vienen despues fallarian por el dato elegido y no
--- por la invariante. `min(id_rol_propietario)` ya ignora los NULL de suyo.
-CREATE TEMP TABLE ctx AS
-SELECT (SELECT min(organizacion_id) FROM propiedad)                              AS org,
-       (SELECT min(id_propiedad)    FROM propiedad
-         WHERE id_rol_propietario IS NOT NULL)                                   AS prop,
-       (SELECT min(id_rol_propietario) FROM propiedad)                           AS titular,
-       (SELECT min(pr.id_persona_rol) FROM persona_rol pr
-         WHERE pr.tipo_rol = 'PROPIETARIO'
-           AND pr.id_persona_rol <> (SELECT min(id_rol_propietario) FROM propiedad)) AS otro_titular;
+-- Sujetos técnicos propios, con referencias capturadas y restricciones activas.
+\ir fixtures/modelo-universal.sql
 
 -- =====================================================================
 -- M0 - PostGIS
@@ -144,14 +151,58 @@ SELECT pg_temp.comprobar('M0 se puede buscar por cercania en metros',
 -- no describia la base: 67 de 1465 propiedades no tenian titularidad vigente y
 -- esta comprobacion llevaba tiempo en fallo sin que nadie la mirara.
 --
--- La exigencia no desaparece: se muda al ENCARGO, que es donde sigue siendo
--- cierta. Aqui se comprueba en su forma nueva.
+-- C2 concilia esta obligación con CAT11/CAT18 (MAT-01/02) y V104:
+-- P=EN_PREPARACION admite partes aún desconocidas; A=APROBADO exige
+-- titularidad. La presentación y habilitación conservan además su suficiencia,
+-- evidencia y revisión exacta en Core. Estado A por sí solo no las acredita.
+-- Se conserva el ancla histórica de esta comprobación, precisando su ámbito.
+CREATE OR REPLACE FUNCTION pg_temp.hay_encargo_aprobado_sin_titular(p_encargo bigint DEFAULT NULL)
+RETURNS boolean LANGUAGE sql AS $$
+    SELECT EXISTS (SELECT 1 FROM captacion c
+                    WHERE c.estado = 'A'
+                      AND (p_encargo IS NULL OR c.id_captacion = p_encargo)
+                      AND NOT EXISTS (SELECT 1 FROM titularidad_propiedad t
+                                       WHERE t.id_propiedad = c.id_propiedad
+                                         AND t.vigente_hasta IS NULL))
+$$;
+
+-- Tres controles sobre el mismo predicado, sin depender del residuo de suites.
+-- Son contrapruebas SQL del montaje propio, nunca una aprobación de producto.
+-- Ningún cambio ni ausencia de titularidad sobrevive al savepoint.
+SAVEPOINT suficiencia_titular_m1;
+DELETE FROM titularidad_propiedad
+ WHERE id_propiedad = (SELECT prop FROM ctx) AND vigente_hasta IS NULL;
+SELECT EXISTS (SELECT 1 FROM captacion c
+                WHERE c.id_captacion = (SELECT encargo FROM ctx) AND c.estado = 'P'
+                  AND NOT EXISTS (SELECT 1 FROM titularidad_propiedad t
+                                   WHERE t.id_propiedad = c.id_propiedad AND t.vigente_hasta IS NULL))
+       AND NOT pg_temp.hay_encargo_aprobado_sin_titular((SELECT encargo FROM ctx))
+       AS m1_preparacion_sin_titular \gset
+
+UPDATE captacion SET estado = 'A' WHERE id_captacion = (SELECT encargo FROM ctx);
+SELECT EXISTS (SELECT 1 FROM captacion
+                WHERE id_captacion = (SELECT encargo FROM ctx) AND estado = 'A')
+       AND pg_temp.hay_encargo_aprobado_sin_titular((SELECT encargo FROM ctx))
+       AS m1_aprobado_sin_titular \gset
+ROLLBACK TO SAVEPOINT suficiencia_titular_m1;
+
+UPDATE captacion SET estado = 'A' WHERE id_captacion = (SELECT encargo FROM ctx);
+SELECT EXISTS (SELECT 1 FROM captacion c
+                WHERE c.id_captacion = (SELECT encargo FROM ctx) AND c.estado = 'A'
+                  AND EXISTS (SELECT 1 FROM titularidad_propiedad t
+                               WHERE t.id_propiedad = c.id_propiedad AND t.vigente_hasta IS NULL))
+       AND NOT pg_temp.hay_encargo_aprobado_sin_titular((SELECT encargo FROM ctx))
+       AS m1_aprobado_con_titular \gset
+ROLLBACK TO SAVEPOINT suficiencia_titular_m1;
+
 SELECT pg_temp.comprobar('M1 ningun encargo vivo cuelga de una propiedad sin titular',
-    NOT EXISTS (SELECT 1 FROM captacion c
-                 WHERE c.estado IN ('P', 'O', 'A')
-                   AND NOT EXISTS (SELECT 1 FROM titularidad_propiedad t
-                                    WHERE t.id_propiedad = c.id_propiedad
-                                      AND t.vigente_hasta IS NULL)));
+    NOT pg_temp.hay_encargo_aprobado_sin_titular()
+        AND :'m1_preparacion_sin_titular'::boolean
+        AND :'m1_aprobado_sin_titular'::boolean
+        AND :'m1_aprobado_con_titular'::boolean,
+    'A sin titular o contraprueba inválida; la preparación P admite partes pendientes',
+    format('C2: ámbito A; controles P sin titular=%s, A sin titular detectado=%s, A con titular=%s',
+           :'m1_preparacion_sin_titular', :'m1_aprobado_sin_titular', :'m1_aprobado_con_titular'));
 
 SELECT pg_temp.comprobar('M1 las cuotas vigentes suman 100 en todas',
     NOT EXISTS (SELECT 1 FROM titularidad_propiedad
@@ -354,9 +405,16 @@ SELECT pg_temp.comprobar('M2 dormitorios solo aplica a departamento y casa',
        FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
       WHERE c.clave = 'dormitorios'));
 
-SELECT pg_temp.comprobar('M2 metraje_total es obligatorio en los siete tipos',
-    (SELECT count(*) = 7 FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
-      WHERE c.clave = 'metraje_total' AND t.requerido));
+-- MAT-01/C2 sustituye ALT universal de registro. Aplicar a un tipo no significa
+-- impedir guardar/prospectar sin ese dato; la suficiencia de Encargo es propia.
+SELECT pg_temp.comprobar('M2 metraje aplica a los ocho tipos sin bloquear el registro',
+    (SELECT array_agg(t.tipo_propiedad ORDER BY t.tipo_propiedad)
+       FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
+      WHERE c.organizacion_id IS NULL AND c.clave = 'metraje_total')
+    = (SELECT array_agg(tipo ORDER BY tipo) FROM tipos_de_propiedad() tipo)
+    AND NOT EXISTS(SELECT 1 FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING(id_catalogo_atributo)
+                    WHERE c.organizacion_id IS NULL AND c.clave='metraje_total'
+                      AND (t.requerido OR t.exigencia='ALT')));
 
 SELECT pg_temp.comprobar('M2 se migraron los valores que ya existian',
     (SELECT count(*) > 0 FROM atributo_propiedad));
@@ -367,10 +425,16 @@ SELECT pg_temp.comprobar('M2 se migraron los valores que ya existian',
 -- autoridad del metraje es la columna canonica. El gate llevaba en rojo desde
 -- entonces contra la decision que lo superaba.
 --
--- Lo que hoy significa "ninguna propiedad perdio su metraje" son dos cosas:
--- que el dato esta en su unico sitio, y que la copia no ha vuelto.
-SELECT pg_temp.comprobar('M2 ninguna propiedad perdio su metraje',
-    NOT EXISTS (SELECT 1 FROM propiedad p WHERE p.metraje IS NULL));
+-- MAT-01 permite un borrador nuevo sin superficie. La conservación mide los
+-- valores conocidos acreditados antes de V71, no convierte NULL legítimo en pérdida.
+SELECT pg_temp.comprobar('M2 los metrajes conocidos conservan su valor',
+    NOT EXISTS (
+        SELECT 1 FROM gate_snapshot_v71 s
+        CROSS JOIN LATERAL jsonb_array_elements(s.datos->'propiedades') e
+        LEFT JOIN propiedad p ON p.id_propiedad=(e->>'id')::bigint
+                             AND p.organizacion_id=(e->>'organizacion')::bigint
+        WHERE e->'metraje' <> 'null'::jsonb
+          AND (p.id_propiedad IS NULL OR p.metraje IS DISTINCT FROM (e->>'metraje')::numeric)));
 
 SELECT pg_temp.comprobar('M2 el metraje no volvio a duplicarse como atributo',
     (SELECT count(*) = 0 FROM atributo_propiedad WHERE clave = 'metraje_total'));
@@ -409,7 +473,7 @@ SELECT pg_temp.debe_rechazar('M3 rechaza un hito con operacion distinta a la de 
     INSERT INTO precio_propiedad (organizacion_id, id_propiedad, id_captacion, hito, moneda, monto, fecha, operacion)
     SELECT %s, c.id_propiedad, c.id_captacion, 'U', 'USD', 1000, CURRENT_DATE,
            CASE c.motivo_operacion WHEN 'A' THEN 'V' ELSE 'A' END
-      FROM captacion c LIMIT 1
+    FROM captacion c WHERE c.id_captacion=(SELECT encargo FROM ctx)
 $f$, (SELECT org FROM ctx)));
 
 -- =====================================================================
@@ -439,7 +503,7 @@ BEGIN
     -- existe para demostrar que se puede --, el INSERT chocaba contra
     -- `uq_captacion_viva_por_operacion` y el gate moria antes del informe.
     SELECT * INTO c FROM captacion cap
-     WHERE cap.estado IN ('P','O','A')
+     WHERE cap.id_captacion=(SELECT encargo FROM ctx) AND cap.estado IN ('P','O','A')
        AND NOT EXISTS (SELECT 1 FROM captacion otra
                         WHERE otra.id_propiedad = cap.id_propiedad
                           AND otra.estado IN ('P','O','A')
@@ -487,7 +551,7 @@ INSERT INTO resultado (prueba, veredicto) VALUES
 
 SELECT pg_temp.debe_rechazar('M4 rechaza una condicion economica de otra operacion', $f$
     UPDATE captacion SET motivo_operacion = CASE motivo_operacion WHEN 'A' THEN 'V' ELSE 'A' END
-     WHERE id_condicion_economica IS NOT NULL
+     WHERE id_captacion=(SELECT encargo FROM ctx) AND id_condicion_economica IS NOT NULL
 $f$);
 
 -- =====================================================================
@@ -513,11 +577,11 @@ SELECT pg_temp.comprobar('M5 el plano perimetrico solo se pide para terreno',
 
 SELECT pg_temp.debe_rechazar('M5 rechaza condiciones de compraventa en expediente de alquiler', format($f$
     INSERT INTO condicion_compraventa (id_solicitud, organizacion_id, forma_pago_saldo)
-    SELECT id_solicitud, %s, 'C' FROM solicitud_alquiler WHERE tipo = 'A' LIMIT 1
+    SELECT id_solicitud, %s, 'C' FROM solicitud_alquiler WHERE tipo = 'A' AND id_solicitud=(SELECT solicitud FROM ctx)
 $f$, (SELECT org FROM ctx)));
 
 SELECT pg_temp.debe_rechazar('M5 rechaza garantia en un expediente de compraventa', $f$
-    UPDATE solicitud_alquiler SET tipo = 'V' WHERE meses_garantia IS NOT NULL
+    UPDATE solicitud_alquiler SET tipo = 'V' WHERE id_solicitud=(SELECT solicitud FROM ctx) AND meses_garantia IS NOT NULL
 $f$);
 
 -- =====================================================================
@@ -565,9 +629,45 @@ SELECT pg_temp.comprobar('GOB ninguna fila de tenant sombrea hoy una clave comun
          ON sistema.organizacion_id IS NULL AND sistema.clave = tenant.clave
       WHERE tenant.organizacion_id IS NOT NULL));
 
-SELECT pg_temp.comprobar('TIPO propiedad admite los SIETE tipos, incluido el almacen',
-    (SELECT pg_get_constraintdef(oid) LIKE '%''A''%'
-       FROM pg_constraint WHERE conname = 'ck_propiedad_tipo'));
+-- V94/MAT-01: la cobertura se prueba escribiendo los ocho tipos propios y
+-- rechazando uno no definido. Un LIKE que sólo encuentra A no demuestra esto.
+SAVEPOINT tipos_del_gate;
+DO $tipos$
+DECLARE tipo varchar(1); defectos text[] := ARRAY[]::text[]; restriccion text;
+BEGIN
+    FOR tipo IN SELECT * FROM tipos_de_propiedad() LOOP
+        BEGIN
+            INSERT INTO propiedad(organizacion_id,codigo,direccion,distrito,metraje,tipo_inmueble,uso,
+                estado_registro,disponibilidad_comercial,origen_incorporacion)
+            SELECT org,'GATE-TIPO-'||tipo,'Sujeto técnico para tipo '||tipo,'Lima',10,tipo,'C','A','D','SEMILLA'
+              FROM ctx;
+        EXCEPTION WHEN others THEN
+            defectos:=array_append(defectos,'tipo '||tipo||' rechazado: '||SQLSTATE||' '||SQLERRM);
+        END;
+    END LOOP;
+    BEGIN
+        INSERT INTO propiedad(organizacion_id,codigo,direccion,distrito,metraje,tipo_inmueble,uso,
+            estado_registro,disponibilidad_comercial,origen_incorporacion)
+        SELECT org,'GATE-TIPO-Z','Sujeto técnico de tipo inválido','Lima',10,'Z','C','A','D','SEMILLA' FROM ctx;
+        defectos:=array_append(defectos,'el tipo no definido Z fue aceptado');
+    EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS restriccion=CONSTRAINT_NAME;
+        IF restriccion IS DISTINCT FROM 'ck_propiedad_tipo' THEN
+            defectos:=array_append(defectos,'Z rechazado por otra restricción: '||coalesce(restriccion,'sin nombre'));
+        END IF;
+    WHEN others THEN
+        defectos:=array_append(defectos,'Z rechazado por otra causa: '||SQLSTATE||' '||SQLERRM);
+    END;
+    CREATE TEMP TABLE gate_tipos_resultado AS
+    SELECT cardinality(defectos)=0
+        AND (SELECT array_agg(t ORDER BY t) FROM tipos_de_propiedad() t)
+            = ARRAY['A','C','D','E','L','O','T','X']::varchar[] AS correcto,
+        array_to_string(defectos,'; ') AS detalle;
+END $tipos$;
+SELECT correcto AS v_tipos, detalle AS v_detalle_tipos FROM gate_tipos_resultado \gset
+ROLLBACK TO SAVEPOINT tipos_del_gate;
+SELECT pg_temp.comprobar('TIPO propiedad admite exactamente los ocho tipos canonicos',
+    :'v_tipos'::boolean, :'v_detalle_tipos');
 
 SELECT pg_temp.comprobar('OP el indice viejo de una activa por local ya NO bloquea',
     NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_captacion_activa_por_local'));
@@ -787,7 +887,7 @@ SELECT pg_temp.comprobar('4P despues del cutover ningun hecho del inmueble sin l
 -- fila entra sola y con `fecha_creacion` de hoy, que es posterior al cutover.
 -- 0 = no hay ninguna, y entonces el control no probo nada y lo dice.
 SELECT COALESCE((SELECT min(p.id_propiedad) FROM propiedad p
-                  WHERE p.tipo_inmueble = 'C'
+                  WHERE p.id_propiedad=(SELECT casa FROM ctx) AND p.tipo_inmueble = 'C'
                     AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
                                      WHERE r.sujeto = 'PROPIEDAD'
                                        AND r.id_agregado = p.id_propiedad
@@ -846,7 +946,8 @@ SELECT cap.id_captacion, cap.organizacion_id, c.clave
   JOIN catalogo_atributo_operacion o ON o.tipo_propiedad = p.tipo_inmueble
                                     AND o.tipo_operacion = cap.motivo_operacion
   JOIN catalogo_atributo c ON c.id_catalogo_atributo = o.id_catalogo_atributo
- WHERE c.organizacion_id IS NULL AND c.activo AND c.sujeto = 'ENCARGO'
+ WHERE cap.id_captacion=(SELECT encargo FROM ctx)
+   AND c.organizacion_id IS NULL AND c.activo AND c.sujeto = 'ENCARGO'
    AND c.tipo_dato = 'BOOLEANO'
    AND NOT EXISTS (SELECT 1 FROM atributo_encargo a
                     WHERE a.id_captacion = cap.id_captacion AND a.clave = c.clave)
@@ -935,7 +1036,8 @@ SELECT p.id_propiedad, e.campo
                              ('PISO',              p.piso),
                              ('PARTIDA_REGISTRAL', p.partida_registral),
                              ('OFICINA_REGISTRAL', p.oficina_registral)) AS e(campo, valor)
- WHERE p.fecha_registro <= frontera_de_linaje()
+ WHERE p.id_propiedad=(SELECT estructural_legacy FROM ctx)
+   AND p.fecha_registro <= frontera_de_linaje()
    AND e.valor IS NOT NULL
    AND NOT EXISTS (
        SELECT 1 FROM rastro_valor_gobernado r
@@ -1100,8 +1202,8 @@ SELECT pg_temp.comprobar('5A el hecho de la ocupacion llega donde se pacta su co
                             WHERE t.id_catalogo_atributo = hecho.id_catalogo_atributo
                               AND t.tipo_propiedad = o.tipo_propiedad)));
 
-SELECT pg_temp.comprobar('5A y el par esta cubierto en los SIETE tipos, no en cero',
-    (SELECT count(DISTINCT o.tipo_propiedad) = 7
+SELECT pg_temp.comprobar('5A el par ocupacion y entrega cubre los ocho tipos canonicos',
+    (SELECT array_agg(DISTINCT o.tipo_propiedad ORDER BY o.tipo_propiedad)
        FROM catalogo_atributo cond
        JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
        JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
@@ -1109,11 +1211,12 @@ SELECT pg_temp.comprobar('5A y el par esta cubierto en los SIETE tipos, no en ce
        JOIN catalogo_atributo_tipo t ON t.id_catalogo_atributo = hecho.id_catalogo_atributo
                                     AND t.tipo_propiedad = o.tipo_propiedad
       WHERE cond.clave = 'entrega_desocupado' AND cond.activo
-        AND cond.organizacion_id IS NULL));
+        AND cond.organizacion_id IS NULL)
+    = (SELECT array_agg(tipo ORDER BY tipo) FROM tipos_de_propiedad() tipo));
 
-SELECT pg_temp.comprobar('5A estado_ocupacion aplica EXACTAMENTE a los siete tipos',
+SELECT pg_temp.comprobar('5A estado_ocupacion aplica EXACTAMENTE a los tipos canonicos',
     (SELECT array_agg(t.tipo_propiedad ORDER BY t.tipo_propiedad)
-            = ARRAY['A','C','D','L','O','T','X']::varchar[]
+            = (SELECT array_agg(tipo ORDER BY tipo) FROM tipos_de_propiedad() tipo)
        FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
       WHERE c.clave = 'estado_ocupacion' AND c.organizacion_id IS NULL));
 
@@ -1321,7 +1424,7 @@ SELECT count(*) AS n_legado_5a FROM atributo_propiedad WHERE clave = 'servicios_
 -- el control mediria el dato elegido en vez de la invariante. 0 = no hay
 -- ninguno, y entonces el control no probo nada y lo dice.
 SELECT COALESCE((SELECT min(p.id_propiedad) FROM propiedad p
-                  WHERE p.tipo_inmueble = 'T'
+                  WHERE p.id_propiedad=(SELECT terreno FROM ctx) AND p.tipo_inmueble = 'T'
                     AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
                                      WHERE r.sujeto = 'PROPIEDAD'
                                        AND r.id_agregado = p.id_propiedad
@@ -1948,8 +2051,7 @@ SELECT pg_temp.comprobar('5B y la CLAVE area_terreno sigue viva: se retiro su ap
 -- Se necesita un TERRENO y una CASA reales. Si no hubiera de alguno, la prueba
 -- lo dice en vez de salir verde: `pg_temp.rechaza` distingue "cero filas
 -- tocadas" de "lo acepto", y el `SELECT` de abajo distingue "no hay sujeto".
-SELECT COALESCE((SELECT min(id_propiedad) FROM propiedad WHERE tipo_inmueble = 'T'), 0) AS terreno_5b \gset
-SELECT COALESCE((SELECT min(id_propiedad) FROM propiedad WHERE tipo_inmueble = 'C'), 0) AS casa_5b \gset
+SELECT terreno AS terreno_5b, casa AS casa_5b FROM ctx \gset
 
 SELECT pg_temp.comprobar('5B CONTROL hay un TERRENO y una CASA con los que probar la puerta',
     :terreno_5b <> 0 AND :casa_5b <> 0,
@@ -2011,8 +2113,7 @@ BEGIN
     BEGIN
         INSERT INTO atributo_propiedad (organizacion_id, id_propiedad, clave, valor_numero)
         SELECT organizacion_id, id_propiedad, 'area_terreno', 500
-          FROM propiedad WHERE id_propiedad = (SELECT min(id_propiedad) FROM propiedad
-                                                WHERE tipo_inmueble = 'T');
+          FROM propiedad WHERE id_propiedad = (SELECT terreno FROM ctx);
         CREATE TEMP TABLE v5b_terreno AS SELECT 'FALLO - lo acepto'::text AS v;
         RETURN;
     EXCEPTION WHEN others THEN
@@ -2041,7 +2142,7 @@ DROP TABLE v5b_terreno;
 DO $casa$
 DECLARE estado text; mensaje text; casa bigint;
 BEGIN
-    SELECT min(id_propiedad) INTO casa FROM propiedad WHERE tipo_inmueble = 'C';
+    SELECT ctx.casa INTO casa FROM ctx;
     BEGIN
         INSERT INTO atributo_propiedad (organizacion_id, id_propiedad, clave, valor_numero)
         SELECT organizacion_id, id_propiedad, 'area_terreno', 300
@@ -2113,7 +2214,7 @@ SELECT organizacion_id, id_propiedad, 'area_terreno', 111
 DO $huella$
 DECLARE huella_a text; huella_b text; filas_a bigint; filas_b bigint; casa bigint;
 BEGIN
-    SELECT min(id_propiedad) INTO casa FROM propiedad WHERE tipo_inmueble = 'C';
+    SELECT ctx.casa INTO casa FROM ctx;
 
     huella_a := pg_temp.huella_area_5b(casa, casa);
     SELECT count(*) INTO filas_a FROM atributo_propiedad
@@ -2197,7 +2298,7 @@ SAVEPOINT repite_5b;
 DO $repite$
 DECLARE estado text; mensaje text; terreno bigint;
 BEGIN
-    SELECT min(id_propiedad) INTO terreno FROM propiedad WHERE tipo_inmueble = 'T';
+    SELECT ctx.terreno INTO terreno FROM ctx;
     IF terreno IS NULL THEN
         CREATE TEMP TABLE v5b_repite AS
         SELECT 'FALLO - no hay ningun TERRENO utilizable: el control no probo nada'::text AS v;
@@ -2292,29 +2393,38 @@ SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',
       WHERE table_name = 'propiedad'
         AND column_name IN ('precio_referencial', 'moneda_referencial', 'id_rol_propietario', 'disponibilidad_comercial')));
 
--- V71 retiro la tabla espejo. La comprobacion cambia de sentido y con eso gana:
--- ya no vigila que el espejo siga ahi, vigila que al retirarlo no se perdiera
--- ningun rubro. Los 21 que tenia la cartera tienen que estar, ahora como valor
--- gobernado.
---
--- Las dos cifras son SUELOS, no censos (corregido en V76). Escritas como
--- `= 21` median el tamano de la cartera y no la invariante: en cuanto alguien
--- registraba una propiedad -- que es el uso normal del sistema -- el gate se
--- ponia rojo sin que nada se hubiera roto. Un gate que se rompe al usar el
--- producto deja de leerse, y ese es el modo de fallo que importa.
+-- C2: conservación por identidad y valor acreditados ANTES de V71. Un suelo
+-- de cartera (aunque se escriba >=21) no detecta qué original se perdió.
 SELECT pg_temp.comprobar('SIN ROMPER detalle_local_comercial ya no existe',
     (SELECT count(*) = 0 FROM information_schema.tables
       WHERE table_name = 'detalle_local_comercial'));
 
-SELECT pg_temp.comprobar('SIN ROMPER los 21 rubros sobrevivieron a la retirada',
-    (SELECT count(*) >= 21 FROM atributo_propiedad WHERE clave = 'rubro_permitido'));
+SELECT pg_temp.comprobar('SIN ROMPER valores V71 conservan identidad y valor',
+    NOT EXISTS (
+        SELECT 1 FROM gate_snapshot_v71 s
+        CROSS JOIN LATERAL jsonb_array_elements(
+            (s.datos->'originales_espejo') || (s.datos->'autoridad_previa')) e
+        LEFT JOIN atributo_propiedad a ON a.id_propiedad=(e->>'id_propiedad')::bigint
+             AND a.organizacion_id=(e->>'organizacion')::bigint AND a.clave=e->>'clave'
+        WHERE a.id_atributo_propiedad IS NULL
+           OR (CASE e->>'clave'
+                WHEN 'rubro_permitido' THEN to_jsonb(a.valor_texto)
+                WHEN 'apto_licencia_funcionamiento' THEN to_jsonb(a.valor_booleano)
+                WHEN 'carga_electrica_kw' THEN to_jsonb(a.valor_numero)
+               END) IS DISTINCT FROM e->'valor'));
 
 SELECT pg_temp.comprobar('SIN ROMPER la busqueda por rubro conserva su indice',
     (SELECT count(*) = 1 FROM pg_indexes
       WHERE indexname = 'ix_atributo_rubro_trgm'));
 
 SELECT pg_temp.comprobar('SIN ROMPER no se perdio ninguna propiedad',
-    (SELECT count(*) >= 21 FROM propiedad));
+    NOT EXISTS (
+        SELECT 1 FROM gate_snapshot_v71 s
+        CROSS JOIN LATERAL jsonb_array_elements(s.datos->'propiedades') e
+        LEFT JOIN propiedad p ON p.id_propiedad=(e->>'id')::bigint
+                             AND p.organizacion_id=(e->>'organizacion')::bigint
+        WHERE p.id_propiedad IS NULL OR p.codigo IS DISTINCT FROM e->>'codigo'
+           OR p.direccion IS DISTINCT FROM e->>'direccion'));
 
 -- =====================================================================
 -- El informe tiene que caber, o el informe miente
@@ -2397,3 +2507,4 @@ BEGIN
 END $$;
 
 ROLLBACK;
+SELECT 'BROX_GATE_ROLLBACK_OK'::text;

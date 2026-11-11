@@ -18,6 +18,7 @@ import jakarta.persistence.Transient;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Una accion pendiente de la bandeja del agente. <b>NO es Transicionable</b>:
@@ -87,6 +88,8 @@ public class Tarea extends EntidadDeOrganizacion {
      * hablar (D-E2-1 §10.3).
      */
     public static final String ENTIDAD_PROSPECCION = "PROSPECCION";
+    /** Aviso personal de gestión de temporales, distinto de una actuación comercial. */
+    public static final String ENTIDAD_FOTO_ORIGINAL_C6 = "FOTO_PROPIEDAD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -113,6 +116,25 @@ public class Tarea extends EntidadDeOrganizacion {
      */
     @Column(name = "id_contrato_origen")
     private Long idContratoOrigen;
+    /** Identidad de la causa material R27; posponer/reasignar no la cambia. */
+    @Column(name="marca_causa",length=64)
+    private String marcaCausa;
+    @Column(name="id_antecedente")
+    private Long idAntecedente;
+    @Column(name="id_seguimiento_prospeccion")
+    private Long idSeguimientoProspeccion;
+    @Column(name="huella_causa_c7",length=64)
+    private String huellaCausaC7;
+    @Column(name="fuente_causa_c7",columnDefinition="text")
+    private String fuenteCausaC7;
+    @Column(name="estado_causa_c7",length=15)
+    private String estadoCausaC7;
+    @Column(name="original_material_ia_c6")
+    private UUID originalMaterialIaC6;
+    @Column(name="revision_material_ia_c6")
+    private Long revisionMaterialIaC6;
+    @Column(name="estado_causa_material_ia_c6",length=15)
+    private String estadoCausaMaterialIaC6;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_rol_agente", nullable = false)
@@ -133,7 +155,8 @@ public class Tarea extends EntidadDeOrganizacion {
     @Column(name = "estado", nullable = false, length = 1)
     private String estado;
 
-    @Column(name = "prioridad", nullable = false, length = 10)
+    /** SQL146 mantiene importancia obligatoria para toda fuente excepto este aviso informativo C6. */
+    @Column(name = "prioridad", length = 10)
     private String prioridad;
 
     // ------------------------------------------------------------------
@@ -171,6 +194,7 @@ public class Tarea extends EntidadDeOrganizacion {
 
     /** Su motivo desaparecio: el reconcile (o el cierre de F4) la da por hecha. */
     public void completar() {
+        if(esAvisoMaterialIaC6())throw new IllegalStateException("La desaparición de una causa informativa no acredita una actuación humana completada.");
         estado = COMPLETADA;
         fechaCompletada = OffsetDateTime.now();
     }
@@ -184,12 +208,27 @@ public class Tarea extends EntidadDeOrganizacion {
     }
 
     public boolean estaAbierta() {
-        return ABIERTAS.contains(getEstado());
+        return ABIERTAS.contains(getEstado())&&(!esAvisoMaterialIaC6()||"VIGENTE".equals(estadoCausaMaterialIaC6))
+                &&(huellaCausaC7==null||"VIGENTE".equals(estadoCausaC7));
     }
+    public String getHuellaCausaC7(){return huellaCausaC7;}
+    public void setHuellaCausaC7(String valor){huellaCausaC7=valor;}
+    public String getFuenteCausaC7(){return fuenteCausaC7;}
+    public void setFuenteCausaC7(String valor){fuenteCausaC7=valor;}
+    public String getEstadoCausaC7(){return estadoCausaC7;}
+    public void setEstadoCausaC7(String valor){estadoCausaC7=valor;}
+    @Transient public boolean esAvisoMaterialIaC6(){return originalMaterialIaC6!=null&&ENTIDAD_FOTO_ORIGINAL_C6.equals(entidadTipo);}
+    public UUID getOriginalMaterialIaC6(){return originalMaterialIaC6;}
+    public void setOriginalMaterialIaC6(UUID valor){originalMaterialIaC6=valor;}
+    public Long getRevisionMaterialIaC6(){return revisionMaterialIaC6;}
+    public void setRevisionMaterialIaC6(Long valor){revisionMaterialIaC6=valor;}
+    public String getEstadoCausaMaterialIaC6(){return estadoCausaMaterialIaC6;}
+    public void setEstadoCausaMaterialIaC6(String valor){estadoCausaMaterialIaC6=valor;}
 
     /** Clave de deduplicacion del reconcile: por ENTIDAD, no por tipo de tarea. */
     public String claveEntidad() {
-        return claveEntidad(entidadTipo, entidadId);
+        String base=claveEntidad(entidadTipo,entidadId);
+        return huellaCausaC7!=null?base+":"+huellaCausaC7:RECONTACTO.equals(tipo)&&marcaCausa!=null?base+":"+marcaCausa:base;
     }
 
     public static String claveEntidad(String entidadTipo, Long entidadId) {
@@ -199,6 +238,12 @@ public class Tarea extends EntidadDeOrganizacion {
     public Long getId() {
         return id;
     }
+    public String getMarcaCausa(){return marcaCausa;}
+    public void setMarcaCausa(String valor){marcaCausa=valor;}
+    public Long getIdAntecedente(){return idAntecedente;}
+    public void setIdAntecedente(Long valor){idAntecedente=valor;}
+    public Long getIdSeguimientoProspeccion(){return idSeguimientoProspeccion;}
+    public void setIdSeguimientoProspeccion(Long valor){idSeguimientoProspeccion=valor;}
 
     public void setId(Long id) {
         this.id = id;

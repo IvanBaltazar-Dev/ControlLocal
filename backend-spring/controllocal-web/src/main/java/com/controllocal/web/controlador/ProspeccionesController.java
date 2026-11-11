@@ -1,11 +1,9 @@
 package com.controllocal.web.controlador;
 
-import com.controllocal.service.CoincidenciaService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.ProspeccionService.FiltrosProspeccion;
 import com.controllocal.web.dto.CaptarProspeccionRequest;
-import com.controllocal.web.dto.CoincidenciasResponse;
 import com.controllocal.web.dto.MarcarProspeccionCaptadaRequest;
 import com.controllocal.web.dto.ProspeccionRequest;
 import com.controllocal.web.dto.ProspeccionResponse;
@@ -34,11 +32,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProspeccionesController {
 
     private final ProspeccionService prospecciones;
-    private final CoincidenciaService coincidencias;
+    private final com.controllocal.service.actuacion.ComandosAutomaticosService comandos;
+    private final com.controllocal.web.seguridad.ProcedenciaDeCabeceras procedencias;
 
-    public ProspeccionesController(ProspeccionService prospecciones, CoincidenciaService coincidencias) {
+    public ProspeccionesController(ProspeccionService prospecciones,
+            com.controllocal.service.actuacion.ComandosAutomaticosService comandos,
+            com.controllocal.web.seguridad.ProcedenciaDeCabeceras procedencias) {
         this.prospecciones = prospecciones;
-        this.coincidencias = coincidencias;
+        this.comandos=comandos;this.procedencias=procedencias;
     }
 
     @GetMapping
@@ -60,10 +61,9 @@ public class ProspeccionesController {
 
     @GetMapping("recontactar")
     public PageResponse<ProspeccionResponse> recontactar(
-            @RequestParam(defaultValue = "7") int dias,
             @RequestParam(defaultValue = "1") int pagina,
             @RequestParam(defaultValue = "10") int tamano) {
-        return pagina(prospecciones.recontactar(dias, pagina, tamano, SesionActual.actor()), pagina, tamano);
+        return pagina(prospecciones.recontactar(pagina, tamano, SesionActual.actor()), pagina, tamano);
     }
 
     @GetMapping("{id}")
@@ -76,16 +76,6 @@ public class ProspeccionesController {
      * que exista captacion. Solo es accionable ("Proponer") si la prospeccion
      * ya tiene captacion; si no, la ruta viaja vacia.
      */
-    @GetMapping("{id}/coincidencias")
-    public CoincidenciasResponse coincidencias(@PathVariable long id,
-                                               @RequestParam(required = false) Integer page,
-                                               @RequestParam(required = false) Integer pagina,
-                                               @RequestParam(name = "page_size", required = false) Integer pageSize,
-                                               @RequestParam(required = false) Integer tamano) {
-        return CoincidenciasResponse.desde(coincidencias.clientesParaProspeccion(id,
-                ClientesController.paginaSolicitada(page, pagina),
-                ClientesController.tamanoSolicitado(pageSize, tamano), SesionActual.actor()));
-    }
 
     @PostMapping
     @PreAuthorize("hasRole('AGENTE')")
@@ -113,10 +103,28 @@ public class ProspeccionesController {
         return ProspeccionResponse.desde(prospecciones.entregarPropuesta(id, SesionActual.actor()));
     }
 
-    @PostMapping("{id}/seguimiento")
-    @PreAuthorize("hasRole('AGENTE')")
-    public ProspeccionResponse registrarSeguimiento(@PathVariable long id) {
-        return ProspeccionResponse.desde(prospecciones.registrarSeguimiento(id, SesionActual.actor()));
+    @GetMapping("{id}/seguimientos")
+    @com.controllocal.web.capacidades.CapacidadReconocida("consultar_seguimientos_prospeccion")
+    public java.util.List<ProspeccionService.RevisionSeguimiento> seguimientos(@PathVariable long id) {
+        return prospecciones.seguimientos(id,SesionActual.actor());
+    }
+    @PostMapping("{id}/seguimientos/{idSeguimiento}/planificacion") @PreAuthorize("hasRole('AGENTE')")
+    @com.controllocal.web.capacidades.CapacidadReconocida("planificar_seguimiento_prospeccion")
+    public com.controllocal.service.actuacion.ComandosAutomaticosService.ResultadoAutomatico<ProspeccionService.RevisionSeguimiento> planificar(
+            @PathVariable long id,@PathVariable long idSeguimiento,@RequestBody ProspeccionService.PlanificacionSeguimiento datos,
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String clave,jakarta.servlet.http.HttpServletRequest r) {
+        return comandos.planificarSeguimiento(id,idSeguimiento,datos,SesionActual.actor(),
+                com.controllocal.web.seguridad.ContextoDeActuacion.de(SesionActual.sesion()),
+                com.controllocal.web.seguridad.ContextoDeActuacion.correlacionDirecta(clave),procedencias.de(r));
+    }
+    @PostMapping("{id}/seguimientos/{idSeguimiento}/posposicion") @PreAuthorize("hasRole('AGENTE')")
+    @com.controllocal.web.capacidades.CapacidadReconocida("posponer_seguimiento_prospeccion")
+    public com.controllocal.service.actuacion.ComandosAutomaticosService.ResultadoAutomatico<ProspeccionService.RevisionSeguimiento> posponer(
+            @PathVariable long id,@PathVariable long idSeguimiento,@RequestBody ProspeccionService.PosposicionSeguimiento datos,
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String clave,jakarta.servlet.http.HttpServletRequest r) {
+        return comandos.posponerSeguimiento(id,idSeguimiento,datos,SesionActual.actor(),
+                com.controllocal.web.seguridad.ContextoDeActuacion.de(SesionActual.sesion()),
+                com.controllocal.web.seguridad.ContextoDeActuacion.correlacionDirecta(clave),procedencias.de(r));
     }
 
     @PostMapping("{id}/rechazar")

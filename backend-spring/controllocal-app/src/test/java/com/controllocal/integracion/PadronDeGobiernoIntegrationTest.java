@@ -1,16 +1,16 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
-import com.controllocal.persistence.repositorio.CredencialUsuarioRepository;
+import com.controllocal.persistence.repositorio.CuentaAccesoRepository;
 import com.controllocal.persistence.repositorio.CuentaDeGobiernoFila;
-import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
-import com.controllocal.persistence.repositorio.UsuarioOrganizacionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.SeguridadService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,111 +18,103 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Gate del <b>padron de gobierno</b> (`GET /accesos`).
- *
- * <p><b>Por que existe.</b> La primera version de esta consulta devolvia
- * <b>una sola fila</b> para un tenant de veintiuna cuentas, y el error no lo
- * vio ni el compilador ni el arranque: el JPQL era valido y el SQL equivalente,
- * escrito a mano, daba las veintiuna. Solo se cayo en un E2E, que tarda diez
- * minutos por intento. Esto lo comprueba en segundos y contra la base de
- * verdad, que es donde el fallo vivia.
- *
- * <p>Se ejecuta solo con {@code TEST_DB_URL} apuntando a una base con el
- * esquema y el seed, igual que el resto de los tests de esta carpeta.
- */
-@EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
-@SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+/** CAT-E01/R19: una fila por pertenencia local, sin actividad ni seguridad personal. */
+@EnabledIfEnvironmentVariable(named="TEST_DB_URL",matches=".+")
+@SpringBootTest(classes=ControlLocalApplication.class,webEnvironment=SpringBootTest.WebEnvironment.NONE)
+@Transactional
 class PadronDeGobiernoIntegrationTest {
-
-    private static final long ORGANIZACION = 1L;
-
-    @DynamicPropertySource
-    static void datos(DynamicPropertyRegistry propiedades) {
-        BaseDeDatosDePruebas.registrar(propiedades);
-    }
-
+    @DynamicPropertySource static void datos(DynamicPropertyRegistry p) {BaseDeDatosDePruebas.registrar(p);}
     @Autowired JdbcTemplate jdbc;
-    @Autowired CredencialUsuarioRepository credenciales;
-    @Autowired UsuarioOrganizacionRepository membresias;
-    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CuentaAccesoRepository cuentas;
     @Autowired SeguridadService seguridad;
+    private long orgA,orgB,broker,rolBroker,adminPuro,historico;
+    private Actor gobierno;
 
-    @Test
-    void elPadronDevuelveTodasLasCuentasDelTenant() {
-        Integer esperadas = jdbc.queryForObject("""
-                SELECT count(*)
-                  FROM credencial_usuario c
-                  JOIN persona_rol r ON r.id_persona_rol = c.id_persona_rol
-                  JOIN persona p ON p.id_persona = r.id_persona
-                 WHERE c.organizacion_id = ?
-                   AND r.vigencia_hasta IS NULL
-                """, Integer.class, ORGANIZACION);
-
-        List<CuentaDeGobiernoFila> padron = credenciales.cuentasDeGobierno(ORGANIZACION);
-
-        assertTrue(esperadas != null && esperadas > 1,
-                "el seed debe tener mas de una cuenta para que la prueba signifique algo");
-        assertEquals(esperadas.intValue(), padron.size(),
-                "el padron debe traer una fila por cuenta, no una por tenant");
+    @BeforeEach void pertenenciasDePrueba() {
+        orgA=jdbc.queryForObject("select min(id_organizacion) from organizacion",Long.class);
+        orgB=jdbc.queryForObject("insert into organizacion(codigo,nombre,estado,modalidad) values(?,?,'I','EMPRESARIAL') returning id_organizacion",Long.class,
+                "PG-"+UUID.randomUUID().toString().substring(0,24),"Otra organizacion ficticia del padron");
+        broker=cuenta("Broker local");long pBroker=persona(orgA,"Broker local");
+        rolBroker=rol(orgA,pBroker,"BROKER");long rolAdmin=rol(orgA,pBroker,"ADMIN");
+        pertenencia(orgA,broker,pBroker,Actor.BROKER,true,"A");
+        gobierno=new Actor(orgA,pBroker,rolAdmin,Actor.TENANT_ADMIN);
+        adminPuro=cuenta("Gobierno sin rol comercial");long pAdmin=persona(orgA,"Gobierno local");
+        rol(orgA,pAdmin,"ADMIN");pertenencia(orgA,adminPuro,pAdmin,null,true,"A");
+        historico=cuenta("Nombre personal que no debe sustituir al local");
+        long pAnterior=persona(orgA,"Antecedente local A");rol(orgA,pAnterior,"ADMIN");
+        pertenencia(orgA,historico,pAnterior,null,true,"I");
+        long pActual=persona(orgB,"Identidad local B reservada");rol(orgB,pActual,"ADMIN");
+        pertenencia(orgB,historico,pActual,null,true,"A");
     }
 
-    @Test
-    void cadaFilaTraeLosDosIdentificadoresYNingunoEsElOtro() {
-        List<CuentaDeGobiernoFila> padron = credenciales.cuentasDeGobierno(ORGANIZACION);
+    @Test void consultaNoColapsaFilasNiCruzaOrganizaciones() {
+        long esperadas=jdbc.queryForObject("select count(*) from usuario_organizacion where organizacion_id=?",Long.class,orgA);
+        var filas=cuentas.cuentasDeGobierno(orgA);assertEquals(esperadas,filas.size());
+        assertTrue(filas.stream().anyMatch(f->f.idCuenta()==broker));
+        assertTrue(filas.stream().anyMatch(f->f.idCuenta()==adminPuro));
+        var idsLocales=new HashSet<>(jdbc.queryForList("select id_persona from persona where organizacion_id=?",Long.class,orgA));
+        assertTrue(filas.stream().allMatch(f->idsLocales.contains(f.idPersona())));
+        assertTrue(filas.stream().noneMatch(f->"Identidad local B reservada".equals(f.nombre())));
+    }
 
-        for (CuentaDeGobiernoFila fila : padron) {
-            assertTrue(fila.idPersona() != null && fila.idRol() != null && fila.idCredencial() != null,
-                    "sin los tres identificadores no se puede gobernar la cuenta: " + fila);
-            // El id del ROL y el de la CREDENCIAL coinciden por diseño (@MapsId);
-            // el de la PERSONA es otro, y confundirlos es revocarle el factor a
-            // quien no era.
-            assertEquals(fila.idRol(), fila.idCredencial(),
-                    "credencial y rol comparten clave por @MapsId");
+    @Test void brokerYAdministracionPermanecenSeparadosYAdminPuroNoSePierde() {
+        var filas=seguridad.cuentas(gobierno);
+        var doble=filas.stream().filter(f->f.idCuenta()==broker).findFirst().orElseThrow();
+        assertEquals(Actor.BROKER,doble.rolPrincipal());assertTrue(doble.administrar());assertTrue(doble.pertenenciaActiva());
+        var puro=filas.stream().filter(f->f.idCuenta()==adminPuro).findFirst().orElseThrow();
+        assertNull(puro.rolPrincipal());assertTrue(puro.administrar());
+    }
+
+    @Test void antecedenteLocalNoPublicaEstadoORestriccionesActualesEnOtraOrganizacion() {
+        var antes=filaHistorica();assertFalse(antes.pertenenciaActiva());assertEquals("Antecedente local A",antes.nombre());
+        jdbc.update("update cuenta_acceso set estado='I',debe_cambiar_contrasena=true,debe_enrolar_mfa=true where id_cuenta_acceso=?",historico);
+        var despues=filaHistorica();assertEquals(antes,despues);
+    }
+
+    @Test void serializacionConservaCardinalidadYExponeSoloNueveCampos() throws Exception {
+        var filas=seguridad.cuentas(gobierno);JsonNode json=new ObjectMapper().valueToTree(filas);
+        assertTrue(json.isArray());assertEquals(cuentas.cuentasDeGobierno(orgA).size(),json.size());
+        Set<String> permitidos=Set.of("idPersona","idCuenta","nombre","usuario","rolPrincipal","administrar","pertenenciaActiva","idMembresia","version");
+        for(JsonNode fila:json) {
+            var campos=new HashSet<String>();fila.fieldNames().forEachRemaining(campos::add);
+            assertEquals(permitidos,campos);
         }
     }
 
-    /** Las dos consultas auxiliares del padron: se cruzan por credencial. */
-    @Test
-    void lasConsultasAuxiliaresSonAgrupadasYNoColapsan() {
-        assertTrue(membresias.bandasActivas(ORGANIZACION).size() >= 1,
-                "el seed tiene al menos una membresia activa");
-        // Sin factores activos la lista es vacia, y eso es valido: la ausencia
-        // significa "sin MFA", no un hueco.
-        assertTrue(factores.codigosDisponiblesPorCredencial(ORGANIZACION).size() >= 0);
+    @Test void brokerSinAtribucionAdministrativaNoConsultaElPadron() {
+        var brokerActor=new Actor(gobierno.idOrganizacion(),gobierno.idPersona(),rolBroker,Actor.BROKER);
+        assertThrows(AccesoNoAutorizadoException.class,()->seguridad.cuentas(brokerActor));
     }
 
-    /**
-     * El camino COMPLETO hasta el cable: service + serializacion. El fallo que
-     * motivo esta clase se veia como "el API devuelve una fila", asi que
-     * comprobar solo el repositorio dejaria sin cubrir justo el tramo donde
-     * podria volver a perderse.
-     */
-    @Test
-    void elServicioYLaSerializacionConservanTodasLasCuentas() throws Exception {
-        Actor gobierno = new Actor(ORGANIZACION, 1L, 1L, Actor.TENANT_ADMIN);
-
-        List<SeguridadService.CuentaDeGobierno> cuentas = seguridad.cuentas(gobierno);
-        assertEquals(credenciales.cuentasDeGobierno(ORGANIZACION).size(), cuentas.size(),
-                "el service no puede perder filas al cruzar banda y codigos");
-
-        JsonNode json = new ObjectMapper().readTree(new ObjectMapper().writeValueAsString(cuentas));
-        assertTrue(json.isArray(), "el cable espera un array");
-        assertEquals(cuentas.size(), json.size(), "la serializacion no puede colapsar el array");
+    private CuentaDeGobiernoFila filaHistorica() {
+        return cuentas.cuentasDeGobierno(orgA).stream().filter(f->f.idCuenta()==historico).findFirst().orElseThrow();
     }
-
-    /** Gobierno es gobierno: un BROKER no ve el padron. */
-    @Test
-    void unBrokerNoLeeElPadron() {
-        Actor broker = new Actor(ORGANIZACION, 2L, 2L, Actor.BROKER);
-        assertThrows(AccesoNoAutorizadoException.class, () -> seguridad.cuentas(broker));
+    private long cuenta(String nombre) {
+        String ref=UUID.randomUUID().toString();var c=new CuentaAcceso();c.setNombreUsuario("padron-"+ref);
+        c.setCorreoPropio("padron-"+ref+"@example.test");c.setCorreoConfirmadoEn(Instant.now());
+        c.setNombreProfesionalDeclarado(nombre);c.setContrasenaHash("fixture-del-padron-no-autenticable");
+        return cuentas.saveAndFlush(c).getId();
+    }
+    private long persona(long org,String nombre) {
+        return jdbc.queryForObject("insert into persona(organizacion_id,tipo_persona,tipo_documento,numero_documento,nombres_o_razon_social) values(?,'N','P',?,?) returning id_persona",
+                Long.class,org,UUID.randomUUID().toString().substring(0,25),nombre);
+    }
+    private long rol(long org,long persona,String tipo) {
+        return jdbc.queryForObject("insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde) values(?,?,?,?) returning id_persona_rol",Long.class,org,persona,tipo,LocalDate.now(ZoneId.of("America/Lima")));
+    }
+    private void pertenencia(long org,long cuenta,long persona,String principal,boolean administrar,String estado) {
+        jdbc.update("insert into usuario_organizacion(organizacion_id,id_usuario,id_persona,rol,administrar,estado) values(?,?,?,?,?,?)",org,cuenta,persona,principal,administrar,estado);
     }
 }

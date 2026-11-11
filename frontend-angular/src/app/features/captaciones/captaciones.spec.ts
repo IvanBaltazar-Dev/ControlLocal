@@ -100,12 +100,12 @@ describe('Captaciones', () => {
     expect(texto(fixture)).not.toContain('CAP-0009');
   });
 
-  it('la entrada del menú existe y está disponible para los tres roles', () => {
+  it('la entrada comercial está disponible para agente y broker, sin gobierno', () => {
     const modulo = MODULOS.find((m) => m.ruta === 'captaciones')!;
     expect(modulo).toBeDefined();
     expect(puedeEntrar(modulo, 'AGENTE')).toBeTrue();
     expect(puedeEntrar(modulo, 'BROKER')).toBeTrue();
-    expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeTrue();
+    expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeFalse();
   });
 
   describe('filtrosCaptacionesDesdeUrl', () => {
@@ -123,6 +123,8 @@ describe('Captaciones', () => {
   ): Promise<ComponentFixture<Captaciones>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't', expiraEnSegundos: 3600, rol, idUsuario: 1, idDominio: 30,
       nombre: 'Prueba', usuario: 'prueba', expiraEn: '2099-01-01T00:00:00',
     });

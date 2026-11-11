@@ -1,18 +1,15 @@
-# =====================================================================
-# E2E del flujo F2 sobre el nucleo multi-tenant (V6).
-#
-# Recorre oferta + prospeccion + captacion contra el API v2 y comprueba,
-# fila por fila, que todo lo que se crea nace con el tenant de legado.
-# Cubre los criterios #1, #2, #5, #6 y #9 del gate de
-# docs/ai/plan-migracion-v6-tenancy.md.
-#
-# Uso: powershell -File backend-spring/verificacion/Invoke-E2E.ps1 -Suite v6
-# Uso:        pwsh backend-spring/verificacion/e2e-v6.ps1
-# =====================================================================
+# E2E de aislamiento por tenant sobre los contratos C1/C2 actuales.
+# Conserva registro, precio/historia, prospeccion, revision, reenvio,
+# reasignacion y fin del mandato; no usa backfill ni un tenant legacy fijo.
+# Uso: Invoke-E2E.ps1 -Suite v6
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
+. "$PSScriptRoot/lib-publicaciones-c6.ps1"
+. "$PSScriptRoot/lib-financiacion-b0-test.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
+$null = AsegurarPlanEmpresarialB0DePrueba -Organizacion $fixtureE2E.organizacion -Codigo $fixtureE2E.codigo
 $ok = 0; $fail = 0
 
 function Check($nombre, $condicion, $detalle) {
@@ -28,235 +25,183 @@ function Api($metodo, $ruta, $token, $cuerpo) {
         $parametros['Body'] = ($cuerpo | ConvertTo-Json -Depth 6)
         $parametros['ContentType'] = 'application/json'
     }
-    Invoke-RestMethod @parametros
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @parametros) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
+
+
+function ApiError($metodo,$ruta,$token,$cuerpo) {
+ try{Api $metodo $ruta $token $cuerpo|Out-Null;return @{codigo=0}}
+ catch{$r=$_.Exception.Response;if($null -eq $r){throw};return @{codigo=[int]$r.StatusCode}}
 }
 
-Write-Host "`n== 1. Login (contrato de token CONGELADO) ==" -ForegroundColor Cyan
-$agente = Api POST '/auth/login' $null @{ usuario = 'vmora'; contrasena = 'Agente2026' }
-Check 'login agente devuelve token' ($agente.token.Length -gt 40) $agente.token
-Check 'rol AGENTE' ($agente.rol -eq 'AGENTE') $agente.rol
-Check 'el token sigue teniendo 3 partes HS256' ($agente.token.Split('.').Count -eq 3) 'formato'
-$claims = $agente.token.Split('.')[1]
-$claims = $claims.PadRight([int](([math]::Ceiling($claims.Length / 4.0)) * 4), '=').Replace('-', '+').Replace('_', '/')
-$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($claims)) | ConvertFrom-Json
-# El tenant lo resuelve el backend por request (D-20): si algun dia aparece
-# en el token, es que el contrato dejo de estar congelado.
-Check 'el token NO lleva la organizacion (gate #5)' ($null -eq $payload.idOrganizacion) 'el token debe seguir congelado'
-
-$broker = Api POST '/auth/login' $null @{ usuario = 'rsalas'; contrasena = 'Broker2026' }
-Check 'login broker' ($broker.rol -eq 'BROKER') $broker.rol
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
-Check 'login admin' ($admin.rol -eq 'ADMIN') $admin.rol
-$hoy = (Get-Date).ToString('yyyy-MM-dd')
-$finEncargo = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
-
-Write-Host "`n== 2. Lectura de la cartera (scope por tenant) ==" -ForegroundColor Cyan
-$locales = Api GET '/locales?pagina=1&tamano=10' $agente.token
-$totalPrevio = $locales.totalRecords
-Check 'GET /locales responde el total del tenant' ($totalPrevio -ge 2) "total=$totalPrevio"
-$localesAdmin = Api GET '/locales?pagina=1&tamano=10' $admin.token
-Check 'el ADMIN ve el mismo universo (su organizacion)' ($localesAdmin.totalRecords -eq $totalPrevio) "$($localesAdmin.totalRecords) vs $totalPrevio"
-
-Write-Host "`n== 3. Alta universal (estampa el tenant en todo lo que crea) ==" -ForegroundColor Cyan
-$sufijo = Get-Random -Minimum 1000 -Maximum 9999
-# `POST /locales` se retiro en el Corte 0A. Hacia tres cosas -registrar, abrir
-# prospeccion y crear anuncio-; el alta universal hace UNA, y las otras dos se
-# declaran. Lo que esta suite verifica sigue siendo lo mismo: que el tenant se
-# estampa en todo lo que nace.
-$nuevoLocal = NuevoInmuebleConEncargo -Token $agente.token `
-    -Direccion 'Av. Multi-tenant 456' -IdPropietario 43 -Codigo "LOC-V6$sufijo" -Metraje 150.5 -Rubro 'Cafeteria' `
-    -Importe 9200 -Moneda 'PEN' -Descripcion "Alta multi-tenant V6 $sufijo"
-$idLocal = $nuevoLocal.id
-Check 'el alta universal crea con los defaults del modelo' `
-    ((Sql "select tipo_inmueble||'/'||uso from propiedad where id_propiedad=$idLocal") -eq 'L/C') 'tipo/uso'
-Check 'la propiedad nace en BROX_LEGACY' ((Sql "select organizacion_id from propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
-Check 'el atributo gobernado hereda el tenant' ((Sql "select distinct organizacion_id from atributo_propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
-Check 'el encargo hereda el tenant' ((Sql "select count(*) from captacion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'captacion'
-# El encargo la pone EN OFERTA: registrar no es encargar, pero encargar si es
-# ofrecer (V75).
-Check 'abrir el encargo deja la propiedad disponible' ((Sql "select disponibilidad_comercial from propiedad where id_propiedad=$idLocal") -eq 'D') 'disponibilidad'
-Check 'y lo deja dicho en su expediente' ((Sql "select count(*) from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$idLocal") -eq '1') 'historial'
-
-$totalNuevo = (Api GET '/locales?pagina=1&tamano=10' $agente.token).totalRecords
-Check 'el total del tenant subio en 1' ($totalNuevo -eq $totalPrevio + 1) "$totalNuevo vs $totalPrevio"
-
-Write-Host "`n== 4. Ficha, edicion y precios ==" -ForegroundColor Cyan
-$ficha = Api GET "/locales/$idLocal" $agente.token
-Check 'GET /locales/{id} devuelve la ficha' ($ficha.codigoLocal -eq "LOC-V6$sufijo") $ficha.codigoLocal
-Check 'la ficha trae el propietario resuelto' ($null -ne $ficha.propietarioNombre) 'propietarioNombre'
-
-# `PUT /locales/{id}` se retiro en el Corte 0A. El precio se cambia donde vive:
-# en el ENCARGO, y cambiarlo ANADE un hito 'U' -no sobrescribe el anterior-.
-Api PUT "/propiedades/$idLocal" $agente.token @{
-    operaciones = @(@{ operacion = 'ALQUILER'; importe = 9900; moneda = 'PEN' })
-} | Out-Null
-$editado = Api GET "/locales/$idLocal" $agente.token
-Check 'editar el encargo actualiza el precio de la ficha' ($editado.precioReferencial -eq 9900) $editado.precioReferencial
-# E0.1 (2026-08-10): la serie de precios es APPEND-ONLY y el alta ya deja su
-# PRIMER hito 'U' con el precio autorizado de salida. Esta comprobacion exigia
-# UNA sola fila, y era correcta mientras el unico productor de 'U' fuera la
-# edicion. Ahora tienen que convivir los dos, en orden y sin pisarse: 9200 al
-# alta y 9900 al editar. Volver a ver un solo hito significaria que la edicion
-# machaca el precio de salida, que es exactamente lo que E0.1 vino a impedir
-# —ese primer numero es el que mide cuanto cedio el propietario hasta el cierre
-# y no se reconstruye desde ninguna otra tabla—.
-$serieU = Sql "select string_agg(monto::int::text, '>' order by id_precio) from precio_propiedad where id_propiedad=$idLocal and hito='U' and organizacion_id=1"
-Check 'el alta y la edicion dejan sus dos hitos U con tenant, sin pisarse' `
-    ($serieU -eq '9200>9900') $serieU
-
-# D-E4-1 (2026-08-18): un hito de precio declara de que OPERACION es. Antes se
-# suponia alquiler cuando el cuerpo no lo decia, y con la venta en el modelo esa
-# suposicion archiva un precio de venta en la serie de alquiler sin que ningun
-# CHECK pueda notarlo. Si la propiedad tiene un unico encargo vivo, el servidor
-# lo deduce de ahi; esta no lo tiene todavia, asi que se declara.
-$precio = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9500; operacion = 'ALQUILER' }
-Check 'POST /precios registra el hito' ($precio.hito -eq 'O') $precio.hito
-Check 'el hito declara su operacion' ($precio.operacion -eq 'ALQUILER') $precio.operacion
-Check 'el precio manual lleva tenant' ((Sql "select organizacion_id from precio_propiedad where id_precio=$($precio.id)") -eq '1') 'organizacion_id'
-
-# Sin operacion declarada, el servidor la DEDUCE cuando no hay ambiguedad: esta
-# propiedad tiene un unico encargo vivo -el de alquiler que abrio el alta-, asi
-# que el hito se archiva en su serie sin suponer nada.
-$deducido = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9600 }
-Check 'con un solo encargo vivo, la operacion se deduce de el' ($deducido.operacion -eq 'ALQUILER') $deducido.operacion
-
-$publicacion = Api POST "/encargos/$($nuevoLocal.idEncargo)/publicaciones" $agente.token @{ canal = 'URBANIA'; importePublicado = 9900; moneda = 'PEN'; estado = 'P' }
-Check 'POST /publicaciones crea el anuncio' ($publicacion.estado -eq 'P') $publicacion.estado
-Check 'la publicacion nueva lleva tenant' ((Sql "select organizacion_id from publicacion where id_publicacion=$($publicacion.id)") -eq '1') 'organizacion_id'
-
-Write-Host "`n== 5. Prospeccion: maquina de estados + auditoria ==" -ForegroundColor Cyan
-# La prospeccion se declara. `POST /locales` la abria de rebote y por eso esta
-# suite la encontraba hecha; el alta universal no crea prospecciones -lo dice su
-# propia documentacion- porque prospectar es una decision, no un efecto de
-# registrar.
-$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
-    -Observaciones "Prospeccion multi-tenant V6 $sufijo"
-$prospecciones = Api GET "/prospecciones?idLocal=$idLocal" $agente.token
-Check 'la prospeccion nace en P' ($prospecciones.items[0].estado -eq 'P') $prospecciones.items[0].estado
-Check 'y hereda el tenant' ((Sql "select organizacion_id from prospeccion where id_prospeccion=$idProspeccion") -eq '1') 'organizacion_id'
-Check 'el correlativo sigue el formato PRO-####' ($prospecciones.items[0].codigoProspeccion -match '^PRO-\d{4}$') $prospecciones.items[0].codigoProspeccion
-
-$p = Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null
-Check 'contactar -> C' ($p.estado -eq 'C') $p.estado
-$p = Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null
-Check 'reunion -> R' ($p.estado -eq 'R') $p.estado
-$p = Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null
-# Cable real de la v1: entregar propuesta deja S, nunca emite el estado E.
-Check 'propuesta deja S (la v1 nunca emite E)' ($p.estado -eq 'S') $p.estado
-Check 'resultadoPropuesta = P' ($p.resultadoPropuesta -eq 'P') $p.resultadoPropuesta
-
-$historial = Sql "select count(*) from historial_estado where entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion"
-Check 'las 3 transiciones quedaron auditadas' ($historial -eq '3') "filas=$historial"
-$historialSinTenant = Sql "select count(*) from historial_estado where entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion and organizacion_id is null"
-Check 'ninguna fila de auditoria quedo sin tenant' ($historialSinTenant -eq '0') "sin tenant=$historialSinTenant"
-
-Write-Host "`n== 6. Captacion: alta desde la prospeccion y revision del broker ==" -ForegroundColor Cyan
-# La propiedad ya tiene un encargo de ALQUILER vivo, asi que captar declara
-# VENTA: la invariante `uq_captacion_viva_por_operacion` prohibe el segundo
-# vivo de la MISMA operacion, no un encargo de la otra (V75).
-$p = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
-    operacion = 'VENTA'; importe = 350000; moneda = 'USD'; comisionPactada = 3
+Write-Host "`n== 1. Identidad global y contexto seleccionado actual ==" -ForegroundColor Cyan
+$agente=Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$broker=Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$admin=Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $fixtureE2E.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
+$brokerDestino=Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.psoto.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+foreach($actor in @($agente,$broker,$admin)){
+ $sesion=Api GET '/sesion' $actor.token
+ Check 'contexto real pertenece al tenant exacto del fixture' ($sesion.idOrganizacion -eq $fixtureE2E.organizacion -and $sesion.rol -eq $actor.rol) 'contexto'
 }
-$idCaptacion = $p.idCaptacion
-Check 'captar -> T (captado)' ($p.estado -eq 'T') $p.estado
-Check 'se creo la captacion' ($null -ne $idCaptacion) 'idCaptacion'
-Check 'el correlativo sigue el formato CAP-####' ($p.captacionCodigo -match '^CAP-\d{4}$') $p.captacionCodigo
-Check 'la captacion nace con tenant' ((Sql "select organizacion_id from captacion where id_captacion=$idCaptacion") -eq '1') 'organizacion_id'
+$hoy=(Get-Date).ToString('yyyy-MM-dd');$finEncargo=(Get-Date).AddDays(90).ToString('yyyy-MM-dd');$sufijo=[guid]::NewGuid().ToString('N').Substring(0,10)
 
-# Y AHORA la propiedad tiene DOS encargos vivos -alquiler y venta-, asi que un
-# hito sin operacion ya no se puede deducir: se rechaza en vez de suponer.
-$rechazado = $false
-try {
-    Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9700 } | Out-Null
-} catch {
-    $rechazado = $true
+Write-Host "`n== 2. Cartera autorizada y frontera de gobierno ==" -ForegroundColor Cyan
+$totalPrevio=(Api GET '/locales?pagina=1&tamano=10' $agente.token).totalRecords
+Check 'organizacion nueva no hereda cartera semilla' ($totalPrevio -eq 0) 'cartera nueva'
+Check 'TenantAdmin no recibe cartera por administrar' ((ApiError GET '/locales' $admin.token).codigo -eq 403) 'gobierno'
+$propietario=(NuevoPropietarioC2DePrueba -Token $agente.token -Nombre 'Titular ficticio TEST V6').id
+
+Write-Host "`n== 3. Alta actual y estampado de tenant ==" -ForegroundColor Cyan
+# Montaje exclusivamente TEST aprobado: una mensualidad E/R en PEN, IGV N,
+# vigencia explicita hoy a finEncargo. No es un default del producto.
+$nuevoLocal=NuevoInmuebleConEncargo -Token $agente.token -Direccion 'Av. Multi-tenant TEST456' -IdPropietario $propietario `
+ -Codigo ('LOC-V6'+$sufijo) -Metraje 150.5 -Rubro 'Cafeteria' -Importe 9200 -Moneda 'PEN' -Descripcion 'Alta multi-tenant TEST V6' -LocalIndependienteTest `
+ -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1 -TratamientoIgv 'N' -Exclusividad $true -InicioEncargo $hoy -FinEncargo $finEncargo
+$idLocal=$nuevoLocal.id
+Check 'tipo y uso declarados se conservan' ((Invoke-ControlLocalE2ESql "select tipo_inmueble||'/'||uso from propiedad where id_propiedad=$idLocal and organizacion_id=$($fixtureE2E.organizacion)") -eq 'L/C') 'tipo/uso'
+Check 'propiedad lleva la organizacion actual, no legacy1' ((Invoke-ControlLocalE2ESql "select organizacion_id from propiedad where id_propiedad=$idLocal") -eq "$($fixtureE2E.organizacion)") 'propiedad'
+Check 'atributos tienen el mismo tenant que su propiedad' ((Invoke-ControlLocalE2ESql "select count(*) from atributo_propiedad where id_propiedad=$idLocal and organizacion_id<>$($fixtureE2E.organizacion)") -eq '0') 'atributos'
+Check 'encargo pertenece al mismo recurso y tenant' ((Invoke-ControlLocalE2ESql "select count(*) from captacion where id_captacion=$($nuevoLocal.idEncargo) and id_propiedad=$idLocal and organizacion_id=$($fixtureE2E.organizacion)") -eq '1') 'encargo'
+Check 'el alta incrementa solo su cartera en1' ((Api GET '/locales?pagina=1&tamano=10' $agente.token).totalRecords -eq ($totalPrevio+1)) 'total'
+
+Write-Host "`n== 4. Precio en el Encargo e historia append-only ==" -ForegroundColor Cyan
+$ficha=Api GET "/locales/$idLocal" $agente.token
+Check 'ficha resuelve el inmueble y titular del caso' ($ficha.codigoLocal -eq ('LOC-V6'+$sufijo) -and $null -ne $ficha.propietarioNombre) 'ficha'
+$encargo=Api GET "/encargos/$($nuevoLocal.idEncargo)" $agente.token
+Check 'preparacion conserva precio inicial con moneda y operacion propias' ($encargo.estado -eq 'EN_PREPARACION' -and $encargo.operacion -eq 'ALQUILER' -and $encargo.condiciones.precioPedido -eq 9200 -and $encargo.condiciones.monedaPrecio -eq 'PEN') 'condicion inicial'
+Check 'el pacto TEST de alquiler declara mensualidad y vigencia completas' ($encargo.condiciones.tipoComision -eq 'E' -and $encargo.condiciones.baseCalculo -eq 'R' -and $encargo.condiciones.valorComision -eq 1 -and $encargo.condiciones.tratamientoIgv -eq 'N' -and $encargo.desde -eq $hoy -and $encargo.hasta -eq $finEncargo) 'pacto explicito, no inferido'
+$idCondicionInicial=[long](Invoke-ControlLocalE2ESql "select id_condicion_economica from captacion where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo) and id_propiedad=$idLocal")
+$pacto=$encargo.condiciones;$pacto.precioPedido=9900
+$encargoEditado=Invoke-ComandoC2DePrueba PUT "/encargos/$($nuevoLocal.idEncargo)/condiciones" $agente.token @{
+ versionEsperada=$encargo.version;condiciones=$pacto;motivo='Precio de salida explicito TEST, aun en preparacion.'
+} ('v6-precio-'+[guid]::NewGuid().ToString('N'))
+Check 'precio editado procede del pacto actual' ((Api GET "/locales/$idLocal" $agente.token).precioReferencial -eq 9900) 'precio'
+$idCondicionActual=[long](Invoke-ControlLocalE2ESql "select id_condicion_economica from captacion where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo)")
+Check 'editar conserva la condicion anterior y una nueva version economica' `
+ ($idCondicionActual -ne $idCondicionInicial -and $encargoEditado.version -gt $encargo.version -and $encargoEditado.condiciones.precioPedido -eq 9900 -and $encargoEditado.condiciones.monedaPrecio -eq 'PEN' -and
+  (Invoke-ControlLocalE2ESql "select count(*) from condicion_economica_captacion where organizacion_id=$($fixtureE2E.organizacion) and id_condicion_economica=$idCondicionInicial and importe_referencia=9200 and moneda_referencia='PEN' and tipo_operacion='A'") -eq '1') '9200/PEN conservado; actual9900/PEN'
+Check 'preparar o editar no acredita precio autorizado U' ((Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo) and hito='U'") -eq '0') 'sin autorizacion ficticia'
+$preciosAntesO=Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo)"
+$ofertasAntesO=Invoke-ControlLocalE2ESql "select count(*) from oferta where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo)"
+$ofertadoManual=Invoke-ComandoC2DePrueba POST "/locales/$idLocal/precios" $agente.token @{hito='O';moneda='PEN';monto=9500;operacion='ALQUILER'} ('v6-ofertado-prohibido-'+[guid]::NewGuid().ToString('N')) -EsperarError
+Check 'OFERTADO manual se rechaza porque requiere una negociacion real' ($ofertadoManual.codigo -eq 400 -and $ofertadoManual.error -match 'OFERTADO.*no se registra a mano.*mesa de negociacion') 'puerta de productor'
+$trasRechazoO=Api GET "/encargos/$($nuevoLocal.idEncargo)" $agente.token
+Check 'el rechazo no crea oferta ni precio ni cambia el Encargo' `
+ ($trasRechazoO.version -eq $encargoEditado.version -and $trasRechazoO.condiciones.precioPedido -eq 9900 -and
+  (Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo)") -eq $preciosAntesO -and
+  (Invoke-ControlLocalE2ESql "select count(*) from oferta where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo)") -eq $ofertasAntesO) 'sin hecho comercial inventado'
+# ESPERADO ya pertenece a la puerta manual; no equivale a OFERTADO/autorizado.
+$deducido=Api POST "/locales/$idLocal/precios" $agente.token @{hito='E';moneda='PEN';monto=9600}
+Check 'la referencia esperada deduce la unica operacion y conserva moneda y tenant' `
+ ($deducido.operacion -eq 'ALQUILER' -and $deducido.hito -eq 'E' -and $deducido.moneda -eq 'PEN' -and $deducido.monto -eq 9600 -and
+  (Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where id_precio=$($deducido.id) and organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo) and operacion='A'") -eq '1') 'referencia, no oferta'
+$null=HabilitarEncargoC2DePrueba -IdEncargo $nuevoLocal.idEncargo -TokenResponsable $agente.token -TokenDecisor $broker.token -MonedaComision 'PEN' -Exclusividad $true `
+ -HitoDevengo 'CONTRATO_ALQUILER' -ParteObligada 'PROPIETARIO' -Beneficiario 'ORGANIZACION' -Exigibilidad 'AL_DEVENGO' -FechaFirma $hoy
+$serieU=Invoke-ControlLocalE2ESql "select string_agg(monto::int::text||'/'||moneda||'/'||operacion,'>' order by id_precio) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$($nuevoLocal.idEncargo) and hito='U'"
+Check 'la habilitacion real crea solo U9900 del alquiler autorizado en PEN' ($serieU -eq '9900/PEN/A') 'hecho autorizado'
+$publicacion=PublicarAnuncioC6DePrueba -IdEncargo $nuevoLocal.idEncargo -Token $agente.token -Canal 'URBANIA' -Importe 9900 -Moneda 'PEN' -Titulo 'Anuncio V6 TEST'
+Check 'publicacion habilitada nace en su tenant' ($publicacion.estado -eq 'P' -and (Invoke-ControlLocalE2ESql "select organizacion_id from publicacion where id_publicacion=$($publicacion.id)") -eq "$($fixtureE2E.organizacion)") 'publicacion'
+
+Write-Host "`n== 5. Prospeccion declarada y transiciones trazadas ==" -ForegroundColor Cyan
+$idProspeccion=NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal -Observaciones 'Prospeccion de venta TEST; no altera el alquiler.'
+$inicial=Api GET "/prospecciones/$idProspeccion" $agente.token
+Check 'prospecto empieza en P y referencia su inmueble' ($inicial.estado -eq 'P' -and $inicial.localId -eq $idLocal) 'prospeccion'
+$antesHistoria=[int](Invoke-ControlLocalE2ESql "select count(*) from historial_estado where organizacion_id=$($fixtureE2E.organizacion) and entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion")
+foreach($paso in @('contactar','reunion','propuesta')){$p=Api POST "/prospecciones/$idProspeccion/$paso" $agente.token $null}
+Check 'propuesta pendiente no acredita aceptacion ni Encargo' ($p.estado -eq 'S' -and $p.resultadoPropuesta -eq 'P' -and $null -eq $p.idCaptacion) 'propuesta'
+Check 'tres transiciones conservan auditoria del tenant' ([int](Invoke-ControlLocalE2ESql "select count(*) from historial_estado where organizacion_id=$($fixtureE2E.organizacion) and entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion") -eq ($antesHistoria+3)) 'historia'
+
+Write-Host "`n== 6. Venta separada, peticion observada y reenvio de la misma identidad ==" -ForegroundColor Cyan
+$captada=Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+ operacion='VENTA';importe=350000;moneda='USD';comisionPactada=3;tipoComision='P';baseCalculo='V';tratamientoIgv='N'
+ inicioEncargo=$hoy;finEncargo=$finEncargo;exclusividad=$true
 }
-Check 'con venta y alquiler vivos, un hito sin operacion se rechaza' $rechazado 'rechazado'
-
-$pendientes = Api GET '/captaciones/pendientes?pagina=1&tamano=20' $broker.token
-Check 'la captacion aparece en la bandeja del broker' (@($pendientes.items | Where-Object { $PSItem.id -eq $idCaptacion }).Count -eq 1) "total=$($pendientes.totalRecords)"
-
-try {
-    Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = '' } | Out-Null
-    Check 'observar sin observacion se rechaza (MEJ-03)' $false 'no lanzo error'
-} catch {
-    Check 'observar sin observacion se rechaza (MEJ-03)' $true 'ok'
+$idCaptacion=$captada.idCaptacion
+Check 'nuevo Encargo de venta no sustituye el alquiler' ($captada.estado -eq 'T' -and $idCaptacion -ne $nuevoLocal.idEncargo) 'identidad'
+$pactoVenta=Api GET "/encargos/$idCaptacion" $agente.token
+Check 'la venta conserva USD y su3porciento declarado con vigencia explicita' ($pactoVenta.operacion -eq 'VENTA' -and $pactoVenta.condiciones.monedaPrecio -eq 'USD' -and $pactoVenta.condiciones.tipoComision -eq 'P' -and $pactoVenta.condiciones.baseCalculo -eq 'V' -and $pactoVenta.condiciones.valorComision -eq 0.03 -and $pactoVenta.desde -eq $hoy -and $pactoVenta.hasta -eq $finEncargo) 'fuente P/V/3pct, no mensualidad'
+$preciosAntesAmbiguedad=Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_propiedad=$idLocal"
+$ambigua=Invoke-ComandoC2DePrueba POST "/locales/$idLocal/precios" $agente.token @{hito='E';moneda='PEN';monto=9700} ('v6-operacion-ambigua-'+[guid]::NewGuid().ToString('N')) -EsperarError
+Check 'precio sin operacion rechaza especificamente venta y alquiler simultaneos' `
+ ($ambigua.codigo -eq 400 -and $ambigua.error -match 'venta y de alquiler a la vez.*declara.*VENTA o ALQUILER' -and
+  (Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_propiedad=$idLocal") -eq $preciosAntesAmbiguedad) 'ambiguedad real sin insertar precio'
+$preparada=PrepararPeticionC2DePrueba -IdEncargo $idCaptacion -TokenResponsable $agente.token -MonedaComision 'USD' -Exclusividad $true `
+ -HitoDevengo 'ESCRITURA' -ParteObligada 'PROPIETARIO' -Beneficiario 'ORGANIZACION' -Exigibilidad 'AL_DEVENGO' -FechaFirma $hoy
+$enc=Api GET "/encargos/$idCaptacion" $broker.token
+$negativa=ApiError POST "/encargos/peticiones/$($preparada.peticion.id)/decision" $broker.token @{
+ actuacion='OBSERVAR';versionPeticion=$preparada.peticion.version;versionEncargo=$enc.version;observaciones=''
 }
-
-$decidida = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = 'Falta el plano del local' }
-Check 'observar -> O' ($decidida.estado -eq 'O') $decidida.estado
-
-# Este encargo es de VENTA -lo abrio `captar` unas lineas mas arriba-, asi que
-# la subsanacion lo edita COMO VENTA. El cuerpo decia `motivoOperacion = 'A'` y
-# eso convertia el encargo de venta en uno de alquiler conservando su historico:
-# los 350 000 USD del precio de venta pasaban a leerse como renta mensual. Aqui
-# chocaba ademas contra `uq_captacion_viva_por_operacion` -la propiedad ya tenia
-# su alquiler vivo- y salia como un 409; sin ese choque habria pasado en
-# silencio. Desde V76 el backend lo rechaza de frente.
-$reenviada = Api PUT "/captaciones/$idCaptacion" $agente.token @{
-    fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
-    observaciones = 'Plano adjunto'; idLocal = $idLocal
-    motivoOperacion = 'V'; tipoOperacion = 'V'; urgencia = 3; exclusividad = $true
-    importeReferencia = 350000; monedaReferencia = 'USD'
-    tipoComision = 'P'; baseCalculo = 'V'; valorComision = 3; monedaComision = 'USD'
-    tratamientoIgv = 'N'
+Check 'observar exige motivo, no un cambio sin contenido' ($negativa.codigo -in @(400,409)) 'motivo'
+$propuesta=Api POST "/encargos/peticiones/$($preparada.peticion.id)/decision" $broker.token @{
+ actuacion='OBSERVAR';versionPeticion=$preparada.peticion.version;versionEncargo=$enc.version;observaciones='Precisar descripcion TEST del instrumento.'
 }
-Check 'editar una observada la reenvia a P' ($reenviada.estado -eq 'P') $reenviada.estado
-Check 'y no cambia la operacion del encargo' ($reenviada.tipoOperacion -eq 'V') $reenviada.tipoOperacion
+$observada=ConfirmarActuacionDePrueba -Token $broker.token -Propuesta $propuesta
+Check 'observar no cambia EN_PREPARACION ni sustituye peticion' ($observada.estado -eq 'OBSERVADA' -and $observada.id -eq $preparada.peticion.id -and (Api GET "/encargos/$idCaptacion" $agente.token).estado -eq 'EN_PREPARACION') 'observacion'
+$enc=Api GET "/encargos/$idCaptacion" $agente.token
+$reenviada=Invoke-ComandoC2DePrueba POST "/encargos/peticiones/$($observada.id)/reenviar" $agente.token @{
+ versionPeticion=$observada.version;presentacion=@{documento=$preparada.documento.id;versionEsperada=$enc.version;partes=$preparada.partes;firmas=$observada.firma.firmas;respuestaObservaciones='Se precisa la descripcion TEST sin cambiar el instrumento firmado.'}
+} ('v6-reenviar-'+[guid]::NewGuid().ToString('N'))
+Check 'reenvio conserva la peticion y versiona su constancia' ($reenviada.id -eq $observada.id -and $reenviada.estado -eq 'PENDIENTE' -and $reenviada.firma.revisionPresentacion -ne $observada.firma.revisionPresentacion) 'reenvio'
+Check 'ruta antigua que mutaba operacion esta retirada' ((ApiError PUT "/captaciones/$idCaptacion" $agente.token @{motivoOperacion='A';tipoOperacion='A'}).codigo -in @(404,405)) 'mutacion retirada'
+Check 'operacion real sigue siendo VENTA' ((Api GET "/encargos/$idCaptacion" $agente.token).operacion -eq 'VENTA') 'operacion'
+$aprobada=AprobarPeticionC2DePrueba -IdEncargo $idCaptacion -IdPeticion $reenviada.id -Documento $preparada.documento -TokenDecisor $broker.token
+Check 'aprobacion humana conserva tenant y documento originales' ($aprobada.estado -eq 'APROBADA' -and $aprobada.id -eq $preparada.peticion.id) 'aprobacion'
 
-# Y cambiarla se rechaza diciendo por que: la operacion es la identidad del
-# encargo, no uno de sus campos.
-$cambioDeOperacion = $false
-try {
-    Api PUT "/captaciones/$idCaptacion" $agente.token @{
-        fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
-        comisionPactada = 100; observaciones = 'Plano adjunto'; idLocal = $idLocal
-        motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
-    } | Out-Null
-} catch {
-    $cambioDeOperacion = $true
+Write-Host "`n== 7. Reasignacion gobernada y fin de ese mandato, no cierre economico ==" -ForegroundColor Cyan
+$enc=Api GET "/encargos/$idCaptacion" $broker.token
+$agenteDestino=Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.ltorres.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$sesionDestino=Api GET '/sesion' $agenteDestino.token
+if($sesionDestino.rol -ne 'AGENTE' -or $sesionDestino.idOrganizacion -ne $fixtureE2E.organizacion -or $sesionDestino.idDominio -le 0){throw 'El destino TEST requiere su contexto operativo real.'}
+$idAgenteDestino=[long]$sesionDestino.idDominio
+# El instrumento aprobado nombra al profesional. Gobierno no altera esa firma.
+$reasignacionesAntesFirmado=Invoke-ControlLocalE2ESql "select count(*) from reasignacion_captacion where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$idCaptacion"
+$condicionesFirmadas=$enc.condiciones|ConvertTo-Json -Depth 20 -Compress
+$candidatosFirmados=@{codigo=0;error=''}
+try {Api GET "/captaciones/$idCaptacion/reasignacion/candidatos" $admin.token | Out-Null}
+catch {
+ if($null -eq $_.Exception.Response){throw}
+ $candidatosFirmados=@{codigo=[int]$_.Exception.Response.StatusCode;error=(LeerErrorHttpDeFixture $_)}
 }
-Check 'la operacion de un encargo no se edita' $cambioDeOperacion 'rechazado'
+Check 'el selector no ofrece sustituir al profesional del instrumento firmado' ($candidatosFirmados.codigo -eq 400 -and $candidatosFirmados.error -match 'corresponde adenda') 'firma protegida'
+$traspasoFirmado=Invoke-ComandoC2DePrueba POST "/captaciones/$idCaptacion/reasignar" $admin.token @{
+ idAgenteNuevo=$idAgenteDestino;idAgenteObservado=$enc.responsable;versionEsperada=$enc.version;motivo='Intento TEST de sustituir profesional firmado sin adenda.'
+} ('v6-firma-protegida-'+[guid]::NewGuid().ToString('N')) -EsperarError
+$firmadoTrasIntento=Api GET "/encargos/$idCaptacion" $broker.token
+Check 'el cambio firmado sin adenda se rechaza sin modificar responsable o pacto' `
+ ($traspasoFirmado.codigo -eq 400 -and $traspasoFirmado.error -match 'corresponde adenda' -and $firmadoTrasIntento.responsable -eq $enc.responsable -and $firmadoTrasIntento.version -eq $enc.version -and
+  $firmadoTrasIntento.documentoActual -eq $enc.documentoActual -and ($firmadoTrasIntento.condiciones|ConvertTo-Json -Depth 20 -Compress) -eq $condicionesFirmadas -and
+  (Invoke-ControlLocalE2ESql "select count(*) from reasignacion_captacion where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$idCaptacion") -eq $reasignacionesAntesFirmado) 'sin efecto sobre lo firmado'
+# Otro episodio TEST no firmado demuestra el cambio operativo permitido;
+# no se atribuye a este positivo cobertura de una adenda de profesional.
+$preparacionReasignable=NuevoInmuebleConEncargo -Token $agente.token -Direccion ('Direccion TEST de preparacion reasignable '+$sufijo) -IdPropietario $propietario `
+ -Codigo ('LOC-V6-R'+$sufijo) -Metraje 150.5 -Rubro 'Cafeteria' -Operacion 'VENTA' -Importe 350000 -Moneda 'USD' -LocalIndependienteTest
+$idReasignable=$preparacionReasignable.idEncargo
+$encReasignable=Api GET "/encargos/$idReasignable" $broker.token
+Check 'la reasignacion positiva opera sobre una preparacion no firmada distinta' ($idReasignable -ne $idCaptacion -and $encReasignable.estado -eq 'EN_PREPARACION' -and $null -eq $encReasignable.documentoActual) 'ambito del caso positivo'
+$candidatos=Api GET "/captaciones/$idReasignable/reasignacion/candidatos" $admin.token
+Check 'candidato exacto de otro equipo es visible por gobierno autorizado' (@($candidatos.items|Where-Object{$_.idAgente -eq $idAgenteDestino}).Count -eq 1) 'candidato'
+$traspaso=Invoke-ComandoC2DePrueba POST "/captaciones/$idReasignable/reasignar" $admin.token @{
+ idAgenteNuevo=$idAgenteDestino;idAgenteObservado=$encReasignable.responsable;versionEsperada=$encReasignable.version;motivo='Cruce autorizado entre equipos de la preparacion no firmada TEST V6.'
+} ('v6-traspaso-'+[guid]::NewGuid().ToString('N'))
+Check 'reasignar cambia responsable y conserva EN_PREPARACION' ($traspaso.id -eq $idReasignable -and $traspaso.idAgente -eq $idAgenteDestino -and $traspaso.estado -eq 'EN_PREPARACION') 'traspaso operativo'
+Check 'evento conserva atribucion de gobierno y tenant' ((Invoke-ControlLocalE2ESql "select count(*) from reasignacion_captacion where id_reasignacion=$($traspaso.idReasignacion) and id_captacion=$idReasignable and organizacion_id=$($fixtureE2E.organizacion) and tipo_rol_actor='TENANT_ADMIN'") -eq '1') 'auditoria'
+Check 'gobierno no obtiene condiciones comerciales tras reasignar' ((ApiError GET "/encargos/$idReasignable" $admin.token).codigo -eq 403) 'sin ampliacion'
+$encDestino=Api GET "/encargos/$idReasignable" $brokerDestino.token
+$fin=Invoke-ComandoC2DePrueba POST "/encargos/$idReasignable/fin" $brokerDestino.token @{
+ tipoFin='FINALIZACION';fechaEfectiva=$hoy;motivo='Fin explicito del mandato ficticio TEST; no venta ni contrato simulado.';versionEsperada=$encDestino.version;evidencias=@()
+} ('v6-fin-'+[guid]::NewGuid().ToString('N'))
+Check 'solo termina la preparacion reasignada; venta y alquiler firmados se conservan' ($fin.id -eq $idReasignable -and $fin.estado -eq 'FINALIZADO' -and
+ (Api GET "/encargos/$idCaptacion" $agente.token).estado -eq 'APROBADO' -and (Api GET "/encargos/$($nuevoLocal.idEncargo)" $agente.token).estado -eq 'APROBADO') 'fin aislado'
+Check 'finalizar la preparacion no registra un cierre economico' ((Invoke-ControlLocalE2ESql "select count(*) from precio_propiedad where organizacion_id=$($fixtureE2E.organizacion) and id_captacion=$idReasignable and hito='C'") -eq '0') 'sin precio de cierre'
 
-$aprobada = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'A'; observacion = 'Conforme' }
-Check 'aprobar -> A (activa)' ($aprobada.estado -eq 'A') $aprobada.estado
-
-$auditoriaCaptacion = Sql "select count(*) from historial_estado where entidad_tipo='CAPTACION' and id_entidad=$idCaptacion and organizacion_id=1"
-Check 'las transiciones de captacion se auditaron con tenant' ($auditoriaCaptacion -eq '3') "filas=$auditoriaCaptacion"
-
-Write-Host "`n== 7. mis-locales, reasignacion y cierre ==" -ForegroundColor Cyan
-$mios = Api GET '/locales/mis-locales?pagina=1&tamano=50' $agente.token
-Check 'el local aparece en mis-locales del agente' (@($mios.items | Where-Object { $PSItem.id -eq $idLocal }).Count -eq 1) "total=$($mios.totalRecords)"
-
-# Agente 29 (Javier Ruiz), tambien supervisado por rsalas en el seed.
-# D-P0-9: el comando declara sobre que agente actua -- el que devolvio la aprobacion, no un id fijo -- y el Core responde 409 si ya lo lleva otro.
-$reasignada = Api POST "/captaciones/$idCaptacion/reasignar" $broker.token @{ idAgenteNuevo = 29; motivo = 'Balance de cartera'; idAgenteActual = $aprobada.idAgente }
-Check 'reasignar cambia el responsable' ($reasignada.idAgente -eq 29) $reasignada.idAgente
-Check 'reasignar NO transiciona el estado' ($reasignada.estado -eq 'A') $reasignada.estado
-Check 'el evento de reasignacion lleva tenant' ((Sql "select count(*) from reasignacion_captacion where id_captacion=$idCaptacion and organizacion_id=1") -eq '1') 'reasignacion'
-
-$cerrada = Api POST "/captaciones/$idCaptacion/cierre" $broker.token @{ motivo = 'Contrato firmado' }
-Check 'cerrar -> C' ($cerrada.estado -eq 'C') $cerrada.estado
-
-Write-Host "`n== 8. Ninguna fila del tenant quedo huerfana ==" -ForegroundColor Cyan
-$huerfanas = Sql @"
-select coalesce(sum(nulos),0) from (
-  select (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I where organizacion_id is null', table_name), false, true, '')))[1]::text::int as nulos
-  from information_schema.columns
-   where column_name='organizacion_id' and table_schema='public'
-     -- catalogo_atributo es HIBRIDO a proposito (D-E4-1 M2, V48): sus filas
-     -- del sistema llevan organizacion_id NULL y son las MISMAS para toda
-     -- corredora. Son lo que permite que dos propiedades se comparen; si
-     -- llevaran tenant, el vocabulario dejaria de ser comun y el matcher
-     -- entre organizaciones no podria existir. Es la misma excepcion que
-     -- ArquitecturaTenancyTest ya declara, con la misma razon.
-     and table_name <> 'catalogo_atributo') t
-"@
-Check 'cero filas con organizacion_id NULL en toda la BD' ($huerfanas -eq '0') "nulos=$huerfanas"
-
-Write-Host "`n===== $ok OK / $fail FALLAS =====" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
-if ($fail -gt 0) { exit 1 }
+Write-Host "`n== 8. Segunda organizacion real de TEST, sin filtro global ficticio ==" -ForegroundColor Cyan
+$otra=Initialize-ControlLocalE2EActors -Etiqueta 'v6otro'
+$otroAgente=Connect-ControlLocalE2E -BaseUrl $base -Correo $otra.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $otra.organizacion -Rol 'AGENTE'
+Check 'otro tenant no lista el inmueble del primero' (@((Api GET '/locales?pagina=1&tamano=100' $otroAgente.token).items|Where-Object{$_.id -eq $idLocal}).Count -eq 0) 'lista'
+Check 'referencia de inmueble ajeno no se resuelve' ((ApiError GET "/locales/$idLocal" $otroAgente.token).codigo -in @(403,404)) 'directa'
+Check 'ninguna fila de historia de estos recursos pierde tenant' ((Invoke-ControlLocalE2ESql "select count(*) from historial_estado where organizacion_id is null and ((entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion) or (entidad_tipo='CAPTACION' and id_entidad in ($idCaptacion,$($nuevoLocal.idEncargo))))") -eq '0') 'historia'
+# No backfill global ni all-tables NULL: cuenta/catalogos globales y tablas
+# privadas tienen autoridades distintas. Se verifican los recursos creados.
+Write-Host "`n===== $ok OK / $fail FALLAS =====" -ForegroundColor $(if($fail -eq 0){'Green'}else{'Red'})
+if($fail -gt 0){exit 1}

@@ -44,5 +44,4 @@ public interface DetalleBrokerRepository extends JpaRepository<DetalleBroker, Lo
 
     long countByOrganizacionId(long idOrganizacion);
 
-    boolean existsByOrganizacionIdAndEsAdministradorTrue(long idOrganizacion);
 }

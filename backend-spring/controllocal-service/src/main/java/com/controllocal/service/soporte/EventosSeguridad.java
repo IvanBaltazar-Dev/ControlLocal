@@ -52,14 +52,14 @@ public class EventosSeguridad {
     }
 
     /**
-     * Datos del actor y del transporte. Todo puede ser {@code null} salvo la
-     * organizacion: un login fallido contra un usuario inexistente no tiene
-     * persona ni credencial, y es justo el que mas interesa registrar.
+     * Datos del actor y del transporte. Antes de seleccionar contexto no hay
+     * organización ni persona local; una identidad comprobada puede conservar
+     * sólo el identificador interno de cuenta. Gobierno y negocio exigen organización.
      */
-    public record Contexto(long idOrganizacion, Long idPersona, Long idCredencial,
+    public record Contexto(Long idOrganizacion, Long idPersona, Long idCuenta,
                            String rolEfectivo, String ip, String agenteUsuario) {
 
-        public static Contexto anonimo(long idOrganizacion, String ip, String agenteUsuario) {
+        public static Contexto anonimo(Long idOrganizacion, String ip, String agenteUsuario) {
             return new Contexto(idOrganizacion, null, null, null, ip, agenteUsuario);
         }
     }
@@ -72,13 +72,37 @@ public class EventosSeguridad {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registrar(String tipo, String resultado, Contexto contexto,
                           String motivo, Long idObjetivo, Map<String, ?> detalle) {
+        guardar(tipo,resultado,contexto,motivo,idObjetivo,detalle);
+    }
+
+    /** Un éxito que modifica autoridad/contexto se conserva sólo si su efecto confirma. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarEnTransaccion(String tipo,String resultado,Contexto contexto,Map<String,?> detalle) {
+        guardar(tipo,resultado,contexto,null,null,detalle);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarEnTransaccion(String tipo,String resultado,Contexto contexto,
+            String motivo,Long idObjetivo,Map<String,?> detalle) {
+        guardar(tipo,resultado,contexto,motivo,idObjetivo,detalle);
+    }
+
+    private void guardar(String tipo,String resultado,Contexto contexto,String motivo,Long idObjetivo,Map<String,?> detalle) {
+        if (contexto.idOrganizacion()==null && (contexto.idPersona()!=null || contexto.rolEfectivo()!=null
+                || !Set.of("LOGIN_OK","LOGIN_FALLIDO","LOGIN_BLOQUEADO_429","LOGOUT","SESIONES_INVALIDADAS",
+                   "CUENTA_BLOQUEADA","CUENTA_DESBLOQUEADA","MFA_OK","MFA_FALLIDO","MFA_CODIGO_RESPALDO_USADO",
+                   "RECUPERACION_EMITIDA","RECUPERACION_CANJEADA","PASSWORD_RESTABLECIDA","PASSWORD_CAMBIADA",
+                   "MFA_ACTIVADO","MFA_REVOCADO","MFA_CODIGOS_REGENERADOS",
+                   "CUENTA_ALTA_SOLICITADA","CUENTA_ALTA_CONFIRMADA","CORREO_CAMBIO_SOLICITADO","CORREO_CAMBIO_CONFIRMADO").contains(tipo))) {
+            throw new IllegalArgumentException("El evento requiere un contexto autorizado.");
+        }
         EventoSeguridad evento = new EventoSeguridad();
         evento.setOrganizacionId(contexto.idOrganizacion());
         evento.setFecha(OffsetDateTime.now());
         evento.setTipo(tipo);
         evento.setResultado(resultado);
         evento.setIdPersona(contexto.idPersona());
-        evento.setIdCredencial(contexto.idCredencial());
+        evento.setIdCuenta(contexto.idCuenta());
         evento.setRolEfectivo(contexto.rolEfectivo());
         evento.setIp(contexto.ip());
         evento.setAgenteUsuario(recortar(contexto.agenteUsuario(), 300));

@@ -1,8 +1,6 @@
 package com.controllocal.arquitectura;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -102,8 +100,7 @@ class UnSoloMotorDeBusquedaTest {
     @Test
     @DisplayName("los dos listados inmobiliarios consumen el motor, no una consulta propia")
     void losDosListadosUsanElMotor() {
-        JavaClasses clases = new ClassFileImporter()
-                .withImportOption(new ImportOption.DoNotIncludeTests())
+        JavaClasses clases = ImportacionesDeProducto.importador()
                 .importPackages("com.controllocal");
 
         for (String servicio : List.of("LocalComercialServiceImpl", "PropiedadUniversalServiceImpl")) {

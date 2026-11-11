@@ -14,10 +14,8 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   flyway:
-    # migration-prod: endurecimiento productivo (rango reservado V900+).
-    # El seed de desarrollo NO esta aqui: una base productiva nueva no nace
-    # con las 21 cuentas conocidas.
-    locations: classpath:db/migration,classpath:db/migration-prod
+    # Esquema definitivo sin cuentas sembradas; guardas de arranque verifican Cuenta.
+    locations: classpath:db/migration
 
 controllocal:
   token:

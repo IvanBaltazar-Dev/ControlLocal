@@ -31,10 +31,14 @@ public final class Idempotencia {
 
     private Idempotencia() { }
 
-    /**
-     * {@code null} si no viaja cabecera —sigue siendo opcional mientras el
-     * contrato legado este congelado—; si viaja, tiene que ser utilizable.
-     */
+    /** Identidad obligatoria de las actuaciones que requieren conciliación exacta. */
+    public static String exigirClave(String clave) {
+        String normalizada = normalizar(clave);
+        if (normalizada == null) throw new ReglaNegocioException("Se requiere la clave del comando original.");
+        return normalizada;
+    }
+
+    /** Contratos actuales que admiten cabecera opcional; no impone esa excepción a la consulta. */
     public static String normalizar(String clave) {
         if (clave == null || clave.isBlank()) {
             return null;
@@ -56,6 +60,11 @@ public final class Idempotencia {
         String texto = Stream.of(partes)
                 .map(p -> p == null ? "" : p.toString().trim().toUpperCase(Locale.ROOT))
                 .collect(Collectors.joining(""));
+        return huellaExacta(texto);
+    }
+
+    /** Contenido canónico exacto: no normaliza mayúsculas ni espacios dentro del documento. */
+    public static String huellaExacta(String texto) {
         try {
             byte[] resumen = MessageDigest.getInstance("SHA-256")
                     .digest(texto.getBytes(StandardCharsets.UTF_8));

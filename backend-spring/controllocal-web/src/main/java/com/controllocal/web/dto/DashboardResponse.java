@@ -37,5 +37,6 @@ public record DashboardResponse(IndicadoresResponse indicadores,
                                 PageResponse<TareaResponse> bandeja,
                                 List<HallazgoResponse> hallazgos,
                                 List<AsuntoDelBrokerResponse> focoDelBroker,
-                                List<AccesoResponse> accesos) {
+                                List<AccesoResponse> accesos,
+                                List<com.controllocal.service.soporte.PendientesComercialesRadar.Actuacion> actuaciones) {
 }

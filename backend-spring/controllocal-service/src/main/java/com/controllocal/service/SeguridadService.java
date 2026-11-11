@@ -32,11 +32,11 @@ public interface SeguridadService {
      */
     List<String> TIPOS_DE_GOBIERNO = List.of(
             "MFA_ACTIVADO", "MFA_REVOCADO", "MFA_CODIGOS_REGENERADOS",
-            "MFA_CODIGO_RESPALDO_USADO", "ELEVACION_EMITIDA", "ELEVACION_FALLIDA",
+            "MFA_CODIGO_RESPALDO_USADO",
             "CUENTA_BLOQUEADA", "CUENTA_DESBLOQUEADA",
             "CUENTA_ACTIVADA", "CUENTA_DESACTIVADA",
             "ROL_OTORGADO", "ROL_REVOCADO",
-            "PASSWORD_RESTABLECIDA", "INVITACION_EMITIDA",
+            "PASSWORD_RESTABLECIDA", "INVITACION_EMITIDA", "INVITACION_RETIRADA", "MEMBRESIA_BAJA_FORMAL",
             "ACCESO_TENANT_CONCEDIDO", "ACCESO_TENANT_USADO", "BREAK_GLASS_ACTIVADO");
 
     /**
@@ -57,22 +57,13 @@ public interface SeguridadService {
     Pagina<AvisoDeGobierno> avisosDeGobierno(int pagina, int tamano, Actor actor);
 
     /**
-     * Una cuenta del tenant vista por el gobierno.
-     *
-     * <p><b>Lleva los dos identificadores.</b> Las fichas comerciales del
-     * contrato congelado hablan de {@code persona_rol.id}; las operaciones de
-     * acceso hablan de la PERSONA. Publicar la correspondencia aquí es lo que
-     * permite ofrecer una acción de gobierno sin añadir campos a
-     * {@code AgenteResponse} ni a {@code BrokerResponse}, que están congelados.
-     *
-     * <p>Lo que <b>no</b> lleva, y no por olvido: nada del secreto ni de los
-     * códigos. Solo <i>cuántos</i> quedan — que es lo que permite avisar antes
-     * de que alguien se quede sin salida.
+     * CAT-E01/R19: padrón local de pertenencias, sin datos de seguridad o actividad comercial.
+     * La atribución administrativa permanece separada del rol principal; una pertenencia
+     * histórica no revela el estado actual de la cuenta en otra organización.
      */
-    record CuentaDeGobierno(long idPersona, long idRol, String nombre, String usuario,
-                            String rolDeGobierno, boolean activa,
-                            boolean debeCambiarContrasena, boolean debeEnrolarMfa,
-                            boolean mfaActivo, long codigosRespaldoDisponibles) {
+    record CuentaDeGobierno(long idPersona, long idCuenta, String nombre, String usuario,
+                            String rolPrincipal, boolean administrar, boolean pertenenciaActiva,
+                            long idMembresia, long version) {
     }
 
     /** Padrón de cuentas del propio tenant. Solo {@code TENANT_ADMIN}. */

@@ -2,6 +2,7 @@ package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.persistence.query.AgenteConSolicitudes;
+import com.controllocal.persistence.query.AccesoActualSolicitud;
 import com.controllocal.persistence.query.CandidatoTarea;
 import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.IndicadorSolicitud;
@@ -26,6 +27,15 @@ import java.util.Optional;
  * {@code alcanceAgentes()} de {@code SolicitudesRest}.
  */
 public interface SolicitudAlquilerRepository extends JpaRepository<SolicitudAlquiler, Long> {
+
+    /** C1: autoridad fresca incluso si OEIV ya conserva la solicitud antes de una espera de I/O. */
+    @Query(nativeQuery = true, value = """
+            SELECT id_solicitud AS "idSolicitud", id_rol_agente AS "idRolAgente"
+            FROM solicitud_alquiler
+            WHERE organizacion_id = :organizacion AND id_solicitud = :solicitud
+            """)
+    Optional<AccesoActualSolicitud> accesoActual(@Param("organizacion") long organizacion,
+                                                @Param("solicitud") long solicitud);
 
     /**
      * Alcance y filtros del listado. Dos apuntes que se pagan caro si se

@@ -1,462 +1,222 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.ComisionLiquidacion;
-import com.controllocal.domain.comercial.ComisionMovimiento;
-import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.persistence.repositorio.ComisionLiquidacionRepository;
-import com.controllocal.persistence.repositorio.ComisionMovimientoRepository;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
 import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService;
-import com.controllocal.service.ComisionService.FichaComision;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Transiciones;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
+import com.controllocal.service.ComisionService.*;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.service.soporte.Documentos;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-/**
- * <b>El ciclo economico de la comision es una maquina alimentada por el saldo
- * de movimientos, y esto lo demuestra.</b>
- *
- * <p>Hermana de {@code CicloContratoTest}: aquella fija el grafo juridico del
- * contrato, esta fija el ECONOMICO de la liquidacion. La diferencia es que el
- * estado de la comision no lo elige quien llama —{@code P/R/C} se DERIVAN del
- * saldo de {@code comision_movimiento}— y solo {@code A} es una decision
- * expresa del broker. Leer la letra almacenada sin mirar los movimientos no
- * dice la situacion economica real; por eso cada caso de abajo comprueba las
- * dos cosas a la vez: el codigo de estado y el saldo del que sale.
- *
- * <pre>
- *   P  cobrado = 0                    R  0 &lt; cobrado &lt; bruto
- *   C  cobrado = bruto                A  anulacion expresa desde P o R
- * </pre>
- *
- * <p>Los seis escenarios exigidos por el subbloque 7.2 —sin cobros, cobro
- * parcial, cobro total, anulacion antes de cobrar, anulacion tras cobro
- * parcial y operacion repetida— estan cada uno en su prueba.
- */
+/** Unidad de fondos/gestión. Los antecedentes P/R se reconstruyen sólo para lectura. */
 class CicloComisionTest {
+    private static final String REPROGRAMAR=ComisionServiceImpl.REPROGRAMAR,CONCLUIR=ComisionServiceImpl.CONCLUIR;
+    private ComisionServiceImplTest.Banco devengada(){var b=new ComisionServiceImplTest.Banco();b.confirmar();b.abrir();return b;}
+    private BigDecimal ingreso(FichaComision f,String moneda){return f.cobro().ingresosRecibidos().stream().filter(d->moneda.equals(d.moneda())).findFirst().orElseThrow().importe();}
+    private DatosReprogramacion reprogramacion(ComisionServiceImplTest.Banco b,LocalDate fecha,String motivo){return new DatosReprogramacion(b.raiz().getId(),b.raiz().getVersion(),fecha,motivo);}
+    private DatosConclusion conclusion(ComisionServiceImplTest.Banco b,String motivo){return new DatosConclusion(b.raiz().getId(),b.raiz().getVersion(),motivo);}
+    private Map<String,Object> mapa(ComisionServiceImplTest.Banco b,Object datos){return b.json.convertValue(datos,new TypeReference<Map<String,Object>>(){});}
 
-    private static final long ORG = 1L;
-    private static final long CONTRATO = 40L;
-    private static final long LIQUIDACION = 60L;
-    private static final BigDecimal BRUTA = new BigDecimal("450.00");
-    private static final BigDecimal PARTE_AGENTE = new BigDecimal("180.00");
-
-    private final ComisionLiquidacionRepository comisiones = mock(ComisionLiquidacionRepository.class);
-    private final ComisionMovimientoRepository movimientos = mock(ComisionMovimientoRepository.class);
-    private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
-    private final List<ComisionMovimiento> registrados = new ArrayList<>();
-
-    private final ComisionServiceImpl service = new ComisionServiceImpl(
-            comisiones, movimientos, new Transiciones(historial), mock(AlertaService.class));
-
-    private final Actor broker = new Actor(ORG, 2L, 20L, Actor.BROKER);
-
-    @BeforeEach
-    void prepararAlmacenDeMovimientos() {
-        registrados.clear();
-        when(movimientos.save(any(ComisionMovimiento.class))).thenAnswer(inv -> {
-            ComisionMovimiento guardado = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardado, "id", (long) registrados.size() + 1L);
-            registrados.add(guardado);
-            return guardado;
-        });
-        when(movimientos.findByOrganizacionIdAndLiquidacionIdOrderByFechaAscIdAsc(ORG, LIQUIDACION))
-                .thenAnswer(inv -> List.copyOf(registrados));
+    @Test @SuppressWarnings("unchecked") void reciboAlteradoNoReemplazaElImporteDelMovimientoInmutable() {
+        var b=devengada();b.cobrar("100","original");
+        var comando=b.recibosGuardados.get("1|original");var docs=new Documentos(b.json);
+        var contenido=docs.comoMapa(comando.getResultado());var resultado=(Map<String,Object>)contenido.get("resultado");
+        ((Map<String,Object>)resultado.get("importe")).put("importe",new BigDecimal("101.00"));
+        ReflectionTestUtils.setField(comando,"resultado",docs.objetoCanonico(contenido));
+        assertThrows(IllegalStateException.class,()->b.sut.consultarResultadoCobro("original",b.broker));
+        assertEquals(new BigDecimal("100.00"),b.libro.getFirst().getMonto());assertEquals(1,b.libro.size());
     }
-
-    // ------------------------------------------------------------------
-    // Los seis escenarios del saldo
-    // ------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("el estado sale del saldo, no de la letra almacenada")
-    class EstadoDerivado {
-
-        @Test
-        @DisplayName("sin cobros: PENDIENTE y el saldo es la bruta integra")
-        void sinCobros() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            FichaComision ficha = service.porContrato(CONTRATO, broker).orElseThrow();
-
-            assertEquals(ComisionLiquidacion.PENDIENTE, ficha.estado());
-            assertEquals(BigDecimal.ZERO, ficha.montoCobrado());
-            assertEquals(BRUTA, ficha.saldoCobro());
-        }
-
-        @Test
-        @DisplayName("cobro parcial: PARCIAL y el saldo baja lo cobrado")
-        void cobroParcial() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            FichaComision ficha = cobrar("200.00");
-
-            assertEquals(ComisionLiquidacion.PARCIAL, ficha.estado());
-            assertEquals(new BigDecimal("200.00"), ficha.montoCobrado());
-            assertEquals(new BigDecimal("250.00"), ficha.saldoCobro());
-        }
-
-        @Test
-        @DisplayName("cobro total en dos abonos: COBRADA cuando el saldo llega a cero")
-        void cobroTotal() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            assertEquals(ComisionLiquidacion.PARCIAL, cobrar("200.00").estado());
-            FichaComision ficha = cobrar("250.00");
-
-            assertEquals(ComisionLiquidacion.COBRADA, ficha.estado());
-            assertEquals(BRUTA, ficha.montoCobrado());
-            assertEquals(new BigDecimal("0.00"), ficha.saldoCobro());
-        }
-
-        @Test
-        @DisplayName("revertir todo lo cobrado devuelve la liquidacion a PENDIENTE")
-        void reversionDesdeParcial() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            cobrar("200.00");
-
-            FichaComision ficha = movimiento(ComisionMovimiento.REVERSION, "200.00");
-
-            assertEquals(ComisionLiquidacion.PENDIENTE, ficha.estado());
-            assertEquals(new BigDecimal("0.00"), ficha.montoCobrado());
-            assertEquals(BRUTA, ficha.saldoCobro());
-        }
+    @Test void sinCobrosConservaSaldoCompletoYRepartoDesconocido() {
+        var b=devengada();var f=b.ficha();assertEquals("SIN_COBROS",f.cobro().estado());
+        assertEquals(new BigDecimal("15000.00"),f.cobro().saldoInformativoSobreCalculo().importe());
+        assertTrue(f.cobro().ingresosRecibidos().isEmpty());assertNull(f.reparto().agente());assertNull(f.reparto().saldoPagoAgente());
+        assertFalse(f.gestion().concluida());assertNull(f.gestion().registradoEn());assertTrue(b.libro.isEmpty());
     }
-
-    @Nested
-    @DisplayName("anulacion: decision expresa, nunca derivada")
-    class Anulacion {
-
-        @Test
-        @DisplayName("anulacion antes de cobrar: A y sin datos de cobro")
-        void antesDeCobrar() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            FichaComision ficha = service.registrarCobro(
-                    CONTRATO, ComisionLiquidacion.ANULADA, LocalDate.now(), "EFECTIVO", broker);
-
-            assertEquals(ComisionLiquidacion.ANULADA, ficha.estado());
-            assertEquals(BigDecimal.ZERO, ficha.montoCobrado());
-            assertTrue(registrados.isEmpty(), "anular no inventa un movimiento de cobro");
-        }
-
-        @Test
-        @DisplayName("anulacion tras cobro parcial: permitida, y el dinero cobrado sigue siendo evidencia")
-        void trasCobroParcial() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            cobrar("200.00");
-
-            FichaComision ficha = service.registrarCobro(
-                    CONTRATO, ComisionLiquidacion.ANULADA, LocalDate.now(), null, broker);
-
-            // R -> A esta en el grafo a proposito: se anula lo que queda por
-            // cobrar, no lo ya cobrado. El movimiento previo NO se borra.
-            assertEquals(ComisionLiquidacion.ANULADA, ficha.estado());
-            assertEquals(new BigDecimal("200.00"), ficha.montoCobrado());
-            assertEquals(1, registrados.size());
-        }
-
-        @Test
-        @DisplayName("una comision cobrada por completo ya no se puede anular")
-        void trasCobroTotal() {
-            liquidacion(ComisionLiquidacion.COBRADA, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.registrarCobro(CONTRATO, ComisionLiquidacion.ANULADA,
-                            LocalDate.now(), null, broker));
-            assertEquals("La comision ya tiene un cobro registrado (Cobrada o Anulada).",
-                    error.getMessage());
-        }
-
-        @Test
-        @DisplayName("una comision anulada no admite ningun movimiento posterior")
-        void anuladaNoAdmiteMovimientos() {
-            liquidacion(ComisionLiquidacion.ANULADA, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.COBRO, "10.00"));
-            assertEquals("Una comision anulada no admite movimientos.", error.getMessage());
-            assertTrue(registrados.isEmpty());
-        }
+    @Test void unPagoPactadoRecibidoEnDosDepositosNoCreaTramos() {
+        var b=devengada();b.cobrar("5000","deposito1");assertEquals("PARCIAL",b.ficha().cobro().estado());
+        assertEquals(new BigDecimal("10000.00"),b.ficha().cobro().saldoInformativoSobreCalculo().importe());
+        b.cobrar("10000","deposito2");var f=b.ficha();assertEquals("COBRADO",f.cobro().estado());
+        assertEquals(new BigDecimal("15000.00"),ingreso(f,"PEN"));assertEquals(2,b.libro.size());
+        assertTrue(b.posiciones.isEmpty());assertTrue(f.tramos().isEmpty());assertNull(b.raiz().getEstadoLegado());
     }
-
-    @Nested
-    @DisplayName("operacion repetida: nunca un 200 silencioso")
-    class OperacionRepetida {
-
-        @Test
-        @DisplayName("cobrar dos veces: el segundo intento es un error explicito")
-        void cobroRepetido() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            service.registrarCobro(CONTRATO, ComisionLiquidacion.COBRADA,
-                    LocalDate.now(), "EFECTIVO", broker);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.registrarCobro(CONTRATO, ComisionLiquidacion.COBRADA,
-                            LocalDate.now(), "EFECTIVO", broker));
-            assertEquals("La comision ya tiene un cobro registrado (Cobrada o Anulada).",
-                    error.getMessage());
-            assertEquals(1, registrados.size(), "el segundo intento no duplica el movimiento");
+    @Test void mismaClaveDevuelveCobroOriginalAunqueCambienSaldoYVersionActuales() {
+        var b=devengada();var d=b.cobro("5000");var a=b.sut.registrarCobro(d,b.broker,b.sid,"repetido",ComisionServiceImplTest.Banco.PROC);
+        b.cobrar("1000","otro");
+        assertEquals(a,b.sut.registrarCobro(d,b.broker,b.sid,"repetido",ComisionServiceImplTest.Banco.PROC));
+        assertEquals(a,b.sut.consultarResultadoCobro("repetido",b.broker).orElseThrow());
+        assertEquals(2,b.libro.size());assertEquals(new BigDecimal("6000.00"),ingreso(b.ficha(),"PEN"));
+    }
+    @Test void mismaClaveOtroContenidoEsConflictoNoOtroCobro() {
+        var b=devengada();b.cobrar("5000","repetido");
+        assertThrows(ConflictoException.class,()->b.cobrar("6000","repetido"));assertEquals(1,b.libro.size());
+    }
+    @Test void dosDepositosIgualesConClavesDistintasSonDosHechos() {
+        var b=devengada();b.cobrar("5000","a");b.cobrar("5000","b");
+        assertEquals(2,b.libro.size());assertEquals(new BigDecimal("10000.00"),ingreso(b.ficha(),"PEN"));
+    }
+    @Test void cobroNoSuperaSaldoPendienteDevengado() {
+        var b=devengada();b.cobrar("5000","a");
+        assertThrows(ReglaNegocioException.class,()->b.cobrar("10000.01","exceso"));assertEquals(1,b.libro.size());
+    }
+    @Test void reversionHistoricaReduceIngresosSinBorrarNiReinterpretarFilas() {
+        var b=devengada();b.cobrar("5000","a");var r=b.historico("R","1000","PEN");String tipo=r.getTipo();
+        assertEquals(new BigDecimal("4000.00"),ingreso(b.ficha(),"PEN"));
+        assertEquals(new BigDecimal("11000.00"),b.ficha().cobro().saldoInformativoSobreCalculo().importe());
+        assertEquals(tipo,r.getTipo());assertEquals(2,b.libro.size());
+    }
+    @Test void reversoHistoricoSinCobroOSuperiorAlRecibidoEsFalloTecnicoNoDeuda() {
+        var b=devengada();b.historico("R","1","PEN");assertThrows(IllegalStateException.class,b::ficha);
+        var otro=devengada();otro.cobrar("5000","a");otro.historico("R","5000.01","PEN");
+        assertThrows(IllegalStateException.class,otro::ficha);assertEquals(2,otro.libro.size());
+    }
+    @Test void terminalLegadoNoImpideOtroCobroParcialTrasRectificacionMayor() {
+        var b=new ComisionServiceImplTest.Banco();b.porcentaje();b.confirmar();b.abrir();b.cobrar("15000","total");
+        ReflectionTestUtils.setField(b.raiz(),"estado",ComisionLiquidacion.COBRADA); // Antecedente técnico, no nueva transición.
+        b.rectificarVenta("666666.67",12,22);b.abrir();b.cobrar("1000","nuevo");
+        assertEquals("PARCIAL",b.ficha().cobro().estado());assertEquals(new BigDecimal("16000.00"),ingreso(b.ficha(),"PEN"));
+        assertEquals(new BigDecimal("4000.00"),b.ficha().cobro().saldoInformativoSobreCalculo().importe());
+        assertEquals(ComisionLiquidacion.COBRADA,b.raiz().getEstadoLegado());assertEquals(2,b.libro.size());
+    }
+    @Test void pagoHistoricoConservaParteYBaseOriginalSinExponerNuevoEfectorSaliente() {
+        var b=devengada();var r=b.sut.asignarReparto(b.reparto("5000"),b.broker,b.sid,"asignar",ComisionServiceImplTest.Banco.PROC);
+        b.historico("P","3000","PEN");var f=b.ficha();
+        assertEquals(new BigDecimal("3000.00"),f.reparto().pagadoAgente());assertEquals(new BigDecimal("2000.00"),f.reparto().saldoPagoAgente());
+        assertEquals(r.reparto().evaluacionBase(),f.reparto().evaluacionBase());assertEquals("PEN",f.reparto().moneda());
+    }
+    @Test void pagoHistoricoNoSeCuentaComoIngresoNiExigeCobroFicticio() {
+        var b=devengada();b.sut.asignarReparto(b.reparto("5000"),b.broker,b.sid,"asignar",ComisionServiceImplTest.Banco.PROC);
+        b.historico("P","1000","PEN");assertTrue(b.ficha().cobro().ingresosRecibidos().isEmpty());
+        assertEquals(new BigDecimal("1000.00"),b.ficha().reparto().pagadoAgente());assertEquals(1,b.libro.size());
+    }
+    @Test void repartoAdmiteParcialPeroNoBajaDeLoHistoricamentePagado() {
+        var b=devengada();b.cobrar("5000","cobro");
+        b.sut.asignarReparto(b.reparto("5000"),b.broker,b.sid,"asignar",ComisionServiceImplTest.Banco.PROC);b.historico("P","3000","PEN");
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarReparto(b.reparto("2999.99"),b.broker));
+        var r=b.sut.asignarReparto(b.reparto("6000"),b.broker,b.sid,"reparto2",ComisionServiceImplTest.Banco.PROC);
+        assertEquals(new BigDecimal("6000.00"),r.reparto().agente());assertEquals(new BigDecimal("9000.00"),r.reparto().empresa());
+    }
+    @Test void repartoCerradoTrasCobroTotalYFueraDeBrutaONegativoRechazados() {
+        var b=devengada();assertThrows(ReglaNegocioException.class,()->b.sut.validarReparto(b.reparto("-1"),b.broker));
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarReparto(b.reparto("15000.01"),b.broker));b.cobrar("15000","total");
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarReparto(b.reparto("5000"),b.broker));
+    }
+    @Test void codigoAnuladoHistoricoNoSustituyeGuardasActualesDeDerechoYFondos() {
+        var b=devengada();ReflectionTestUtils.setField(b.raiz(),"estado",ComisionLiquidacion.ANULADA);
+        b.cobrar("1","real");assertEquals(new BigDecimal("1.00"),ingreso(b.ficha(),"PEN"));
+        assertEquals(ComisionLiquidacion.ANULADA,b.raiz().getEstadoLegado());
+    }
+    @Test void fechaAusenteFuturaMonedaIncompatibleYCeroNoProducenDinero() {
+        var b=devengada();assertThrows(ReglaNegocioException.class,()->b.sut.validarCobro(b.cobro("1",null,null),b.broker));
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarCobro(b.cobro("1",ComisionServiceImplTest.Banco.HOY.plusDays(1),null),b.broker));
+        assertThrows(ReglaNegocioException.class,()->b.cobrar("0","cero"));var d=b.cobro("1");
+        var usd=new DatosCobro(d.comision(),d.versionEsperada(),d.tramo(),d.monto(),"USD",d.fecha(),d.formaPago(),
+                d.parteObligada(),d.beneficiario(),d.destino(),d.referenciaExterna(),d.evidencias(),d.observacion());
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarCobro(usd,b.broker));assertTrue(b.libro.isEmpty());
+    }
+    @Test void evidenciaOIdentidadRevocadaDeniegaValidacionEfectoYRecibo() {
+        var b=devengada();var a=b.cobrar("100","cobro");doThrow(new AccesoNoAutorizadoException()).when(b.referencias).exigirLectura(any(),any(),any(),any());
+        assertThrows(AccesoNoAutorizadoException.class,()->b.sut.validarCobro(b.cobro("1"),b.broker));
+        assertThrows(AccesoNoAutorizadoException.class,()->b.cobrar("1","otro"));
+        assertThrows(AccesoNoAutorizadoException.class,()->b.sut.consultarResultadoCobro("cobro",b.broker));
+        assertEquals(1,b.libro.size());assertEquals(1,a.movimiento());
+    }
+    @Test void cobroReautorizaPartesDestinoYEvidenciasOriginalesTipadas() {
+        var b=devengada();var d=b.cobro("100");b.sut.registrarCobro(d,b.broker,b.sid,"c",ComisionServiceImplTest.Banco.PROC);
+        verify(b.referencias).exigirLectura(eq(ComisionServiceImplTest.Banco.CTX),eq(ComisionServiceImplTest.Banco.PACTO),
+                argThat(v->v.parteObligada()!=null&&v.beneficiario()!=null&&v.destino()!=null&&v.evidencias().size()==1),eq(b.broker));
+    }
+    @Test void concluirConParcialNoCondonaNiImpideOtroCobroONiegaElPacto() {
+        var b=devengada();b.cobrar("5000","uno");var antes=b.ficha();
+        var r=b.sut.concluirGestion(conclusion(b,"Gestión concluida con lo recibido"),b.broker,b.sid,"fin",ComisionServiceImplTest.Banco.PROC);
+        assertTrue(r.gestion().concluida());assertNull(r.gestion().proximaRevision());
+        assertEquals(antes.calculo(),b.ficha().calculo());assertEquals(antes.devengo(),b.ficha().devengo());assertEquals(antes.cobro(),b.ficha().cobro());
+        assertEquals(1,b.historia.size());b.cobrar("1000","posterior");assertTrue(b.ficha().gestion().concluida());
+        assertNull(b.ficha().gestion().proximaRevision());assertEquals(new BigDecimal("6000.00"),ingreso(b.ficha(),"PEN"));assertEquals(2,b.libro.size());
+    }
+    @Test void reprogramacionExplicitaConservaAntecedenteOriginalYCasInclusoConDatosIguales() {
+        var b=devengada();var d=reprogramacion(b,ComisionServiceImplTest.Banco.HOY.plusDays(4),"Acordado con el obligado");
+        var a=b.sut.reprogramarGestion(d,b.broker,b.sid,"g1",ComisionServiceImplTest.Banco.PROC);
+        assertEquals(a,b.sut.reprogramarGestion(d,b.broker,b.sid,"g1",ComisionServiceImplTest.Banco.PROC));
+        var siguiente=b.sut.reprogramarGestion(reprogramacion(b,d.proximaRevision(),d.motivo()),b.broker,b.sid,"g2",ComisionServiceImplTest.Banco.PROC);
+        assertTrue(siguiente.version()>a.version());assertEquals("g2",b.raiz().getClaveUltimaGestion());
+        var docs=new Documentos(b.json);assertEquals("g1",docs.comoMapa(b.recibosGuardados.get("1|g2").getResultado()).get("claveAntecedente"));
+        assertEquals(a,b.sut.consultarResultadoGestion(REPROGRAMAR,"g1",b.broker).orElseThrow());
+        assertThrows(ConflictoException.class,()->b.sut.reprogramarGestion(reprogramacion(b,d.proximaRevision().plusDays(1),d.motivo()),b.broker,b.sid,"g1",ComisionServiceImplTest.Banco.PROC));
+        assertThrows(ConflictoException.class,()->b.sut.validarReprogramacion(d,b.broker));assertTrue(b.libro.isEmpty());
+    }
+    @Test void gestionExigeFechaMotivoCasYAutoridadSinImportarCadenciaNiExigibilidad() {
+        var b=devengada();long id=b.raiz().getId(),v=b.raiz().getVersion();
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarReprogramacion(new DatosReprogramacion(id,v,null,"Motivo"),b.broker));
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarConclusion(new DatosConclusion(id,v," "),b.broker));
+        assertThrows(ReglaNegocioException.class,()->b.sut.validarConclusion(new DatosConclusion(id,null,"Motivo"),b.broker));
+        assertThrows(AccesoNoAutorizadoException.class,()->b.sut.validarConclusion(new DatosConclusion(id,v,"Motivo"),new Actor(1,7,5,Actor.AGENTE)));
+        var r=b.sut.reprogramarGestion(reprogramacion(b,ComisionServiceImplTest.Banco.HOY.plusDays(9),"Fecha elegida"),b.broker,b.sid,"g",ComisionServiceImplTest.Banco.PROC);
+        assertEquals(ComisionServiceImplTest.Banco.HOY.plusDays(9),r.gestion().proximaRevision());assertEquals(ComisionServiceImplTest.Banco.HOY.minusDays(1),b.ficha().exigibilidad().fechaAcreditada());
+        assertTrue(b.libro.isEmpty());
+    }
+    @Test void gestionReautorizadaNoRecuperaReciboConSesionOCompetenciaRevocadas() {
+        var b=devengada();var d=conclusion(b,"Sin otra gestión");b.sut.concluirGestion(d,b.broker,b.sid,"fin",ComisionServiceImplTest.Banco.PROC);
+        doThrow(new AccesoNoAutorizadoException()).when(b.acceso).iniciar(eq(b.broker),eq(b.sid),eq(3L));
+        assertThrows(AccesoNoAutorizadoException.class,()->b.sut.concluirGestion(d,b.broker,b.sid,"fin",ComisionServiceImplTest.Banco.PROC));
+        b.supervisados.clear();assertThrows(AccesoNoAutorizadoException.class,()->b.sut.consultarResultadoGestion(CONCLUIR,"fin",b.broker));
+        assertTrue(b.libro.isEmpty());
+    }
+    @Test void rectificacionMenorConservaCalculosCobrosYRepartoOriginalSinDevoluciones() {
+        var b=new ComisionServiceImplTest.Banco();b.porcentaje();b.confirmar();b.abrir();
+        var reparto=b.sut.asignarReparto(b.reparto("5000"),b.broker,b.sid,"reparto",ComisionServiceImplTest.Banco.PROC);
+        b.cobrar("15000","total");String original=b.historia.getLast().getResultado();int previas=b.historia.size();
+        b.rectificarVenta("333333.33",12,22);var despues=b.abrir();
+        assertEquals(new BigDecimal("10000.00"),despues.calculo().cuantia().importe());assertEquals(new BigDecimal("15000.00"),ingreso(despues,"PEN"));
+        assertEquals(0,despues.cobro().saldoInformativoSobreCalculo().importe().signum());assertEquals(reparto.reparto(),despues.reparto());
+        assertEquals(original,b.historia.get(previas-1).getResultado());assertEquals(previas+1,b.historia.size());
+        assertEquals(1,b.libro.size());assertEquals("C",b.libro.getFirst().getTipo());assertEquals(1,b.raices.size());
+    }
+    @Test void ingresosHistoricosDeMonedasDistintasSeConservanSinConversionNiSaldoInventado() {
+        var b=devengada();b.historico("C","100","PEN");b.historico("C","20","USD");var f=b.ficha();
+        assertEquals(new BigDecimal("100.00"),ingreso(f,"PEN"));assertEquals(new BigDecimal("20.00"),ingreso(f,"USD"));
+        assertEquals(2,f.cobro().ingresosRecibidos().size());assertNull(f.cobro().saldoInformativoSobreCalculo().importe());assertNull(f.cobro().estado());
+        assertThrows(ReglaNegocioException.class,()->b.cobrar("1","incomparable"));assertEquals(2,b.libro.size());
+        b.historico("C","1","XYZ");assertThrows(IllegalStateException.class,b::ficha);
+    }
+    @Test void jsonYMapRechazanTipoAntiguoAntesODespuesInclusoSiElMapperIgnoraDesconocidos() throws Exception {
+        var b=devengada();var datos=mapa(b,b.cobro("100"));
+        for(Object tipo:new Object[]{"P","R",null})for(boolean primero:new boolean[]{true,false}) {
+            Map<String,Object> entrada=new LinkedHashMap<>();if(primero)entrada.put("tipo",tipo);entrada.putAll(datos);if(!primero)entrada.put("tipo",tipo);
+            assertThrows(IllegalArgumentException.class,()->b.json.convertValue(entrada,DatosCobro.class));
+            String json=b.json.writeValueAsString(entrada);assertThrows(JsonProcessingException.class,()->b.json.readValue(json,DatosCobro.class));
+            assertThrows(ReglaNegocioException.class,()->b.sut.previsualizarActuacion("registrar_cobro",entrada,b.broker));
         }
-
-        @Test
-        @DisplayName("reenviar el mismo abono agota el saldo y el siguiente se rechaza")
-        void abonoRepetido() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            cobrar("225.00");
-            cobrar("225.00");
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> cobrar("225.00"));
-            assertEquals("El cobro no puede superar el saldo pendiente.", error.getMessage());
-            assertEquals(2, registrados.size());
-        }
-
-        @Test
-        @DisplayName("reenviar el mismo pago al agente se corta en su saldo")
-        void pagoAgenteRepetido() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            movimiento(ComisionMovimiento.PAGO_AGENTE, "180.00");
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.PAGO_AGENTE, "180.00"));
-            assertEquals("El pago al agente no puede superar su saldo pendiente.", error.getMessage());
-            assertEquals(1, registrados.size());
+        assertNotNull(b.json.convertValue(datos,DatosCobro.class));assertTrue(b.libro.isEmpty());
+        for(Object gesto:List.of(conclusion(b,"Motivo"),reprogramacion(b,ComisionServiceImplTest.Banco.HOY,"Motivo"))) {
+            var mapa=mapa(b,gesto);mapa.put("tipo","P");
+            if(gesto instanceof DatosConclusion)assertThrows(IllegalArgumentException.class,()->b.json.convertValue(mapa,DatosConclusion.class));
+            else assertThrows(IllegalArgumentException.class,()->b.json.convertValue(mapa,DatosReprogramacion.class));
         }
     }
-
-    // ------------------------------------------------------------------
-    // Invariantes economicos
-    // ------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("invariantes del dinero")
-    class Invariantes {
-
-        @Test
-        @DisplayName("no se cobra mas que la bruta")
-        void nuncaMasQueLaBruta() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> cobrar("450.01"));
-            assertEquals("El cobro no puede superar el saldo pendiente.", error.getMessage());
-        }
-
-        @Test
-        @DisplayName("la moneda del movimiento no puede diferir de la liquidacion")
-        void monedaAtada() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.registrarMovimiento(CONTRATO, ComisionMovimiento.COBRO,
-                            new BigDecimal("100.00"), "USD", LocalDate.now(), "EFECTIVO", null, null, broker));
-            assertEquals("La moneda del movimiento debe coincidir con la liquidacion.",
-                    error.getMessage());
-        }
-
-        @Test
-        @DisplayName("no se paga al agente antes de que el broker reparta")
-        void pagoAgenteExigeReparto() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, null);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.PAGO_AGENTE, "10.00"));
-            assertEquals("Asigna primero la parte del agente.", error.getMessage());
-        }
-
-        @Test
-        @DisplayName("una reversion no puede devolver mas de lo cobrado")
-        void reversionAcotadaPorLoCobrado() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            cobrar("100.00");
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.REVERSION, "100.01"));
-            assertEquals("La reversion no puede superar lo cobrado.", error.getMessage());
-        }
-
-        @Test
-        @DisplayName("sin cobros no hay nada que revertir: el saldo nunca supera la bruta")
-        void reversionSinCobroPrevio() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.REVERSION, "500.00"));
-            assertEquals("La reversion no puede superar lo cobrado.", error.getMessage());
-
-            FichaComision ficha = service.porContrato(CONTRATO, broker).orElseThrow();
-            assertEquals(BRUTA, ficha.saldoCobro());
-        }
-
-        /**
-         * El ajuste se admitia, se persistia como evidencia economica y no
-         * movia ningun saldo. Sin una regla que diga que modifica —signo, tope,
-         * efecto en {@code P/R/C}, reversion, KPI— no es una operacion
-         * monetaria, asi que deja de aceptarse como comando.
-         */
-        @Test
-        @DisplayName("el ajuste no es un comando monetario: 400 y sin fila")
-        void ajusteRetirado() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> movimiento(ComisionMovimiento.AJUSTE, "50.00"));
-
-            assertTrue(error.getMessage().startsWith("El ajuste no es una operacion monetaria"),
-                    error.getMessage());
-            FichaComision ficha = service.porContrato(CONTRATO, broker).orElseThrow();
-            assertEquals(ComisionLiquidacion.PENDIENTE, ficha.estado());
-            assertEquals(BRUTA, ficha.saldoCobro());
-        }
+    @Test void resumenHumanoIncluyeRecibidoGestionPactoYCalculoExactosSinEfectos() {
+        var b=devengada();b.cobrar("5000","recibido");var d=conclusion(b,"Con lo recibido");
+        long version=b.raiz().getVersion();var resumen=b.sut.previsualizarActuacion(CONCLUIR,mapa(b,d),b.broker);
+        var ficha=(FichaComision)resumen.get("comision");assertEquals(b.ficha(),ficha);
+        assertEquals(new BigDecimal("5000.00"),ingreso(ficha,"PEN"));assertFalse(ficha.gestion().concluida());
+        assertNotNull(resumen.get("pacto"));assertEquals(d,resumen.get("datos"));assertEquals(version,b.raiz().getVersion());
+        assertEquals(1,b.libro.size());assertFalse(b.recibosGuardados.containsKey("1|fin"));
+        var contador=new AtomicInteger();doAnswer(i->{if(contador.incrementAndGet()==2)ReflectionTestUtils.setField(b.raiz(),"version",version+1);return null;}).when(b.em).refresh(any(ComisionLiquidacion.class));
+        assertThrows(ConflictoException.class,()->b.sut.previsualizarActuacion(CONCLUIR,mapa(b,d),b.broker));
     }
-
-    @Nested
-    @DisplayName("reparto agente/empresa")
-    class Reparto {
-
-        @Test
-        @DisplayName("un cobro parcial no congela el reparto todavia sin asignar")
-        void repartoTrasCobroParcial() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, null);
-            cobrar("200.00");
-
-            FichaComision ficha = service.asignarMontoAgente(CONTRATO, PARTE_AGENTE, broker);
-
-            assertEquals(PARTE_AGENTE, ficha.montoAgente());
-            assertEquals(new BigDecimal("270.00"), ficha.montoEmpresa());
-            assertEquals(ComisionLiquidacion.PARCIAL, ficha.estado());
-        }
-
-        @Test
-        @DisplayName("el reparto no se toca cuando la comision ya esta resuelta")
-        void repartoCerradoTrasResolver() {
-            liquidacion(ComisionLiquidacion.COBRADA, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.asignarMontoAgente(CONTRATO, new BigDecimal("100.00"), broker));
-            // Mensaje congelado de la v1. Su letra dice "Pendiente" porque alli
-            // PARCIAL no tenia productor; el gate real es "queda saldo por
-            // cobrar", que para la v1 significaba exactamente lo mismo.
-            assertEquals("Solo se puede asignar el monto del agente mientras la comision esta Pendiente.",
-                    error.getMessage());
-        }
-
-        @Test
-        @DisplayName("el reparto no puede quedar por debajo de lo ya pagado al agente")
-        void repartoNoBajaDeLoPagado() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            movimiento(ComisionMovimiento.PAGO_AGENTE, "150.00");
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.asignarMontoAgente(CONTRATO, new BigDecimal("100.00"), broker));
-            assertEquals("El monto del agente no puede ser menor que lo ya pagado al agente.",
-                    error.getMessage());
-        }
-    }
-
-    @Nested
-    @DisplayName("cascada del contrato anulado")
-    class ContratoAnulado {
-
-        @Test
-        @DisplayName("anular el contrato arrastra la comision pendiente")
-        void arrastraLaPendiente() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-
-            service.anularPorContratoAnulado(CONTRATO, broker);
-
-            assertEquals(ComisionLiquidacion.ANULADA,
-                    service.porContrato(CONTRATO, broker).orElseThrow().estado());
-        }
-
-        @Test
-        @DisplayName("arrastra tambien la parcial y conserva el abono como evidencia")
-        void arrastraLaParcial() {
-            liquidacion(ComisionLiquidacion.PENDIENTE, BRUTA, PARTE_AGENTE);
-            cobrar("200.00");
-
-            service.anularPorContratoAnulado(CONTRATO, broker);
-
-            FichaComision ficha = service.porContrato(CONTRATO, broker).orElseThrow();
-            assertEquals(ComisionLiquidacion.ANULADA, ficha.estado());
-            assertEquals(new BigDecimal("200.00"), ficha.montoCobrado());
-            assertEquals(1, registrados.size());
-        }
-
-        @Test
-        @DisplayName("con la comision ya cobrada, la anulacion del contrato se rechaza")
-        void rechazaSiYaSeCobro() {
-            liquidacion(ComisionLiquidacion.COBRADA, BRUTA, PARTE_AGENTE);
-
-            ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> service.anularPorContratoAnulado(CONTRATO, broker));
-            assertEquals("No se puede anular un contrato cuya comision ya fue cobrada.",
-                    error.getMessage());
-        }
-
-        @Test
-        @DisplayName("un contrato sin liquidacion se anula sin ruido")
-        void sinLiquidacionNoHaceNada() {
-            when(comisiones.porContrato(ORG, CONTRATO)).thenReturn(Optional.empty());
-
-            service.anularPorContratoAnulado(CONTRATO, broker);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    private FichaComision cobrar(String monto) {
-        return movimiento(ComisionMovimiento.COBRO, monto);
-    }
-
-    private FichaComision movimiento(String tipo, String monto) {
-        return service.registrarMovimiento(CONTRATO, tipo, new BigDecimal(monto), "PEN",
-                LocalDate.now(), "TRANSFERENCIA", null, null, broker);
-    }
-
-    private void liquidacion(String estado, BigDecimal bruta, BigDecimal montoAgente) {
-        ComisionLiquidacion comision = new ComisionLiquidacion();
-        comision.setOrganizacionId(ORG);
-        comision.setContrato(contrato());
-        comision.setMonto(bruta);
-        comision.setMoneda("PEN");
-        if (montoAgente != null) {
-            comision.asignarMontoAgente(montoAgente);
-        }
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(comision, estado);
-        ReflectionTestUtils.setField(comision, "id", LIQUIDACION);
-        when(comisiones.porContrato(ORG, CONTRATO)).thenReturn(Optional.of(comision));
-        when(comisiones.save(any(ComisionLiquidacion.class))).thenAnswer(inv -> inv.getArgument(0));
-    }
-
-    private static ContratoAlquiler contrato() {
-        ContratoAlquiler contrato = new ContratoAlquiler();
-        contrato.setOrganizacionId(ORG);
-        contrato.setFechaCierre(LocalDate.now());
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .iniciar(contrato, ContratoAlquiler.VIGENTE);
-        ReflectionTestUtils.setField(contrato, "id", CONTRATO);
-        return contrato;
+    @Test void resumenNoConvierteFalloTecnicoEnPendienteNiEnEntradaInvalida() {
+        var b=devengada();var datos=mapa(b,conclusion(b,"Motivo"));
+        doThrow(new IllegalStateException("Fallo técnico TEST")).when(b.hitos).consultarContexto(any(),any());
+        assertThrows(IllegalStateException.class,()->b.sut.previsualizarActuacion(CONCLUIR,datos,b.broker));
+        assertFalse(b.raiz().isGestionConcluida());assertTrue(b.libro.isEmpty());
     }
 }
+

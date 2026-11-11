@@ -72,10 +72,10 @@ public class ObservacionMercado extends EntidadDeOrganizacion {
     @Column(name = "operacion", nullable = false, length = 1)
     private String operacion;
 
-    @Column(name = "importe", nullable = false, precision = 14, scale = 2)
+    @Column(name = "importe", precision = 14, scale = 2)
     private BigDecimal importe;
 
-    @Column(name = "moneda", nullable = false, length = 3)
+    @Column(name = "moneda", length = 3)
     private String moneda;
 
     /**
@@ -95,6 +95,14 @@ public class ObservacionMercado extends EntidadDeOrganizacion {
 
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
+
+    @Column(name="procedencia",columnDefinition="text",updatable=false)
+    private String procedencia;
+    public String getProcedencia(){return procedencia;}
+    public void conProcedencia(String valor){
+        if(procedencia!=null)throw new IllegalStateException("La procedencia original no se sobrescribe.");
+        procedencia=valor;
+    }
 
     protected ObservacionMercado() {
         // JPA

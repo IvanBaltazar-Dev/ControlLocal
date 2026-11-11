@@ -14,7 +14,12 @@ import {
   CaptacionesService,
   CaptacionRequest,
 } from '../../core/api/captaciones.service';
-import { Local, LocalesService } from '../../core/api/locales.service';
+import {
+  EncargoEnLista,
+  FichaPropiedad,
+  FilaPropiedad,
+  PropiedadesService,
+} from '../../core/api/propiedades.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { AuthService } from '../../core/auth/auth.service';
 import {
@@ -74,7 +79,7 @@ export class CaptacionForm implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly api = inject(CaptacionesService);
   private readonly prospecciones = inject(ProspeccionesService);
-  private readonly localesApi = inject(LocalesService);
+  private readonly propiedadesApi = inject(PropiedadesService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -89,8 +94,8 @@ export class CaptacionForm implements OnInit {
   protected readonly errorGuardado = signal<string | null>(null);
   protected readonly idCaptacion = signal<number | null>(null);
   protected readonly prospeccionOrigen = signal<Prospeccion | null>(null);
-  protected readonly localActual = signal<Local | null>(null);
-  protected readonly locales = signal<readonly Local[]>([]);
+  protected readonly localActual = signal<FilaPropiedad | null>(null);
+  protected readonly locales = signal<readonly FilaPropiedad[]>([]);
   protected readonly totalLocales = signal(0);
   protected readonly busquedaLocal = this.fb.nonNullable.control('');
 
@@ -202,6 +207,7 @@ export class CaptacionForm implements OnInit {
     if (!admitidas.includes(this.formulario.controls.modalidadComision.value)) {
       this.formulario.controls.modalidadComision.setValue(MODALIDAD_HABITUAL[operacion]);
     }
+    this.proponerImporteDeOperacion();
   }
 
   protected seleccionarLocal(): void {
@@ -212,7 +218,7 @@ export class CaptacionForm implements OnInit {
   protected descripcionLocal(): string {
     const local = this.localActual();
     if (!local) return SIN_DATO;
-    return `${texto(local.codigoLocal)} · ${texto(local.direccion)} (${texto(local.distrito)})`;
+    return `${texto(local.codigo)} · ${texto(local.direccion)} (${texto(local.distrito)})`;
   }
 
   protected areaLocal(): string {
@@ -222,7 +228,9 @@ export class CaptacionForm implements OnInit {
 
   protected precioLocal(): string {
     const local = this.localActual();
-    return monto(local?.precioReferencial, local?.monedaReferencial);
+    const encargo = this.encargoParaOperacion(this.operacionSel())
+      ?? (local?.encargos.length === 1 ? local.encargos[0] : undefined);
+    return monto(encargo?.importe, encargo?.moneda ?? undefined);
   }
 
   /**
@@ -261,7 +269,7 @@ export class CaptacionForm implements OnInit {
     return importeTexto(calcularCondicionComision(this.condicionFormulario()));
   }
 
-  protected valor(valor: string | undefined): string {
+  protected valor(valor: string | null | undefined): string {
     return texto(valor);
   }
 
@@ -341,7 +349,7 @@ export class CaptacionForm implements OnInit {
       } else if (idProspeccion) {
         await this.cargarDesdeProspeccion(idProspeccion);
       } else if (idLocal) {
-        await this.fijarLocal(await this.localesApi.obtener(idLocal));
+        await this.fijarPropiedad(filaDeFicha(await this.propiedadesApi.consultar(idLocal)));
       } else {
         await this.cargarLocales('');
       }
@@ -360,13 +368,15 @@ export class CaptacionForm implements OnInit {
     if (!captacion.idLocal) throw new Error('La captación no tiene un local asociado.');
     this.captacionOriginal = captacion;
     this.idCaptacion.set(captacion.id);
-    await this.fijarLocal(await this.localesApi.obtener(captacion.idLocal));
+    await this.fijarPropiedad(filaDeFicha(await this.propiedadesApi.consultar(captacion.idLocal)));
     // La operacion del encargo que se edita, tal como la guardo el backend. El
     // espejo heredado `motivoOperacion` solo se consulta si el tipado no vino.
     const operacion = operacionValida(captacion.tipoOperacion)
       ?? operacionValida(captacion.motivoOperacion)
       ?? '';
     this.operacionSel.set(operacion);
+    const encargoPropiedad = this.localActual()?.encargos.find((encargo) =>
+      encargo.operacion === (operacion === 'V' ? 'VENTA' : 'ALQUILER'));
     this.formulario.patchValue({
       operacion,
       fechaCaptacion: captacion.fechaCaptacion ?? hoyIso(),
@@ -376,16 +386,16 @@ export class CaptacionForm implements OnInit {
       // proyecta: son cosas distintas desde V75 y la propiedad puede no tener
       // ninguna.
       importeReferencia: captacion.importeReferencia
-        ?? this.localActual()?.precioReferencial
+        ?? encargoPropiedad?.importe
         ?? null,
       monedaReferencia: monedaValida(captacion.monedaReferencia)
-        ?? monedaValida(this.localActual()?.monedaReferencial)
+        ?? monedaValida(encargoPropiedad?.moneda)
         ?? 'PEN',
       modalidadComision: modalidadDesde(captacion),
       valorComision: valorEditableDesde(captacion),
       monedaComision: monedaValida(captacion.monedaComision)
         ?? monedaValida(captacion.monedaReferencia)
-        ?? monedaValida(this.localActual()?.monedaReferencial)
+        ?? monedaValida(encargoPropiedad?.moneda)
         ?? 'PEN',
       tratamientoIgv: tratamientoIgvValido(captacion.tratamientoIgv),
       motivoSinComision: captacion.motivoSinComision ?? '',
@@ -403,15 +413,16 @@ export class CaptacionForm implements OnInit {
     }
     if (!prospeccion.localId) throw new Error('La prospección no tiene un local asociado.');
     this.prospeccionOrigen.set(prospeccion);
-    await this.fijarLocal(await this.localesApi.obtener(prospeccion.localId));
+    await this.fijarPropiedad(filaDeFicha(await this.propiedadesApi.consultar(prospeccion.localId)));
   }
 
-  private async fijarLocal(local: Local): Promise<void> {
+  private async fijarPropiedad(local: FilaPropiedad): Promise<void> {
     this.localActual.set(local);
     this.locales.set([local]);
     this.totalLocales.set(1);
     this.formulario.controls.idLocal.setValue(local.id);
-    const moneda = monedaValida(local.monedaReferencial);
+    const sugerido = local.encargos.length === 1 ? local.encargos[0] : undefined;
+    const moneda = monedaValida(sugerido?.moneda);
     if (moneda && !this.esEdicion()) {
       this.formulario.controls.monedaComision.setValue(moneda);
       this.formulario.controls.monedaReferencia.setValue(moneda);
@@ -419,16 +430,16 @@ export class CaptacionForm implements OnInit {
     // El último precio registrado se PROPONE como punto de partida; no se
     // hereda. Si la propiedad nunca tuvo encargo llega vacío y el campo se
     // queda esperando lo que el propietario acaba de aceptar (V75).
-    if (!this.esEdicion() && local.precioReferencial != null) {
-      this.formulario.controls.importeReferencia.setValue(local.precioReferencial);
+    if (!this.esEdicion() && sugerido?.importe != null) {
+      this.formulario.controls.importeReferencia.setValue(sugerido.importe);
     }
   }
 
   private async cargarLocales(textoBusqueda: string): Promise<void> {
     this.cargandoLocales.set(true);
     try {
-      const pagina = await this.localesApi.pagina({
-        page: 1,
+      const pagina = await this.propiedadesApi.listar({
+        pagina: 1,
         tamano: LOCALES_POR_BUSQUEDA,
         texto: textoBusqueda || undefined,
         estado: 'D',
@@ -538,6 +549,24 @@ export class CaptacionForm implements OnInit {
     );
     this.captacionCreadaPendienteEnlace = null;
   }
+
+  private encargoParaOperacion(operacion: Operacion): EncargoEnLista | undefined {
+    if (!operacion) return undefined;
+    const codigo = operacion === 'V' ? 'VENTA' : 'ALQUILER';
+    return this.localActual()?.encargos.find((encargo) => encargo.operacion === codigo);
+  }
+
+  private proponerImporteDeOperacion(): void {
+    if (this.esEdicion() || this.formulario.controls.importeReferencia.value !== null) return;
+    const encargo = this.encargoParaOperacion(this.operacionSel());
+    if (encargo?.importe == null) return;
+    this.formulario.controls.importeReferencia.setValue(encargo.importe);
+    const moneda = monedaValida(encargo.moneda);
+    if (moneda) {
+      this.formulario.controls.monedaReferencia.setValue(moneda);
+      this.formulario.controls.monedaComision.setValue(moneda);
+    }
+  }
 }
 
 export function generarCodigoCaptacion(fecha = new Date()): string {
@@ -638,4 +667,33 @@ function tratamientoIgvValido(valor: string | null | undefined): 'I' | 'A' | 'N'
 
 function mensajeError(error: unknown, alterno: string): string {
   return error instanceof ApiError || error instanceof Error ? error.message : alterno;
+}
+
+/** Adapta una ficha universal al resumen mínimo que necesita elegir un encargo. */
+function filaDeFicha(ficha: FichaPropiedad): FilaPropiedad {
+  const metraje = ficha.atributos.find((atributo) => atributo.clave === 'metraje_total')?.valor;
+  return {
+    id: ficha.id,
+    codigo: ficha.codigo,
+    tipoPropiedad: ficha.tipoPropiedad,
+    tipoRotulo: ficha.tipoRotulo,
+    uso: ficha.uso,
+    direccion: ficha.ubicacion?.direccion ?? '',
+    distrito: ficha.ubicacion?.distrito ?? '',
+    metraje: metraje == null || metraje.trim() === '' ? null : Number(metraje),
+    estado: ficha.estadoRegistro ?? '',
+    idPropietario: ficha.titulares[0]?.idPropietario,
+    propietarioNombre: ficha.titulares.find((titular) => titular.representante)?.nombre
+      ?? ficha.titulares[0]?.nombre,
+    titulares: ficha.titulares.length,
+    encargos: ficha.encargos
+      .filter((encargo) => encargo.vivo)
+      .map((encargo) => ({
+        operacion: encargo.operacion,
+        estado: encargo.estado,
+        importe: encargo.importe,
+        moneda: encargo.moneda,
+      })),
+    fechaRegistro: ficha.fechaRegistro,
+  };
 }

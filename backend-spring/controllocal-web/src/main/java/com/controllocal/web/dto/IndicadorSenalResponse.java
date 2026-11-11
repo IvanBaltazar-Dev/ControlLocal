@@ -30,10 +30,10 @@ import com.controllocal.service.IndicadorService;
  */
 public record IndicadorSenalResponse(
         String concepto,
-        int valor,
+        Integer valor,
         String nivelAtencion,
         boolean requiereAtencion,
-        int prioridad) {
+        int prioridad,String estadoCalculo,String causa) {
 
     public static IndicadorSenalResponse desde(IndicadorService.Senal senal) {
         return new IndicadorSenalResponse(
@@ -41,6 +41,6 @@ public record IndicadorSenalResponse(
                 senal.valor(),
                 senal.nivelAtencion(),
                 senal.requiereAtencion(),
-                senal.prioridad());
+                senal.prioridad(),senal.estadoCalculo(),senal.causa());
     }
 }

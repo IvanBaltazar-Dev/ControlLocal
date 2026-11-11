@@ -28,10 +28,6 @@ public interface LocalListado {
 
     BigDecimal getMetraje();
 
-    BigDecimal getPrecioReferencial();
-
-    String getMonedaReferencial();
-
     String getDescripcion();
 
     String getEstado();

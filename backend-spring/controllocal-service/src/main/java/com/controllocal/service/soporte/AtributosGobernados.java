@@ -4,6 +4,7 @@ import com.controllocal.domain.auditoria.RastroValorGobernado;
 import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.domain.inmueble.Sujeto;
 import com.controllocal.domain.inmueble.ValorMultipleAtributo;
 import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * <b>El catalogo decide que se pregunta; esto lo aplica.</b>
@@ -52,6 +54,40 @@ import java.util.Optional;
  */
 @Component
 public class AtributosGobernados {
+
+    /**
+     * Vocabulario unico de tipos fisicos de propiedad.
+     *
+     * <p>El codigo persistido ocupa una letra. {@code E} identifica un
+     * ESTACIONAMIENTO (cochera); las otras formas son alias de entrada para
+     * que el motor pueda recibir el nombre que use la persona sin crear otro
+     * tipo. La tabla de aplicabilidad y los checks de la base comparten este
+     * mismo vocabulario (migracion V94).
+     */
+    private static final List<TipoPropiedad> TIPOS_PROPIEDAD = List.of(
+            new TipoPropiedad("L", "LOCAL", "Local comercial", Set.of("L", "LOCAL", "LOCAL_COMERCIAL")),
+            new TipoPropiedad("O", "OFICINA", "Oficina", Set.of("O", "OFICINA")),
+            new TipoPropiedad("D", "DEPARTAMENTO", "Departamento", Set.of("D", "DEPARTAMENTO", "DEPTO")),
+            new TipoPropiedad("C", "CASA", "Casa", Set.of("C", "CASA")),
+            new TipoPropiedad("T", "TERRENO", "Terreno", Set.of("T", "TERRENO")),
+            new TipoPropiedad("A", "ALMACEN", "Almacén",
+                    Set.of("A", "ALMACEN", "ALMACÉN", "DEPOSITO", "DEPÓSITO")),
+            new TipoPropiedad("E", "ESTACIONAMIENTO", "Estacionamiento",
+                    Set.of("E", "ESTACIONAMIENTO", "COCHERA")),
+            new TipoPropiedad("X", "OTRO", "Otro", Set.of("X", "OTRO")));
+
+    /** Tipos en el mismo nombre que viaja por el contrato de captura. */
+    public static List<String> nombresDeTipos() {
+        return TIPOS_PROPIEDAD.stream().map(TipoPropiedad::nombre).toList();
+    }
+
+    /** Texto comun para los rechazos de tipo, sin una lista paralela. */
+    public static String tiposAdmitidos() {
+        return String.join(", ", nombresDeTipos());
+    }
+
+    private record TipoPropiedad(String codigo, String nombre, String rotulo, Set<String> alias) {
+    }
 
     private final CatalogoAtributoRepository catalogo;
     private final AtributoPropiedadRepository valores;
@@ -201,22 +237,18 @@ public class AtributosGobernados {
     }
 
     /**
-     * El ancla de un multivalor, con sus valores.
+     * <b>Una clave escalar no se escribe por la via del conjunto.</b>
      *
-     * <p>Va aparte de {@link #convertir} porque no es el mismo acto: alli se
-     * escribe UN valor, aqui se sustituye un CONJUNTO. Y sustituir es lo
-     * correcto -- anadir dejaria sin forma de quitar una opcion, que es la
-     * mitad de lo que significa editar una lista.
+     * <p>Estaba dentro de {@code convertirMultivalor}, que solo corria cuando
+     * habia que CREAR el ancla — o sea, nunca en la edicion de una lista que ya
+     * tenia valores (`N22`). Vive aqui, junto a las otras dos exigencias, para
+     * que las tres se hagan siempre y en el mismo sitio.
      */
-    private AtributoPropiedad convertirMultivalor(long idOrganizacion, long idPropiedad,
-                                                 String tipoPropiedad, String clave) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
-        exigirQueAplique(definicion, tipoPropiedad);
+    private static void exigirQueSeaMultivalor(CatalogoAtributo definicion) {
         if (!definicion.tipo().esMultivalor()) {
             throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" no admite varios valores.");
+                    "El atributo \"" + definicion.getClave() + "\" no admite varios valores.");
         }
-        return AtributoPropiedad.anclaDeMultivalor(idOrganizacion, idPropiedad, clave);
     }
 
     /**
@@ -504,13 +536,31 @@ public class AtributosGobernados {
      * conjunto anterior era legado y nadie lo escribio nunca.
      */
     private void escribirMultivalor(Actor actor, Propiedad propiedad, ValorEntrante entrante) {
+        // EL CATALOGO SE CONSULTA SIEMPRE, no solo cuando hay que crear el ancla
+        // (`N22`). Hasta WP-C esta rama preguntaba por la definicion unicamente
+        // en `convertirMultivalor` --o sea, cuando el ancla NO existia--, asi
+        // que en el ALTA la clave retirada se rechazaba y en la EDICION de una
+        // que ya tenia ancla se pasaba de largo: `save` y `borrarDe` sin mirar
+        // el catalogo ni una vez. Y la red de atras cubria la mitad exacta:
+        // `exigir_opcion_gobernada` es BEFORE INSERT OR UPDATE, asi que cazaba
+        // el anadir y no veia el borrar. Resultado: a una LISTA_MULTIPLE
+        // retirada se le podian QUITAR opciones -- que es la operacion
+        // irreversible de las dos.
+        //
+        // `definicionDe` es la misma puerta que usa el resto de la escritura, y
+        // tiene que ir DELANTE de crear nada: rechazar despues de haber
+        // insertado el ancla dejaria una fila de un valor que no se escribio.
+        CatalogoAtributo definicion = definicionDe(actor.idOrganizacion(), entrante.clave());
+        exigirQueAplique(definicion, propiedad.getTipoInmueble());
+        exigirQueSeaMultivalor(definicion);
+
         AtributoPropiedad ancla = valores
                 .findByIdPropiedadAndClave(propiedad.getId(), entrante.clave())
                 .orElse(null);
         boolean existia = ancla != null;
         if (!existia) {
-            ancla = valores.save(convertirMultivalor(actor.idOrganizacion(), propiedad.getId(),
-                    propiedad.getTipoInmueble(), entrante.clave()));
+            ancla = valores.save(AtributoPropiedad.anclaDeMultivalor(
+                    actor.idOrganizacion(), propiedad.getId(), entrante.clave()));
         }
         List<String> antes = existia ? multivalores.valoresDe(ancla.getId()) : List.of();
         ValorLogico hallado = existia ? ValorLogico.deConjunto(antes) : null;
@@ -571,15 +621,20 @@ public class AtributosGobernados {
         // fisico. Una retirada es exactamente el hecho que no puede quedar en
         // manos de quien no responde por la propiedad.
         autoridad.exigirEdicion(actor, propiedad);
-        Optional<CatalogoAtributo> definicion =
-                catalogo.porClave(actor.idOrganizacion(), clave);
+        // Borrar enruta por sujeto igual que leer y escribir, y desde `N7` lo
+        // hace la CONSULTA y no solo la comprobacion de despues: sin sujeto en
+        // el `where`, una clave homonima del encargo podia resolverse aqui y el
+        // enrutamiento dependia de cual ganara por precedencia de organizacion.
+        Optional<CatalogoAtributo> definicion = catalogo
+                .porClaveYSujeto(actor.idOrganizacion(), clave, Sujeto.PROPIEDAD.codigo());
         if (definicion.isEmpty()) {
+            // Puede no existir, o existir en el OTRO sujeto. Lo segundo tiene
+            // que decirse: pedir que se retire una condicion del encargo por
+            // esta puerta saldria como "no esta en el catalogo", que es falso.
+            catalogo.porClave(actor.idOrganizacion(), clave)
+                    .ifPresent(AtributosGobernados::exigirQueSeaDePropiedad);
             return ValorRetirado.NO_ES_DEL_CATALOGO;
         }
-        // Borrar enruta por sujeto igual que leer y escribir. Sin esto, pedir
-        // que se retire una condicion del encargo saldria como "no esta en el
-        // catalogo" -- un mensaje falso sobre una clave que existe.
-        exigirQueSeaDePropiedad(definicion.get());
 
         ValorLogico hallado;
         if (definicion.get().esEstructural()) {
@@ -687,14 +742,28 @@ public class AtributosGobernados {
      * ocurre en el camino del fallo.
      */
     public CatalogoAtributo definicionDe(long idOrganizacion, String clave) {
-        CatalogoAtributo definicion = catalogo.porClave(idOrganizacion, clave)
+        CatalogoAtributo definicion = catalogo
+                // Por CLAVE Y SUJETO (`N7`): una clave que existiera con el
+                // mismo nombre en los dos sujetos no puede resolverse aqui por
+                // precedencia de organizacion, que no dice nada sobre si el
+                // valor es un hecho del inmueble o una condicion pactada. El
+                // `exigirQueSeaDePropiedad` de abajo sigue: es el MENSAJE, y lo
+                // da la consulta sin sujeto del camino del fallo.
+                .porClaveYSujeto(idOrganizacion, clave, Sujeto.PROPIEDAD.codigo())
                 .orElseThrow(() -> new ReglaNegocioException(porQueNoSeResuelve(idOrganizacion, clave)));
         exigirQueSeaDePropiedad(definicion);
         return definicion;
     }
 
     private String porQueNoSeResuelve(long idOrganizacion, String clave) {
-        boolean retirada = catalogo.paraLeer(idOrganizacion, List.of(clave)).stream()
+        // La clave existe y es del OTRO sujeto: el mensaje tiene que decirlo, y
+        // no «no esta en el catalogo», que es falso y manda a buscar una errata.
+        CatalogoAtributo enOtroSujeto = catalogo.porClave(idOrganizacion, clave).orElse(null);
+        if (enOtroSujeto != null && enOtroSujeto.esDeEncargo()) {
+            return esDelEncargo(enOtroSujeto.getClave());
+        }
+        boolean retirada = catalogo
+                .paraLeer(idOrganizacion, List.of(clave), Sujeto.PROPIEDAD.codigo()).stream()
                 .anyMatch(c -> clave.equals(c.getClave()));
         if (retirada) {
             return "El atributo \"" + clave + "\" se retiro del catalogo: su valor se conserva y "
@@ -718,12 +787,21 @@ public class AtributosGobernados {
      */
     private static void exigirQueSeaDePropiedad(CatalogoAtributo definicion) {
         if (definicion.esDeEncargo()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + definicion.getClave() + "\" es una condicion del ENCARGO "
-                            + "y se intento tratar como un hecho de la propiedad. Se pacta en "
-                            + "cada comercializacion: guardarlo en el inmueble haria que el "
-                            + "siguiente encargo heredara lo pactado en el anterior.");
+            throw new ReglaNegocioException(esDelEncargo(definicion.getClave()));
         }
+    }
+
+    /**
+     * El mensaje, escrito una vez. Lo dicen dos sitios —la guarda de arriba y
+     * el camino del fallo de {@link #porQueNoSeResuelve}, que ahora sabe
+     * distinguir «no existe» de «existe en el otro sujeto» (`N7`)— y dos
+     * redacciones del mismo rechazo se separan.
+     */
+    private static String esDelEncargo(String clave) {
+        return "El atributo \"" + clave + "\" es una condicion del ENCARGO "
+                + "y se intento tratar como un hecho de la propiedad. Se pacta en "
+                + "cada comercializacion: guardarlo en el inmueble haria que el "
+                + "siguiente encargo heredara lo pactado en el anterior.";
     }
 
     /** Las definiciones de un lote de claves, por clave. Evita el N+1 de la ficha. */
@@ -804,7 +882,50 @@ public class AtributosGobernados {
                                                               String tipoPropiedad,
                                                               Collection<String> clavesLeidas) {
         Map<String, CatalogoAtributo> porClave = definicionesDe(idOrganizacion, tipoPropiedad);
-        completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas);
+        completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas, Sujeto.PROPIEDAD);
+        return porClave;
+    }
+
+    /**
+     * <b>Las ESTRUCTURALES que ya no se preguntan, para que su valor no
+     * desaparezca de la ficha</b> (`N3`, WP-C).
+     *
+     * <p>Es la quinta superficie de la retirada, y la unica que
+     * {@link #definicionesParaLeer} no podia cubrir. El razonamiento, entero,
+     * porque es la parte que cuesta ver:
+     *
+     * <pre>
+     *   una clave ESTRUCTURAL no deja fila en atributo_propiedad
+     *     -> el lector no la "encuentra escrita"
+     *     -> no entra en clavesLeidas
+     *     -> completarRetiradas no tiene que completar
+     *     -> y el valor de la columna canonica no llega a la ficha
+     * </pre>
+     *
+     * <p>Para producirla hacia falta ya su definicion, y la definicion es
+     * justo lo que el filtro por {@code activo} quitaba. Se rompe preguntando
+     * por el <b>concepto</b> —las claves con campo canonico— en vez de por la
+     * clave escrita.
+     *
+     * <p><b>Solo las retiradas.</b> Una estructural viva ya viene por
+     * {@link #definicionesDe}; una viva que dejo de aplicar a este tipo es otra
+     * superficie —la que {@code ContratoDeEscritura} llama «ya no se pregunta
+     * para un terreno»— y no se toca aqui: hoy no hay ninguna en esa situacion
+     * y meterla cambiaria fichas que hoy no muestran ese valor.
+     *
+     * <p>Coste: <b>una consulta</b> por lectura, sobre una tabla de catalogo de
+     * decenas de filas, y solo se paga cuando hay alguna retirada — la lista
+     * llega vacia en cuanto no la hay, que es el caso de hoy (0 medidas el
+     * 2026-09-05 en las dos bases).
+     */
+    public Map<String, CatalogoAtributo> estructuralesRetiradas(long idOrganizacion) {
+        Map<String, CatalogoAtributo> porClave = new LinkedHashMap<>();
+        for (CatalogoAtributo definicion
+                : catalogo.estructuralesParaLeer(idOrganizacion, Sujeto.PROPIEDAD.codigo())) {
+            if (!definicion.isActivo()) {
+                porClave.putIfAbsent(definicion.getClave(), definicion);
+            }
+        }
         return porClave;
     }
 
@@ -821,7 +942,7 @@ public class AtributosGobernados {
      */
     static void completarRetiradas(CatalogoAtributoRepository catalogo, long idOrganizacion,
                                    Map<String, CatalogoAtributo> porClave,
-                                   Collection<String> clavesLeidas) {
+                                   Collection<String> clavesLeidas, Sujeto sujeto) {
         List<String> faltan = clavesLeidas.stream()
                 .filter(clave -> !porClave.containsKey(clave))
                 .distinct()
@@ -829,7 +950,13 @@ public class AtributosGobernados {
         if (faltan.isEmpty()) {
             return;
         }
-        for (CatalogoAtributo definicion : catalogo.paraLeer(idOrganizacion, faltan)) {
+        // Con SUJETO (`N7`): completar la definicion de una clave homonima del
+        // otro sujeto pondria en la ficha del inmueble el rotulo, el tipo y la
+        // unidad de una condicion pactada. El `putIfAbsent` sobre el orden de la
+        // consulta es lo que la acota a UNA fila por clave -- la de la
+        // organizacion delante de la del sistema.
+        for (CatalogoAtributo definicion
+                : catalogo.paraLeer(idOrganizacion, faltan, sujeto.codigo())) {
             porClave.putIfAbsent(definicion.getClave(), definicion);
         }
     }
@@ -887,19 +1014,9 @@ public class AtributosGobernados {
 
     /** El nombre del tipo, para que el error no diga "tipo T". */
     public static String nombreDelTipo(String tipoPropiedad) {
-        return switch (tipoPropiedad) {
-            case "L" -> "LOCAL";
-            case "O" -> "OFICINA";
-            case "D" -> "DEPARTAMENTO";
-            case "C" -> "CASA";
-            case "T" -> "TERRENO";
-            case "A" -> "ALMACEN";
-            case "X" -> "OTRO";
-            default -> tipoPropiedad;
-        };
+        return tipoPorCodigo(tipoPropiedad).map(TipoPropiedad::nombre).orElse(tipoPropiedad);
     }
 
-    /** El codigo de un tipo escrito con palabras. Acepta las dos formas. */
     /**
      * <b>Como se llama un tipo cuando lo lee una persona.</b>
      *
@@ -913,16 +1030,7 @@ public class AtributosGobernados {
      * texto» viviendo en la interfaz, y con dos interfaces habria dos (D-A-1).
      */
     public static String rotuloDelTipo(String tipoPropiedad) {
-        return switch (tipoPropiedad == null ? "" : tipoPropiedad) {
-            case "L" -> "Local comercial";
-            case "O" -> "Oficina";
-            case "D" -> "Departamento";
-            case "C" -> "Casa";
-            case "T" -> "Terreno";
-            case "A" -> "Almacén";
-            case "X" -> "Otro";
-            default -> tipoPropiedad;
-        };
+        return tipoPorCodigo(tipoPropiedad).map(TipoPropiedad::rotulo).orElse(tipoPropiedad);
     }
 
     /**
@@ -945,20 +1053,25 @@ public class AtributosGobernados {
             default -> uso;
         };
     }
+
+    private static Optional<TipoPropiedad> tipoPorCodigo(String codigo) {
+        if (codigo == null) {
+            return Optional.empty();
+        }
+        return TIPOS_PROPIEDAD.stream()
+                .filter(tipo -> tipo.codigo().equals(codigo))
+                .findFirst();
+    }
+
+    /** El codigo de un tipo escrito con palabras o con su alias de captura. */
     public static Optional<String> codigoDelTipo(String tipoPropiedad) {
         if (tipoPropiedad == null || tipoPropiedad.isBlank()) {
             return Optional.empty();
         }
         String limpio = tipoPropiedad.trim().toUpperCase(Locale.ROOT);
-        return switch (limpio) {
-            case "L", "LOCAL", "LOCAL_COMERCIAL" -> Optional.of("L");
-            case "O", "OFICINA" -> Optional.of("O");
-            case "D", "DEPARTAMENTO", "DEPTO" -> Optional.of("D");
-            case "C", "CASA" -> Optional.of("C");
-            case "T", "TERRENO" -> Optional.of("T");
-            case "A", "ALMACEN", "ALMACÉN", "DEPOSITO", "DEPÓSITO" -> Optional.of("A");
-            case "X", "OTRO" -> Optional.of("X");
-            default -> Optional.empty();
-        };
+        return TIPOS_PROPIEDAD.stream()
+                .filter(tipo -> tipo.alias().contains(limpio))
+                .map(TipoPropiedad::codigo)
+                .findFirst();
     }
 }

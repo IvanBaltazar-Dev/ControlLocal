@@ -36,14 +36,14 @@ import java.util.Optional;
  * <h3>La regla que no se puede romper</h3>
  *
  * <b>El mismo archivo tiene que servirse igual venga del disco o del bucket.</b>
- * Mientras el contrato siga congelado los dos backends son intercambiables, y
- * una diferencia observable —otro content-type, otro nombre de descarga— seria
+ * Los dos backends conservan las referencias existentes; una diferencia
+ * observable —otro content-type, otro nombre de descarga— seria
  * un cambio de contrato disfrazado de cambio de infraestructura. De ahi dos
  * decisiones que parecen menores y no lo son:
  *
  * <ul>
- *   <li>la clave la construye {@link AlmacenDocumentos#claveNueva}, compartida,
- *       para que migrar sea <b>copiar</b> y no traducir;</li>
+ *   <li>la clave exacta la preasigna Core antes de escribir; al migrar se
+ *       <b>copia</b> sin traducir ni acunar otra referencia;</li>
  *   <li>al leer, el content-type se <b>deduce de la clave</b> con
  *       {@link AlmacenDocumentos#contentTypeDe} en vez de devolver el que S3
  *       tenga guardado. Se guarda igualmente en el objeto —es correcto y lo
@@ -68,22 +68,30 @@ public class AlmacenS3 implements AlmacenDocumentos {
         return "S3";
     }
 
-    @Override
-    public ArchivoGuardado guardar(String carpeta, String nombreArchivo, byte[] contenido,
-                                   String contentType) {
-        String clave = AlmacenDocumentos.claveNueva(carpeta, nombreArchivo);
+    @Override public String identidadTecnica() {
         try {
-            s3.putObject(PutObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(clave)
-                            .contentType(contentType != null && !contentType.isBlank()
-                                    ? contentType
-                                    : AlmacenDocumentos.contentTypeDe(clave))
-                            .build(),
-                    RequestBody.fromBytes(contenido));
-            return new ArchivoGuardado(clave, nombreArchivo);
-        } catch (SdkException error) {
-            throw new AlmacenException("No se pudo escribir el archivo en el bucket.", error);
+            var configuracion=s3.serviceClientConfiguration();
+            if(configuracion==null)throw new IllegalStateException();
+            String endpoint;
+            if(configuracion.endpointOverride().isPresent()) {
+                var uri=configuracion.endpointOverride().get().normalize();
+                if(uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null||uri.getHost()==null
+                        ||!("https".equalsIgnoreCase(uri.getScheme())||"http".equalsIgnoreCase(uri.getScheme())))
+                    throw new IllegalStateException();
+                int puerto=uri.getPort();
+                if((puerto==443&&"https".equalsIgnoreCase(uri.getScheme()))||(puerto==80&&"http".equalsIgnoreCase(uri.getScheme())))puerto=-1;
+                var autoridad=new java.net.URI(uri.getScheme().toLowerCase(java.util.Locale.ROOT),null,
+                        uri.getHost().toLowerCase(java.util.Locale.ROOT),puerto,null,null,null);
+                // No decodificar %2F u otros segmentos reservados: /a%2Fb no
+                // acredita el mismo namespace que /a/b en el endpoint real.
+                endpoint=autoridad.toASCIIString()+(uri.getRawPath()==null?"":uri.getRawPath());
+            } else {
+                if(configuracion.region()==null||configuracion.region().id()==null||configuracion.region().id().isBlank())throw new IllegalStateException();
+                endpoint="AWS-S3:"+configuracion.region().id();
+            }
+            return AlmacenDocumentos.huellaIdentidad(proveedor(),endpoint+"\u0000"+bucket);
+        } catch(RuntimeException|java.net.URISyntaxException fallo) {
+            throw new AlmacenException("No se pudo verificar la identidad del almacén privado.",null);
         }
     }
 
@@ -113,11 +121,9 @@ public class AlmacenS3 implements AlmacenDocumentos {
      *
      * <p>Se contemplan las dos formas en que un compatible dice "no existe":
      * {@code NoSuchKeyException}, que es la del protocolo, y un
-     * {@code S3Exception} con estado 404, que devuelven algunas
-     * implementaciones cuando el <b>bucket</b> tampoco esta. Un bucket ausente
-     * en produccion es un fallo de configuracion, pero no hay nada que este
-     * metodo pueda hacer con el que no sea decir que no encontro el archivo;
-     * quien impide llegar ahi es la validacion de arranque.
+     * {@code S3Exception} con código NoSuchKey y estado404. Un bucket ausente,
+     * un404 sin semántica de objeto o un fallo de permisos no acreditan ausencia:
+     * la recuperación durable debe conservarlos como fallo técnico pendiente.
      */
     @Override
     public Optional<ArchivoDescargado> abrir(String clave) {
@@ -135,7 +141,8 @@ public class AlmacenS3 implements AlmacenDocumentos {
         } catch (NoSuchKeyException ausente) {
             return Optional.empty();
         } catch (S3Exception error) {
-            if (error.statusCode() == 404) {
+            if (error.statusCode() == 404&&error.awsErrorDetails()!=null
+                    &&"NoSuchKey".equals(error.awsErrorDetails().errorCode())) {
                 return Optional.empty();
             }
             throw new AlmacenException("No se pudo leer el archivo del bucket.", error);

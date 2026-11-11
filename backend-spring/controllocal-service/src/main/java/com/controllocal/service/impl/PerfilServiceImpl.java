@@ -47,7 +47,7 @@ public class PerfilServiceImpl implements PerfilService {
         Persona persona = cargar(actor);
         persona.setFotoClave(clave);
         personas.save(persona);
-        return clave;
+        return referenciaFoto(persona);
     }
 
     private Persona cargar(Actor actor) {
@@ -58,6 +58,12 @@ public class PerfilServiceImpl implements PerfilService {
 
     private static FichaPerfil ficha(Persona persona) {
         return new FichaPerfil(persona.getNombresORazonSocial(),
-                persona.getCorreo(), persona.getTelefono(), persona.getFotoClave());
+                persona.getCorreo(), persona.getTelefono(), referenciaFoto(persona));
+    }
+
+    private static String referenciaFoto(Persona persona) {
+        if (persona.getFotoClave() == null || persona.getFotoClave().isBlank()) return persona.getFotoClave();
+        return java.util.Objects.requireNonNull(persona.getFotoRef(),
+                "El perfil carece de referencia de archivo").toString();
     }
 }

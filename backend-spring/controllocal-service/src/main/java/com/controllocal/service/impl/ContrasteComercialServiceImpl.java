@@ -18,16 +18,9 @@ import java.math.BigDecimal;
 /**
  * Situa un dato contra la operacion de la propia casa, o dice que no puede.
  *
- * <h2>La degradacion es el camino normal, no el error</h2>
- *
- * <p>Con los datos del 2026-08-19 <b>las cuatro comparaciones degradan</b>: cero
- * hitos de renta publicada, cero visitas realizadas, cero interacciones colgadas
- * de una prospeccion y cuatro contratos con cronologia valida frente a los cinco
- * de muestra minima. Eso no es un fallo que haya que rodear: es lo que hay, y
- * decirlo es el producto.
- *
- * <p>El codigo esta escrito para que el camino con dato y el camino sin dato
- * cuesten lo mismo. Cuando la cartera crezca, el contraste aparecera solo.
+ * <p>Cada contraste conserva su población y suficiencia. El cálculo antiguo de
+ * plazo medio de recontacto se retiró por decisión del titular del 30/10/2026;
+ * no se sustituye por otro promedio ni por una cifra sin evidencia.
  */
 @Service
 public class ContrasteComercialServiceImpl implements ContrasteComercialService {
@@ -70,23 +63,19 @@ public class ContrasteComercialServiceImpl implements ContrasteComercialService 
         if (alcance.vacio()) {
             return new MediasPropias(
                     MediasPropias.Media.sinBase(0, "Todavia no hay visitas con que medirlo"),
-                    MediasPropias.Media.sinBase(0, "Todavia no hay contratos con que medirlo"),
-                    MediasPropias.Media.sinBase(0, "Todavia no hay contactos con que medirlo"));
+                    MediasPropias.Media.sinBase(0, "Todavia no hay contratos con que medirlo"));
         }
         boolean global = alcance.global();
         var roles = alcance.paramRoles();
 
         MediaPropia visitas = contrastes.propuestasPorVisita(organizacion, global, roles);
         MediaPropia contratos = contrastes.diasHastaContrato(organizacion, global, roles);
-        MediaPropia recontactos = contrastes.plazoRealDeRecontacto(organizacion, global, roles);
 
         return new MediasPropias(
                 MediasPropias.proporcion(casos(visitas), base(visitas),
                         "solicitudes", "visitas realizadas"),
                 MediasPropias.magnitud(valor(contratos), base(contratos),
-                        "dias", "contratos firmados"),
-                MediasPropias.magnitud(valor(recontactos), base(recontactos),
-                        "dias", "recontactos registrados"));
+                        "dias", "contratos firmados"));
     }
 
     private static int base(MediaPropia m) {

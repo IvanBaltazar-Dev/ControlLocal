@@ -1,877 +1,285 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.auditoria.HistorialEstado;
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.domain.comercial.OportunidadComercial;
-import com.controllocal.domain.comercial.SolicitudAlquiler;
+import com.controllocal.domain.auditoria.*;
+import com.controllocal.domain.comercial.*;
 import com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial;
-import com.controllocal.domain.comun.EstadosDominio.EstadoRegistroPropiedad;
-import com.controllocal.domain.inmueble.PrecioPropiedad;
-import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.inmueble.Publicacion;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleCliente;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
-import com.controllocal.domain.persona.SupervisionAgente;
+import com.controllocal.domain.inmueble.*;
+import com.controllocal.domain.persona.*;
 import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.repositorio.CaptacionRepository;
-import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
-import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
-import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.PublicacionRepository;
-import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
-import com.controllocal.persistence.repositorio.RevisionDisponibilidadRepository;
-import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
-import com.controllocal.persistence.query.ComisionGeneradaPorMoneda;
-import com.controllocal.persistence.query.MovimientoComisionPorMoneda;
-import com.controllocal.persistence.query.RepartoComisionPorMoneda;
-import com.controllocal.persistence.query.ResumenCierres;
-import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService;
-import com.controllocal.service.TareaService;
-import com.controllocal.service.ComisionService;
-import com.controllocal.service.ComisionService.FichaComision;
-import com.controllocal.service.ContratoService.DatosContrato;
-import com.controllocal.service.ContratoService.DatosRenovacion;
-import com.controllocal.service.ContratoService.DatosTransicion;
-import com.controllocal.service.ContratoService.FichaContrato;
-import com.controllocal.service.ContratoService.FiltrosContrato;
-import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
-import com.controllocal.service.excepcion.NoEncontradoException;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.Alcances.Alcance;
-import com.controllocal.service.soporte.Transiciones;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.service.*;
+import com.controllocal.service.ContratoService.*;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.service.encargo.AccesoEncargo;
+import com.controllocal.service.encargo.PactosDeEncargo.ReferenciaPacto;
+import com.controllocal.service.excepcion.*;
+import com.controllocal.service.formalizacion.FormalizacionService.*;
+import com.controllocal.service.formalizacion.HitosConfirmados.*;
+import com.controllocal.service.soporte.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.test.util.ReflectionTestUtils;
-
+import org.springframework.transaction.annotation.*;
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda la cascada del cierre (§6) —la operacion mas pesada del sistema— y
- * los mensajes de ContratosRest.
- *
- * <p>Lo que este test protege de verdad: que el cierre siga tocando las
- * SIETE cosas y que las CUATRO transiciones queden auditadas. Es la mejora
- * MEJ-01 sobre la v1, que movia esos cuatro estados a mano y no dejaba
- * rastro de ninguno.
- */
+/** RF058/059/CAT-E25: preparación no es firma; la confirmación interna no produce dinero. */
 class ContratoServiceImplTest {
+    private static final long ORG=1,CID=40;
+    private static final LocalDate HECHO=LocalDate.of(2026,10,12),INICIO=LocalDate.of(2026,11,1),FIN=INICIO.plusYears(1);
+    private final Actor agente=new Actor(ORG,3,30,"AGENTE"),broker=new Actor(ORG,2,20,"BROKER"),gobierno=new Actor(ORG,1,10,"TENANT_ADMIN");
+    private final ContextoSesion sid=new ContextoSesion("fixture",2000000000,"sid-fixture",1);
+    private final Procedencia proc=new Procedencia("API",null,null,null,null,null,null,null,null);
+    private final ContratoAlquilerRepository contratos=mock(ContratoAlquilerRepository.class);
+    private final SolicitudAlquilerRepository solicitudes=mock(SolicitudAlquilerRepository.class);
+    private final OportunidadComercialRepository oportunidades=mock(OportunidadComercialRepository.class);
+    private final CaptacionRepository captaciones=mock(CaptacionRepository.class);
+    private final PropiedadRepository propiedades=mock(PropiedadRepository.class);
+    private final PrecioPropiedadRepository precios=mock(PrecioPropiedadRepository.class);
+    private final com.controllocal.service.publicacion.HistoriadorPublicacion publicaciones=mock(com.controllocal.service.publicacion.HistoriadorPublicacion.class);
+    private final ComisionService comisiones=mock(ComisionService.class);
+    private final Alcances alcances=mock(Alcances.class);
+    private final HistorialEstadoRepository historial=mock(HistorialEstadoRepository.class);
+    private final TareaService tareas=mock(TareaService.class);
+    private final AlertaService alertas=mock(AlertaService.class);
+    private final SupervisionAgenteRepository supervisiones=mock(SupervisionAgenteRepository.class);
+    private final RevisionDisponibilidadRepository revisiones=mock(RevisionDisponibilidadRepository.class);
+    private final AccesoContrato acceso=mock(AccesoContrato.class);
+    private final PreparacionesDeContrato preparaciones=mock(PreparacionesDeContrato.class);
+    private final ContextosDeActividad contextos=mock(ContextosDeActividad.class);
+    private final ComandosIdempotentes comandos=mock(ComandosIdempotentes.class);
+    private final ComandoIdempotenteRepository recibos=mock(ComandoIdempotenteRepository.class);
+    private final Documentos documentos=new Documentos(new ObjectMapper().findAndRegisterModules());
+    private final EntityManager em=mock(EntityManager.class);
+    private final AccesoEncargo accesoEncargo=mock(AccesoEncargo.class);
+    private final MesaNegociacionRepository mesas=mock(MesaNegociacionRepository.class);
+    private final Transiciones transiciones=new Transiciones(historial);
+    private final ContratoServiceImpl service=crear(acceso);
+    private final SolicitudAlquiler solicitud=solicitud();
+    private final OportunidadComercial oportunidad=solicitud.getOportunidad();
+    private final Captacion encargo=oportunidad.getCaptacion();
+    private final Propiedad propiedad=encargo.getPropiedad();
+    private final ReferenciaPacto pacto=new ReferenciaPacto(7,70);
+    private final ReferenciaFuenteEconomica refFuente=new ReferenciaFuenteEconomica("REVISION_C5",60,1);
 
-    private static final long ORG = 1L;
-    private static final long SOLICITUD = 5L;
-    private static final long CONTRATO = 40L;
-
-    private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
-    private final SolicitudAlquilerRepository solicitudes = mock(SolicitudAlquilerRepository.class);
-    private final OportunidadComercialRepository oportunidades = mock(OportunidadComercialRepository.class);
-    private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final PropiedadRepository propiedades = mock(PropiedadRepository.class);
-    private final PrecioPropiedadRepository precios = mock(PrecioPropiedadRepository.class);
-    private final PublicacionRepository publicaciones = mock(PublicacionRepository.class);
-    private final ComisionService comisiones = mock(ComisionService.class);
-    private final TareaService tareas = mock(TareaService.class);
-    private final Alcances alcances = mock(Alcances.class);
-    private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
-    private final SupervisionAgenteRepository supervisiones = mock(SupervisionAgenteRepository.class);
-    private final RevisionDisponibilidadRepository revisiones = mock(RevisionDisponibilidadRepository.class);
-    private final com.controllocal.persistence.repositorio.OfertaRepository ofertas =
-            mock(com.controllocal.persistence.repositorio.OfertaRepository.class);
-
-    private final ContratoServiceImpl service = new ContratoServiceImpl(
-            contratos, solicitudes, oportunidades, captaciones, propiedades, precios, publicaciones,
-            comisiones, alcances, new Transiciones(historial), tareas,
-            mock(AlertaService.class), supervisiones, revisiones,
-            // La mesa de negociacion (WP-A): el cierre del alquiler le pregunta si
-            // hubo una oferta ACEPTADA para atar su hito C a la vuelta que lo
-            // produjo. Vacia por defecto -- el caso normal es cerrar por solicitud
-            // aprobada, sin negociacion registrada -- y el test que SI la ejercita
-            // lo dice en su propio nombre.
-            ofertas, null);
-
-    /** vmora: agente responsable de la solicitud 5. */
-    private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
-    private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
-
-    // ------------------------------------------------------------------
-    // Mensajes del contrato (paridad v1)
-    // ------------------------------------------------------------------
-
-    @Test
-    void sinSolicitudRespondeElMensajeV1() {
-        ReglaNegocioException sinDatos = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(null, agente));
-        assertEquals("Selecciona la solicitud aprobada que se va a alquilar.", sinDatos.getMessage());
-
-        ReglaNegocioException cero = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(0L, null, null, null), agente));
-        assertEquals("Selecciona la solicitud aprobada que se va a alquilar.", cero.getMessage());
+    @BeforeEach void montar() {
+        when(solicitudes.buscarFicha(ORG,5L)).thenReturn(Optional.of(solicitud));
+        when(oportunidades.buscarFicha(ORG,8L)).thenReturn(Optional.of(oportunidad));
+        when(accesoEncargo.leer(7,broker)).thenReturn(encargo);
+        when(propiedades.bloquearParaEscritura(ORG,9)).thenReturn(Optional.of(propiedad));
+        when(contratos.saveAndFlush(any(ContratoAlquiler.class))).thenAnswer(i->{ContratoAlquiler c=i.getArgument(0);if(c.getId()==null)id(c,c.getContratoAnterior()==null?CID:41);return c;});
+        when(contextos.ahora()).thenReturn(Instant.parse("2026-10-31T12:00:00Z"));
+        when(alcances.de(broker)).thenReturn(new Alcances.Alcance(ORG,false,List.of(30L)));
+    }
+    @Test void prepararCreaPSinFirmaNiEfectoComercialOMonetario() {
+        var f=service.iniciarEnProceso(new DatosContrato(5L,"Documento en preparación"),agente,sid,"preparar-1",proc);
+        assertEquals("P",f.estadoContrato());assertNull(f.fechaCierre());assertNull(f.comision());
+        assertEquals(OportunidadComercial.ABIERTA,oportunidad.estadoActual());assertEquals(Captacion.APROBADO,encargo.estadoActual());
+        assertEquals(DisponibilidadComercial.DISPONIBLE.codigo(),propiedad.getDisponibilidadComercial());
+        verifyNoInteractions(comisiones,precios,publicaciones,tareas,alertas,historial);verify(contextos).iniciar(agente,sid);
+        verify(comandos).registrar(eq(agente),eq("preparar-1"),eq("PREPARAR_CONTRATO_ALQUILER"),anyString(),eq("CONTRATO_ALQUILER"),eq(CID),eq(proc),anyString());
+    }
+    @Test void preparacionParcialNoInterpretaDigitosDelTextoTentativo() {
+        solicitud.setPlazoContratoMeses(null);solicitud.setPlazoTentativo("12 o 24 meses, por acordar");
+        var f=service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"preparar-2",proc);
+        assertNull(f.plazoContratoMeses());assertNull(f.fechaFinContrato());assertNull(f.fechaCierre());
+    }
+    @Test void prepararExigeSolicitudRealAprobadaPropia() {
+        assertThrows(ReglaNegocioException.class,()->service.iniciarEnProceso(new DatosContrato(null,null),agente,sid,"p-3",proc));
+        solicitud.setAgente(agente(99));assertThrows(AccesoNoAutorizadoException.class,()->service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-4",proc));
+        verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void solicitudSinAprobarNoGeneraPreparacion() {
+        ReflectionTestUtils.setField(solicitud,"estado",SolicitudAlquiler.REGISTRADA);
+        assertThrows(ReglaNegocioException.class,()->service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-5",proc));verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void mesaConContratoNoAdmiteOtraPreparacionOriginal() {
+        when(contratos.existeDeOportunidad(ORG,8)).thenReturn(true);
+        assertThrows(ConflictoException.class,()->service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-6",proc));
+    }
+    @Test void identidadActualSeExigeAntesDeBuscarReciboYEfecto() {
+        doThrow(new AccesoNoAutorizadoException()).when(contextos).iniciar(agente,sid);
+        assertThrows(AccesoNoAutorizadoException.class,()->service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-7",proc));verifyNoInteractions(recibos,comandos);verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void repetirPreparacionReautorizaResultadoOriginalSinRepetirAlta() {
+        var original=service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-replay",proc);
+        var recibo=mock(ComandoIdempotente.class);when(recibo.getResultado()).thenReturn(documentos.objetoCanonico(original));
+        when(comandos.buscar(eq(agente),eq("p-replay"),anyString(),anyString())).thenReturn(Optional.of(recibo));
+        var c=contrato("P");when(acceso.leer(CID,agente)).thenReturn(c);
+        assertEquals(original,service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-replay",proc));verify(contratos,times(1)).saveAndFlush(any());verify(contextos,times(2)).iniciar(agente,sid);
+        doThrow(new AccesoNoAutorizadoException()).when(acceso).leer(CID,agente);
+        assertThrows(AccesoNoAutorizadoException.class,()->service.iniciarEnProceso(new DatosContrato(5L,null),agente,sid,"p-replay",proc));
+    }
+    @Test void renovarPreparaSucesorSinCambiarPadreVNiCrearComision() {
+        var padre=contrato("V");when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(padre));
+        var f=service.renovar(CID,new DatosRenovacion(INICIO,FIN,new BigDecimal("2700"),"PEN","Renovación para revisar"),agente,sid,"ren-1",proc);
+        assertEquals("P",f.estadoContrato());assertNull(f.fechaCierre());assertEquals(CID,f.idContratoAnterior());assertNotEquals(padre.getId(),f.id());assertEquals("V",padre.estadoActual());verifyNoInteractions(comisiones,precios,publicaciones,tareas,alertas,historial);
+    }
+    @Test void renovarNoSustituyeSucesorYaPreparado() {
+        var padre=contrato("V");when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(padre));when(contratos.existsByOrganizacionIdAndContratoAnteriorId(ORG,CID)).thenReturn(true);
+        assertThrows(ConflictoException.class,()->service.renovar(CID,new DatosRenovacion(INICIO,FIN,BigDecimal.TEN,"PEN","Preparar"),agente,sid,"ren-2",proc));verify(contratos,never()).saveAndFlush(any());verifyNoInteractions(comisiones);
+    }
+    @Test void confirmarUsaFechaYFuenteFinalYCierraSoloRecursosLegitimos() {
+        assertEquals(CID,confirmar(null,null,null,fuenteUnidad(null)));var c=guardado();
+        assertEquals(HECHO,c.getFechaCierre());assertEquals(INICIO,c.getFechaInicioContrato());assertEquals(FIN,c.getFechaFinContrato());assertEquals(new BigDecimal("2500"),c.getRentaContractual());assertEquals("D",c.estadoActual());assertEquals(20L,c.getIdRolBrokerCierre());
+        assertEquals(OportunidadComercial.FINALIZADA_EXITOSA,oportunidad.estadoActual());assertEquals(SolicitudAlquiler.CERRADA,solicitud.estadoActual());assertEquals(Captacion.FINALIZADO,encargo.estadoActual());assertEquals(DisponibilidadComercial.ALQUILADO.codigo(),propiedad.getDisponibilidadComercial());
+        verify(publicaciones).cerrarPorHito(encargo,broker);verify(historial,times(4)).save(any());verify(precios).save(any());
+        verify(tareas).resolverPorCierreConfirmado(1L,broker);
+        verifyNoMoreInteractions(tareas);verifyNoInteractions(comisiones);
+    }
+    @Test void rentaFinalNoSeTomaDeSolicitudNiTotalMensualDeMatching() {
+        solicitud.setMontoPropuesto(new BigDecimal("9999"));confirmar(null,null,null,fuenteUnidad(null));assertEquals(new BigDecimal("2500"),guardado().getRentaContractual());
+        var c=ArgumentCaptor.forClass(PrecioPropiedad.class);verify(precios).save(c.capture());assertEquals(new BigDecimal("2500"),c.getValue().getMonto());assertEquals(HECHO,c.getValue().getFecha());
+    }
+    @Test void sinSolicitudNiRolClienteNoFabricaEsosRecursos() {
+        oportunidad.setCliente(null);service.confirmarHito(contexto(null,null),hito(null),fuenteUnidad(null),acuerdo(),broker,null);
+        var c=guardado();assertNull(c.getSolicitud());assertNull(c.getIdRolCliente());assertEquals(30L,c.getIdRolAgenteCierre());verify(solicitudes,never()).buscarFicha(anyLong(),anyLong());verify(solicitudes,never()).save(any());verifyNoInteractions(comisiones);
+    }
+    @Test void faltanFechasContractualesNoSeInventanDesdeLaFirma() {
+        var sinFechas=new AcuerdoFinalDocumentado(null,dinero(),null,List.of(),"Fuente revisada",null);
+        assertThrows(ReglaNegocioException.class,()->service.confirmarHito(contexto(null,5L),hito(null),fuenteUnidad(null),sinFechas,broker,null));verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void fechaDeHitoDesconocidaNoSeSustituyePorHoy() {
+        var h=new FuenteHitoConfirmado(new ReferenciaContextoEconomico(1),new ReferenciaHito(2,1),TipoHitoContractual.CONTRATO_ALQUILER,null,OffsetDateTime.now(),pacto,refFuente,null,proc);
+        assertThrows(ReglaNegocioException.class,()->service.confirmarHito(contexto(null,5L),h,fuenteUnidad(null),acuerdo(),broker,null));verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void sinMesaRealNoCreaOportunidadFicticiaParaCerrar() {
+        var sinMesa=new ContextoEconomico(new ReferenciaContextoEconomico(1),ORG,7,OperacionInmobiliaria.ALQUILER,null,5L,null,null,pacto,fuenteUnidad(null),List.of());
+        assertThrows(ReglaNegocioException.class,()->service.confirmarHito(sinMesa,hito(null),fuenteUnidad(null),acuerdo(),broker,null));verifyNoInteractions(oportunidades,comisiones);
+    }
+    @Test void autoridadCompetenteEsObligatoriaAntesDelCierre() {
+        doThrow(new AccesoNoAutorizadoException()).when(accesoEncargo).exigirDecision(encargo,broker);
+        assertThrows(AccesoNoAutorizadoException.class,()->confirmar(null,null,null,fuenteUnidad(null)));verify(contratos,never()).saveAndFlush(any());verifyNoInteractions(precios,comisiones);
+    }
+    @Test void contextoDeOtroTenantNoSeReinterpreta() {
+        var ajeno=new ContextoEconomico(new ReferenciaContextoEconomico(1),99,7,OperacionInmobiliaria.ALQUILER,8L,5L,null,null,pacto,fuenteUnidad(null),List.of());
+        assertThrows(ConflictoException.class,()->service.confirmarHito(ajeno,hito(null),fuenteUnidad(null),acuerdo(),broker,null));verifyNoInteractions(accesoEncargo);verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void precioCUsaOfertaDelAcuerdoExactoSinElegirAceptadaActual() {
+        var a=new MesaNegociacionRepository.AcuerdoGuardado(80,2,81,4,"{}",Instant.parse("2026-10-12T12:00:00Z"));when(mesas.acuerdoExacto(ORG,80,2)).thenReturn(Optional.of(a));confirmar(null,null,null,fuenteUnidad(80L));
+        var c=ArgumentCaptor.forClass(PrecioPropiedad.class);verify(precios).save(c.capture());assertEquals(81L,c.getValue().getIdOferta());verify(mesas).acuerdoExacto(ORG,80,2);
+    }
+    @Test void ausenciaDeAcuerdoNoInventaVueltaDeNegociacion() {
+        confirmar(null,null,null,fuenteUnidad(null));var c=ArgumentCaptor.forClass(PrecioPropiedad.class);verify(precios).save(c.capture());assertNull(c.getValue().getIdOferta());verifyNoInteractions(mesas);
+    }
+    @Test void paqueteCierraSoloUnidadesCubiertasSinImputarRentaTotalIndividual() {
+        var otra=propiedad(10);when(propiedades.bloquearParaEscritura(ORG,10)).thenReturn(Optional.of(otra));
+        var objeto=new OfertaService.ObjetoExacto(OfertaService.TipoObjeto.COMPOSICION,7L,1L,null,null,90L,1L,List.of(9L,10L));var f=new FuenteEconomicaFinal(refFuente,null,null,objeto,null,dinero(),List.of(),proc);
+        confirmar(null,null,null,f);assertEquals(DisponibilidadComercial.ALQUILADO.codigo(),otra.getDisponibilidadComercial());verify(precios,never()).save(any());verify(propiedades,times(2)).bloquearParaEscritura(eq(ORG),anyLong());verify(publicaciones).cerrarPorHito(encargo,broker);
+    }
+    @Test void elCierreDeDifusionSeDelegaAlEscritorUnico() {
+        confirmar(null,null,null,fuenteUnidad(null));verify(publicaciones).cerrarPorHito(encargo,broker);
+    }
+    @Test void confirmarPExigeHuellaExactaBajoLocks() {
+        var p=contrato("P");var revisada=metadata(p,"h1");var actual=metadata(p,"h2");when(preparaciones.consultar(CID,broker)).thenReturn(actual);when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(p));
+        assertThrows(ConflictoException.class,()->confirmar(CID,revisada,null,fuenteUnidad(null)));verify(contratos,never()).saveAndFlush(any());verifyNoInteractions(precios,comisiones);
+    }
+    @Test void confirmarRenovacionConsumeMismoPDespuesDeRetirarVDelPadre() {
+        var padre=contrato("V");var p=contrato("P");id(p,41L);p.setContratoAnterior(padre);var m=metadata(p,"h1");when(preparaciones.consultar(41,broker)).thenReturn(m);when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(padre));when(contratos.bloquear(ORG,41)).thenReturn(Optional.of(p));
+        assertEquals(41,confirmar(41L,m,null,fuenteUnidad(null)));assertEquals("R",padre.estadoActual());assertEquals("D",p.estadoActual());assertEquals(HECHO,p.getFechaCierre());
+        var orden=inOrder(contratos);orden.verify(contratos).bloquear(ORG,CID);orden.verify(contratos).bloquear(ORG,41);orden.verify(contratos).saveAndFlush(padre);orden.verify(contratos).saveAndFlush(p);
+        verifyNoInteractions(comisiones);verify(tareas,never()).resolverPorCierreConfirmado(anyLong(),any());
+    }
+    @Test void rectificarConservaContratoSinSegundaVentaPrecioCNiCobro() {
+        var c=contrato("D");c.atribuir(30L,77L,7L,9L,50L);var m=metadata(c,"actual");when(preparaciones.consultar(CID,broker)).thenReturn(m);when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(c));
+        assertEquals(CID,confirmar(CID,null,new ReferenciaHito(2,1),fuenteUnidad(null)));assertEquals("D",c.estadoActual());assertEquals(77L,c.getIdRolBrokerCierre());verifyNoInteractions(precios,publicaciones,tareas,alertas,comisiones,historial);verify(oportunidades,never()).save(any());
+    }
+    @Test void rectificarNoConfirmaPorPrimeraVezUnP() {
+        var p=contrato("P");var m=metadata(p,"actual");when(preparaciones.consultar(CID,broker)).thenReturn(m);when(contratos.bloquear(ORG,CID)).thenReturn(Optional.of(p));
+        assertThrows(ConflictoException.class,()->confirmar(CID,null,new ReferenciaHito(2,1),fuenteUnidad(null)));verify(contratos,never()).saveAndFlush(any());
+    }
+    @Test void callbackEsMandatorySinEfectoresLegacyDeFirmaODinero() throws Exception {
+        var m=ContratoServiceImpl.class.getMethod("confirmarHito",ContextoEconomico.class,FuenteHitoConfirmado.class,FuenteEconomicaFinal.class,AcuerdoFinalDocumentado.class,Actor.class,PreparacionContrato.class);assertEquals(Propagation.MANDATORY,m.getAnnotation(Transactional.class).propagation());
+        assertFalse(Arrays.stream(ContratoService.class.getMethods()).anyMatch(x->Set.of("registrar","firmar","asignarComision","registrarCobroComision","registrarMovimientoComision").contains(x.getName())));
+    }
+    @Test void fichaForwardeaUnaSolaProyeccionFinancieraCanonica() {
+        var c=contrato("D");var f=mock(ComisionService.FichaComision.class);when(acceso.leer(CID,agente)).thenReturn(c);when(comisiones.porContratosAlquiler(List.of(CID),agente)).thenReturn(Map.of(CID,f));assertSame(f,service.obtener(CID,agente).comision());
+    }
+    @Test void listadoResuelveComisionesEnLoteNoUnaPorContrato() {
+        var c=contrato("D");var f=mock(ComisionService.FichaComision.class);when(contratos.buscar(eq(ORG),eq(false),eq(false),eq(List.of(30L)),isNull(),isNull(),any(Pageable.class))).thenReturn(new PageImpl<>(List.of(c)));when(comisiones.porContratosAlquiler(List.of(CID),broker)).thenReturn(Map.of(CID,f));
+        assertSame(f,service.listar(1,20,broker).items().getFirst().comision());verify(comisiones,never()).porContratoAlquiler(anyLong(),any());
+    }
+    @Test void brokerSinEquipoObtieneConjuntoVacioSinLeerDinero() {
+        when(alcances.de(broker)).thenReturn(new Alcances.Alcance(ORG,false,List.of()));assertEquals(0,service.listar(1,20,broker).total());assertEquals(0,service.resumenCierres(filtros(null),broker).cierres());verifyNoInteractions(contratos,comisiones);
+    }
+    @Test void gobiernoNoLeeContratoNiDineroPorConocerId() {
+        doThrow(new AccesoNoAutorizadoException()).when(acceso).leer(CID,gobierno);assertThrows(AccesoNoAutorizadoException.class,()->service.obtener(CID,gobierno));verifyNoInteractions(comisiones);
+    }
+    @Test void agenteDeSolicitudConservaContratoAunqueNoLeCorrespondaProyeccionFinanciera() {
+        var c=contrato("V");encargo.setAgente(agente(99));
+        var cabecera=mock(ContratoAlquilerRepository.PreparacionActual.class);
+        when(cabecera.getOportunidad()).thenReturn(8L);when(cabecera.getEncargo()).thenReturn(7L);when(cabecera.getSolicitud()).thenReturn(5L);
+        when(cabecera.getAgenteSolicitud()).thenReturn(30L);when(cabecera.getResponsableEncargo()).thenReturn(99L);
+        when(contratos.preparacionActual(ORG,CID)).thenReturn(Optional.of(cabecera));when(contratos.buscarFicha(ORG,CID)).thenReturn(Optional.of(c));
+        when(comisiones.porContratosAlquiler(List.of(CID),agente)).thenReturn(Map.of());
+        var real=crear(new AccesoContrato(contratos,alcances));var f=real.finalizar(CID,new DatosTransicion(HECHO,"Fin confirmado"),agente);
+        assertEquals("F",f.estadoContrato());assertEquals(new BigDecimal("2500"),f.rentaMensual());assertNull(f.comision());
+        verify(comisiones,never()).porContratoAlquiler(anyLong(),any());
+        when(cabecera.getAgenteSolicitud()).thenReturn(31L);
+        assertThrows(AccesoNoAutorizadoException.class,()->real.obtener(CID,agente));verify(comisiones,times(1)).porContratosAlquiler(List.of(CID),agente);
+    }
+    @Test void falloTecnicoDeProyeccionFinancieraSePropagaSinSimularAusencia() {
+        var c=contrato("D");when(acceso.leer(CID,agente)).thenReturn(c);var fallo=new IllegalStateException("Fallo técnico de ensayo");
+        when(comisiones.porContratosAlquiler(List.of(CID),agente)).thenThrow(fallo);
+        assertSame(fallo,assertThrows(IllegalStateException.class,()->service.obtener(CID,agente)));
+    }
+    @Test void finalizarMantieneOcupacionYAbreRevisionExpresaSinDinero() {
+        var c=contrato("V");propiedad.marcarAlquilado();when(acceso.leer(CID,agente)).thenReturn(c);service.finalizar(CID,new DatosTransicion(HECHO,"Fin del contrato"),agente);
+        assertEquals("F",c.estadoActual());assertEquals(DisponibilidadComercial.ALQUILADO.codigo(),propiedad.getDisponibilidadComercial());verify(tareas).crearRevisionInmueble(eq(9L),eq(30L),anyString(),eq(CID),eq(agente));verify(comisiones).porContratosAlquiler(List.of(CID),agente);verifyNoMoreInteractions(comisiones);
+    }
+    @Test void anularPreparacionNoSimulaFirmaNiCondonaComision() {
+        var c=contrato("P");when(acceso.leer(CID,broker)).thenReturn(c);service.anular(CID,new DatosTransicion(HECHO,"No se formalizó"),broker);assertEquals("A",c.estadoActual());assertNull(c.getFechaCierre());verify(comisiones).porContratosAlquiler(List.of(CID),broker);verifyNoMoreInteractions(comisiones);verifyNoInteractions(tareas);
+    }
+    @Test void transicionIlegalYMismoEstadoNoEscribenHistoria() {
+        var p=contrato("P");when(acceso.leer(CID,agente)).thenReturn(p);assertThrows(ReglaNegocioException.class,()->service.activar(CID,new DatosTransicion(HECHO,"Cambio"),agente));
+        var f=contrato("F");when(acceso.leer(CID,agente)).thenReturn(f);assertThrows(ReglaNegocioException.class,()->service.finalizar(CID,new DatosTransicion(HECHO,"Cambio"),agente));verifyNoInteractions(historial);
+    }
+    @Test void resumenSeparaPoblacionFinancieraYDesconocidosDeCero() {
+        var filas=List.of(contadores(4,3,1,false),finanza("CALCULADO","PEN","500",1,1),finanza("CALCULADO","USD","40",1,0),finanza("DEVENGADO",null,null,0,1),finanza("RECIBIDO","PEN","100",1,0),finanza("SALDO","PEN","400",1,1));
+        when(contratos.finanzasDeCierres(ORG,false,false,"{30}",null,null)).thenReturn(filas);var r=service.resumenCierres(filtros(null),broker);
+        assertEquals(4,r.cierres());assertEquals(3,r.cierresConLecturaFinanciera());assertEquals(1,r.sinEvaluacion());assertEquals(new BigDecimal("500"),r.calculado().getFirst().monto());assertEquals(1,r.calculado().getFirst().pendientes());assertNull(r.devengadoAcreditado().getFirst().monto());assertNull(r.devengadoAcreditado().getFirst().moneda());assertEquals(new BigDecimal("100"),r.ingresosRealmenteRecibidos().getFirst().monto());
+    }
+    @Test void resumenConTextoUsaMismaPoblacionFiltradaDeBandeja() {
+        var filas=List.of(contadores(1,1,0,false));when(contratos.finanzasDeCierresPorTexto(ORG,false,false,"{30}","Surco",null,null)).thenReturn(filas);assertEquals(1,service.resumenCierres(filtros(" Surco "),broker).cierres());verify(contratos,never()).finanzasDeCierres(anyLong(),anyBoolean(),anyBoolean(),anyString(),any(),any());
+    }
+    @Test void resumenNoConvierteAnomaliaHistoricaEnIngresoCero() {
+        var filas=List.of(contadores(1,1,0,true));when(contratos.finanzasDeCierres(ORG,false,false,"{30}",null,null)).thenReturn(filas);assertThrows(IllegalStateException.class,()->service.resumenCierres(filtros(null),broker));
+    }
+    @Test void resumenNoAceptaMonedaIlegibleNiTotalSinPoblacion() {
+        var filas=List.of(contadores(1,1,0,false),finanza("RECIBIDO","???","20",1,0));when(contratos.finanzasDeCierres(ORG,false,false,"{30}",null,null)).thenReturn(filas);assertThrows(IllegalStateException.class,()->service.resumenCierres(filtros(null),broker));
+        when(contratos.finanzasDeCierres(ORG,false,false,"{30}",null,null)).thenReturn(List.of());assertThrows(IllegalStateException.class,()->service.resumenCierres(filtros(null),broker));
     }
 
-    @Test
-    void laSolicitudDeOtroAgenteNoSeCierra() {
-        SolicitudAlquiler ajena = solicitud(SolicitudAlquiler.APROBADA, 99L);
-        when(solicitudes.buscarFicha(ORG, SOLICITUD)).thenReturn(Optional.of(ajena));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente));
-        verifyNoInteractions(historial);
-    }
-
-    @Test
-    void unEstadoDeContratoDesconocidoRespondeElMensajeV1() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, "Z", null), agente));
-        assertEquals("Estado de contrato invalido.", error.getMessage());
-    }
-
-    @Test
-    void elCierreSoloAdmiteFirmadoOVigente() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-
-        // 'P' (En proceso) es un estado valido del enum, pero no de cierre.
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, "P", null), agente));
-        assertEquals("El cierre solo admite los estados Firmado o Vigente.", error.getMessage());
-    }
-
-    @Test
-    void laFechaDeCierreNoPuedeSerFutura() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(
-                        new DatosContrato(SOLICITUD, LocalDate.now().plusDays(1), null, null), agente));
-        assertEquals("La fecha de cierre no puede ser futura.", error.getMessage());
-    }
-
-    @Test
-    void soloSeAlquilaUnaSolicitudAprobada() {
-        prepararCierreValido(SolicitudAlquiler.EN_REVISION, OportunidadComercial.SOLICITUD_CREADA);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente));
-        assertEquals("Solo se puede registrar el alquiler de una solicitud aprobada.",
-                error.getMessage());
-    }
-
-    @Test
-    void unaOportunidadYaCerradaNoAdmiteContrato() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.FINALIZADA_NO_FAVORABLE);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente));
-        assertEquals("La oportunidad ya esta cerrada; no admite un nuevo contrato.", error.getMessage());
-    }
-
-    @Test
-    void unaOportunidadAbiertaSinSolicitudCreadaTambienAdmiteContrato() {
-        // El cable acepta A y S: no exige haber pasado por S.
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.ABIERTA);
-
-        assertEquals(ContratoAlquiler.VIGENTE,
-                service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente).estadoContrato());
-    }
-
-    @Test
-    void unaOportunidadNoAdmiteDosContratos() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        when(contratos.existeDeOportunidad(ORG, 8L)).thenReturn(true);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente));
-        assertEquals("Esta operacion ya tiene un contrato de alquiler registrado.", error.getMessage());
-    }
-
-    // ------------------------------------------------------------------
-    // WP-A / D-N-5 — el hito C también dice de qué vuelta salió
-    // ------------------------------------------------------------------
-
-    /**
-     * <b>Un alquiler también se negocia.</b> Si la mesa llegó a tener una oferta
-     * ACEPTADA, el hito {@code C} del cierre se ata a ella, igual que hace el
-     * cierre de venta.
-     *
-     * <p>Sin esto la serie de una VENTA se podría leer por negociación y la de un
-     * ALQUILER no: dos verdades distintas para el mismo dato, y la asimetría la
-     * habría introducido WP-A al añadir la mesa.
-     */
-    @Test
-    void elHitoDeCierreSeAtaALaOfertaAceptadaDeLaMesa() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        com.controllocal.domain.comercial.Oferta aceptada =
-                new com.controllocal.domain.comercial.Oferta();
-        ReflectionTestUtils.setField(aceptada, "id", 4242L);
-        when(ofertas.aceptadaDe(ORG, 8L)).thenReturn(java.util.Optional.of(aceptada));
-
-        service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
-
-        ArgumentCaptor<PrecioPropiedad> precio = ArgumentCaptor.forClass(PrecioPropiedad.class);
-        verify(precios).save(precio.capture());
-        assertEquals("C", precio.getValue().getHito());
-        assertEquals(4242L, precio.getValue().getIdOferta(),
-                "el cierre de un alquiler negociado sale de una oferta concreta");
-    }
-
-    /**
-     * <b>Y sin mesa negociada, {@code null}.</b> Es una respuesta, no un hueco:
-     * hoy el caso normal es cerrar por solicitud aprobada, sin negociación
-     * registrada. Poner ahí la última oferta que hubiera —o inventar una— sería
-     * atribuir el cierre a una vuelta que no lo produjo.
-     */
-    @Test
-    void sinOfertaAceptadaElHitoDeCierreNoInventaUnaVuelta() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-
-        service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
-
-        ArgumentCaptor<PrecioPropiedad> precio = ArgumentCaptor.forClass(PrecioPropiedad.class);
-        verify(precios).save(precio.capture());
-        assertNull(precio.getValue().getIdOferta());
-        assertEquals(7L, precio.getValue().getIdCaptacion(),
-                "el encargo sí se declara siempre: eso no es opcional (V76)");
-    }
-
-    // ------------------------------------------------------------------
-    // §6 — la cascada completa
-    // ------------------------------------------------------------------
-
-    @Test
-    void elCierreDisparaLosSieteEfectosYAuditaLasCuatroTransiciones() {
-        SolicitudAlquiler solicitud = prepararCierreValido(
-                SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        OportunidadComercial oportunidad = solicitud.getOportunidad();
-        Captacion captacion = oportunidad.getCaptacion();
-        Propiedad propiedad = captacion.getPropiedad();
-        Publicacion publicada = publicacion(Publicacion.ESTADO_PUBLICADO);
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(9L))
-                .thenReturn(List.of(publicada));
-        LocalDate cierre = LocalDate.now().minusDays(1);
-
-        FichaContrato ficha = service.registrar(
-                new DatosContrato(SOLICITUD, cierre, "D", "  Firmado ante notario  "), agente);
-
-        // 1) contrato
-        assertEquals(ContratoAlquiler.FIRMADO, ficha.estadoContrato());
-        assertEquals(cierre, ficha.fechaCierre());
-        assertEquals("Firmado ante notario", ficha.incidencias());
-        // 2) comision, con la pactada de la captacion y la renta de la solicitud
-        verify(comisiones).crearPendienteNormalizada(any(ContratoAlquiler.class), any(),
-                eq(new BigDecimal("9000.00")), eq("PEN"), eq(agente));
-        assertEquals(new BigDecimal("450.00"), ficha.comisionGenerada());
-        // 3) oportunidad cerrada como exitosa, con fecha y SIN motivo
-        assertEquals(OportunidadComercial.FINALIZADA_EXITOSA, oportunidad.estadoActual());
-        assertNull(oportunidad.getMotivoCierre());
-        // 4) solicitud cerrada
-        assertEquals(SolicitudAlquiler.CERRADA, solicitud.estadoActual());
-        // 5) el cierre se registra como hecho separado del plazo pactado del encargo
-        assertEquals(Captacion.CERRADA, captacion.estadoActual());
-        assertEquals(LocalDate.of(2027, 7, 1), captacion.getFechaFinVigencia());
-        assertEquals(cierre, captacion.getFechaCierre());
-        assertEquals("A", captacion.getMotivoCierre());
-        assertEquals("Alquiler concretado con la solicitud SOL-260715103000.",
-                captacion.getDetalleMotivoCierre());
-        // 6) local fuera del mercado + precio de cierre + publicaciones de baja
-        assertEquals(EstadoRegistroPropiedad.ACTIVO, propiedad.estadoRegistroTipado());
-        assertEquals(DisponibilidadComercial.ALQUILADO,
-                propiedad.disponibilidadComercialTipada());
-        assertEquals(Propiedad.LEGADO_NO_DISPONIBLE, propiedad.estadoLegado());
-        assertEquals(Publicacion.ESTADO_CERRADO, publicada.getEstado());
-        ArgumentCaptor<PrecioPropiedad> precio = ArgumentCaptor.forClass(PrecioPropiedad.class);
-        verify(precios).save(precio.capture());
-        assertEquals("C", precio.getValue().getHito());
-        assertEquals("PEN", precio.getValue().getMoneda());
-        assertEquals(new BigDecimal("9000.00"), precio.getValue().getMonto());
-        // La v1 fecha el precio de cierre con HOY, no con la fecha de cierre.
-        assertEquals(LocalDate.now(), precio.getValue().getFecha());
-
-        // Las CUATRO transiciones quedan auditadas (la v1 no auditaba ninguna).
-        ArgumentCaptor<HistorialEstado> eventos = ArgumentCaptor.forClass(HistorialEstado.class);
-        verify(historial, times(4)).save(eventos.capture());
-        List<String> tipos = eventos.getAllValues().stream().map(HistorialEstado::getEntidadTipo).toList();
-        assertEquals(List.of("OPORTUNIDAD", "SOLICITUD_ALQUILER", "CAPTACION",
-                "DISPONIBILIDAD_PROPIEDAD"), tipos);
-        eventos.getAllValues().forEach(evento -> {
-            assertEquals(3L, evento.getIdActor());
-            assertEquals("AGENTE", evento.getTipoRolActor());
-            assertEquals("Alquiler concretado con la solicitud SOL-260715103000.", evento.getMotivo());
-        });
-    }
-
-    // ------------------------------------------------------------------
-    // V27 - atribucion historica del cierre
-    // ------------------------------------------------------------------
-
-    @Test
-    void elCierreCongelaLaAtribucionDelAlquiler() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        when(supervisiones.buscarActivaPorAgente(ORG, 30L))
-                .thenReturn(Optional.of(supervision(20L)));
-
-        service.registrar(new DatosContrato(SOLICITUD, LocalDate.now(), "V", null), agente);
-
-        ArgumentCaptor<ContratoAlquiler> guardado = ArgumentCaptor.forClass(ContratoAlquiler.class);
-        verify(contratos).save(guardado.capture());
-        ContratoAlquiler contrato = guardado.getValue();
-        assertEquals(30L, contrato.getIdRolAgenteCierre());
-        assertEquals(20L, contrato.getIdRolBrokerCierre());
-        assertEquals(7L, contrato.getIdCaptacion());
-        assertEquals(9L, contrato.getIdPropiedad());
-        assertEquals(50L, contrato.getIdRolCliente());
-    }
-
-    /** Sin supervisor no se inventa uno: el hueco es informacion que no existe. */
-    @Test
-    void sinSupervisorActivoElCierreQuedaSinBrokerAtribuido() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        when(supervisiones.buscarActivaPorAgente(ORG, 30L)).thenReturn(Optional.empty());
-
-        service.registrar(new DatosContrato(SOLICITUD, LocalDate.now(), "V", null), agente);
-
-        ArgumentCaptor<ContratoAlquiler> guardado = ArgumentCaptor.forClass(ContratoAlquiler.class);
-        verify(contratos).save(guardado.capture());
-        assertEquals(30L, guardado.getValue().getIdRolAgenteCierre());
-        assertNull(guardado.getValue().getIdRolBrokerCierre());
-    }
-
-    /**
-     * El porque de todo V27: una reasignacion posterior NO reescribe a quien se
-     * le atribuye un alquiler ya cerrado. Antes la ficha releia el agente de la
-     * solicitud, asi que el cierre cambiaba de dueno solo.
-     */
-    @Test
-    void laFichaPublicaElAgenteAtribuidoAunqueLaCadenaCambieDespues() {
-        ContratoAlquiler contrato = contratoRegistrado();
-        ReflectionTestUtils.setField(contrato, "agenteCierre",
-                detalleAgente(30L, "Valentina Mora"));
-        // Reasignacion posterior al cierre: la cadena vigente ya dice otra cosa.
-        contrato.getSolicitud().setAgente(detalleAgente(31L, "Bruno Salas"));
-        Actor admin = new Actor(ORG, 1L, 10L, "TENANT_ADMIN");
-        when(comisiones.porContrato(CONTRATO, admin)).thenReturn(Optional.empty());
-
-        FichaContrato ficha = service.obtenerPorOportunidad(8L, admin);
-
-        assertEquals(30L, ficha.agenteId());
-        assertEquals("Valentina Mora", ficha.agenteNombre());
-    }
-
-    @Test
-    void unaPublicacionYaCerradaNoSeVuelveATocar() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(9L))
-                .thenReturn(List.of(publicacion(Publicacion.ESTADO_CERRADO)));
-
-        service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
-
-        verify(publicaciones, times(0)).save(any(Publicacion.class));
-    }
-
-    @Test
-    void elAgenteQueCierraNoVeElRepartoDeLaComision() {
-        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-
-        FichaContrato ficha = service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
-
-        assertNull(ficha.montoAgente());
-        assertNull(ficha.montoEmpresa());
-        // La bruta y el estado si los ve.
-        assertEquals(new BigDecimal("450.00"), ficha.comisionGenerada());
-        assertEquals("P", ficha.comisionEstado());
-    }
-
-    @Test
-    void elPlazoYLaFechaFinSeDerivanDeLaSolicitud() {
-        SolicitudAlquiler solicitud = prepararCierreValido(
-                SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
-        solicitud.setPlazoContratoMeses(null);
-        solicitud.setPlazoTentativo("24 meses");
-        solicitud.setFechaInicioContrato(LocalDate.of(2026, 9, 1));
-
-        FichaContrato ficha = service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
-
-        // Sin plazo numerico, el cable lo parsea del texto libre.
-        assertEquals(24, ficha.plazoContratoMeses());
-        assertEquals(LocalDate.of(2028, 9, 1), ficha.fechaFinContrato());
-    }
-
-    // ------------------------------------------------------------------
-    // Alcance: BROKER por CAPTACION (§7), no por agente
-    // ------------------------------------------------------------------
-
-    @Test
-    void elBrokerAlcanzaElContratoPorLaCaptacionDeSuEquipo() {
-        contratoRegistrado();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(30L));
-        when(comisiones.porContrato(CONTRATO, broker)).thenReturn(Optional.empty());
-
-        assertEquals(CONTRATO, service.obtenerPorOportunidad(8L, broker).id());
-    }
-
-    @Test
-    void elBrokerNoAlcanzaElContratoDeUnaCaptacionAjena() {
-        contratoRegistrado();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(77L));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.obtenerPorOportunidad(8L, broker));
-    }
-
-    @Test
-    void otroAgenteNoAlcanzaElContrato() {
-        contratoRegistrado();
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.obtenerPorOportunidad(8L, new Actor(ORG, 9L, 31L, "AGENTE")));
-    }
-
-    @Test
-    void sinContratoDeEsaOportunidadResponde404() {
-        when(contratos.buscarPorOportunidad(ORG, 8L)).thenReturn(Optional.empty());
-
-        assertThrows(NoEncontradoException.class, () -> service.obtenerPorOportunidad(8L, agente));
-    }
-
-    @Test
-    void unBrokerSinEquipoObtieneListaVaciaNoUn403() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, false, List.of()));
-
-        assertEquals(0, service.listar(1, 100, broker).items().size());
-        verifyNoInteractions(contratos);
-    }
-
-    @Test
-    void elListadoResuelveLasComisionesEnBloque() {
-        ContratoAlquiler contrato = contratoRegistrado();
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, false, List.of(30L)));
-        when(contratos.buscar(eq(ORG), anyBoolean(), anyBoolean(), anyCollection(),
-                isNull(), isNull(), any(Pageable.class)))
-                .thenReturn(pagina(contrato));
-        when(comisiones.porContratos(anyCollection(), eq(broker)))
-                .thenReturn(Map.of(CONTRATO, comision()));
-
-        List<FichaContrato> items = service.listar(1, 100, broker).items();
-
-        assertEquals(1, items.size());
-        // El broker SI ve el reparto.
-        assertEquals(new BigDecimal("180.00"), items.get(0).montoAgente());
-        assertEquals(new BigDecimal("270.00"), items.get(0).montoEmpresa());
-        verify(comisiones).porContratos(anyCollection(), eq(broker));
-    }
-
-    // ------------------------------------------------------------------
-    // Los dos gates de comision
-    // ------------------------------------------------------------------
-
-    @Test
-    void asignarSinMontoRespondeAntesDeBuscarElContrato() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.asignarComision(CONTRATO, null, broker));
-        assertEquals("Indica el monto del agente.", error.getMessage());
-        verifyNoInteractions(contratos);
-    }
-
-    @Test
-    void cobrarSinEstadoRespondeAntesDeBuscarElContrato() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrarCobroComision(CONTRATO, "  ", null, null, broker));
-        assertEquals("Indica el estado del cobro (Cobrada o Anulada).", error.getMessage());
-        verifyNoInteractions(contratos);
-    }
-
-    @Test
-    void asignarExigeQueElBrokerSupervisaLaCaptacionDelContrato() {
-        contratoRegistrado();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(77L));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.asignarComision(CONTRATO, new BigDecimal("180.00"), broker));
-        verifyNoInteractions(comisiones);
-    }
-
-    @Test
-    void asignarDevuelveElContratoConElRepartoVisible() {
-        contratoRegistrado();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(30L));
-        when(comisiones.asignarMontoAgente(CONTRATO, new BigDecimal("180.00"), broker))
-                .thenReturn(comision());
-
-        FichaContrato ficha = service.asignarComision(CONTRATO, new BigDecimal("180.00"), broker);
-
-        assertEquals(new BigDecimal("180.00"), ficha.montoAgente());
-        assertEquals(new BigDecimal("270.00"), ficha.montoEmpresa());
-    }
-
-    // ------------------------------------------------------------------
-    // Ciclo contractual normalizado
-    // ------------------------------------------------------------------
-
-    @Test
-    void finalizarConservaElLocalAlquiladoYCreaRevisionExpresa() {
-        ContratoAlquiler contrato = contratoRegistrado();
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> inv.getArgument(0));
-        LocalDate efectiva = LocalDate.now();
-
-        FichaContrato ficha = service.finalizar(CONTRATO,
-                new DatosTransicion(efectiva, "Entrega de llaves"), agente);
-
-        assertEquals(ContratoAlquiler.FINALIZADO, ficha.estadoContrato());
-        assertEquals(DisponibilidadComercial.ALQUILADO,
-                contrato.getOportunidad().getCaptacion().getPropiedad()
-                        .disponibilidadComercialTipada());
-        verify(tareas).crearRevisionInmueble(9L, 30L,
-                "Revisar disponibilidad despues de finalizado", CONTRATO, agente);
-        HistorialEstado evento = eventoAuditado();
-        assertEquals(ContratoAlquiler.VIGENTE, evento.getEstadoAnterior());
-        assertEquals(ContratoAlquiler.FINALIZADO, evento.getEstadoNuevo());
-        assertEquals(efectiva, evento.getFechaEfectiva());
-    }
-
-    @Test
-    void anularContratoFirmadoNoCreaRevisionDelInmueble() {
-        ContratoAlquiler contrato = contratoEnEstado(ContratoAlquiler.FIRMADO);
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        FichaContrato ficha = service.anular(CONTRATO,
-                new DatosTransicion(LocalDate.now(), "Firma dejada sin efecto"), agente);
-
-        assertEquals(ContratoAlquiler.ANULADO, ficha.estadoContrato());
-        verifyNoInteractions(tareas);
-        assertEquals(ContratoAlquiler.ANULADO, contrato.estadoActual());
-        // La comision nace al FIRMAR: anular el contrato tiene que arrastrarla,
-        // o queda una liquidacion cobrable de un contrato que ya no existe.
-        verify(comisiones).anularPorContratoAnulado(CONTRATO, agente);
-    }
-
-    @Test
-    void anularNoSeConsumaSiLaComisionYaSeCobro() {
-        ContratoAlquiler contrato = contratoEnEstado(ContratoAlquiler.FIRMADO);
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> inv.getArgument(0));
-        doThrow(new ReglaNegocioException("No se puede anular un contrato cuya comision ya fue cobrada."))
-                .when(comisiones).anularPorContratoAnulado(CONTRATO, agente);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.anular(CONTRATO, new DatosTransicion(LocalDate.now(), "prueba"), agente));
-
-        assertEquals("No se puede anular un contrato cuya comision ya fue cobrada.", error.getMessage());
-        // El caso de uso es @Transactional: el estado del contrato revierte con
-        // la excepcion. Lo que se blinda aqui es que la comision manda.
-    }
-
-    @Test
-    void finalizarYRescindirNoTocanLaComision() {
-        ContratoAlquiler contrato = contratoEnEstado(ContratoAlquiler.VIGENTE);
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(comisiones.porContrato(CONTRATO, agente)).thenReturn(Optional.empty());
-
-        service.finalizar(CONTRATO, new DatosTransicion(LocalDate.now(), "fin"), agente);
-
-        // Decision de 7.1, reafirmada aqui desde el lado economico: terminar un
-        // alquiler que existio no borra la comision que genero.
-        verify(comisiones, never()).anularPorContratoAnulado(anyLong(), any());
-        assertEquals(ContratoAlquiler.FINALIZADO, contrato.estadoActual());
-    }
-
-    @Test
-    void renovarCreaSucesorYNoSobrescribeElContratoAnterior() {
-        ContratoAlquiler anterior = contratoRegistrado();
-        LocalDate inicioAnterior = anterior.getFechaInicioContrato();
-        LocalDate finAnterior = anterior.getFechaFinContrato();
-        BigDecimal rentaAnterior = anterior.getRentaContractual();
-        when(contratos.existsByOrganizacionIdAndContratoAnteriorId(ORG, CONTRATO)).thenReturn(false);
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> {
-            ContratoAlquiler guardado = inv.getArgument(0);
-            if (guardado.getId() == null) ReflectionTestUtils.setField(guardado, "id", 41L);
-            return guardado;
-        });
-        when(comisiones.crearPendienteNormalizada(
-                any(ContratoAlquiler.class), any(), any(), any(), any()))
-                .thenReturn(comisionPendiente());
-        LocalDate inicioNuevo = LocalDate.now();
-        LocalDate finNuevo = inicioNuevo.plusYears(2);
-
-        FichaContrato ficha = service.renovar(CONTRATO,
-                new DatosRenovacion(inicioNuevo, finNuevo,
-                        new BigDecimal("9500.00"), "PEN", "Renovacion bianual"), agente);
-
-        assertEquals(ContratoAlquiler.RENOVADO, anterior.estadoActual());
-        assertEquals(inicioAnterior, anterior.getFechaInicioContrato());
-        assertEquals(finAnterior, anterior.getFechaFinContrato());
-        assertEquals(rentaAnterior, anterior.getRentaContractual());
-        assertEquals(ContratoAlquiler.FIRMADO, ficha.estadoContrato());
-        assertEquals(CONTRATO, ficha.idContratoAnterior());
-        assertEquals(inicioNuevo, ficha.fechaInicioContrato());
-        assertEquals(finNuevo, ficha.fechaFinContrato());
-        assertEquals(new BigDecimal("9500.00"), ficha.rentaMensual());
-    }
-
-    /**
-     * Con texto, los cuatro agregados salen del conjunto de candidatos
-     * (RC-003): las variantes {@code *PorTexto} reciben el alcance como array
-     * de la consulta nativa, no como coleccion.
-     */
-    @Test
-    void kpiSeparaGeneradoCobradoPendienteYPagoDelAgentePorMoneda() {
-        when(alcances.de(broker)).thenReturn(new Alcance(ORG, true, List.of()));
-        ResumenCierres conteos = mock(ResumenCierres.class);
-        when(conteos.getCierres()).thenReturn(4L);
-        when(conteos.getPorLiquidar()).thenReturn(2L);
-        when(conteos.getSinLiquidacion()).thenReturn(1L);
-        when(contratos.resumenCierresPorTexto(eq(ORG), eq(true), eq(false), anyString(),
-                eq("larco"), eq("Miraflores"), eq(30L))).thenReturn(conteos);
-        List<ComisionGeneradaPorMoneda> generadas = List.of(
-                generada("PEN", "1000.00"), generada("USD", "500.00"));
-        List<RepartoComisionPorMoneda> repartos = List.of(
-                reparto("PEN", "300.00"), reparto("USD", "100.00"));
-        List<MovimientoComisionPorMoneda> movimientosKpi = List.of(
-                movimientos("PEN", "400.00", "100.00"),
-                movimientos("USD", "200.00", "50.00"));
-        when(contratos.comisionesGeneradasPorTexto(eq(ORG), eq(true), eq(false), anyString(),
-                eq("larco"), eq("Miraflores"), eq(30L))).thenReturn(generadas);
-        when(contratos.repartosPorMonedaPorTexto(eq(ORG), eq(true), eq(false), anyString(),
-                eq("larco"), eq("Miraflores"), eq(30L))).thenReturn(repartos);
-        when(contratos.movimientosPorMonedaPorTexto(eq(ORG), eq(true), eq(false), anyString(),
-                eq("larco"), eq("Miraflores"), eq(30L))).thenReturn(movimientosKpi);
-
-        var resumen = service.resumenCierres(
-                new FiltrosContrato("larco", "Miraflores", 30L, null, 1, 20), broker);
-
-        assertEquals(List.of("PEN:1000.00", "USD:500.00"), importes(resumen.comisionesGeneradas()));
-        assertEquals(List.of("PEN:400.00", "USD:200.00"), importes(resumen.montosCobrados()));
-        assertEquals(List.of("PEN:600.00", "USD:300.00"), importes(resumen.saldosPendientes()));
-        assertEquals(List.of("PEN:100.00", "USD:50.00"), importes(resumen.montosPagadosAgente()));
-        assertEquals(List.of("PEN:200.00", "USD:50.00"), importes(resumen.saldosPendientesAgente()));
-        assertEquals(1, resumen.sinLiquidacion());
-    }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    private SolicitudAlquiler prepararCierreValido(String estadoSolicitud, String estadoOportunidad) {
-        SolicitudAlquiler solicitud = solicitud(estadoSolicitud, 30L);
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .aplicar(solicitud.getOportunidad(), 8L, estadoOportunidad, null, null);
-        when(solicitudes.buscarFicha(ORG, SOLICITUD)).thenReturn(Optional.of(solicitud));
-        when(solicitudes.save(any(SolicitudAlquiler.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(oportunidades.save(any(OportunidadComercial.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(captaciones.save(any(Captacion.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(contratos.save(any(ContratoAlquiler.class))).thenAnswer(inv -> {
-            ContratoAlquiler guardado = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardado, "id", CONTRATO);
-            return guardado;
-        });
-        when(comisiones.crearPendienteNormalizada(
-                any(ContratoAlquiler.class), any(), any(), any(), any()))
-                .thenReturn(comisionPendiente());
-        return solicitud;
-    }
-
-    /** Contrato 40 sobre la solicitud 5 (agente 30) y la oportunidad 8. */
-    private ContratoAlquiler contratoRegistrado() {
-        return contratoEnEstado(ContratoAlquiler.VIGENTE);
-    }
-
-    private ContratoAlquiler contratoEnEstado(String estado) {
-        ContratoAlquiler contrato = new ContratoAlquiler();
-        contrato.setOrganizacionId(ORG);
-        SolicitudAlquiler solicitud = solicitud(SolicitudAlquiler.CERRADA, 30L);
-        contrato.setSolicitud(solicitud);
-        contrato.setOportunidad(solicitud.getOportunidad());
-        contrato.setFechaCierre(LocalDate.now());
-        contrato.setFechaInicioContrato(LocalDate.of(2026, 9, 1));
-        contrato.setFechaFinContrato(LocalDate.of(2028, 9, 1));
-        contrato.setRentaContractual(new BigDecimal("9000.00"));
-        contrato.setMoneda("PEN");
-        contrato.getOportunidad().getCaptacion().getPropiedad().marcarAlquilado();
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .iniciar(contrato, estado);
-        ReflectionTestUtils.setField(contrato, "id", CONTRATO);
-        when(contratos.buscarPorOportunidad(ORG, 8L)).thenReturn(Optional.of(contrato));
-        when(contratos.buscarFicha(ORG, CONTRATO)).thenReturn(Optional.of(contrato));
-        return contrato;
-    }
-
-    private static Page<ContratoAlquiler> pagina(ContratoAlquiler contrato) {
-        return new PageImpl<>(List.of(contrato), Pageable.unpaged(), 1);
-    }
-
-    private static FichaComision comisionPendiente() {
-        return new FichaComision(60L, CONTRATO, new BigDecimal("450.00"), "PEN",
-                null, null, null, null, "P");
-    }
-
-    private static FichaComision comision() {
-        return new FichaComision(60L, CONTRATO, new BigDecimal("450.00"), "PEN",
-                new BigDecimal("180.00"), new BigDecimal("270.00"), null, null, "P");
-    }
-
-    /** Solicitud 5 sobre la oportunidad 8 / captacion 7 / propiedad 9. */
-    private static SolicitudAlquiler solicitud(String estado, long idRolAgente) {
-        SolicitudAlquiler solicitud = new SolicitudAlquiler();
-        solicitud.setOrganizacionId(ORG);
-        solicitud.setCodigoSolicitud("SOL-260715103000");
-        solicitud.setFechaRegistro(LocalDate.of(2026, 7, 15));
-        solicitud.setMontoPropuesto(new BigDecimal("9000.00"));
-        solicitud.setMoneda("PEN");
-        solicitud.setPlazoContratoMeses(24);
-        solicitud.setFechaInicioContrato(LocalDate.of(2026, 9, 1));
-        solicitud.setOportunidad(oportunidad());
-        solicitud.setAgente(detalleAgente(idRolAgente, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(solicitud, estado);
-        ReflectionTestUtils.setField(solicitud, "id", SOLICITUD);
-        return solicitud;
-    }
-
-    private static OportunidadComercial oportunidad() {
-        OportunidadComercial oportunidad = new OportunidadComercial();
-        oportunidad.setOrganizacionId(ORG);
-        oportunidad.setCodigoOportunidad("OP-0001");
-        oportunidad.setCliente(detalleCliente(50L, "Mariana Delgado"));
-        oportunidad.setCaptacion(captacion());
-        oportunidad.setAgente(detalleAgente(30L, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .iniciar(oportunidad, OportunidadComercial.ABIERTA);
-        ReflectionTestUtils.setField(oportunidad, "id", 8L);
-        return oportunidad;
-    }
-
-    private static Captacion captacion() {
-        Captacion captacion = new Captacion();
-        captacion.setOrganizacionId(ORG);
-        captacion.setCodigoCaptacion("CAP-0001");
-        captacion.setFechaInicioVigencia(LocalDate.of(2026, 7, 1));
-        captacion.setFechaFinVigencia(LocalDate.of(2027, 7, 1));
-        captacion.setComisionPactada(new BigDecimal("5.00"));
-        captacion.setPropiedad(propiedad());
-        captacion.setAgente(detalleAgente(30L, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(captacion, Captacion.ACTIVA);
-        ReflectionTestUtils.setField(captacion, "id", 7L);
-        return captacion;
-    }
-
-    private static Propiedad propiedad() {
-        Propiedad propiedad = new Propiedad();
-        propiedad.setOrganizacionId(ORG);
-        propiedad.setCodigo("LOC-0001");
-        propiedad.setDireccion("Av. Larco 123");
-        propiedad.setDistrito("Miraflores");
-        propiedad.setMetraje(new BigDecimal("120.00"));
-        propiedad.setRolPropietario(personaRol("Inversiones Delgado SAC", TipoRol.PROPIETARIO));
-        ReflectionTestUtils.setField(propiedad.getRolPropietario(), "id", 40L);
-        propiedad.iniciarDisponible();
-        ReflectionTestUtils.setField(propiedad, "id", 9L);
-        return propiedad;
-    }
-
-    private static Publicacion publicacion(String estado) {
-        Publicacion publicacion = new Publicacion();
-        publicacion.setOrganizacionId(ORG);
-        publicacion.setIdPropiedad(9L);
-        publicacion.setCanal(Publicacion.CANAL_WEB_PROPIA);
-        publicacion.setEstado(estado);
-        ReflectionTestUtils.setField(publicacion, "id", 12L);
-        return publicacion;
-    }
-
-    private static DetalleCliente detalleCliente(long idRol, String nombre) {
-        DetalleCliente cliente = new DetalleCliente();
-        cliente.setOrganizacionId(ORG);
-        cliente.setRol(personaRol(nombre, TipoRol.CLIENTE));
-        ReflectionTestUtils.setField(cliente, "id", idRol);
-        return cliente;
-    }
-
-    private static SupervisionAgente supervision(long idRolBroker) {
-        SupervisionAgente supervision = new SupervisionAgente();
-        supervision.setOrganizacionId(ORG);
-        supervision.setIdRolBroker(idRolBroker);
-        supervision.setIdRolAgente(30L);
-        supervision.setFechaAsignacion(LocalDate.of(2026, 1, 1));
-        supervision.setMotivo("Alta del agente");
-        return supervision;
-    }
-
-    private static DetalleAgente detalleAgente(long idRol, String nombre) {
-        DetalleAgente detalle = new DetalleAgente();
-        detalle.setRol(personaRol(nombre, TipoRol.AGENTE));
-        detalle.setCodigoAgente("AGE-001");
-        ReflectionTestUtils.setField(detalle, "id", idRol);
-        return detalle;
-    }
-
-    private static PersonaRol personaRol(String nombre, TipoRol tipo) {
-        Persona persona = new Persona();
-        persona.setNombresORazonSocial(nombre);
-        PersonaRol rol = new PersonaRol();
-        rol.setPersona(persona);
-        rol.setTipoRol(tipo);
-        return rol;
-    }
-
-    private static ComisionGeneradaPorMoneda generada(String moneda, String monto) {
-        ComisionGeneradaPorMoneda fila = mock(ComisionGeneradaPorMoneda.class);
-        when(fila.getMoneda()).thenReturn(moneda);
-        when(fila.getMonto()).thenReturn(new BigDecimal(monto));
-        return fila;
-    }
-
-    private static RepartoComisionPorMoneda reparto(String moneda, String parteAgente) {
-        RepartoComisionPorMoneda fila = mock(RepartoComisionPorMoneda.class);
-        when(fila.getMoneda()).thenReturn(moneda);
-        when(fila.getParteAgente()).thenReturn(new BigDecimal(parteAgente));
-        return fila;
-    }
-
-    private static MovimientoComisionPorMoneda movimientos(String moneda, String cobrado,
-                                                            String pagadoAgente) {
-        MovimientoComisionPorMoneda fila = mock(MovimientoComisionPorMoneda.class);
-        when(fila.getMoneda()).thenReturn(moneda);
-        when(fila.getMontoCobrado()).thenReturn(new BigDecimal(cobrado));
-        when(fila.getMontoPagadoAgente()).thenReturn(new BigDecimal(pagadoAgente));
-        return fila;
-    }
-
-    private static List<String> importes(
-            List<com.controllocal.service.ContratoService.ImportePorMoneda> importes) {
-        return importes.stream().map(i -> i.moneda() + ":" + i.monto()).toList();
-    }
-
-    private HistorialEstado eventoAuditado() {
-        ArgumentCaptor<HistorialEstado> evento = ArgumentCaptor.forClass(HistorialEstado.class);
-        verify(historial).save(evento.capture());
-        return evento.getValue();
-    }
+    private long confirmar(Long contrato,PreparacionContrato p,ReferenciaHito r,FuenteEconomicaFinal f){return service.confirmarHito(contexto(contrato,5L),hito(r),f,acuerdo(),broker,p);}
+    private ContratoServiceImpl crear(AccesoContrato guardia){return new ContratoServiceImpl(contratos,solicitudes,oportunidades,captaciones,propiedades,precios,
+            publicaciones,comisiones,alcances,transiciones,tareas,alertas,supervisiones,revisiones,guardia,preparaciones,contextos,
+            comandos,recibos,documentos,em,accesoEncargo,mesas);}
+    private ContextoEconomico contexto(Long contrato,Long sol){return new ContextoEconomico(new ReferenciaContextoEconomico(1),ORG,7,OperacionInmobiliaria.ALQUILER,8L,sol,contrato,null,pacto,fuenteUnidad(null),List.of());}
+    private FuenteHitoConfirmado hito(ReferenciaHito r){return new FuenteHitoConfirmado(new ReferenciaContextoEconomico(1),new ReferenciaHito(2,r==null?1:2),TipoHitoContractual.CONTRATO_ALQUILER,HECHO,OffsetDateTime.parse("2026-10-31T12:00Z"),pacto,refFuente,r,proc);}
+    private FuenteEconomicaFinal fuenteUnidad(Long a){return new FuenteEconomicaFinal(refFuente,a,a==null?null:2L,new OfertaService.ObjetoExacto(OfertaService.TipoObjeto.UNIDAD,7L,1L,9L,1L,null,null,List.of(9L)),null,dinero(),List.of(),proc);}
+    private OfertaService.Dinero dinero(){return new OfertaService.Dinero(new BigDecimal("2500"),"PEN",null,null);}
+    private AcuerdoFinalDocumentado acuerdo(){return new AcuerdoFinalDocumentado(null,dinero(),null,List.of(),"Renta final documentada",new TerminosAlquiler(INICIO,FIN));}
+    private ContratoAlquiler contrato(String e){var c=new ContratoAlquiler();c.setOrganizacionId(ORG);id(c,CID);c.setOportunidad(oportunidad);c.setSolicitud(solicitud);c.setFechaCierre("P".equals(e)?null:HECHO);c.setFechaInicioContrato(INICIO);c.setFechaFinContrato(FIN);c.setRentaContractual(new BigDecimal("2500"));c.setMoneda("PEN");c.atribuir(30L,20L,7L,9L,50L);new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(c,e);return c;}
+    private PreparacionContrato metadata(ContratoAlquiler c,String h){return new PreparacionContrato(c.getId(),c.estadoActual(),7,8,5L,c.getContratoAnterior()==null?null:c.getContratoAnterior().getId(),c.getRentaContractual(),c.getMoneda(),c.getFechaInicioContrato(),c.getFechaFinContrato(),h);}
+    private ContratoAlquiler guardado(){var c=ArgumentCaptor.forClass(ContratoAlquiler.class);verify(contratos).saveAndFlush(c.capture());return c.getValue();}
+    private static SolicitudAlquiler solicitud(){var s=new SolicitudAlquiler();s.setOrganizacionId(ORG);id(s,5);s.setCodigoSolicitud("SOL-TEST");s.setMontoPropuesto(new BigDecimal("9000"));s.setMoneda("PEN");s.setFechaInicioContrato(INICIO);s.setPlazoContratoMeses(12);s.setAgente(agente(30));var o=new OportunidadComercial();o.setOrganizacionId(ORG);id(o,8);o.setCodigoOportunidad("OP-TEST");o.setAgente(s.getAgente());var cap=new Captacion();cap.setOrganizacionId(ORG);id(cap,7);cap.setCodigoCaptacion("CAP-TEST");cap.setAgente(s.getAgente());cap.setPropiedad(propiedad(9));new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(cap,Captacion.APROBADO);o.setCaptacion(cap);new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(o,OportunidadComercial.ABIERTA);var cli=new DetalleCliente();cli.setRol(rol("Cliente",TipoRol.CLIENTE));id(cli,50);o.setCliente(cli);s.setOportunidad(o);new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(s,SolicitudAlquiler.APROBADA);return s;}
+    private static Propiedad propiedad(long n){var p=new Propiedad();p.setOrganizacionId(ORG);id(p,n);p.setDireccion("Av. de prueba");p.setDistrito("Surco");p.iniciarDisponible();return p;}
+    private static DetalleAgente agente(long n){var a=new DetalleAgente();a.setRol(rol("Agente",TipoRol.AGENTE));id(a,n);return a;}
+    private static PersonaRol rol(String n,TipoRol t){var p=new Persona();p.setNombresORazonSocial(n);var r=new PersonaRol();r.setPersona(p);r.setTipoRol(t);return r;}
+    private static Publicacion publicacion(String e){var p=new Publicacion();p.setOrganizacionId(ORG);id(p,12);p.setIdPropiedad(9L);p.setEstado(e);return p;}
+    private static void id(Object e,long n){ReflectionTestUtils.setField(e,"id",n);}
+    private static FiltrosContrato filtros(String t){return new FiltrosContrato(t,null,null,null,1,20);}
+    private static ContratoAlquilerRepository.FinanzasCierres contadores(long c,long l,long p,boolean a){var f=mock(ContratoAlquilerRepository.FinanzasCierres.class);when(f.getDimension()).thenReturn("CONTADORES");when(f.getCierres()).thenReturn(c);when(f.getConLecturaFinanciera()).thenReturn(l);when(f.getSinEvaluacion()).thenReturn(p);when(f.getAnomalia()).thenReturn(a);return f;}
+    private static ContratoAlquilerRepository.FinanzasCierres finanza(String d,String m,String v,long c,long p){var f=mock(ContratoAlquilerRepository.FinanzasCierres.class);when(f.getDimension()).thenReturn(d);when(f.getMoneda()).thenReturn(m);when(f.getMonto()).thenReturn(v==null?null:new BigDecimal(v));when(f.getDeterminados()).thenReturn(c);when(f.getPendientes()).thenReturn(p);return f;}
 }
+
+

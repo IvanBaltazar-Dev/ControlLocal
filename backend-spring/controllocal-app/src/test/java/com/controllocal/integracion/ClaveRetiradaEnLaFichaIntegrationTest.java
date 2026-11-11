@@ -7,7 +7,6 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.AtributoFicha;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
-import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
@@ -25,7 +24,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -88,6 +86,12 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void prepararPertenenciaTecnicaDePrueba(){
+        com.controllocal.integracion.soporte.SemillaDeIdentidadPruebas.aplicar(jdbc);
+    }
+
     @Autowired PropiedadUniversalService propiedades;
     @Autowired MotorDeCaptura captura;
 
@@ -502,8 +506,13 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
         long id = registrarTerreno();
         sembrarValorHuerfano(id, clave, "777");
 
+        // El segundo argumento es el proveedor del almacen (WP-C): la ficha
+        // publica sus fotos y la capa web es la unica que sabe quien sirve los
+        // binarios. Aqui da igual cual sea -- no hay fotos -- y se pone `DISCO`,
+        // que es el de este despliegue.
         PropiedadUniversalDtos.PropiedadResponse respuesta =
-                PropiedadUniversalDtos.PropiedadResponse.desde(propiedades.consultar(id, actor()));
+                PropiedadUniversalDtos.PropiedadResponse.desde(propiedades.consultar(id, actor()),
+                        "DISCO");
 
         PropiedadUniversalDtos.AtributoResponse historico = respuesta.atributos().stream()
                 .filter(a -> clave.equals(a.clave()))
@@ -517,7 +526,7 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
         PropiedadUniversalDtos.AtributoResponse vigente = respuesta.atributos().stream()
                 .filter(a -> "metraje_total".equals(a.clave()))
                 .findFirst().orElse(null);
-        assertNotNull(vigente, "el metraje tiene que estar: es ALT en los siete tipos");
+        assertNotNull(vigente, "el metraje declarado en el montaje debe seguir vigente; no se deduce un mínimo universal de registro");
         assertEquals(ContratoDeEscritura.VIGENTE, vigente.estadoDato());
         assertTrue(vigente.editable());
         assertNull(vigente.motivoNoEditable(),
@@ -619,7 +628,7 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
                 """.formatted(idPropiedad, clave, valor));
     }
 
-    /** Una clave del tenant, activa y aplicable a los siete tipos. */
+    /** Una clave del tenant, activa y aplicable a todos los tipos declarados. */
     private String sembrarClaveDeTenant(long org) {
         String clave = "zz_historica_" + UUID.randomUUID().toString().substring(0, 8);
         jdbc.update("""
@@ -659,7 +668,7 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
     }
 
     private boolean seOfrece(String tipo, String clave) {
-        return captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA", actor())
+        return captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA", null, actor())
                 .todas().stream().anyMatch(p -> clave.equals(p.clave()));
     }
 
@@ -671,13 +680,12 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
 
     private void editar(long id, ValorAtributo valor) {
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                List.of(valor), null, null), actor());
+                List.of(valor), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
     }
 
     private long registrarTerreno() {
         return registrar("TERRENO",
                 List.of(new ValorAtributo("metraje_total", "500"),
-                        new ValorAtributo("zonificacion", "RDM"),
                         new ValorAtributo("condicion_terreno", "URBANO_HABILITADO")));
     }
 
@@ -700,8 +708,7 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
                         null, null, null, null, null, null, null),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
                 atributos,
-                List.of(new OperacionSolicitada("VENTA", new BigDecimal("300000"), "USD",
-                        null, null, null, null, null, null, null)),
+                List.of(),
                 null), actor).idPropiedad();
     }
 

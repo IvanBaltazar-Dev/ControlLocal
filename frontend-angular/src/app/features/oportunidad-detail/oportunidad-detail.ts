@@ -13,7 +13,13 @@ import {
   RESULTADO_INTERACCION,
   RESULTADO_VISITA,
 } from '../../core/api/codigos';
-import { Interaccion, InteraccionesService } from '../../core/api/interacciones.service';
+import {
+  Interaccion,
+  InteraccionesService,
+  nombreDelInterlocutor,
+  telefonoDelInterlocutor,
+  tipoDelInterlocutor,
+} from '../../core/api/interacciones.service';
 import { Oportunidad, OportunidadesService } from '../../core/api/oportunidades.service';
 import { Visita, VisitasService } from '../../core/api/visitas.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -298,6 +304,18 @@ export class OportunidadDetail implements OnInit {
 
   protected resultadoInteraccion(codigo: string | undefined): string {
     return describir(RESULTADO_INTERACCION, codigo) || SIN_DATO;
+  }
+
+  protected interlocutor(interaccion: Interaccion): string {
+    return nombreDelInterlocutor(interaccion);
+  }
+
+  protected rolInterlocutor(interaccion: Interaccion): string {
+    return tipoDelInterlocutor(interaccion);
+  }
+
+  protected telefonoInterlocutor(interaccion: Interaccion): string {
+    return textoDe(telefonoDelInterlocutor(interaccion));
   }
 
   protected estadoVisita(codigo: string | undefined): string {

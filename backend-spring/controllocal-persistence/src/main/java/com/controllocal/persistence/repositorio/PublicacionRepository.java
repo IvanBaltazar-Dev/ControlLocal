@@ -1,8 +1,9 @@
 package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.inmueble.Publicacion;
-import com.controllocal.persistence.query.EstadoPublicacionPropiedad;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,8 +13,6 @@ import java.util.Optional;
 
 public interface PublicacionRepository extends JpaRepository<Publicacion, Long> {
 
-    /** La primera de la lista es la publicacion principal (mas reciente), como en la v1. */
-    List<Publicacion> findByIdPropiedadOrderByFechaPublicacionDesc(long idPropiedad);
 
     /**
      * <b>Los anuncios de UN encargo</b>, del mas reciente al mas antiguo (V70).
@@ -57,12 +56,8 @@ public interface PublicacionRepository extends JpaRepository<Publicacion, Long> 
      */
     Optional<Publicacion> findByOrganizacionIdAndId(long organizacionId, Long id);
 
-    /** Estado de la publicacion principal de cada propiedad del lote, en una sola consulta. */
-    @Query(nativeQuery = true, value = """
-            SELECT DISTINCT ON (id_propiedad) id_propiedad AS idPropiedad, estado
-            FROM publicacion
-            WHERE id_propiedad IN (:ids)
-            ORDER BY id_propiedad, fecha_publicacion DESC, id_publicacion DESC
-            """)
-    List<EstadoPublicacionPropiedad> estadosPublicacion(@Param("ids") Collection<Long> ids);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Publicacion p where p.organizacionId=:organizacion and p.idEncargo=:encargo and p.id=:id")
+    Optional<Publicacion> bloquear(@Param("organizacion") long organizacion,@Param("encargo") long encargo,@Param("id") long id);
+
 }

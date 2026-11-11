@@ -79,9 +79,6 @@ public interface LocalComercialService {
                       PropiedadUniversalService.Responsabilidad responsabilidad) {
     }
 
-    record FotoLocal(Long idFoto, String clave, String nombreArchivo) {
-    }
-
     /**
      * Filtros del listado. {@code texto} busca en codigo, direccion, distrito y
      * nombre del propietario; {@code estado} es el codigo de una letra (D/N/I).
@@ -132,11 +129,14 @@ public interface LocalComercialService {
     /** Baja logica (estado I) con transicion auditada. */
     boolean desactivar(long id, Actor actor);
 
-    List<FotoLocal> listarFotos(long idPropiedad);
-
-    /** Registra la clave de una foto ya guardada en el almacen (maximo 6 por local). */
-    FotoLocal agregarFoto(long idPropiedad, String clave, String nombreArchivo, Actor actor);
-
-    /** Elimina el registro y devuelve la clave del binario para limpiar el almacen. */
-    Optional<String> eliminarFoto(long idFoto, Actor actor);
+    // La galeria se fue a FotoPropiedadService (WP-C).
+    //
+    // No es un cambio de sitio por orden: las fotos son de la PROPIEDAD, y
+    // mientras vivieran aqui la unica puerta para ponerlas hablaba de «locales»
+    // sobre un modelo que ya no distingue el tipo. Con la ficha universal
+    // publicandolas, tener dos implementaciones —una por ruta— habria sido dos
+    // topes, dos validaciones y dos autoridades sobre la misma tabla.
+    //
+    // `/locales/{id}/fotos` sigue existiendo con sus rutas y su tope de 6:
+    // delega en el mismo servicio.
 }

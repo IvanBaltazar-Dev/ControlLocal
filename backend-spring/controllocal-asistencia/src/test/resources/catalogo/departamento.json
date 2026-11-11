@@ -1,0 +1,1251 @@
+{
+  "intencion": "REGISTRAR_PROPIEDAD",
+  "tipoPropiedad": "DEPARTAMENTO",
+  "operaciones": [],
+  "comunes": [
+    {
+      "clave": "titulares",
+      "rotulo": "Titulares",
+      "seccion": "COMUN",
+      "control": "TITULARES",
+      "tipoDato": "TITULARES",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Busca a la persona antes de crearla. Con varios titulares, las cuotas tienen que sumar 100 %.",
+      "orden": 0
+    },
+    {
+      "clave": "direccion",
+      "rotulo": "Dirección",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 1
+    },
+    {
+      "clave": "distrito",
+      "rotulo": "Distrito",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "Ancon",
+          "rotulo": "Ancon"
+        },
+        {
+          "valor": "Ate",
+          "rotulo": "Ate"
+        },
+        {
+          "valor": "Barranco",
+          "rotulo": "Barranco"
+        },
+        {
+          "valor": "Brena",
+          "rotulo": "Brena"
+        },
+        {
+          "valor": "Carabayllo",
+          "rotulo": "Carabayllo"
+        },
+        {
+          "valor": "Chaclacayo",
+          "rotulo": "Chaclacayo"
+        },
+        {
+          "valor": "Chorrillos",
+          "rotulo": "Chorrillos"
+        },
+        {
+          "valor": "Cieneguilla",
+          "rotulo": "Cieneguilla"
+        },
+        {
+          "valor": "Comas",
+          "rotulo": "Comas"
+        },
+        {
+          "valor": "El Agustino",
+          "rotulo": "El Agustino"
+        },
+        {
+          "valor": "Independencia",
+          "rotulo": "Independencia"
+        },
+        {
+          "valor": "Jesus Maria",
+          "rotulo": "Jesus Maria"
+        },
+        {
+          "valor": "La Molina",
+          "rotulo": "La Molina"
+        },
+        {
+          "valor": "La Victoria",
+          "rotulo": "La Victoria"
+        },
+        {
+          "valor": "Lima",
+          "rotulo": "Lima"
+        },
+        {
+          "valor": "Lince",
+          "rotulo": "Lince"
+        },
+        {
+          "valor": "Los Olivos",
+          "rotulo": "Los Olivos"
+        },
+        {
+          "valor": "Lurigancho-Chosica",
+          "rotulo": "Lurigancho-Chosica"
+        },
+        {
+          "valor": "Lurin",
+          "rotulo": "Lurin"
+        },
+        {
+          "valor": "Magdalena del Mar",
+          "rotulo": "Magdalena del Mar"
+        },
+        {
+          "valor": "Miraflores",
+          "rotulo": "Miraflores"
+        },
+        {
+          "valor": "Pachacamac",
+          "rotulo": "Pachacamac"
+        },
+        {
+          "valor": "Pucusana",
+          "rotulo": "Pucusana"
+        },
+        {
+          "valor": "Pueblo Libre",
+          "rotulo": "Pueblo Libre"
+        },
+        {
+          "valor": "Puente Piedra",
+          "rotulo": "Puente Piedra"
+        },
+        {
+          "valor": "Punta Hermosa",
+          "rotulo": "Punta Hermosa"
+        },
+        {
+          "valor": "Punta Negra",
+          "rotulo": "Punta Negra"
+        },
+        {
+          "valor": "Rimac",
+          "rotulo": "Rimac"
+        },
+        {
+          "valor": "San Bartolo",
+          "rotulo": "San Bartolo"
+        },
+        {
+          "valor": "San Borja",
+          "rotulo": "San Borja"
+        },
+        {
+          "valor": "San Isidro",
+          "rotulo": "San Isidro"
+        },
+        {
+          "valor": "San Juan de Lurigancho",
+          "rotulo": "San Juan de Lurigancho"
+        },
+        {
+          "valor": "San Juan de Miraflores",
+          "rotulo": "San Juan de Miraflores"
+        },
+        {
+          "valor": "San Luis",
+          "rotulo": "San Luis"
+        },
+        {
+          "valor": "San Martin de Porres",
+          "rotulo": "San Martin de Porres"
+        },
+        {
+          "valor": "San Miguel",
+          "rotulo": "San Miguel"
+        },
+        {
+          "valor": "Santa Anita",
+          "rotulo": "Santa Anita"
+        },
+        {
+          "valor": "Santa Maria del Mar",
+          "rotulo": "Santa Maria del Mar"
+        },
+        {
+          "valor": "Santa Rosa",
+          "rotulo": "Santa Rosa"
+        },
+        {
+          "valor": "Santiago de Surco",
+          "rotulo": "Santiago de Surco"
+        },
+        {
+          "valor": "Surquillo",
+          "rotulo": "Surquillo"
+        },
+        {
+          "valor": "Villa El Salvador",
+          "rotulo": "Villa El Salvador"
+        },
+        {
+          "valor": "Villa Maria del Triunfo",
+          "rotulo": "Villa Maria del Triunfo"
+        }
+      ],
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 2
+    },
+    {
+      "clave": "zonaUrbanizacion",
+      "rotulo": "Zona o urbanización",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 3
+    },
+    {
+      "clave": "referenciaInterna",
+      "rotulo": "Referencia interna",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 4
+    },
+    {
+      "clave": "latitud",
+      "rotulo": "Latitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 5
+    },
+    {
+      "clave": "longitud",
+      "rotulo": "Longitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 6
+    },
+    {
+      "clave": "codigo",
+      "rotulo": "Código interno",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, lo genera BROX.",
+      "orden": 7
+    },
+    {
+      "clave": "descripcion",
+      "rotulo": "Descripción",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 8
+    },
+    {
+      "clave": "uso",
+      "rotulo": "Uso",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "COMERCIAL",
+          "rotulo": "COMERCIAL"
+        },
+        {
+          "valor": "VIVIENDA",
+          "rotulo": "VIVIENDA"
+        },
+        {
+          "valor": "INDUSTRIAL",
+          "rotulo": "INDUSTRIAL"
+        },
+        {
+          "valor": "MIXTO",
+          "rotulo": "MIXTO"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, se deduce del tipo: una casa es vivienda.",
+      "orden": 9
+    }
+  ],
+  "delTipo": [
+    {
+      "clave": "interiorUnidad",
+      "rotulo": "Interior o unidad",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 0
+    },
+    {
+      "clave": "nombreEdificioGaleria",
+      "rotulo": "Edificio o galería",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 1
+    },
+    {
+      "clave": "metraje_total",
+      "rotulo": "Metraje total",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 10
+    },
+    {
+      "clave": "antiguedad_anios",
+      "rotulo": "Antigüedad",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "unidad": "años",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 20,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "estacionamientos",
+      "rotulo": "Estacionamientos",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 30,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "metraje_construido",
+      "rotulo": "Metraje construido",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 40
+    },
+    {
+      "clave": "ambientes",
+      "rotulo": "Ambientes",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 50,
+      "restricciones": {
+        "minimo": 1,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "piso",
+      "rotulo": "Piso",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 60
+    },
+    {
+      "clave": "cuota_mantenimiento",
+      "rotulo": "Cuota de mantenimiento",
+      "seccion": "TIPO",
+      "control": "IMPORTE",
+      "tipoDato": "IMPORTE",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 70,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "dormitorios",
+      "rotulo": "Dormitorios",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 80,
+      "restricciones": {
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "banos",
+      "rotulo": "Baños",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos baños tiene. Un baño completo cuenta 1 y un medio baño —sin ducha— cuenta 0.5. El medio baño se registra además, y por separado, en «Medios baños».",
+      "orden": 90
+    },
+    {
+      "clave": "amoblado",
+      "rotulo": "Amoblado",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 100
+    },
+    {
+      "clave": "partida_registral",
+      "rotulo": "Partida registral",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "El número de partida en el registro de predios. Es lo que identifica al inmueble y permite verificar titular y cargas antes de firmar.",
+      "orden": 200,
+      "restricciones": {
+        "longitudMaxima": 40
+      }
+    },
+    {
+      "clave": "oficina_registral",
+      "rotulo": "Oficina registral",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "LIMA",
+          "rotulo": "Lima"
+        },
+        {
+          "valor": "CALLAO",
+          "rotulo": "Callao"
+        },
+        {
+          "valor": "HUAURA",
+          "rotulo": "Huaura"
+        },
+        {
+          "valor": "CANETE",
+          "rotulo": "Cañete"
+        },
+        {
+          "valor": "HUARAL",
+          "rotulo": "Huaral"
+        },
+        {
+          "valor": "BARRANCA",
+          "rotulo": "Barranca"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "La oficina registral donde está inscrita la partida. El mismo número de partida existe en varias oficinas.",
+      "orden": 210
+    },
+    {
+      "clave": "independizado",
+      "rotulo": "Independizado",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si la unidad tiene partida propia. Sin independizar no se puede vender ni hipotecar por separado.",
+      "orden": 220
+    },
+    {
+      "clave": "declaratoria_fabrica",
+      "rotulo": "Declaratoria de fábrica",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si la edificación está inscrita. Sin declaratoria el registro dice que el terreno está vacío, y ahí el banco no financia.",
+      "orden": 230
+    },
+    {
+      "clave": "cargas_gravamenes",
+      "rotulo": "Cargas y gravámenes",
+      "seccion": "TIPO",
+      "control": "SELECTOR_MULTIPLE",
+      "tipoDato": "LISTA_MULTIPLE",
+      "opciones": [
+        {
+          "valor": "NINGUNA",
+          "rotulo": "Ninguna"
+        },
+        {
+          "valor": "HIPOTECA",
+          "rotulo": "Hipoteca"
+        },
+        {
+          "valor": "EMBARGO",
+          "rotulo": "Embargo"
+        },
+        {
+          "valor": "SERVIDUMBRE",
+          "rotulo": "Servidumbre"
+        },
+        {
+          "valor": "COPROPIEDAD_SIN_DIVIDIR",
+          "rotulo": "Copropiedad sin dividir"
+        },
+        {
+          "valor": "SUCESION_PENDIENTE",
+          "rotulo": "Sucesión pendiente"
+        },
+        {
+          "valor": "LITIGIO",
+          "rotulo": "Litigio"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Lo que consta inscrito sobre el inmueble. Una hipoteca o un embargo cambian el plazo, y a veces impiden la operación.",
+      "orden": 250
+    },
+    {
+      "clave": "estado_conservacion",
+      "rotulo": "Estado de conservación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "ESTRENO",
+          "rotulo": "Estreno"
+        },
+        {
+          "valor": "MUY_BUENO",
+          "rotulo": "Muy bueno"
+        },
+        {
+          "valor": "BUENO",
+          "rotulo": "Bueno"
+        },
+        {
+          "valor": "REGULAR",
+          "rotulo": "Regular"
+        },
+        {
+          "valor": "PARA_REMODELAR",
+          "rotulo": "Para remodelar"
+        },
+        {
+          "valor": "PARA_DEMOLER",
+          "rotulo": "Para demoler"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué estado está hoy el inmueble. No lo dice la antigüedad: veinte años remodelado y veinte años sin tocar son dos productos distintos y hoy tienen la misma ficha.",
+      "orden": 260
+    },
+    {
+      "clave": "etapa_entrega",
+      "rotulo": "Etapa de entrega",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "EN_PLANOS",
+          "rotulo": "En planos"
+        },
+        {
+          "valor": "EN_CONSTRUCCION",
+          "rotulo": "En construcción"
+        },
+        {
+          "valor": "ENTREGA_INMEDIATA",
+          "rotulo": "Entrega inmediata"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si se entrega ya, está en obra o todavía está en planos. Cambia la fecha en que el cliente puede mudarse y quién puede financiarlo.",
+      "orden": 270
+    },
+    {
+      "clave": "ascensores",
+      "rotulo": "Ascensores",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos ascensores tiene el edificio. Cero es una respuesta válida, y es la que decide una visita a un quinto piso.",
+      "orden": 280,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "vigilancia",
+      "rotulo": "Vigilancia y control de acceso",
+      "seccion": "TIPO",
+      "control": "SELECTOR_MULTIPLE",
+      "tipoDato": "LISTA_MULTIPLE",
+      "opciones": [
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        },
+        {
+          "valor": "PORTERO_DIURNO",
+          "rotulo": "Portero diurno"
+        },
+        {
+          "valor": "CASETA_24H",
+          "rotulo": "Caseta 24 horas"
+        },
+        {
+          "valor": "CAMARAS_CCTV",
+          "rotulo": "Cámaras CCTV"
+        },
+        {
+          "valor": "CONTROL_DE_ACCESO",
+          "rotulo": "Control de acceso"
+        },
+        {
+          "valor": "CERCO_PERIMETRICO",
+          "rotulo": "Cerco perimétrico"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Qué vigilancia y qué control de acceso tiene. Se marcan todas las que haya: una caseta 24 horas y unas cámaras no son lo mismo.",
+      "orden": 290
+    },
+    {
+      "clave": "areas_comunes",
+      "rotulo": "Áreas comunes",
+      "seccion": "TIPO",
+      "control": "SELECTOR_MULTIPLE",
+      "tipoDato": "LISTA_MULTIPLE",
+      "opciones": [
+        {
+          "valor": "GIMNASIO",
+          "rotulo": "Gimnasio"
+        },
+        {
+          "valor": "PISCINA",
+          "rotulo": "Piscina"
+        },
+        {
+          "valor": "SUM",
+          "rotulo": "Sala de usos múltiples"
+        },
+        {
+          "valor": "PARRILLAS",
+          "rotulo": "Parrillas"
+        },
+        {
+          "valor": "COWORKING",
+          "rotulo": "Coworking"
+        },
+        {
+          "valor": "SALA_DE_NINOS",
+          "rotulo": "Sala de niños"
+        },
+        {
+          "valor": "AZOTEA",
+          "rotulo": "Azotea"
+        },
+        {
+          "valor": "LAVANDERIA_COMUN",
+          "rotulo": "Lavandería común"
+        },
+        {
+          "valor": "JUEGOS_INFANTILES",
+          "rotulo": "Juegos infantiles"
+        },
+        {
+          "valor": "SALA_DE_CINE",
+          "rotulo": "Sala de cine"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Qué áreas comunes tiene el edificio o el condominio. Se marcan todas las que haya.",
+      "orden": 300
+    },
+    {
+      "clave": "unidades_por_piso",
+      "rotulo": "Unidades por piso",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántas unidades hay por piso. Dos por piso y ocho por piso son dos productos distintos aunque el departamento sea igual.",
+      "orden": 310,
+      "restricciones": {
+        "minimo": 1,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "restriccion_reglamento_interno",
+      "rotulo": "Restricciones del reglamento interno",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Lo que el reglamento interno prohíbe o limita: horarios de mudanza, obras, uso de las áreas comunes. Se escribe lo que dice el reglamento, no lo que se supone.",
+      "orden": 330,
+      "restricciones": {
+        "longitudMaxima": 500
+      }
+    },
+    {
+      "clave": "accesibilidad_movilidad_reducida",
+      "rotulo": "Accesible para movilidad reducida",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si se puede llegar a la unidad sin escaleras, por rampa o por ascensor desde la calle.",
+      "orden": 340
+    },
+    {
+      "clave": "tipologia",
+      "rotulo": "Tipología",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "MONOAMBIENTE",
+          "rotulo": "Monoambiente"
+        },
+        {
+          "valor": "FLAT",
+          "rotulo": "Flat"
+        },
+        {
+          "valor": "DUPLEX",
+          "rotulo": "Dúplex"
+        },
+        {
+          "valor": "TRIPLEX",
+          "rotulo": "Tríplex"
+        },
+        {
+          "valor": "PENTHOUSE",
+          "rotulo": "Penthouse"
+        },
+        {
+          "valor": "LOFT",
+          "rotulo": "Loft"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "La forma de la unidad. Un dúplex y un flat del mismo metraje se buscan y se pagan distinto.",
+      "orden": 350
+    },
+    {
+      "clave": "niveles_internos",
+      "rotulo": "Niveles de la unidad",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos niveles tiene la unidad por dentro. Uno es lo corriente; dos o tres es un dúplex o un tríplex.",
+      "orden": 360,
+      "restricciones": {
+        "minimo": 1,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "medios_banos",
+      "rotulo": "Medios baños",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos medios baños hay, es decir baños sin ducha. Van aparte de «Baños» para que el conteo de baños completos no dependa de una convención.",
+      "orden": 370,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "cuarto_servicio",
+      "rotulo": "Cuartos de servicio",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos cuartos de servicio tiene. No se cuentan como dormitorios.",
+      "orden": 380,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "bano_servicio",
+      "rotulo": "Baño de servicio",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si la unidad tiene baño de servicio.",
+      "orden": 390
+    },
+    {
+      "clave": "tipo_cocina",
+      "rotulo": "Tipo de cocina",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "CERRADA",
+          "rotulo": "Cerrada"
+        },
+        {
+          "valor": "ABIERTA_A_SALA",
+          "rotulo": "Abierta a la sala"
+        },
+        {
+          "valor": "KITCHENETTE",
+          "rotulo": "Kitchenette"
+        },
+        {
+          "valor": "BARRA",
+          "rotulo": "Barra"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo es la cocina. Abierta a la sala y cerrada son dos decisiones distintas para el cliente.",
+      "orden": 400
+    },
+    {
+      "clave": "lavanderia",
+      "rotulo": "Lavandería",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "INDEPENDIENTE",
+          "rotulo": "Independiente"
+        },
+        {
+          "valor": "EN_COCINA",
+          "rotulo": "En la cocina"
+        },
+        {
+          "valor": "EN_TERRAZA",
+          "rotulo": "En la terraza"
+        },
+        {
+          "valor": "COMUN_DEL_EDIFICIO",
+          "rotulo": "Común del edificio"
+        },
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Dónde está la lavandería. «No tiene» es una respuesta verificada, no el valor inicial.",
+      "orden": 410
+    },
+    {
+      "clave": "estudio",
+      "rotulo": "Ambiente de estudio",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si hay un ambiente de estudio. Se pregunta aparte para no contarlo como dormitorio: eso falsea el dato con el que se busca.",
+      "orden": 420
+    },
+    {
+      "clave": "vista",
+      "rotulo": "Vista",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "INTERIOR",
+          "rotulo": "Interior"
+        },
+        {
+          "valor": "EXTERIOR_A_CALLE",
+          "rotulo": "Exterior, a la calle"
+        },
+        {
+          "valor": "VISTA_A_PARQUE",
+          "rotulo": "A parque"
+        },
+        {
+          "valor": "VISTA_AL_MAR",
+          "rotulo": "Al mar"
+        },
+        {
+          "valor": "VISTA_A_AREAS_COMUNES",
+          "rotulo": "A áreas comunes"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "A dónde da la unidad. Dos departamentos iguales del mismo edificio se pagan distinto según la vista.",
+      "orden": 430
+    },
+    {
+      "clave": "terraza",
+      "rotulo": "Tiene terraza",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si tiene terraza. El metraje va aparte, en «Área de terraza»: la presencia se sabe en la visita y el metraje no siempre.",
+      "orden": 440
+    },
+    {
+      "clave": "area_terraza",
+      "rotulo": "Área de terraza",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros cuadrados tiene la terraza. Vacío no significa que no haya terraza: eso lo dice «Tiene terraza».",
+      "orden": 450,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "balcon",
+      "rotulo": "Tiene balcón",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si tiene balcón. Un balcón no es una terraza, y quien busca terraza no debe visitar balcones.",
+      "orden": 460
+    },
+    {
+      "clave": "jardin",
+      "rotulo": "Tiene jardín",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si tiene jardín. No es lo mismo que un patio: quien busca jardín no debe visitar patios.",
+      "orden": 470
+    },
+    {
+      "clave": "patio",
+      "rotulo": "Tiene patio",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si tiene patio. No es lo mismo que un jardín, y por eso se preguntan por separado.",
+      "orden": 480
+    },
+    {
+      "clave": "area_jardin_patio",
+      "rotulo": "Área de uso exclusivo",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros cuadrados de uso exclusivo hay en jardín o patio. Vacío no significa que no los haya.",
+      "orden": 490,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "depositos",
+      "rotulo": "Depósitos",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos depósitos incluye la unidad. Cero es una respuesta válida.",
+      "orden": 510,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "deposito_area",
+      "rotulo": "Área de depósito",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros cuadrados suma el depósito. Vacío no significa que no haya depósito.",
+      "orden": 520,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "tipo_estacionamiento",
+      "rotulo": "Tipo de estacionamiento",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "SIMPLE",
+          "rotulo": "Simple"
+        },
+        {
+          "valor": "DOBLE_LINEAL",
+          "rotulo": "Doble lineal"
+        },
+        {
+          "valor": "DOBLE_PARALELO",
+          "rotulo": "Doble paralelo"
+        },
+        {
+          "valor": "MOTO",
+          "rotulo": "Moto"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo es el estacionamiento. Un doble paralelo obliga a mover un auto para sacar el otro, y eso decide compras.",
+      "orden": 530
+    },
+    {
+      "clave": "torre_bloque",
+      "rotulo": "Torre o bloque",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué torre o bloque está la unidad. El 501 existe en la Torre A y en la B, y sin esto son la misma dirección.",
+      "orden": 540,
+      "restricciones": {
+        "longitudMaxima": 40
+      }
+    },
+    {
+      "clave": "mascotas_reglamento",
+      "rotulo": "El reglamento permite mascotas",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si el reglamento del edificio o del condominio permite mascotas. Es un hecho del inmueble; que este alquiler concreto las acepte lo dice la condición del encargo.",
+      "orden": 550
+    },
+    {
+      "clave": "gas",
+      "rotulo": "Suministro de gas",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "SIN_RED_CERCANA",
+          "rotulo": "Sin red cercana"
+        },
+        {
+          "valor": "RED_EN_LA_VIA",
+          "rotulo": "Red en la vía"
+        },
+        {
+          "valor": "CON_FACTIBILIDAD_APROBADA",
+          "rotulo": "Con factibilidad aprobada"
+        },
+        {
+          "valor": "INSTALADO",
+          "rotulo": "Instalado"
+        },
+        {
+          "valor": "GLP_TANQUE_EXTERNO",
+          "rotulo": "GLP con tanque externo"
+        },
+        {
+          "valor": "GLP_BALONES",
+          "rotulo": "GLP con balones"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo llega el gas a este inmueble. No se supone por el distrito: la red crece manzana a manzana. «Red en la vía» es la tubería física en la calle, sin trámite; «con factibilidad aprobada» es la autorización escrita de la concesionaria, que puede existir sin que la red pase todavía.",
+      "orden": 610
+    },
+    {
+      "clave": "agua_caliente",
+      "rotulo": "Agua caliente",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        },
+        {
+          "valor": "TERMA_ELECTRICA",
+          "rotulo": "Terma eléctrica"
+        },
+        {
+          "valor": "TERMA_A_GAS",
+          "rotulo": "Terma a gas"
+        },
+        {
+          "valor": "CENTRALIZADA",
+          "rotulo": "Centralizada"
+        },
+        {
+          "valor": "SOLAR",
+          "rotulo": "Solar"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo se produce el agua caliente.",
+      "orden": 620
+    },
+    {
+      "clave": "respaldo_electrico",
+      "rotulo": "Respaldo eléctrico",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        },
+        {
+          "valor": "GRUPO_ELECTROGENO_AREAS_COMUNES",
+          "rotulo": "Grupo electrógeno para áreas comunes"
+        },
+        {
+          "valor": "GRUPO_ELECTROGENO_TOTAL",
+          "rotulo": "Grupo electrógeno total"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si hay grupo electrógeno y hasta dónde llega.",
+      "orden": 640
+    },
+    {
+      "clave": "estado_ocupacion",
+      "rotulo": "Estado de ocupación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "DESOCUPADO",
+          "rotulo": "Desocupado"
+        },
+        {
+          "valor": "OCUPADO_POR_EL_PROPIETARIO",
+          "rotulo": "Ocupado por el propietario"
+        },
+        {
+          "valor": "OCUPADO_POR_INQUILINO",
+          "rotulo": "Ocupado por inquilino"
+        },
+        {
+          "valor": "OCUPADO_POR_TERCEROS_SIN_TITULO",
+          "rotulo": "Ocupado por terceros sin título"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Quién está dentro del inmueble hoy. No es su disponibilidad comercial: un inmueble disponible para vender puede estar ocupado por su propietario hasta la firma.",
+      "orden": 950
+    }
+  ],
+  "deLaOperacion": []
+}

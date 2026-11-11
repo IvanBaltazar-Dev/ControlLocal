@@ -1,6 +1,7 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
 import com.controllocal.service.LocalComercialService;
@@ -14,19 +15,33 @@ import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.NoEncontradoException;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.ComandosIdempotentes;
+import com.controllocal.service.soporte.Procedencia;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,6 +49,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * <b>La Propiedad como activo de dato</b> (V76).
@@ -82,6 +100,10 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @Autowired ProspeccionService prospecciones;
     @Autowired ObservacionMercadoService observaciones;
     @Autowired LocalComercialService locales;
+    @Autowired EncargoService ciclo;
+    @Autowired PlatformTransactionManager gestor;
+    @Autowired ObjectMapper json;
+    @SpyBean ComandosIdempotentes comandos;
 
     // ==================================================================
     // 1. Un inmueble conocido, sin dueno conocido
@@ -172,57 +194,37 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     // 3. Conocer no es gestionar: nada comercial nace del conocimiento
     // ==================================================================
 
-    /**
-     * El recorrido completo del punto 9: crear, leer, editar, observar y
-     * conservar historia <b>sin producir</b> ni prospeccion, ni encargo, ni
-     * hito, ni publicacion, ni KPI comercial.
-     */
-    /**
-     * <b>Sin encargo vivo, la ficha no dice estar disponible.</b>
-     *
-     * <p>La situacion comercial se <b>deriva</b> de los encargos —V76 se nego a
-     * crear un estado NO_OFRECIDA porque serian dos autoridades para la misma
-     * verdad—, pero el lector copiaba la columna tal cual. Sobre una propiedad
-     * cuyo encargo se cerro, la misma pantalla decia «Disponibilidad comercial:
-     * Disponible» arriba y «Ningun encargo vigente: hoy no esta ni en venta ni
-     * en alquiler» debajo.
-     */
+    /** CAT-E11/18: abrir un episodio en preparación no acredita habilitación. */
     @Test
-    @DisplayName("cerrado el encargo, la ficha deja de afirmar que la propiedad se ofrece")
-    void sinEncargoVivoLaFichaNoDiceEstarDisponible() {
+    @DisplayName("el Encargo en preparación no afirma disponibilidad ni precio autorizado")
+    void sinEncargoHabilitadoLaFichaNoDiceEstarDisponible() {
         long id = registrarGestionada(List.of(
                 new OperacionSolicitada("ALQUILER", new BigDecimal("2800"), "PEN",
                         null, null, null, null, null, null, null)));
-        assertEquals("Disponible", propiedades.consultar(id, actor()).disponibilidadRotulo(),
-                "con su encargo vivo si se ofrece");
-
-        // Se cierra el encargo por la via del negocio, sin tocar la columna.
-        jdbc.update("""
-                update captacion set estado = 'C', fecha_cierre = current_date,
-                       motivo_cierre = 'M', detalle_motivo_cierre = 'cierre de prueba'
-                 where id_propiedad = ? and estado in ('P','O','A')
-                """, id);
-
         var ficha = propiedades.consultar(id, actor());
         assertNull(ficha.disponibilidadRotulo(),
-                "sin encargo vivo no hay oferta que declarar");
+                "preparar el episodio no acredita una oferta habilitada");
         assertNull(ficha.disponibilidadComercial(),
                 "y tampoco su codigo: la pantalla no puede pintar lo que no se afirma");
-        assertEquals("D", jdbc.queryForObject(
+        assertNull(jdbc.queryForObject(
                 "select disponibilidad_comercial from propiedad where id_propiedad = ?",
-                String.class, id),
-                "la columna conserva el ultimo estado comercial conocido: es historia, no se borra");
+                String.class, id));
+        assertEquals(Captacion.EN_PREPARACION, jdbc.queryForObject(
+                "select estado from captacion where id_propiedad=?", String.class, id));
+        assertEquals(0, contar("select count(*) from precio_propiedad where id_propiedad=? and hito='U'", id));
     }
 
     @Test
     @DisplayName("una propiedad de conocimiento se crea, se lee, se edita y se observa sin producir nada comercial")
     void elCicloCompletoNoProduceNadaComercial() {
         long id = registrarConocida();
+        var observada = propiedades.consultar(id, actor());
 
         propiedades.editar(id, new ComandoEdicion(null, null, "Otra descripcion", null, null,
-                List.of(new ValorAtributo("metraje_total", "95")), null, null), actor());
-        observar(id, "VENTA", new BigDecimal("180000"), "USD", LocalDate.now().minusDays(10));
-        observar(id, "VENTA", new BigDecimal("172000"), "USD", LocalDate.now());
+                List.of(new ValorAtributo("metraje_total", "95")), null, null)
+                .conVersion(observada.versionFisica()), actor());
+        observar(id, "VENTA", new BigDecimal("180000"), "USD", hoyLima().minusDays(10));
+        observar(id, "VENTA", new BigDecimal("172000"), "USD", hoyLima());
 
         var ficha = propiedades.consultar(id, actor());
         assertEquals("Otra descripcion", ficha.descripcion());
@@ -292,26 +294,23 @@ class PropiedadComoActivoDeDatoIntegrationTest {
                 "y el expediente no cuenta un hecho comercial que no ocurrio");
     }
 
-    /**
-     * <b>Y la de lo que SI se ofrecio sigue retirandose.</b> El arreglo anterior
-     * no puede convertirse en "la baja ya no retira nada": una propiedad con
-     * encargo vivo que se da de baja sale del mercado, como siempre.
-     */
+    /** Preparar condiciones tampoco convierte la baja física en retirada de una oferta. */
     @Test
-    @DisplayName("la baja de una propiedad ofrecida si la retira del mercado")
-    void laBajaDeLoOfrecidoSiRetiraDelMercado() {
+    @DisplayName("la baja con Encargo en preparación no inventa un retiro del mercado")
+    void laBajaDeEncargoEnPreparacionNoInventaRetiroComercial() {
         long id = registrarGestionada(List.of(
                 new OperacionSolicitada("ALQUILER", new BigDecimal("2800"), "PEN",
                         null, null, null, null, null, null, null)));
-        assertEquals("D", jdbc.queryForObject(
+        assertNull(jdbc.queryForObject(
                 "select disponibilidad_comercial from propiedad where id_propiedad = ?",
                 String.class, id));
 
         locales.desactivar(id, actor());
 
-        assertEquals("T", jdbc.queryForObject(
+        assertNull(jdbc.queryForObject(
                 "select disponibilidad_comercial from propiedad where id_propiedad = ?",
                 String.class, id));
+        assertEquals(0, contar("select count(*) from precio_propiedad where id_propiedad=?", id));
     }
 
     /**
@@ -323,18 +322,20 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @DisplayName("prospectar y captar despues no destruyen la historia observada")
     void laHistoriaPreviaSobrevive() {
         long id = registrarConocida();
-        observar(id, "VENTA", new BigDecimal("180000"), "USD", LocalDate.now().minusMonths(6));
+        var observada = propiedades.consultar(id, actor());
+        observar(id, "VENTA", new BigDecimal("180000"), "USD", hoyLima().minusMonths(6));
         String retratoAntes = retratoDeObservaciones(id);
 
         // Y ahora se averigua de quien es. Es la historia real: primero se
         // conoce el inmueble, despues al dueno, y solo entonces se puede
         // encargar. La titularidad se anade sobre la MISMA propiedad.
         propiedades.editar(id, new ComandoEdicion(null, null, null, null,
-                List.of(new Titular(unPropietario(), null, Boolean.TRUE)), null, null, null),
+                List.of(new Titular(unPropietario(), null, Boolean.TRUE)), null, null, null)
+                .conVersion(observada.versionFisica()),
                 actor());
 
         long idProspeccion = prospecciones.registrar(
-                new ProspeccionService.DatosProspeccion(id, "Ahora si la vamos a captar"),
+                new ProspeccionService.DatosProspeccion(id, "Ahora si la vamos a captar", null),
                 actor()).id();
         prospecciones.captar(idProspeccion, new ProspeccionService.DatosCaptura(
                 "VENTA", new BigDecimal("175000"), "USD", new BigDecimal("3"),
@@ -344,46 +345,47 @@ class PropiedadComoActivoDeDatoIntegrationTest {
                 "el encargo se enlaza a la misma propiedad");
         assertEquals(retratoAntes, retratoDeObservaciones(id),
                 "y lo observado antes queda exactamente como estaba");
-        assertEquals(1, contar("""
+        assertEquals(0, contar("""
                 select count(*) from precio_propiedad where id_propiedad = ? and hito = 'U'
                 """, id),
-                "el hito 'U' nace con el encargo, no con las observaciones");
+                "el borrador no acredita el precio autorizado que nace de revisión competente");
+        assertEquals(Captacion.EN_PREPARACION, jdbc.queryForObject(
+                "select estado from captacion where id_propiedad=?", String.class, id));
     }
 
     // ==================================================================
-    // 4. Pero el Encargo si exige saber de quien es
+    // 4. Preparar no habilita el Encargo ni completa una titularidad desconocida
     // ==================================================================
 
-    /**
-     * Conocer un inmueble no es poder venderlo. Una relacion comercial nace de
-     * alguien que puede encargarla, asi que aqui la titularidad si es exigible.
-     */
+    /** CAT-E11/18: el borrador admite faltantes; la habilitación conserva su guarda. */
     @Test
-    @DisplayName("no se puede captar una propiedad de la que no se sabe quien es el dueno")
-    void captarExigeTitularidad() {
+    @DisplayName("sin titular se prepara el Encargo, sin habilitarlo ni inventar la titularidad")
+    void captarSinTitularSoloPreparaEncargo() {
         long id = registrarConocida();
         long idProspeccion = prospecciones.registrar(
-                new ProspeccionService.DatosProspeccion(id, "Sin dueno conocido"), actor()).id();
+                new ProspeccionService.DatosProspeccion(id, "Sin dueno conocido", null), actor()).id();
 
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> prospecciones.captar(idProspeccion, new ProspeccionService.DatosCaptura(
-                        "VENTA", new BigDecimal("175000"), "USD", new BigDecimal("3"),
-                        null, null, null, null, null, null), actor()));
-        assertTrue(error.getMessage().toLowerCase().contains("titular"),
-                "el mensaje tiene que decir que falta el titular: " + error.getMessage());
-        assertEquals(0, contar("select count(*) from captacion where id_propiedad = ?", id),
-                "y no deja el encargo a medias");
+        var preparada = prospecciones.captar(idProspeccion, new ProspeccionService.DatosCaptura(
+                "VENTA", new BigDecimal("175000"), "USD", new BigDecimal("3"),
+                null, null, null, null, null, null), actor());
+        assertNotNull(preparada.idCaptacion());
+        assertFalse(ciclo.consultar(preparada.idCaptacion(), actor()).vigencia().habilitado());
+        assertEquals(Captacion.EN_PREPARACION, jdbc.queryForObject(
+                "select estado from captacion where id_captacion=?", String.class, preparada.idCaptacion()));
+        assertEquals(0, contar("select count(*) from titularidad_propiedad where id_propiedad=?", id));
+        assertEquals(0, contar("select count(*) from precio_propiedad where id_propiedad=?", id));
     }
 
     @Test
-    @DisplayName("tampoco por la puerta del alta con operaciones")
-    void elAltaConOperacionesExigeTitularidad() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> alta(List.of(), List.of(
-                        new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
-                                null, null, null, null, null, null, null))));
-        assertTrue(error.getMessage().toLowerCase().contains("titular"),
-                "mismo mensaje por las dos puertas: " + error.getMessage());
+    @DisplayName("el alta explícita con operación y titular faltante abre sólo preparación")
+    void elAltaConOperacionesSinTitularNoHabilitaElEncargo() {
+        long id = alta(List.of(), List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
+                null, null, null, null, null, null, null)), "OPERACION");
+        assertEquals(0, contar("select count(*) from titularidad_propiedad where id_propiedad=?", id));
+        long encargo = jdbc.queryForObject("select id_captacion from captacion where id_propiedad=?", Long.class, id);
+        assertFalse(ciclo.consultar(encargo, actor()).vigencia().habilitado());
+        assertEquals(0, contar("select count(*) from precio_propiedad where id_propiedad=?", id));
+        assertNull(propiedades.consultar(id, actor()).disponibilidadComercial());
     }
 
     // ==================================================================
@@ -394,7 +396,7 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @DisplayName("una observacion nunca entra en el historico economico del encargo")
     void laObservacionNoEsUnHecho() {
         long id = registrarConocida();
-        observar(id, "VENTA", new BigDecimal("190000"), "USD", LocalDate.now());
+        observar(id, "VENTA", new BigDecimal("190000"), "USD", hoyLima());
 
         assertEquals(0, contar("select count(*) from precio_propiedad where id_propiedad = ?", id),
                 "«lo vi anunciado a 190 000» no es un precio autorizado ni publicado");
@@ -408,7 +410,7 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @DisplayName("cada observacion conserva su fuente, su fecha y quien la capturo")
     void cadaObservacionConservaSuEvidencia() {
         long id = registrarConocida();
-        observar(id, "VENTA", new BigDecimal("190000"), "USD", LocalDate.now().minusDays(3));
+        observar(id, "VENTA", new BigDecimal("190000"), "USD", hoyLima().minusDays(3));
 
         Map<String, Object> fila = jdbc.queryForMap("""
                 select operacion, importe, moneda, fecha_observada, fuente, id_rol_actor
@@ -429,8 +431,8 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @DisplayName("las observaciones no se editan ni se borran: se anaden")
     void lasObservacionesSonAppendOnly() {
         long id = registrarConocida();
-        observar(id, "VENTA", new BigDecimal("190000"), "USD", LocalDate.now().minusMonths(2));
-        observar(id, "VENTA", new BigDecimal("178000"), "USD", LocalDate.now());
+        observar(id, "VENTA", new BigDecimal("190000"), "USD", hoyLima().minusMonths(2));
+        observar(id, "VENTA", new BigDecimal("178000"), "USD", hoyLima());
 
         assertEquals(2, contar(
                 "select count(*) from observacion_mercado where id_propiedad = ?", id),
@@ -450,13 +452,11 @@ class PropiedadComoActivoDeDatoIntegrationTest {
         long id = registrarConocida();
         assertThrows(ReglaNegocioException.class,
                 () -> observaciones.registrar(new ObservacionMercadoService.DatosObservacion(
-                        id, LocalDate.now(), "VENTA", new BigDecimal("100000"), "USD", null, null),
-                        actor()),
+                        id, hoyLima(), "VENTA", new BigDecimal("100000"), "USD", null, null), actor(), null, com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "sin fuente no se guarda: la evidencia va antes que la inferencia");
         assertThrows(ReglaNegocioException.class,
                 () -> observaciones.registrar(new ObservacionMercadoService.DatosObservacion(
-                        id, null, "VENTA", new BigDecimal("100000"), "USD", "PORTAL", null),
-                        actor()),
+                        id, null, "VENTA", new BigDecimal("100000"), "USD", "PORTAL", null), actor(), null, com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "sin fecha tampoco: un precio sin fecha no se puede comparar");
     }
 
@@ -466,7 +466,7 @@ class PropiedadComoActivoDeDatoIntegrationTest {
         long id = registrarConocida();
         assertThrows(ReglaNegocioException.class,
                 () -> observar(id, "VENTA", new BigDecimal("100000"), "USD",
-                        LocalDate.now().plusDays(1)));
+                        hoyLima().plusDays(1)));
     }
 
     // ==================================================================
@@ -483,6 +483,7 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @DisplayName("invariante: ningun hito economico NUEVO puede nacer sin su encargo")
     void ningunHitoNuevoSinEncargo() {
         long id = registrarConocida();
+        int antecedentes = contar("select count(*) from precio_propiedad where id_captacion is null");
         Exception error = assertThrows(Exception.class, () -> jdbc.update("""
                 insert into precio_propiedad
                        (organizacion_id, id_propiedad, hito, operacion, moneda, monto, fecha)
@@ -495,23 +496,223 @@ class PropiedadComoActivoDeDatoIntegrationTest {
         // Las filas historicas se quedan: borrarlas seria inventar que nunca
         // existieron. Lo que se cierra es la puerta, no el pasado -- y ningun
         // escritor vivo las produce ya.
-        assertTrue(contar("""
+        assertEquals(antecedentes, contar("""
                 select count(*) from precio_propiedad where id_captacion is null
-                """) >= 0);
+                """));
+    }
+
+    @Test
+    @DisplayName("la observación sin precio conserva procedencia y no crea efectos comerciales")
+    void observacionParcialConservaProcedenciaSinCeroNiHechosComerciales() throws Exception {
+        Actor profesional = independienteTest();
+        long id = propiedadTest(profesional);
+        Map<String, Object> antes = estadoFisicoYComercial(id);
+        Procedencia procedencia = procedenciaTest();
+        var datos = datosParciales(id);
+
+        var resultado = observaciones.registrar(datos, profesional, "om-" + UUID.randomUUID(), procedencia);
+
+        assertNull(resultado.importe());
+        assertNull(resultado.moneda());
+        var fila = jdbc.queryForMap("select * from observacion_mercado where id_observacion=?", resultado.id());
+        assertNull(fila.get("importe"));
+        assertNull(fila.get("moneda"));
+        assertEquals(datos.fechaObservada(), ((java.sql.Date) fila.get("fecha_observada")).toLocalDate());
+        assertEquals("PORTAL_TEST", fila.get("fuente"));
+        assertEquals("V", fila.get("operacion"));
+        assertEquals(profesional.idRolOperativo(), ((Number) fila.get("id_rol_actor")).longValue());
+        assertEquals(json.readTree(json.writeValueAsString(procedencia)), json.readTree((String) fila.get("procedencia")));
+        assertEquals(antes, estadoFisicoYComercial(id));
+        sinEfectosComerciales(id);
+    }
+
+    @Test
+    @DisplayName("la serie exige alcance actual; broker lee y gobierno u otros actores no heredan acceso")
+    void observacionesNoSonLecturaGeneralDelTenantNiPermisoDeRegistroDelBroker() {
+        EmpresaTest empresa = empresaTest();
+        long id = propiedadTest(empresa.agente());
+        var datos = datosParciales(id);
+        observaciones.registrar(datos, empresa.agente(), null, Procedencia.deLaPantalla());
+
+        assertEquals(1, observaciones.listarDe(id, empresa.broker()).size());
+        assertThrows(AccesoNoAutorizadoException.class, () -> observaciones.registrar(datos,
+                empresa.broker(), null, Procedencia.deLaPantalla()));
+        assertThrows(AccesoNoAutorizadoException.class, () -> observaciones.listarDe(id, empresa.gobierno()));
+        assertThrows(NoEncontradoException.class, () -> observaciones.listarDe(id, empresa.otroAgente()));
+        assertThrows(NoEncontradoException.class, () -> observaciones.registrar(datos,
+                empresa.otroAgente(), null, Procedencia.deLaPantalla()));
+
+        Actor homonimoDeOtroTenant = independienteTest();
+        assertEquals(jdbc.queryForObject("select nombres_o_razon_social from persona where id_persona=?",
+                        String.class, empresa.agente().idPersona()),
+                jdbc.queryForObject("select nombres_o_razon_social from persona where id_persona=?",
+                        String.class, homonimoDeOtroTenant.idPersona()));
+        assertThrows(NoEncontradoException.class, () -> observaciones.listarDe(id, homonimoDeOtroTenant));
+        assertThrows(NoEncontradoException.class, () -> observaciones.registrar(datos,
+                homonimoDeOtroTenant, null, Procedencia.deLaPantalla()));
+        assertEquals(1, contar("select count(*) from observacion_mercado where id_propiedad=?", id));
+        sinEfectosComerciales(id);
+    }
+
+    @Test
+    @DisplayName("dos intentos concurrentes con la clave original conservan un solo hecho y recibo")
+    void observacionConcurrenteConMismaClaveConservaUnEfectoYResultadoOriginal() throws Exception {
+        Actor profesional = independienteTest();
+        long id = propiedadTest(profesional);
+        var datos = datosParciales(id);
+        var procedencia = procedenciaTest();
+        String clave = "om-" + UUID.randomUUID();
+        var hilos = Executors.newFixedThreadPool(2);
+        CountDownLatch preparados = new CountDownLatch(2), salida = new CountDownLatch(1);
+        try {
+            var trabajos = java.util.stream.IntStream.range(0, 2).mapToObj(i -> hilos.submit(() -> {
+                preparados.countDown();
+                if (!salida.await(15, TimeUnit.SECONDS)) throw new IllegalStateException("Barrera TEST agotada.");
+                return observaciones.registrar(datos, profesional, clave, procedencia);
+            })).toList();
+            assertTrue(preparados.await(15, TimeUnit.SECONDS));
+            salida.countDown();
+            var original = trabajos.get(0).get(40, TimeUnit.SECONDS);
+            assertEquals(original, trabajos.get(1).get(40, TimeUnit.SECONDS));
+            assertEquals(original, observaciones.registrar(datos, profesional, clave, procedencia));
+            assertEquals(1, contar("select count(*) from observacion_mercado where id_propiedad=?", id));
+            assertEquals(1, contar("select count(*) from comando_idempotente where organizacion_id=? and idempotency_key=?",
+                    profesional.idOrganizacion(), clave));
+            var recibo = jdbc.queryForMap("select entidad_id,resultado from comando_idempotente where organizacion_id=? and idempotency_key=?",
+                    profesional.idOrganizacion(), clave);
+            assertEquals(original.id(), ((Number) recibo.get("entidad_id")).longValue());
+            assertEquals(original, json.readValue((String) recibo.get("resultado"), ObservacionMercadoService.FichaObservacion.class));
+            sinEfectosComerciales(id);
+        } finally {
+            salida.countDown();
+            hilos.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("fallar la conservación del recibo revierte también la observación y su procedencia")
+    void falloDelReciboRevierteHechoYProcedenciaEnLaMismaTransaccion() {
+        Actor profesional = independienteTest();
+        long id = propiedadTest(profesional);
+        String clave = "om-" + UUID.randomUUID();
+        var procedencia = procedenciaTest();
+        doThrow(new IllegalStateException("Fallo TEST al guardar recibo de observación"))
+                .when(comandos).registrar(eq(profesional), eq(clave), eq("REGISTRAR_OBSERVACION_MERCADO"),
+                        anyString(), eq("OBSERVACION_MERCADO"), anyLong(), eq(procedencia), anyString());
+
+        assertThrows(IllegalStateException.class,
+                () -> observaciones.registrar(datosParciales(id), profesional, clave, procedencia));
+        assertEquals(0, contar("select count(*) from observacion_mercado where id_propiedad=?", id));
+        assertEquals(0, contar("select count(*) from comando_idempotente where organizacion_id=? and idempotency_key=?",
+                profesional.idOrganizacion(), clave));
+        sinEfectosComerciales(id);
     }
 
     // ==================================================================
-    // Fixture
+    // Fixtures TEST propios de AC054, sin relaciones comerciales artificiales
+    // ==================================================================
+
+    private static ObservacionMercadoService.DatosObservacion datosParciales(long id) {
+        return new ObservacionMercadoService.DatosObservacion(id, hoyLima(),
+                "VENTA", null, null, "Portal TEST", "Aviso observado sin precio declarado");
+    }
+
+    private static LocalDate hoyLima() {
+        return LocalDate.now(ZoneId.of("America/Lima"));
+    }
+
+    private static Procedencia procedenciaTest() {
+        return Procedencia.deAgente("API", "TEST-KAIROS", null, null, "test-observacion",
+                "test-turno", "test-mensaje", "Guardar la referencia observada sin inventar precio")
+                .invocando("registrar_observacion_mercado");
+    }
+
+    private Map<String, Object> estadoFisicoYComercial(long id) {
+        return jdbc.queryForMap("select precio_referencial,moneda_referencial,disponibilidad_comercial,version_fisica from propiedad where id_propiedad=?", id);
+    }
+
+    private void sinEfectosComerciales(long id) {
+        for (String tabla : List.of("captacion", "prospeccion", "precio_propiedad", "publicacion"))
+            assertEquals(0, contar("select count(*) from " + tabla + " where id_propiedad=?", id), tabla);
+    }
+
+    private long propiedadTest(Actor profesional) {
+        return propiedades.registrar(new ComandoRegistro(null, Procedencia.deLaPantalla(), null,
+                "TERRENO", null, "Referencia de mercado TEST",
+                new Ubicacion("Av. TEST " + UUID.randomUUID(), "Surco", null, null, null, null, null, null, null),
+                List.of(), List.of(), List.of(), null, "OBSERVACION"), profesional).idPropiedad();
+    }
+
+    private Actor independienteTest() {
+        return new TransactionTemplate(gestor).execute(tx -> profesionalTest(organizacionTest("INDIVIDUAL", "A"), Actor.AGENTE, false));
+    }
+
+    private long organizacionTest(String modalidad, String estado) {
+        String marca = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+        return jdbc.queryForObject("insert into organizacion(codigo,nombre,modalidad,estado) values(?,?,?,?) returning id_organizacion",
+                Long.class, "TEST-OM-" + marca, "TEST observaciones de mercado", modalidad, estado);
+    }
+
+    private Actor profesionalTest(long org, String rol, boolean administrar) {
+        String marca = UUID.randomUUID().toString().replace("-", "");
+        long cuenta = jdbc.queryForObject("""
+                insert into cuenta_acceso(nombre_usuario,correo_propio,correo_confirmado_en,contrasena_hash)
+                values(?,?,clock_timestamp(),'fixture-no-autenticable-observacion') returning id_cuenta_acceso
+                """, Long.class, "mercado-" + marca, "mercado-" + marca + "@example.invalid");
+        long persona = jdbc.queryForObject("insert into persona(organizacion_id,nombres_o_razon_social) values(?,'Profesional TEST de mercado') returning id_persona",
+                Long.class, org);
+        long idRol = rolTest(org, persona, rol);
+        if (Actor.AGENTE.equals(rol)) jdbc.update("""
+                insert into detalle_agente(organizacion_id,id_persona_rol,codigo_agente,fecha_ingreso,estado_operativo)
+                values(?,?,?,(clock_timestamp() at time zone 'America/Lima')::date,'D')
+                """, org, idRol, "AG-OM-" + idRol);
+        else jdbc.update("""
+                insert into detalle_broker(organizacion_id,id_persona_rol,codigo_broker,fecha_designacion)
+                values(?,?,?,(clock_timestamp() at time zone 'America/Lima')::date)
+                """, org, idRol, "BR-OM-" + idRol);
+        if (administrar) rolTest(org, persona, "ADMIN");
+        jdbc.update("insert into usuario_organizacion(organizacion_id,id_usuario,id_persona,rol,administrar,estado) values(?,?,?,?,?,'A')",
+                org, cuenta, persona, rol, administrar);
+        return new Actor(org, persona, idRol, rol);
+    }
+
+    private long rolTest(long org, long persona, String rol) {
+        return jdbc.queryForObject("""
+                insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde)
+                values(?,?,?,(clock_timestamp() at time zone 'America/Lima')::date) returning id_persona_rol
+                """, Long.class, org, persona, rol);
+    }
+
+    private record EmpresaTest(Actor agente, Actor otroAgente, Actor broker, Actor gobierno) { }
+    private EmpresaTest empresaTest() {
+        return new TransactionTemplate(gestor).execute(tx -> {
+            long org = organizacionTest("EMPRESARIAL", "I");
+            Actor broker = profesionalTest(org, Actor.BROKER, true);
+            Actor agente = profesionalTest(org, Actor.AGENTE, false), otro = profesionalTest(org, Actor.AGENTE, false);
+            for (Actor profesional : List.of(agente, otro)) jdbc.update("""
+                    insert into supervision_agente(organizacion_id,id_rol_broker,id_rol_agente,fecha_asignacion,motivo)
+                    values(?,?,?,(clock_timestamp() at time zone 'America/Lima')::date,'Supervisión TEST de observaciones')
+                    """, org, broker.idRolOperativo(), profesional.idRolOperativo());
+            long idAdmin = jdbc.queryForObject("select id_persona_rol from persona_rol where organizacion_id=? and id_persona=? and tipo_rol='ADMIN'",
+                    Long.class, org, broker.idPersona());
+            jdbc.update("update organizacion set estado='A' where id_organizacion=?", org);
+            return new EmpresaTest(agente, otro, broker,
+                    new Actor(org, broker.idPersona(), idAdmin, Actor.TENANT_ADMIN));
+        });
+    }
+
+    // ==================================================================
+    // Fixture precedente, reconciliado con identificación y apertura C2
     // ==================================================================
 
     /** El inmueble que BROX conoce y no gestiona: sin titular y sin encargo. */
     private long registrarConocida() {
-        return alta(List.of(), List.of());
+        return alta(List.of(), List.of(), "OBSERVACION");
     }
 
     /** El inmueble que BROX gestiona: con su titular. */
     private long registrarGestionada(List<OperacionSolicitada> operaciones) {
-        return alta(List.of(new Titular(unPropietario(), null, Boolean.TRUE)), operaciones);
+        return alta(List.of(new Titular(unPropietario(), null, Boolean.TRUE)), operaciones, "OPERACION");
     }
 
     private Long unPropietario() {
@@ -522,23 +723,23 @@ class PropiedadComoActivoDeDatoIntegrationTest {
                 """, Long.class, actor().idOrganizacion());
     }
 
-    private long alta(List<Titular> titulares, List<OperacionSolicitada> operaciones) {
+    private long alta(List<Titular> titulares, List<OperacionSolicitada> operaciones, String origen) {
         return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
                 "Conocida por BROX",
                 new Ubicacion("Av. Conocimiento "
                         + java.util.UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "TEST-501", null, null, null),
                 titulares,
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
-                operaciones, null), actor()).idPropiedad();
+                operaciones, null, origen), actor()).idPropiedad();
     }
 
     private void observar(long idPropiedad, String operacion, BigDecimal importe, String moneda,
                           LocalDate fecha) {
         observaciones.registrar(new ObservacionMercadoService.DatosObservacion(
                 idPropiedad, fecha, operacion, importe, moneda, "PORTAL",
-                "Aviso publicado en un portal"), actor());
+                "Aviso publicado en un portal"), actor(), null, com.controllocal.service.soporte.Procedencia.deLaPantalla());
     }
 
     /** Todas las observaciones, planas: para poder decir «quedaron IGUALES». */

@@ -304,7 +304,8 @@ class ValidadorConfiguracionSeguridadTest {
                     e.swaggerHabilitado(), e.urlBaseDatos(), e.contrasenaBaseDatos(),
                     e.directorioAlmacen(), e.almacenPersistenteYEscribible(), 1, 0, 0, false, false, false, false));
 
-            assertTrue(problema.contains("V900"), "debe decir que migracion falta: " + problema);
+            assertTrue(problema.contains("MD5"));
+            assertTrue(problema.contains("cambio seguro"), "debe identificar la correccion vigente: " + problema);
         }
 
         @Test

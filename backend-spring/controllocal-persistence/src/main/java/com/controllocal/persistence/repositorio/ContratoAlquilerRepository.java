@@ -7,7 +7,6 @@ import com.controllocal.persistence.query.ComisionGeneradaPorMoneda;
 import com.controllocal.persistence.query.IndicadorContrato;
 import com.controllocal.persistence.query.MovimientoComisionPorMoneda;
 import com.controllocal.persistence.query.RepartoComisionPorMoneda;
-import com.controllocal.persistence.query.ResumenCierres;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -29,13 +28,32 @@ import java.util.Optional;
  * parametro {@code porAgente} distingue las ramas, igual que en oportunidades.
  */
 public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquiler, Long> {
+    /** Sólo datos actuales; esta proyección no concede permiso ni inventa una versión de contrato. */
+    interface PreparacionActual {
+        Long getId(); String getEstado(); Long getEncargo(); Long getOportunidad(); Long getSolicitud(); Long getAnterior();
+        Long getAgenteSolicitud();Long getResponsableEncargo();
+        java.math.BigDecimal getRenta();String getMoneda();java.time.LocalDate getInicio();java.time.LocalDate getFin();
+    }
+    @Query("""
+        select c.id as id,c.estadoContrato as estado,cap.id as encargo,op.id as oportunidad,
+               s.id as solicitud,a.id as anterior,s.agente.id as agenteSolicitud,cap.agente.id as responsableEncargo,
+               c.rentaContractual as renta,c.moneda as moneda,
+               c.fechaInicioContrato as inicio,c.fechaFinContrato as fin
+          from ContratoAlquiler c join c.oportunidad op join op.captacion cap
+          left join c.solicitud s left join c.contratoAnterior a
+         where c.organizacionId=:org and c.id=:id
+        """)
+    Optional<PreparacionActual> preparacionActual(@Param("org")long org,@Param("id")long id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ContratoAlquiler c where c.organizacionId=:org and c.id=:id")
+    Optional<ContratoAlquiler> bloquear(@Param("org")long org,@Param("id")long id);
 
     /**
      * Solo los joins que el WHERE necesita: es lo que se cuenta, sin traer nada.
      *
-     * <p>Los joins de propiedad y cliente estan aqui porque los usa
-     * {@link #FILTROS}. Son INNER igual que en {@link #FICHA}, asi que el
-     * conteo y la pagina siguen viendo el mismo conjunto.
+     * <p>Solicitud y rol Cliente son opcionales reales; sus LEFT JOIN conservan
+     * el mismo conjunto autorizado en ficha, conteo y página.
      *
      * <p><b>El rol y la persona del agente NO estan aqui.</b> Solo los nombra
      * {@link #agentesDeCierres}, que los anade por su cuenta con
@@ -49,57 +67,31 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
               join op.captacion cap
               join cap.propiedad prop
               join cap.agente capAg
-              join op.cliente cli
-              join cli.rol cliRol
-              join cliRol.persona cliPer
-              join c.solicitud s
-              join s.agente ag
+              left join op.cliente cli
+              left join cli.rol cliRol
+              left join cliRol.persona cliPer
+              left join c.solicitud s
+              left join s.agente ag
             """;
 
     /** Lo que {@link #agentesDeCierres} necesita y nadie mas. */
     String JOINS_PERSONA_AGENTE = """
-              join ag.rol agRol
-              join agRol.persona agPer
+              left join ag.rol agRol
+              left join agRol.persona agPer
+              left join c.agenteCierre cierreAg
+              left join cierreAg.rol cierreRol
+              left join cierreRol.persona cierrePer
             """;
 
     String DESDE_WHERE = """
             where c.organizacionId = :idOrganizacion
+              and c.estadoContrato <> 'P' and c.fechaCierre is not null
               and (:sinScope = true
-                   or (:porAgente = true  and ag.id in :roles)
+                   or (:porAgente = true and ((s.id is not null and ag.id in :roles) or (s.id is null and capAg.id in :roles)))
                    or (:porAgente = false and capAg.id in :roles))
             """;
 
     String DESDE = DESDE_JOINS + DESDE_WHERE;
-
-    /**
-     * La liquidacion no es una asociacion del contrato —la relacion se declara
-     * del lado de {@code ComisionLiquidacion}—, asi que se une explicitamente.
-     *
-     * <p><b>LEFT de verdad</b>, y solo para {@link #resumenCierres}: ahi el
-     * contrato SIN liquidacion es parte de la respuesta
-     * ({@code sinLiquidacion}), y un INNER lo dejaria fuera del conteo de
-     * cierres, que es lo primero que se muestra.
-     */
-    String DESDE_CON_COMISION = DESDE_JOINS
-            + " left join ComisionLiquidacion com on com.contrato = c "
-            + DESDE_WHERE;
-
-    /**
-     * Para los agregados de importes, que solo miran liquidaciones existentes.
-     *
-     * <p>Antes usaban {@link #DESDE_CON_COMISION} y colaban un
-     * {@code and com.id is not null} en el WHERE: un INNER escrito como OUTER.
-     * El planificador tenia que resolver el join externo entero para luego
-     * descartar las filas sin pareja.
-     */
-    String DESDE_CON_LIQUIDACION = DESDE_JOINS
-            + " join ComisionLiquidacion com on com.contrato = c "
-            + DESDE_WHERE;
-
-    String DESDE_CON_MOVIMIENTO = DESDE_JOINS
-            + " join ComisionLiquidacion com on com.contrato = c "
-            + " join ComisionMovimiento mov on mov.liquidacion = com "
-            + DESDE_WHERE;
 
     /**
      * Filtros ADITIVOS del listado de cierres, ambos opcionales: con los dos en
@@ -122,7 +114,7 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
      */
     String FILTROS = """
               and (:distrito is null or prop.distrito = :distrito)
-              and (:idAgente is null or ag.id = :idAgente)
+              and (:idAgente is null or coalesce(ag.id,c.idRolAgenteCierre) = :idAgente)
             """;
 
     /**
@@ -136,18 +128,18 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
     String FICHA = """
             select c from ContratoAlquiler c
               join fetch c.oportunidad op
-              join fetch op.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona cliPer
+              left join fetch op.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona cliPer
               join fetch op.captacion cap
               join fetch cap.propiedad prop
               left join fetch prop.rolPropietario propRol
               left join fetch propRol.persona
               join fetch cap.agente capAg
-              join fetch c.solicitud s
-              join fetch s.agente ag
-              join fetch ag.rol agRol
-              join fetch agRol.persona agPer
+              left join fetch c.solicitud s
+              left join fetch s.agente ag
+              left join fetch ag.rol agRol
+              left join fetch agRol.persona agPer
               join fetch c.agenteCierre agc
               join fetch agc.rol agcRol
               join fetch agcRol.persona
@@ -155,8 +147,9 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
 
     String CONDICION = """
              where c.organizacionId = :idOrganizacion
+               and c.estadoContrato <> 'P' and c.fechaCierre is not null
                and (:sinScope = true
-                    or (:porAgente = true  and ag.id in :roles)
+                    or (:porAgente = true and ((s.id is not null and ag.id in :roles) or (s.id is null and capAg.id in :roles)))
                     or (:porAgente = false and capAg.id in :roles))
             """;
 
@@ -177,73 +170,6 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
                                   @Param("idAgente") Long idAgente,
                                   Pageable pageable);
 
-    /**
-     * Los tres KPI de la pantalla de cierres, en una consulta y sobre la BASE.
-     *
-     * <p>Dos cosas que hay que respetar aqui:
-     * <ul>
-     *   <li>la liquidacion se une con un join explicito y <b>LEFT</b>: un
-     *       contrato podria no tenerla, y un inner la dejaria fuera del conteo
-     *       de cierres, que es lo primero que se muestra;</li>
-     *   <li>su estado viaja con el <b>NOMBRE</b> del enum
-     *       ({@code 'PENDIENTE'}), no como CHAR(1). Es una de las dos rupturas
-     *       de la convencion en esta vertical, y comparar con {@code 'P'} da
-     *       cero en silencio.</li>
-     * </ul>
-     */
-    @Query("select count(c) as cierres,"
-            + " count(case when com.estado in ('P', 'R') then 1 end) as porLiquidar,"
-            + " count(case when com.id is null then 1 end) as sinLiquidacion "
-            + DESDE_CON_COMISION + FILTROS)
-    ResumenCierres resumenCierres(@Param("idOrganizacion") long idOrganizacion,
-                                  @Param("sinScope") boolean sinScope,
-                                  @Param("porAgente") boolean porAgente,
-                                  @Param("roles") Collection<Long> roles,
-                                  @Param("distrito") String distrito,
-                                  @Param("idAgente") Long idAgente);
-
-    /** Excluye ANULADA y agrupa por moneda para no sumar unidades distintas. */
-    @Query("select com.moneda as moneda, sum(com.montoBruto) as monto "
-            + DESDE_CON_LIQUIDACION + FILTROS
-            + " and com.estado <> 'A' "
-            + " group by com.moneda order by com.moneda")
-    List<ComisionGeneradaPorMoneda> comisionesGeneradas(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") Collection<Long> roles,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
-
-    /** Reparto asignado, excluyendo anulaciones, para derivar el saldo del agente. */
-    @Query("select com.moneda as moneda, sum(coalesce(com.parteAgente, 0)) as parteAgente "
-            + DESDE_CON_LIQUIDACION + FILTROS
-            + " and com.estado <> 'A' "
-            + " group by com.moneda order by com.moneda")
-    List<RepartoComisionPorMoneda> repartosPorMoneda(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") Collection<Long> roles,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
-
-    /** Evidencia economica real: cobros/reversiones y pagos, por moneda. */
-    @Query("select mov.moneda as moneda, "
-            + "sum(case when mov.tipo = 'C' then mov.monto "
-            + "         when mov.tipo = 'R' then -mov.monto else 0 end) as montoCobrado, "
-            + "sum(case when mov.tipo = 'P' then mov.monto else 0 end) as montoPagadoAgente "
-            + DESDE_CON_MOVIMIENTO + FILTROS
-            + " and com.estado <> 'A' "
-            + " group by mov.moneda order by mov.moneda")
-    List<MovimientoComisionPorMoneda> movimientosPorMoneda(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") Collection<Long> roles,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
-
     // ------------------------------------------------------------------
     // Ficha del agente: por ATRIBUCION HISTORICA (V27), no por la cadena
     // ------------------------------------------------------------------
@@ -257,76 +183,69 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
     // historial de cada quien queda fijo.
     //
     // Ojo: NO llevan filtro de alcance. Quien puede abrir la ficha de un
-    // agente lo decide el service ANTES de llamar aqui (el BROKER solo a los
-    // que supervisa, el ADMIN a todos); meter el scope otra vez aqui daria
+    // agente lo decide el service ANTES de llamar aqui (sólo BROKER supervisor;
+    // gobierno no obtiene cartera); meter otro scope aqui daria
     // numeros distintos a los de la propia ficha.
 
     @Query("""
             select count(c) from ContratoAlquiler c
             where c.organizacionId = :idOrganizacion
               and c.idRolAgenteCierre = :idRolAgente
+              and c.estadoContrato <> 'P' and c.fechaCierre is not null
             """)
     long contarCierresDeAgente(@Param("idOrganizacion") long idOrganizacion,
                                @Param("idRolAgente") long idRolAgente);
 
-    /** Comision GENERADA: el bruto pactado, excluyendo liquidaciones anuladas. */
-    @Query("""
-            select com.moneda as moneda, sum(com.montoBruto) as monto
-            from ContratoAlquiler c
-              join ComisionLiquidacion com on com.contrato = c
-            where c.organizacionId = :idOrganizacion
-              and c.idRolAgenteCierre = :idRolAgente
-              and com.estado <> 'A'
-            group by com.moneda order by com.moneda
-            """)
-    List<ComisionGeneradaPorMoneda> comisionesGeneradasDeAgente(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("idRolAgente") long idRolAgente);
+    String HISTORIA_CIERRES_AGENTE="""
+            from contrato_alquiler c
+            left join comision_liquidacion com on com.organizacion_id=c.organizacion_id and com.id_contrato_alquiler=c.id_contrato_alquiler
+            """;
+    String FILTRO_HISTORICO_AGENTE="""
+            where c.organizacion_id=:idOrganizacion and c.id_rol_agente_cierre=:idRolAgente
+              and c.estado_contrato<>'P' and c.fecha_cierre is not null
+            """;
 
-    /** Reparto ASIGNADO al agente por el broker; base del saldo por pagarle. */
-    @Query("""
-            select com.moneda as moneda, sum(coalesce(com.parteAgente, 0)) as parteAgente
-            from ContratoAlquiler c
-              join ComisionLiquidacion com on com.contrato = c
-            where c.organizacionId = :idOrganizacion
-              and c.idRolAgenteCierre = :idRolAgente
-              and com.estado <> 'A'
-            group by com.moneda order by com.moneda
-            """)
-    List<RepartoComisionPorMoneda> repartosDeAgente(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("idRolAgente") long idRolAgente);
+    String BASE_ECONOMICA_AGENTE="with base as (select com.id_comision_liquidacion as comision,com.id_ultima_evaluacion,com.id_evaluacion_base_reparto,com.parte_agente "
+            +HISTORIA_CIERRES_AGENTE+FILTRO_HISTORICO_AGENTE+"), fondos as materialized ("
+            +"select b.comision,m.moneda,sum(case when m.tipo='C' then m.monto when m.tipo='R' then -m.monto end) as recibido,"
+            +"sum(case when m.tipo='P' then m.monto end) as pagado,"
+            +"bool_or(m.tipo not in ('C','R','P','A') or m.moneda is null or m.moneda!~'^[A-Z]{3}$') as ilegible "
+            +"from base b join comision_movimiento m on m.organizacion_id=:idOrganizacion and m.id_comision_liquidacion=b.comision group by b.comision,m.moneda) ";
 
-    /**
-     * Evidencia economica REAL, que es cosa distinta de lo generado: lo cobrado
-     * por la corredora (cobros menos reversiones) y lo pagado al agente.
-     */
-    @Query("""
-            select mov.moneda as moneda,
-                   sum(case when mov.tipo = 'C' then mov.monto
-                            when mov.tipo = 'R' then -mov.monto else 0 end) as montoCobrado,
-                   sum(case when mov.tipo = 'P' then mov.monto else 0 end) as montoPagadoAgente
-            from ContratoAlquiler c
-              join ComisionLiquidacion com on com.contrato = c
-              join ComisionMovimiento mov on mov.liquidacion = com
-            where c.organizacionId = :idOrganizacion
-              and c.idRolAgenteCierre = :idRolAgente
-              and com.estado <> 'A'
-            group by mov.moneda order by mov.moneda
-            """)
-    List<MovimientoComisionPorMoneda> movimientosDeAgente(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("idRolAgente") long idRolAgente);
+    @Query(value=BASE_ECONOMICA_AGENTE+", cuantias as (select b.comision,e.resultado::jsonb#>'{calculo,cuantia}' as q "
+            +"from base b left join comision_evaluacion e on e.organizacion_id=:idOrganizacion and e.id_comision_liquidacion=b.comision and e.id_comision_evaluacion=b.id_ultima_evaluacion), "
+            +"valores as (select comision,q->>'moneda' as moneda,case when q->>'moneda' is not null then (q->>'importe')::numeric end as monto from cuantias), "
+            +"saldos as (select v.*,case when monto is not null and not exists(select 1 from fondos f where f.comision=v.comision and f.recibido is not null and (f.moneda<>v.moneda or f.recibido<0 or f.ilegible)) "
+            +"then greatest(monto-coalesce((select f.recibido from fondos f where f.comision=v.comision and f.moneda=v.moneda),0),0) end as saldo from valores v) "
+            +"select moneda,sum(monto) as monto,sum(saldo) as \"saldoInformativoSobreCalculo\",count(monto) as determinados,count(*)-count(monto) as pendientes,"
+            +"count(saldo) as \"saldoDeterminados\",count(*)-count(saldo) as \"saldoPendientes\" from saldos group by moneda order by moneda nulls last",nativeQuery=true)
+    List<ComisionGeneradaPorMoneda> comisionesGeneradasDeAgente(@Param("idOrganizacion") long org,@Param("idRolAgente") long agente);
 
+    @Query(value=BASE_ECONOMICA_AGENTE+", valores as (select b.comision,e.resultado::jsonb#>>'{calculo,cuantia,moneda}' as moneda,"
+            +"case when e.resultado::jsonb#>>'{calculo,cuantia,moneda}' is not null then b.parte_agente end as monto "
+            +"from base b left join comision_evaluacion e on e.organizacion_id=:idOrganizacion and e.id_comision_liquidacion=b.comision and e.id_comision_evaluacion=b.id_evaluacion_base_reparto), "
+            +"saldos as (select v.*,case when monto is not null and not exists(select 1 from fondos f where f.comision=v.comision and f.pagado is not null and (f.moneda<>v.moneda or f.ilegible)) "
+            +"then greatest(monto-coalesce((select f.pagado from fondos f where f.comision=v.comision and f.moneda=v.moneda),0),0) end as saldo from valores v) "
+            +"select moneda,sum(monto) as \"parteAgente\",sum(saldo) as \"saldoPagoAgente\",count(monto) as determinados,count(*)-count(monto) as pendientes,"
+            +"count(saldo) as \"saldoDeterminados\",count(*)-count(saldo) as \"saldoPendientes\" from saldos group by moneda order by moneda nulls last",nativeQuery=true)
+    List<RepartoComisionPorMoneda> repartosDeAgente(@Param("idOrganizacion") long org,@Param("idRolAgente") long agente);
+
+    // Ingresos C-R y pagos P históricos. No se emite ningún movimiento nuevo.
+    // Ledger autorizado conocido: ninguna fila P acredita cero pagado, no una base de cálculo desconocida.
+    @Query(value=BASE_ECONOMICA_AGENTE+"select moneda,coalesce(sum(recibido),0) as \"montoCobrado\",coalesce(sum(pagado),0) as \"montoPagadoAgente\","
+            +"bool_or(ilegible or coalesce(recibido<0,false)) as anomalia from fondos group by moneda order by moneda nulls last",nativeQuery=true)
+    List<MovimientoComisionPorMoneda> movimientosDeAgente(@Param("idOrganizacion") long org,@Param("idRolAgente") long agente);
     /** Cierres del agente para la ficha, del mas reciente al mas antiguo. */
     @Query(value = FICHA + """
             where c.organizacionId = :idOrganizacion
               and c.idRolAgenteCierre = :idRolAgente
+              and c.estadoContrato <> 'P' and c.fechaCierre is not null
             """,
             countQuery = """
                     select count(c) from ContratoAlquiler c
                     where c.organizacionId = :idOrganizacion
                       and c.idRolAgenteCierre = :idRolAgente
+              and c.estadoContrato <> 'P' and c.fechaCierre is not null
                     """)
     Page<ContratoAlquiler> cierresDeAgente(@Param("idOrganizacion") long idOrganizacion,
                                            @Param("idRolAgente") long idRolAgente,
@@ -342,9 +261,9 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
                                     @Param("idAgente") Long idAgente);
 
     /** Agentes con al menos un cierre en el alcance. */
-    @Query("select distinct ag.id as id, agPer.nombresORazonSocial as nombre "
+    @Query("select distinct coalesce(ag.id,c.idRolAgenteCierre) as id, coalesce(agPer.nombresORazonSocial,cierrePer.nombresORazonSocial) as nombre "
             + DESDE_JOINS + JOINS_PERSONA_AGENTE + DESDE_WHERE + FILTROS
-            + " order by agPer.nombresORazonSocial")
+            + " order by coalesce(agPer.nombresORazonSocial,cierrePer.nombresORazonSocial)")
     List<AgenteConCierres> agentesDeCierres(@Param("idOrganizacion") long idOrganizacion,
                                             @Param("sinScope") boolean sinScope,
                                             @Param("porAgente") boolean porAgente,
@@ -385,30 +304,29 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
      */
     String COMUN_TEXTO = """
              where c.organizacion_id = :idOrganizacion
+               and c.estado_contrato <> 'P' and c.fecha_cierre is not null
                and (:sinScope = true
                     or (:porAgente = true
-                        and s.id_rol_agente = any(cast(:roles as bigint[])))
+                        and ((s.id_solicitud is not null and s.id_rol_agente = any(cast(:roles as bigint[])))
+                             or (s.id_solicitud is null and cap.id_rol_agente = any(cast(:roles as bigint[])))))
                     or (:porAgente = false
                         and cap.id_rol_agente = any(cast(:roles as bigint[]))))
                and (cast(:distrito as varchar) is null
                     or prop.distrito = cast(:distrito as varchar))
                and (cast(:idAgente as bigint) is null
-                    or s.id_rol_agente = cast(:idAgente as bigint))
+                    or coalesce(s.id_rol_agente,c.id_rol_agente_cierre) = cast(:idAgente as bigint))
             """;
 
     /**
-     * Tronco de las cuatro ramas. La solicitud se une con INNER a proposito:
-     * {@code contrato_alquiler.id_solicitud} es NULLABLE y {@link #DESDE_JOINS}
-     * tambien la exige, asi que un contrato sin solicitud queda fuera de la
-     * bandeja igual que antes. Las otras tres son FK NOT NULL y no descartan
-     * ninguna fila; estan porque el alcance y el filtro por distrito viven en
-     * ellas.
+     * RF059: la solicitud es opcional real. Su ausencia no oculta el contrato;
+     * el alcance de ese caso es el responsable actual del Encargo, igual que
+     * el lector canónico. Preparaciones sin firma no pertenecen a este conjunto.
      */
     String DESDE_TEXTO = """
               from contrato_alquiler c
-              join solicitud_alquiler s on s.id_solicitud = c.id_solicitud
+              left join solicitud_alquiler s on s.id_solicitud = c.id_solicitud
               join oportunidad_comercial op on op.id_oportunidad = c.id_oportunidad
-              join captacion cap on cap.id_captacion = c.id_captacion
+              join captacion cap on cap.id_captacion = op.id_captacion
               join propiedad prop on prop.id_propiedad = c.id_propiedad
             """;
 
@@ -472,6 +390,94 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
                                     @Param("limite") int limite,
                                     @Param("desplazamiento") int desplazamiento);
 
+    /** Proyección de lectura: cálculo/devengo de la evaluación exacta, fondos del ledger. */
+    interface FinanzasCierres {
+        String getDimension(); String getMoneda(); java.math.BigDecimal getMonto();
+        Long getDeterminados(); Long getPendientes(); Long getCierres();
+        Long getConLecturaFinanciera(); Long getSinEvaluacion(); Boolean getAnomalia();
+    }
+
+    // seleccion conserva el mismo conjunto que lista/conteo. La autorización financiera
+    // se intersecta ANTES de leer la evaluación o los movimientos. Sin comisión, el
+    // recurso potencial sigue el Encargo; con ella, su Encargo actual como en Money.
+    String FINANZAS_CIERRES = """
+            ), poblacion as materialized (
+                select c.id_contrato_alquiler as id,cap.id_captacion as encargo,cap.id_rol_agente
+                from seleccion x join contrato_alquiler c on c.id_contrato_alquiler=x.id
+                join oportunidad_comercial op on op.id_oportunidad=c.id_oportunidad
+                join captacion cap on cap.id_captacion=op.id_captacion
+                where c.organizacion_id=:idOrganizacion and cap.organizacion_id=:idOrganizacion
+            ), financiera as materialized (
+                select p.id,p.encargo,com.id_comision_liquidacion as comision,
+                       com.id_captacion as encargo_comision,com.id_ultima_evaluacion
+                from poblacion p
+                left join comision_liquidacion com on com.organizacion_id=:idOrganizacion and com.id_contrato_alquiler=p.id
+                left join captacion cap_com on cap_com.organizacion_id=:idOrganizacion and cap_com.id_captacion=com.id_captacion
+                where (:sinScope or (case when com.id_comision_liquidacion is null then p.id_rol_agente
+                                    else cap_com.id_rol_agente end)=any(cast(:roles as bigint[])))
+            ), evaluada as materialized (
+                select f.*,e.id_comision_evaluacion as evaluacion,
+                       e.resultado::jsonb as material
+                from financiera f left join comision_evaluacion e
+                  on e.organizacion_id=:idOrganizacion and e.id_comision_liquidacion=f.comision
+                 and e.id_comision_evaluacion=f.id_ultima_evaluacion
+            ), importes as materialized (
+                select e.*,
+                  (material#>>'{calculo,cuantia,importe}')::numeric as calculo,
+                  material#>>'{calculo,cuantia,moneda}' as moneda_calculo,
+                  (material#>>'{devengo,cuantiaAcreditada,importe}')::numeric as devengo,
+                  material#>>'{devengo,cuantiaAcreditada,moneda}' as moneda_devengo
+                from evaluada e
+            ), fondos as materialized (
+                select f.comision,m.moneda,
+                       sum(case when m.tipo='C' then m.monto when m.tipo='R' then -m.monto end) as recibido
+                from financiera f join comision_movimiento m
+                  on m.organizacion_id=:idOrganizacion and m.id_comision_liquidacion=f.comision
+                where m.tipo in ('C','R') group by f.comision,m.moneda
+            ), datos as (
+                select 'CALCULADO'::text as dimension,moneda_calculo as moneda,
+                       case when moneda_calculo is not null then calculo end as monto from importes
+                union all
+                select 'DEVENGADO',moneda_devengo,case when moneda_devengo is not null then devengo end from importes
+                union all
+                select 'RECIBIDO',moneda,recibido from fondos
+                union all
+                select 'SALDO',i.moneda_calculo,
+                  case when i.calculo is not null and i.moneda_calculo is not null
+                        and not exists(select 1 from fondos f where f.comision=i.comision and f.moneda<>i.moneda_calculo)
+                       then greatest(i.calculo-coalesce((select f.recibido from fondos f
+                                where f.comision=i.comision and f.moneda=i.moneda_calculo),0),0) end
+                from importes i
+            ), control as (
+                select (select count(*) from poblacion) as cierres,
+                       (select count(*) from financiera) as financieros,
+                       (select count(*) from evaluada where id_ultima_evaluacion is null) as sin_evaluacion,
+                       (exists(select 1 from evaluada where (id_ultima_evaluacion is not null and evaluacion is null)
+                                 or encargo_comision<>encargo)
+                        or exists(select 1 from fondos where recibido<0)
+                        or exists(select 1 from financiera f join comision_movimiento m
+                          on m.organizacion_id=:idOrganizacion and m.id_comision_liquidacion=f.comision
+                          where m.tipo not in ('C','R','P','A'))) as anomalia
+            )
+            select 'CONTADORES' as dimension,null::text as moneda,null::numeric as monto,
+                   0::bigint as determinados,0::bigint as pendientes,cierres,
+                   financieros as "conLecturaFinanciera",sin_evaluacion as "sinEvaluacion",anomalia from control
+            union all
+            select dimension,moneda,sum(monto),count(monto),count(*)-count(monto),
+                   0::bigint,0::bigint,0::bigint,false
+            from datos group by dimension,moneda
+            order by dimension,moneda nulls last
+            """;
+
+    @Query(value="with seleccion as ("+SELECT_TEXTO+DESDE_TEXTO+COMUN_TEXTO+FINANZAS_CIERRES,nativeQuery=true)
+    List<FinanzasCierres> finanzasDeCierres(@Param("idOrganizacion") long org,@Param("sinScope") boolean global,
+        @Param("porAgente") boolean porAgente,@Param("roles") String roles,@Param("distrito") String distrito,@Param("idAgente") Long agente);
+
+    @Query(value="with seleccion as ("+RAMAS_TEXTO+FINANZAS_CIERRES,nativeQuery=true)
+    List<FinanzasCierres> finanzasDeCierresPorTexto(@Param("idOrganizacion") long org,@Param("sinScope") boolean global,
+        @Param("porAgente") boolean porAgente,@Param("roles") String roles,@Param("texto") String texto,
+        @Param("distrito") String distrito,@Param("idAgente") Long agente);
+
     /** Total del MISMO conjunto que paginan las dos variantes de arriba. */
     @Query(value = "select count(*) from (" + RAMAS_TEXTO + ") x", nativeQuery = true)
     long contarPorTexto(@Param("idOrganizacion") long idOrganizacion,
@@ -481,76 +487,6 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
                         @Param("texto") String texto,
                         @Param("distrito") String distrito,
                         @Param("idAgente") Long idAgente);
-
-    /**
-     * Los tres contadores de la cabecera sobre el MISMO conjunto. El LEFT es
-     * el legitimo: {@code sinLiquidacion} cuenta justo los que no casan.
-     */
-    @Query(value = "select count(*) as cierres,"
-            + " count(case when com.estado in ('P', 'R') then 1 end) as \"porLiquidar\","
-            + " count(case when com.id_comision_liquidacion is null then 1 end) as \"sinLiquidacion\""
-            + " from (" + RAMAS_TEXTO + ") x"
-            + " left join comision_liquidacion com"
-            + "   on com.id_contrato_alquiler = x.id and com.organizacion_id = :idOrganizacion",
-            nativeQuery = true)
-    ResumenCierres resumenCierresPorTexto(@Param("idOrganizacion") long idOrganizacion,
-                                          @Param("sinScope") boolean sinScope,
-                                          @Param("porAgente") boolean porAgente,
-                                          @Param("roles") String roles,
-                                          @Param("texto") String texto,
-                                          @Param("distrito") String distrito,
-                                          @Param("idAgente") Long idAgente);
-
-    @Query(value = "select com.moneda as moneda, sum(com.monto_bruto) as monto"
-            + " from comision_liquidacion com"
-            + " join (" + RAMAS_TEXTO + ") x on x.id = com.id_contrato_alquiler"
-            + " where com.organizacion_id = :idOrganizacion and com.estado <> 'A'"
-            + " group by com.moneda order by com.moneda",
-            nativeQuery = true)
-    List<ComisionGeneradaPorMoneda> comisionesGeneradasPorTexto(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") String roles,
-            @Param("texto") String texto,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
-
-    @Query(value = "select com.moneda as moneda,"
-            + " sum(coalesce(com.parte_agente, 0)) as \"parteAgente\""
-            + " from comision_liquidacion com"
-            + " join (" + RAMAS_TEXTO + ") x on x.id = com.id_contrato_alquiler"
-            + " where com.organizacion_id = :idOrganizacion and com.estado <> 'A'"
-            + " group by com.moneda order by com.moneda",
-            nativeQuery = true)
-    List<RepartoComisionPorMoneda> repartosPorMonedaPorTexto(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") String roles,
-            @Param("texto") String texto,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
-
-    @Query(value = "select mov.moneda as moneda,"
-            + " sum(case when mov.tipo = 'C' then mov.monto"
-            + "          when mov.tipo = 'R' then -mov.monto else 0 end) as \"montoCobrado\","
-            + " sum(case when mov.tipo = 'P' then mov.monto else 0 end) as \"montoPagadoAgente\""
-            + " from comision_movimiento mov"
-            + " join comision_liquidacion com"
-            + "   on com.id_comision_liquidacion = mov.id_comision_liquidacion"
-            + " join (" + RAMAS_TEXTO + ") x on x.id = com.id_contrato_alquiler"
-            + " where mov.organizacion_id = :idOrganizacion and com.estado <> 'A'"
-            + " group by mov.moneda order by mov.moneda",
-            nativeQuery = true)
-    List<MovimientoComisionPorMoneda> movimientosPorMonedaPorTexto(
-            @Param("idOrganizacion") long idOrganizacion,
-            @Param("sinScope") boolean sinScope,
-            @Param("porAgente") boolean porAgente,
-            @Param("roles") String roles,
-            @Param("texto") String texto,
-            @Param("distrito") String distrito,
-            @Param("idAgente") Long idAgente);
 
     /** Distritos del MISMO conjunto, para el filtro data-driven. */
     @Query(value = "select distinct prop.distrito from (" + RAMAS_TEXTO + ") x"
@@ -567,12 +503,12 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
                                             @Param("idAgente") Long idAgente);
 
     /** Agentes del MISMO conjunto, para el filtro data-driven. */
-    @Query(value = "select distinct s.id_rol_agente as id,"
+    @Query(value = "select distinct coalesce(s.id_rol_agente,c.id_rol_agente_cierre) as id,"
             + " per.nombres_o_razon_social as nombre"
             + " from (" + RAMAS_TEXTO + ") x"
             + " join contrato_alquiler c on c.id_contrato_alquiler = x.id"
-            + " join solicitud_alquiler s on s.id_solicitud = c.id_solicitud"
-            + " join persona_rol rol on rol.id_persona_rol = s.id_rol_agente"
+            + " left join solicitud_alquiler s on s.id_solicitud = c.id_solicitud"
+            + " join persona_rol rol on rol.id_persona_rol = coalesce(s.id_rol_agente,c.id_rol_agente_cierre)"
             + " join persona per on per.id_persona = rol.id_persona"
             + " order by per.nombres_o_razon_social",
             nativeQuery = true)
@@ -647,7 +583,7 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
             select c.id as entidadId, s.codigoSolicitud as entidadCodigo,
                    c.fechaCierre as fechaPlazo, cast(null as string) as marca
             from ContratoAlquiler c
-              join c.solicitud s
+              left join c.solicitud s
               join ComisionLiquidacion com on com.contrato.id = c.id
             where c.organizacionId = :idOrganizacion
               and s.agente.id = :idRolAgente
@@ -715,26 +651,11 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
             """)
     List<IndicadorContrato> indicadores(@Param("idOrganizacion") long idOrganizacion);
 
-    /**
-     * Fuente de cierres del seguimiento comercial: el tenant completo. La fila
-     * del cierre se arma <b>desde la solicitud</b>, no desde el contrato, asi
-     * que lo que se trae es el grafo de ELLA —su oportunidad, su cliente, su
-     * captacion y su agente—. La v1 traia los contratos y despues buscaba la
-     * solicitud de cada uno por id (N+1); aqui viene en el mismo select.
-     */
-    @Query("""
-            select c from ContratoAlquiler c
-              join fetch c.solicitud s
-              join fetch s.agente ag
-              join fetch ag.rol agRol
-              join fetch agRol.persona
-              join fetch s.oportunidad solOp
-              join fetch solOp.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona
-              join fetch solOp.captacion solCap
-              join fetch solCap.propiedad
-            where c.organizacionId = :idOrganizacion
-            """)
-    List<ContratoAlquiler> listarSeguimiento(@Param("idOrganizacion") long idOrganizacion);
+    /** Mismo conjunto autorizado de cierres; Solicitud/Cliente opcionales, sin N+1. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths={
+        "solicitud.agente.rol.persona","oportunidad.cliente.rol.persona",
+        "oportunidad.captacion.propiedad.rolPropietario.persona","agenteCierre.rol.persona"})
+    @Query("select c " + DESDE)
+    List<ContratoAlquiler> listarSeguimiento(@Param("idOrganizacion") long idOrganizacion,
+        @Param("sinScope") boolean sinScope,@Param("porAgente") boolean porAgente,@Param("roles") Collection<Long> roles);
 }

@@ -10,6 +10,9 @@ import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
 import com.controllocal.persistence.repositorio.EventoDominioRepository;
 import com.controllocal.persistence.repositorio.TitularidadPropiedadRepository;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.SelectableConsumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -23,17 +26,14 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
+import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,8 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       guardar.</li>
  * </ul>
  *
- * <p>Cada prueba es {@code @Transactional}: escribe y deshace, asi que se puede
- * correr contra la base de desarrollo sin dejar rastro.
+ * <p>Se ejecuta sólo en una base de pruebas autorizada. Los casos
+ * {@code @Transactional} revierten sus escrituras; esto no autoriza una base compartida.
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
@@ -79,6 +79,7 @@ class NucleoUniversalIntegrationTest {
     @Autowired CatalogoAtributoRepository catalogo;
     @Autowired AtributoPropiedadRepository atributos;
     @Autowired EventoDominioRepository eventos;
+    @Autowired EntityManagerFactory entidades;
 
     private long unaPropiedad() {
         return jdbc.queryForObject("select min(id_propiedad) from propiedad", Long.class);
@@ -395,10 +396,8 @@ class NucleoUniversalIntegrationTest {
     @Test
     @DisplayName("ninguna columna obligatoria queda sin mapear en su entidad")
     void todaColumnaObligatoriaEstaMapeada() throws Exception {
-        Map<String, String> fuentePorTabla = fuentesDeEntidadesPorTabla();
-        List<String> huerfanas = new java.util.ArrayList<>();
-
-        for (Map<String, Object> fila : jdbc.queryForList("""
+        Map<String,Set<String>> mapeadas=columnasMapeadasPorTabla();
+        List<Map<String,Object>> obligatorias=jdbc.queryForList("""
                 select c.table_name, c.column_name
                   from information_schema.columns c
                   join information_schema.tables t
@@ -410,67 +409,67 @@ class NucleoUniversalIntegrationTest {
                    and c.is_generated = 'NEVER'
                    and c.identity_generation is null
                  order by c.table_name, c.column_name
-                """)) {
-            String tabla = (String) fila.get("table_name");
-            String columna = (String) fila.get("column_name");
-            String fuente = fuentePorTabla.get(tabla);
-            if (fuente == null) {
-                continue;
-            }
-            boolean mapeada = fuente.contains("\"" + columna + "\"");
-            if (!mapeada) {
-                huerfanas.add(tabla + "." + columna);
-            }
-        }
-
-        assertEquals(List.of(), huerfanas,
+                """);
+        assertEquals(List.of(),columnasSinMapeo(obligatorias,mapeadas),
                 "Estas columnas son NOT NULL sin DEFAULT y su entidad no las mapea: cualquier "
                         + "INSERT por JPA fallara. `ddl-auto: validate` no lo detecta porque solo "
                         + "mira las columnas que la entidad SI declara.");
     }
 
-    /** Mapa {@code tabla -> codigo fuente de su entidad}, leyendo {@code @Table(name=...)}. */
-    private static Map<String, String> fuentesDeEntidadesPorTabla() throws Exception {
-        Path dominio = Path.of("..", "controllocal-domain", "src", "main", "java").toAbsolutePath()
-                .normalize();
-        Pattern tabla = Pattern.compile("@Table\\(name\\s*=\\s*\"([a-z_]+)\"");
-        Map<String, String> porTabla = new java.util.LinkedHashMap<>();
+    @Test
+    void elGateReconoceColumnasImplicitasYHeredadasPeroDetectaUnaOmitida() {
+        var reales=columnasMapeadasPorTabla();
+        var operacion=reales.get("operacion_herramienta");
+        assertNotNull(operacion);
+        assertTrue(operacion.containsAll(Set.of("referencia","capacidad","huella","contenido",
+                "procedencia","organizacion_id")),"Incluye nombres implícitos y la superclase mapeada real.");
+        Map<String,Set<String>> sabotaje=new LinkedHashMap<>(reales);
+        Set<String> incompletas=new LinkedHashSet<>(operacion);incompletas.remove("huella");
+        sabotaje.put("operacion_herramienta",incompletas);
+        assertEquals(List.of("operacion_herramienta.huella"),columnasSinMapeo(
+                List.of(Map.<String,Object>of("table_name","operacion_herramienta","column_name","huella")),sabotaje));
+    }
 
-        // Las columnas heredadas —`organizacion_id` de EntidadDeOrganizacion—
-        // no estan en el fichero de la entidad, sino en su @MappedSuperclass.
-        // Sin esto, el gate marcaria 48 tablas como sin mapear y solo estaria
-        // diciendo que no sabe leer una herencia.
-        StringBuilder heredado = new StringBuilder();
-        try (Stream<Path> ficheros = Files.walk(dominio)) {
-            for (Path fichero : ficheros.filter(f -> f.toString().endsWith(".java")).toList()) {
-                String fuente = Files.readString(fichero, StandardCharsets.UTF_8);
-                if (fuente.contains("@MappedSuperclass")) {
-                    heredado.append(fuente);
-                }
+    private static List<String> columnasSinMapeo(List<Map<String,Object>> obligatorias,
+                                                Map<String,Set<String>> mapeadas) {
+        List<String> huerfanas=new java.util.ArrayList<>();
+        for(Map<String,Object> fila:obligatorias) {
+            String tabla = (String) fila.get("table_name");
+            String columna = (String) fila.get("column_name");
+            Set<String> columnas=mapeadas.get(tabla);
+            if (columnas == null) {
+                continue;
+            }
+            if (!columnas.contains(columna)) {
+                huerfanas.add(tabla + "." + columna);
             }
         }
+        return huerfanas;
+    }
 
-        try (Stream<Path> ficheros = Files.walk(dominio)) {
-            for (Path fichero : ficheros.filter(f -> f.toString().endsWith(".java")).toList()) {
-                String fuente = Files.readString(fichero, StandardCharsets.UTF_8);
-                Matcher encontrada = tabla.matcher(fuente);
-                if (encontrada.find()) {
-                    // Una entidad y su @Embeddable pueden compartir tabla; se
-                    // concatenan para que las columnas de los dos cuenten.
-                    porTabla.merge(encontrada.group(1), fuente + heredado, (a, b) -> a + b);
-                }
-            }
-        }
-        // `catalogo_atributo_tipo` es una @CollectionTable, no una @Table: sus
-        // columnas viven en AplicacionAtributo y en la @CollectionTable del
-        // padre. Se junta a mano porque el patron de arriba no la ve.
-        Path aplicacion = dominio.resolve(
-                Path.of("com", "controllocal", "domain", "inmueble", "AplicacionAtributo.java"));
-        if (Files.exists(aplicacion)) {
-            porTabla.merge("catalogo_atributo_tipo",
-                    Files.readString(aplicacion, StandardCharsets.UTF_8) + "\"id_catalogo_atributo\"",
-                    (a, b) -> a + b);
-        }
+    /** Columnas físicas que el proveedor usa realmente, incluidos identificador, herencia y colecciones. */
+    private Map<String,Set<String>> columnasMapeadasPorTabla() {
+        Map<String,Set<String>> porTabla=new LinkedHashMap<>();
+        SelectableConsumer guardar=(indice,seleccion)->{
+            if(seleccion.isFormula())return;
+            String tabla=seleccion.getContainingTableExpression().replace("\"","");
+            if(tabla.startsWith("public."))tabla=tabla.substring("public.".length());
+            if(tabla.contains("."))return;
+            porTabla.computeIfAbsent(tabla,t->new LinkedHashSet<>())
+                    .add(seleccion.getSelectionExpression().replace("\"",""));
+        };
+        var metamodelo=entidades.unwrap(SessionFactoryImplementor.class).getMappingMetamodel();
+        metamodelo.forEachEntityDescriptor(entidad->{
+            entidad.getIdentifierMapping().forEachSelectable(guardar);
+            entidad.forEachSelectable(guardar);
+        });
+        metamodelo.forEachCollectionDescriptor(coleccion->{
+            var atributo=coleccion.getAttributeMapping();
+            atributo.getKeyDescriptor().visitKeySelectables(guardar);
+            atributo.getElementDescriptor().forEachSelectable(guardar);
+            if(atributo.getIndexDescriptor()!=null)atributo.getIndexDescriptor().forEachSelectable(guardar);
+            if(atributo.getIdentifierDescriptor()!=null)atributo.getIdentifierDescriptor().forEachSelectable(guardar);
+        });
         return porTabla;
     }
 }

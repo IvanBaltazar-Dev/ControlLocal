@@ -1,0 +1,45 @@
+<brox-page-header miga="Organización" [titulo]="esEdicion ? 'Editar perfil laboral' : 'Invitar a la organización'"
+  sub="La cuenta personal y sus credenciales pertenecen a su titular." />
+<cl-estado-listado [cargando]="cargando()" [error]="null" [vacio]="false" />
+@if (error()) { <p role="alert">{{ error() }}</p> }
+@if (emitida(); as invitacion) {
+  <section class="cl-seccion" role="status"><h2>Invitación registrada</h2>
+    <p>El titular deberá aceptar con su cuenta BROX verificada. La pertenencia aún no está activa.</p>
+    <p>Referencia: <code>{{ invitacion.referencia }}</code></p>
+    <p>Vence: {{ invitacion.venceEn }}</p><button class="cl-btn" (click)="volver()">Volver a pertenencias</button>
+  </section>
+} @else if (!cargando()) {
+  <form class="cl-formulario" [formGroup]="formulario" (ngSubmit)="guardar()">
+    @if (!esEdicion) {
+      <section class="cl-seccion"><h2>Pertenencia que se propone</h2><div class="cl-grid">
+        <label class="cl-campo">Correo de la cuenta BROX<input type="email" formControlName="correoCuenta" autocomplete="off" /></label>
+        <label class="cl-campo">Rol comercial<select formControlName="rol">
+          <option value="">Sin rol comercial</option><option value="AGENTE">Agente</option><option value="BROKER">Broker</option>
+        </select></label>
+        <label class="cl-campo"><span>Gobierno organizacional</span><span><input type="checkbox" formControlName="administrar" /> TenantAdmin</span></label>
+        @if (formulario.controls.rol.value === 'AGENTE') {
+          <label class="cl-campo">Broker supervisor<select formControlName="supervisor"><option value="">Seleccionar</option>
+            @for (b of supervisores(); track b.id) { <option [value]="b.id">{{ b.nombre ?? b.codigoBroker ?? b.id }}</option> }
+          </select></label>
+          @if (hayMasSupervisores()) { <button type="button" class="cl-btn" (click)="masSupervisores()">Cargar más supervisores</button> }
+        }
+        <label class="cl-campo">Vencimiento (hora local del dispositivo)<input type="datetime-local" formControlName="venceEn" /></label>
+        <label class="cl-campo">Motivo<textarea formControlName="motivo"></textarea></label>
+      </div></section>
+    }
+    <section class="cl-seccion"><h2>Datos laborales conocidos</h2><div class="cl-grid">
+      <label class="cl-campo">Nombre<input formControlName="nombre" /></label>
+      <label class="cl-campo">Teléfono<input type="tel" formControlName="telefono" /></label>
+      <label class="cl-campo">Correo laboral<input type="email" formControlName="correoLaboral" /></label>
+      <label class="cl-campo">Zona<input formControlName="zona" /></label>
+      @if (formulario.controls.rol.value === 'AGENTE') {
+        <label class="cl-campo">Disponibilidad<select formControlName="estadoOperativo"><option value="">Conservar / sin indicar</option>
+          <option value="D">Disponible</option><option value="O">Ocupado</option><option value="V">Vacaciones</option><option value="S">Suspendido</option>
+        </select></label>
+      }
+    </div></section>
+    <div class="cl-acciones-formulario"><button type="button" class="cl-btn" (click)="volver()">Volver</button>
+      <button type="submit" class="cl-btn primario" [disabled]="guardando()">{{ esEdicion ? 'Guardar perfil laboral' : 'Registrar invitación' }}</button>
+    </div>
+  </form>
+}

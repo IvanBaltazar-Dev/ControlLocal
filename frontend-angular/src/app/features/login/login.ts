@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeAviso } from '../../core/auth/avisos-acceso';
 import { destinoSeguro, PARAM_DESTINO } from '../../core/auth/destino-tras-login';
 import { exigeReiniciarLogin, MFA_CODIGO_REUTILIZADO } from '../../core/auth/codigos-mfa';
+import { ContextoAcceso, ETIQUETA_ROL } from '../../core/auth/sesion.model';
 
 /**
  * Puerta de entrada. **Dos pasos, y el segundo solo aparece si hace falta**
@@ -24,13 +25,16 @@ import { exigeReiniciarLogin, MFA_CODIGO_REUTILIZADO } from '../../core/auth/cod
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
-export class Login {
+export class Login implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly seleccionandoContexto = signal(false);
+  protected readonly contextos = signal<ContextoAcceso[]>([]);
+  protected readonly etiquetaRol = ETIQUETA_ROL;
 
   private readonly parametros = inject(ActivatedRoute).snapshot.queryParamMap;
 
@@ -49,13 +53,57 @@ export class Login {
   protected readonly desafio = signal<string | null>(null);
 
   protected readonly formulario = this.fb.nonNullable.group({
-    usuario: ['', Validators.required],
+    correo: ['', [Validators.required, Validators.email]],
     contrasena: ['', Validators.required],
   });
 
   protected readonly formularioCodigo = this.fb.nonNullable.group({
     codigo: ['', Validators.required],
   });
+
+  protected readonly formularioContexto = this.fb.nonNullable.group({ referencia: ['', Validators.required] });
+
+  ngOnInit(): void {
+    if (this.auth.autenticado() && this.auth.contextoRequerido()) {
+      void this.irADestino().catch(() => this.error.set('No se pudieron consultar los contextos autorizados.'));
+    }
+  }
+
+  protected async elegirContexto(): Promise<void> {
+    const referencia = this.formularioContexto.controls.referencia.value;
+    if (this.cargando() || !this.contextos().some(c => c.referencia === referencia)) {
+      this.formularioContexto.markAllAsTouched();
+      return;
+    }
+    this.cargando.set(true);
+    this.error.set(null);
+    try {
+      await this.auth.seleccionarContexto(referencia, this.destino ?? '/');
+    } catch (e) {
+      const mensaje = (e as HttpErrorResponse).error?.error ?? (e as Error).message ?? 'No se pudo comprobar el contexto.';
+      if (this.auth.autenticado()) {
+        try { await this.cargarContextos(); } catch { /* La selección no habilita trabajo sin Core. */ }
+      } else {
+        this.seleccionandoContexto.set(false);
+      }
+      this.error.set(mensaje);
+    } finally { this.cargando.set(false); }
+  }
+
+  protected async usarOtraCuenta(): Promise<void> {
+    this.seleccionandoContexto.set(false);
+    this.contextos.set([]);
+    this.formulario.patchValue({ contrasena: '' });
+    await this.auth.salir();
+  }
+
+  private async cargarContextos(): Promise<void> {
+    this.contextos.set(await this.auth.contextosDisponibles());
+    this.formularioContexto.reset({ referencia: '' });
+    this.desafio.set(null);
+    this.formulario.patchValue({ contrasena: '' });
+    this.seleccionandoContexto.set(true);
+  }
 
   protected async ingresar(): Promise<void> {
     if (this.formulario.invalid || this.cargando()) {
@@ -133,6 +181,10 @@ export class Login {
    * rebote, que es lo mismo pero con parpadeo.
    */
   private async irADestino(): Promise<void> {
+    if (this.auth.debeCambiarContrasena()) {
+      await this.router.navigate(['/cambiar-contrasena'], { queryParams: { obligatorio: '1' }, replaceUrl: true });
+      return;
+    }
     if (this.auth.debeEnrolarMfa()) {
       await this.router.navigate(['/enrolar-mfa'], {
         queryParams: { obligatorio: '1' },
@@ -140,6 +192,11 @@ export class Login {
       });
       return;
     }
+    if (this.auth.contextoRequerido()) {
+      await this.cargarContextos();
+      return;
+    }
+    if (!this.auth.tieneContexto()) throw new Error('Selecciona un contexto autorizado para continuar.');
     // `navigateByUrl` y no `navigate`: el destino ya es una URL completa con
     // sus query params (los filtros de una bandeja, por ejemplo), y trocearla
     // para pasarla por `navigate` los perdería.

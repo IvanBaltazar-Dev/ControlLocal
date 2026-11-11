@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ControlLocal backend v2 (Spring Boot) - reactor del Strangler.
-  Capas estrictas (Doc 5 arquitectura-objetivo): web -> service -> persistence -> domain,
-  blindadas por ArchUnit en controllocal-app. El contrato REST se mantiene CONGELADO
-  respecto del backend Jakarta (backend-java) hasta el corte de cada modulo.
+  Core modular Java/Spring. Las capas de negocio y la coordinación de asistencia
+  conservan puertos explícitos; P-07 no incorpora otro servidor de aplicación.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -27,6 +25,7 @@
         <module>controllocal-domain</module>
         <module>controllocal-persistence</module>
         <module>controllocal-service</module>
+        <module>controllocal-asistencia</module>
         <module>controllocal-web</module>
         <module>controllocal-app</module>
     </modules>
@@ -65,6 +64,11 @@
             </dependency>
             <dependency>
                 <groupId>com.controllocal</groupId>
+                <artifactId>controllocal-asistencia</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.controllocal</groupId>
                 <artifactId>controllocal-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -87,4 +91,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+    <profiles>
+        <!-- Validación sobre una salida nueva; conserva artefactos montados de otro entorno. -->
+        <profile>
+            <id>salida-aislada</id>
+            <activation>
+                <property><name>brox.salida.aislada</name></property>
+            </activation>
+            <build>
+                <directory>${brox.salida.aislada}/${project.artifactId}</directory>
+            </build>
+        </profile>
+    </profiles>
 </project>

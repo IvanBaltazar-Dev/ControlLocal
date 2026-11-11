@@ -57,6 +57,8 @@ public final class EstadosDominio {
             public static final String RESERVADO = "R";
             public static final String ALQUILADO = "A";
             public static final String RETIRADO = "T";
+            /** Se vendio. No es "retirado del mercado": es otro hecho (V91). */
+            public static final String VENDIDO = "V";
             private DisponibilidadPropiedad() { }
         }
 
@@ -80,12 +82,10 @@ public final class EstadosDominio {
         }
 
         public static final class Captacion {
-            public static final String PENDIENTE = "P";
-            public static final String OBSERVADA = "O";
-            public static final String RECHAZADA = "R";
-            public static final String ACTIVA = "A";
-            public static final String CERRADA = "C";
-            public static final String VENCIDA = "V";
+            public static final String EN_PREPARACION = "P";
+            public static final String APROBADO = "A";
+            public static final String FINALIZADO = "C";
+            public static final String RESCINDIDO = "S";
             private Captacion() { }
         }
 
@@ -99,9 +99,9 @@ public final class EstadosDominio {
         }
 
         public static final class Requerimiento {
-            public static final String ACTIVO = "A";
-            public static final String PAUSADO = "P";
-            public static final String CERRADO = "C";
+            public static final String ABIERTA = "A";
+            public static final String RETIRADA = "R";
+            public static final String FINALIZADA = "F";
             private Requerimiento() { }
         }
 
@@ -275,7 +275,16 @@ public final class EstadosDominio {
         DISPONIBLE(Codigos.DisponibilidadPropiedad.DISPONIBLE, "Disponible"),
         RESERVADO(Codigos.DisponibilidadPropiedad.RESERVADO, "Reservado"),
         ALQUILADO(Codigos.DisponibilidadPropiedad.ALQUILADO, "Alquilado"),
-        RETIRADO(Codigos.DisponibilidadPropiedad.RETIRADO, "Retirado del mercado");
+        RETIRADO(Codigos.DisponibilidadPropiedad.RETIRADO, "Retirado del mercado"),
+        /**
+         * <b>Se vendio</b> (V91). No es {@code RETIRADO}: aquel es «alguien lo
+         * saco del mercado» y este es «cambio de dueno». Los dos sacan el
+         * inmueble de la oferta y solo uno dice por que; hasta V91 el cierre de
+         * venta escribia {@code RETIRADO} porque era lo mas fuerte que este
+         * vocabulario sabia decir con verdad, y lo dejo anotado como decision
+         * pendiente.
+         */
+        VENDIDO(Codigos.DisponibilidadPropiedad.VENDIDO, "Vendido");
         private final String codigo; private final String descripcion;
         DisponibilidadComercial(String codigo, String descripcion) { this.codigo = codigo; this.descripcion = descripcion; }
         public String codigo() { return codigo; } public String descripcion() { return descripcion; }
@@ -311,12 +320,10 @@ public final class EstadosDominio {
     }
 
     public enum EstadoCaptacion implements Codigo {
-        PENDIENTE(Codigos.Captacion.PENDIENTE, "Pendiente de revision"),
-        OBSERVADA(Codigos.Captacion.OBSERVADA, "Observada"),
-        RECHAZADA(Codigos.Captacion.RECHAZADA, "Rechazada"),
-        ACTIVA(Codigos.Captacion.ACTIVA, "Activa"),
-        CERRADA(Codigos.Captacion.CERRADA, "Cerrada"),
-        VENCIDA(Codigos.Captacion.VENCIDA, "Vencida");
+        EN_PREPARACION(Codigos.Captacion.EN_PREPARACION, "En preparación"),
+        APROBADO(Codigos.Captacion.APROBADO, "Aprobado"),
+        FINALIZADO(Codigos.Captacion.FINALIZADO, "Finalizado"),
+        RESCINDIDO(Codigos.Captacion.RESCINDIDO, "Rescindido");
         private final String codigo; private final String descripcion;
         EstadoCaptacion(String codigo, String descripcion) { this.codigo = codigo; this.descripcion = descripcion; }
         public String codigo() { return codigo; } public String descripcion() { return descripcion; }
@@ -338,9 +345,9 @@ public final class EstadosDominio {
     }
 
     public enum EstadoRequerimiento implements Codigo {
-        ACTIVO(Codigos.Requerimiento.ACTIVO, "Activo"),
-        PAUSADO(Codigos.Requerimiento.PAUSADO, "Pausado"),
-        CERRADO(Codigos.Requerimiento.CERRADO, "Cerrado");
+        ABIERTA(Codigos.Requerimiento.ABIERTA, "Abierta"),
+        RETIRADA(Codigos.Requerimiento.RETIRADA, "Retirada"),
+        FINALIZADA(Codigos.Requerimiento.FINALIZADA, "Finalizada");
         private final String codigo; private final String descripcion;
         EstadoRequerimiento(String codigo, String descripcion) { this.codigo = codigo; this.descripcion = descripcion; }
         public String codigo() { return codigo; } public String descripcion() { return descripcion; }

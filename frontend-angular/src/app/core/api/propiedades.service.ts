@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
 import { Publicacion } from './encargos.service';
 import { PageResponse } from './api.types';
@@ -66,6 +67,29 @@ export interface FiltrosPropiedades {
 /** Lo que el filtro puede ofrecer sin inventarse opciones que no existan. */
 export interface OpcionesDeFiltro {
   distritos: string[];
+}
+
+/** Una foto de la galería de la propiedad, en el orden que decide el Core. */
+export interface FotoPropiedad {
+  id: number;
+  clave: string;
+  nombreArchivo?: string | null;
+  orden: number;
+  proveedor?: string | null;
+}
+
+/** Una unidad física vinculada a la propiedad, con su vigencia registral. */
+export interface UnidadRelacionada {
+  idRelacion: number;
+  idPropiedad: number;
+  codigo: string;
+  tipoPropiedad: string;
+  tipoRotulo: string;
+  tipoRelacion: string;
+  tipoRelacionRotulo: string;
+  partidaRegistral?: string | null;
+  vigenteDesde: string;
+  vigenteHasta?: string | null;
 }
 
 // ====================================================================
@@ -560,6 +584,11 @@ export interface FichaPropiedad {
    * propiedad no tiene actividad».
    */
   actividad?: ActividadPropiedad | null;
+  /** Galería universal; cada foto conserva la clave y su posición. */
+  fotos?: FotoPropiedad[];
+  fotoPortada?: FotoPropiedad | null;
+  /** Relaciones físicas históricas; no representan un paquete comercial. */
+  unidadesRelacionadas?: UnidadRelacionada[] | null;
   fechaRegistro?: string | null;
   /**
    * **Quién responde por la propiedad, y qué puede hacer quien está mirando**
@@ -701,6 +730,30 @@ export class PropiedadesService {
    */
   consultar(id: number): Promise<FichaPropiedad> {
     return this.api.get<FichaPropiedad>(`propiedades/${id}`);
+  }
+
+  consultar$(id: number): Observable<FichaPropiedad> {
+    return this.api.get$<FichaPropiedad>(`propiedades/${id}`);
+  }
+
+  /** Galería universal de la propiedad. */
+  fotos$(id: number): Observable<FotoPropiedad[]> {
+    return this.api.get$<FotoPropiedad[]>(`propiedades/${id}/fotos`);
+  }
+
+  fotos(id: number): Promise<FotoPropiedad[]> {
+    return this.api.get<FotoPropiedad[]>(`propiedades/${id}/fotos`);
+  }
+
+  subirFoto(id: number, nombreArchivo: string, contenidoBase64: string): Promise<FotoPropiedad> {
+    return this.api.post<FotoPropiedad>(`propiedades/${id}/fotos`, {
+      nombreArchivo,
+      contenidoBase64,
+    });
+  }
+
+  eliminarFoto(id: number, idFoto: number): Promise<void> {
+    return this.api.delete<void>(`propiedades/${id}/fotos/${idFoto}`);
   }
 
   /**

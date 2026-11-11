@@ -62,18 +62,14 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
     // Busqueda del catalogo: filtros ADITIVOS, resueltos en la BASE
     // ------------------------------------------------------------------
     //
-    // El estado administrativo NO vive en el agente: vive en su credencial, que
-    // cuelga del rol USUARIO_INTERNO de la misma persona. Por eso el join va
-    // por PERSONA y no por rol, y es `left join`: un agente sin credencial
-    // seguiria saliendo en el listado (hoy no puede ocurrir, porque el alta los
-    // crea juntos, pero un left join no cuesta nada y un inner escondería la
-    // fila en vez de mostrarla incompleta).
+    // El estado administrativo de esta ficha es el de su pertenencia local.
+    // El left join conserva la ficha contextual aunque todavía no tenga una
+    // pertenencia aceptada; no deriva el estado de la cuenta personal global.
     String DESDE_FILTRABLE = """
             from DetalleAgente a
               join a.rol r
               join r.persona p
-              left join CredencialUsuario c
-                     on c.rol.persona = p and c.rol.vigenciaHasta is null
+              left join UsuarioOrganizacion uo on uo.idPersona=p.id and uo.organizacionId=a.organizacionId and uo.rol='AGENTE'
             """;
 
     String CONDICION_FILTRABLE = """
@@ -89,7 +85,7 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
                    or lower(p.numeroDocumento) like lower(concat('%', cast(:texto as string), '%'))
                    or lower(a.codigoAgente) like lower(concat('%', cast(:texto as string), '%'))
                    or lower(a.zonaAsignada) like lower(concat('%', cast(:texto as string), '%')))
-              and (:estado is null or c.estadoAdministrativo = :estado)
+              and (:estado is null or uo.estado = :estado)
               and (:estadoOperativo is null or a.estadoOperativo = :estadoOperativo)
               and (:zona is null or a.zonaAsignada = :zona)
             """;
@@ -125,9 +121,9 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
                          @Param("estadoOperativo") String estadoOperativo,
                          @Param("zona") String zona);
 
-    @Query("select coalesce(c.estadoAdministrativo, 'A') as estado, count(a) as total "
+    @Query("select uo.estado as estado, count(a) as total "
             + DESDE_FILTRABLE + CONDICION_FILTRABLE
-            + " group by coalesce(c.estadoAdministrativo, 'A')")
+            + " group by uo.estado")
     List<ConteoPorEstado> contarPorEstadoAdministrativo(
             @Param("idOrganizacion") long idOrganizacion,
             @Param("sinScope") boolean sinScope,
@@ -218,12 +214,9 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
      * <pre>
      *   mismo tenant          organizacion_id del detalle Y del rol
      *   rol AGENTE vigente    persona_rol.tipo_rol='AGENTE' y vigencia_hasta null
-     *   cuenta habilitada     credencial_usuario.estado_administrativo='A' de la
-     *                         MISMA persona en la org, colgando de su
-     *                         persona_rol USUARIO_INTERNO vigente
-     *   membresia vigente     usuario_organizacion.estado='A' por ese mismo rol
-     *                         USUARIO_INTERNO (la fuente que ya lee
-     *                         UsuarioOrganizacionRepository.bandaActivaDePersona)
+     *   cuenta habilitada     CuentaAcceso activa vinculada por la pertenencia
+     *   membresia vigente     usuario_organizacion activa para la misma Persona
+     *                         y organización, con principal AGENTE
      *   disponible            detalle_agente.estado_operativo='D'
      * </pre>
      *
@@ -243,23 +236,12 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
               and r.tipoRol = com.controllocal.domain.persona.enums.TipoRol.AGENTE
               and r.vigenciaHasta is null
               and a.estadoOperativo = 'D'
-              and exists (select 1 from CredencialUsuario c
-                            join c.rol rc
-                           where rc.persona = p
-                             and rc.organizacionId = :idOrganizacion
-                             and rc.tipoRol
-                                 = com.controllocal.domain.persona.enums.TipoRol.USUARIO_INTERNO
-                             and rc.vigenciaHasta is null
-                             and c.estadoAdministrativo = 'A')
-              and exists (select 1 from UsuarioOrganizacion uo, PersonaRol ru
+              and exists (select 1 from UsuarioOrganizacion uo, CuentaAcceso c
                            where uo.organizacionId = :idOrganizacion
-                             and uo.idUsuario = ru.id
+                             and uo.idUsuario = c.id
                              and uo.estado = 'A'
-                             and ru.persona = p
-                             and ru.organizacionId = :idOrganizacion
-                             and ru.tipoRol
-                                 = com.controllocal.domain.persona.enums.TipoRol.USUARIO_INTERNO
-                             and ru.vigenciaHasta is null)
+                             and uo.idPersona = p.id and uo.rol='AGENTE'
+                             and c.estado = 'A')
               and (:sinSupervision = true
                    or exists (select 1 from SupervisionAgente s
                                where s.organizacionId = :idOrganizacion
@@ -330,13 +312,9 @@ public interface DetalleAgenteRepository extends JpaRepository<DetalleAgente, Lo
      * en el instante en que se pregunta, y el problema es que el instante pasa.
      *
      * <h2>Por que ESTA fila y no otra</h2>
-     * Las cinco condiciones viven en cuatro tablas ({@code persona_rol},
-     * {@code credencial_usuario}, {@code usuario_organizacion},
-     * {@code detalle_agente}) mas {@code supervision_agente}. Bloquearlas todas
-     * seria cinco candados y un orden que respetar; bloquear <b>una</b>
-     * convenida basta si <b>todo</b> el que cambia la elegibilidad pasa por
-     * ella. Se elige {@code detalle_agente} porque es la fila que <b>siempre</b>
-     * existe para un agente y la que ya identifica el sujeto de la decision.
+     * El detalle serializa el gobierno local que modifica la elegibilidad.
+     * CuentaAcceso conserva su propia frontera de autenticación global; este
+     * candado no concede vigencia a una cuenta o pertenencia retirada.
      *
      * <h2>Quien tiene que tomarlo, medido el 2026-09-01</h2>
      * <pre>

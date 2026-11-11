@@ -4,70 +4,36 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.soporte.Procedencia;
 
 /**
- * Casos de uso de captacion (F2). Records espejo del contrato CONGELADO
- * (Dtos.CaptacionRequest/CaptacionResponse/ReasignacionCaptacionResponse v1).
- * Maquina P->{A|O|R}, O->(editar)->P, A->{C|V} sobre soporte/Transiciones
- * (auditada); la reasignacion es un evento de actor (tabla-evento), no una
- * transicion. El alcance por rol se aplica en el service.
+ * Lecturas comerciales de Encargo y gobierno acotado de su reasignacion.
+ * Las mutaciones de preparacion, peticion/revision y fin corresponden a
+ * {@link com.controllocal.service.encargo.EncargoService}; sus estados y
+ * facultades versionadas se consultan en ese contrato. Esta proyeccion no
+ * concede aprobacion ni historia comercial por ejercer gobierno.
  */
 public interface CaptacionService {
 
-    /** Espejo de CaptacionRequest. idLocal = propiedad; idAgente lo fija el actor (agente). */
-    record DatosCaptacion(String codigoCaptacion, LocalDate fechaCaptacion, LocalDate fechaInicioVigencia,
-                          LocalDate fechaFinVigencia, BigDecimal comisionPactada, String observaciones,
-                          Long idLocal, Long idAgente, String motivoOperacion, Integer urgencia,
-                          Boolean exclusividad, String tipoOperacion, BigDecimal importeReferencia,
-                          String monedaReferencia, String tipoComision, String baseCalculo,
-                          BigDecimal valorComision, String monedaComision, String tratamientoIgv,
-                          String motivoSinComision) {
-        public DatosCaptacion(String codigoCaptacion, LocalDate fechaCaptacion,
-                              LocalDate fechaInicioVigencia, LocalDate fechaFinVigencia,
-                              BigDecimal comisionPactada, String observaciones, Long idLocal,
-                              Long idAgente, String motivoOperacion, Integer urgencia,
-                              Boolean exclusividad) {
-            this(codigoCaptacion, fechaCaptacion, fechaInicioVigencia, fechaFinVigencia,
-                    comisionPactada, observaciones, idLocal, idAgente, motivoOperacion,
-                    urgencia, exclusividad, null, null, null, null, null, null, null, null, null);
-        }
-    }
 
     /**
-     * <b>Que puede hacer QUIEN PREGUNTA con este encargo</b> (D-P0-12).
+     * Capacidades resueltas por Core para los consumidores de esta proyeccion.
+     * Los tres campos de mutaciones sustituidas permanecen en false durante la
+     * transicion del consumidor Angular; no representan rutas ejecutables.
+     * Las facultades del ciclo vigente se entregan con sus recursos versionados
+     * en EncargoService, sin que el cliente replique sus reglas.
      *
-     * <p>Viaja resuelta por el Core y no la deduce el cliente. Sin esto, la
-     * pantalla del encargo tendria que escribir su propia version de tres reglas
-     * —«soy el agente y esta pendiente», «soy broker y lo superviso», «esta
-     * activa»— y una copia de una regla de autoridad diverge siempre hacia el
-     * lado que pinta un boton que el backend va a rechazar. Es el mismo motivo
-     * por el que {@code Responsabilidad.puedeEditar} viaja resuelta.
+     * <p>Reasignar conserva el predicado canonico del comando sin el destino:
+     * BROKER dentro de su equipo o TENANT_ADMIN para el cruce autorizado;
+     * AGENTE no reasigna. El comando revalida ademas contexto, version observada,
+     * responsable y elegibilidad actuales del destino. La lectura de gobierno
+     * emplea su proyeccion minima, no esta ficha comercial.
      *
-     * <p>Cada booleano lo produce el <b>mismo</b> predicado que despues deniega
-     * el comando, no una segunda tabla de decision.
-     *
-     * <p><b>No autoriza nada</b>: el comando revalida. Y llega {@code null} en
-     * los listados —donde la pregunta no es «que puedo hacer con este» sino «que
-     * hay»—, asi que por NON_NULL el campo no viaja ahi.
-     *
-     * @param puedeEditar  {@code PUT /captaciones/{id}}: su propio agente, y
-     *                     solo mientras el encargo sea editable (P u O)
-     * @param puedeRevisar {@code POST /captaciones/{id}/decision}: el BROKER que
-     *                     supervisa a su agente, y solo mientras sea editable.
-     *                     El TENANT_ADMIN <b>no</b> — es operacion comercial y el
-     *                     gobierno no la hereda (D-S0-17 fila 5)
-     * @param puedeCerrar  {@code POST /captaciones/{id}/cierre}: el mismo BROKER,
-     *                     y solo si el encargo esta ACTIVO (D-S0-17 fila 7)
-     * @param puedeReasignar {@code POST /captaciones/{id}/reasignar}: el BROKER
-     *                     que supervisa hoy al agente que lo lleva, <b>y tambien
-     *                     el TENANT_ADMIN</b> — reasignar entre equipos es
-     *                     organigrama, no operacion comercial (D-S0-17 fila 6),
-     *                     asi que es la unica de las cuatro que el gobierno del
-     *                     tenant si hereda. Un AGENTE nunca, tampoco sobre el
-     *                     suyo. Son las guardas del comando <b>sin el
-     *                     destino</b>, que en la ficha todavia no existe: el
-     *                     comando revalida ademas el destino, su elegibilidad
-     *                     (D-P0-7) y el agente observado (D-P0-9)
+     * @param puedeEditar false; la edicion vigente pertenece a EncargoService
+     * @param puedeRevisar false; se decide una peticion versionada de Encargo
+     * @param puedeCerrar false; el fin vigente usa el caso canonico de Encargo
+     * @param puedeReasignar capacidad de reasignacion actual; el comando reautoriza
      */
     record Capacidades(boolean puedeEditar, boolean puedeRevisar, boolean puedeCerrar,
                        boolean puedeReasignar) {
@@ -112,6 +78,17 @@ public interface CaptacionService {
                              Long idAgenteNuevo, String agenteNuevoNombre, Long idBroker,
                              String brokerNombre, LocalDateTime fechaCambio, String motivo) {
     }
+
+    /** RF017: datos mínimos del expediente para elegir y comprobar el responsable. */
+    record EncargoReasignable(Long id, String codigoCaptacion, String estado,
+                             String direccionLocal, Long idAgente, String agenteNombre,long version) { }
+
+    /** Efecto real de gobierno. No incorpora la ficha ni condiciones del Encargo. */
+    record ResultadoReasignacion(Long id, String codigoCaptacion, String estado,
+                                 Long idAgenteAnterior, Long idAgente, Long idReasignacion,long version) { }
+    record DatosReasignacion(long idAgenteNuevo,long idAgenteObservado,
+            @com.fasterxml.jackson.annotation.JsonProperty(value="versionEsperada",required=true)
+            @com.fasterxml.jackson.annotation.JsonSetter(nulls=com.fasterxml.jackson.annotation.Nulls.FAIL) long versionEsperada,String motivo) { }
 
     /**
      * Filtros opcionales del listado Angular. Son una extension aditiva: si
@@ -164,18 +141,13 @@ public interface CaptacionService {
     Pagina<FichaCaptacion> pendientes(FiltrosPendientes filtros, Actor actor);
 
     /** Captaciones ACTIVAS en el alcance del broker/admin (candidatas a reasignar). */
-    Pagina<FichaCaptacion> reasignables(int pagina, int tamano, String q, Actor actor);
+    Pagina<EncargoReasignable> reasignables(int pagina, int tamano, String q, Actor actor);
+    EncargoReasignable consultarReasignable(long id,Actor actor);
 
     FichaCaptacion obtener(long id, Actor actor);
 
     FichaCaptacion obtenerPorCodigo(String codigo, Actor actor);
 
-    FichaCaptacion registrar(DatosCaptacion datos, Actor actor);
-
-    FichaCaptacion actualizar(long id, DatosCaptacion datos, Actor actor);
-
-    /** Decision del broker: accion APROBAR/OBSERVAR/RECHAZAR (o A/O/R). */
-    FichaCaptacion decidir(long id, String accion, String observacion, Actor actor);
 
     /**
      * <b>La unica puerta que mueve el agente de un encargo</b> (D-P0-9/D-P0-10
@@ -192,8 +164,8 @@ public interface CaptacionService {
      * una segunda firma seria la puerta por la que volveria a entrar una
      * reasignacion que no declara de donde parte.
      */
-    FichaCaptacion reasignar(long id, long idAgenteNuevo, String motivo,
-                             long idAgenteObservado, Actor actor);
+    ResultadoReasignacion reasignar(long id,DatosReasignacion datos,Actor actor,ContextoSesion sesion,
+                                    String claveComando,Procedencia procedencia);
 
     /**
      * <b>Los destinos que ESTE actor puede elegir para ESTE encargo</b>
@@ -214,10 +186,6 @@ public interface CaptacionService {
     Pagina<CandidatoAgente> candidatosAReasignacion(long id, String texto, int pagina,
                                                     int tamano, Actor actor);
 
-    FichaCaptacion cerrar(long id, String motivo, Actor actor);
-
-    /** Cierre causal usado por la cascada contractual. */
-    FichaCaptacion cerrarPorContrato(long id, LocalDate fecha, Actor actor, String detalle);
 
     /** Historial de reasignaciones (gobierno broker/admin), el mas reciente primero. */
     List<FichaReasignacion> listarReasignaciones(Actor actor);

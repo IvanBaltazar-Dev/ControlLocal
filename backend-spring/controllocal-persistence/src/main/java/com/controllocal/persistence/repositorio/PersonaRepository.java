@@ -7,5 +7,7 @@ import java.util.Optional;
 
 public interface PersonaRepository extends JpaRepository<Persona, Long> {
 
+    boolean existsByOrganizacionIdAndId(long idOrganizacion,long id);
+
     Optional<Persona> findByOrganizacionIdAndId(long idOrganizacion, long id);
 }

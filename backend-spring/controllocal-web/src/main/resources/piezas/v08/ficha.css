@@ -1,0 +1,1230 @@
+/* BROX · Ficha comercial V08 (1.8.0). Dos lecturas de la misma pieza: .digital (pantalla) y .a4 (hojas estáticas para
+   imprimir y para Core C6). Sin estilos en línea: la política de contenido los bloquea; los valores por foto y por pieza
+   se aplican por CSSOM (--enc-w, --enc-x, --k, --lat, --c, --r, --ar, --p).
+
+   1.4.0 · guía visual de BROX Web (artifact «BROX Web · Inicio validado y guía visual», paleta y sistema) y revisión
+   entregada por el titular el 18 de octubre de 2026:
+     Identidad   tinta #111214 (títulos, cifras, dinero, botón principal) · papel #F5F4F0 (fondo de la página, nunca dentro
+                 de un panel) · blanco (todo contenedor) · piedra #ECE8E0 (sin foto) · oro #B8924C (marca, selección,
+                 subrayado de enlace, filete del dinero y cuadro de 7 px de la operación; nunca texto: desde 1.5.0 la
+                 pieza no usa el oro de texto #8A672C) · oro claro #E4CB93 (sólo sobre tinta) · verde WhatsApp
+                 #009E19→#00410A (sólo el botón de WhatsApp).
+   1.5.0 · segunda revisión del 20 de octubre: firma horizontal (empresa a la izquierda; quien atiende con su foto de 12 × 15
+   mm a la derecha), la X de BROX en la línea de la operación, pie en dos niveles con «Inteligencia inmobiliaria con BROX»,
+   capítulos sin número y sin marcas de corte.
+   1.6.0 · instrucción del titular del 20 de octubre: «Coordinar una visita» es el mismo botón verde de la web en todos los
+   canales y también en el PDF, con un degradado opaco, sin transparencias; la franja de contacto del pie va
+   entre dos líneas, con un filete entre quien atiende y su canal.
+     Operación   tinte al 8 % y línea lateral de 3 px; el panel sigue blanco. Rojo #B23D49 (bloqueado, con texto
+                 seminegrita) · zafiro #2E60D4 (lo que distingue al inmueble y lo que mueve el profesional) · hoja #357A2B
+                 (confirmado y a favor) · acero y pizarra sin texto (la pieza ya no usa acero: el azul queda para lo que
+                 distingue al inmueble).
+     Fondos      papel claro #FBFAF7 en la banda del título de un panel · marfil #FAF6EF con filete oro de 2 px para el
+                 precio · ningún tinte sobre otro tinte ni por encima del 8 %.
+     Texto       #111214, #2B2E35 (contexto) y #474B54 (el más claro permitido).
+     Letra       Archivo 600 al 112,5 % (SemiExpanded, 1.9.0) para títulos y cifras · Instrument Sans para leer y actuar · Geist Mono para datos
+                 técnicos. Pantalla: 32 · 28 · 22 · 17 · 15 · 13,5 · 12,5 · 11 (rótulo de sección) y mono 11,5. Hoja A4:
+                 28 · 22 · 17 · 15 · 13,5 px, de modo que el menor texto es 13,5 px (10,1 pt; mínimo de CIERRE-PLANTILLAS
+                 «V08 conserva mínimo 10 pt»).
+     Forma       esquinas rectas · botones de 44 px · iconos de 16 a 18 px con trazo 1,6 y puntas rectas, en tinta (el
+                 icono acompaña, nunca protagoniza) · cuadros de 7 px para estados · nada se anima al entrar; al pasar,
+                 lo que se pulsa responde. */
+
+/* 1.9.0 · letra estática oficial (OFL; procedencia en fuentes/PROCEDENCIA.md): una cara por peso y ancho usados. Las
+   variables entraban al PDF como fuentes «Type 3»; las estáticas entran como TrueType, con las mismas medidas. */
+@font-face{font-family:"Archivo";src:url("fuentes/ArchivoSemiExpanded-SemiBold.ttf") format("truetype");font-weight:600;font-stretch:112.5%;font-style:normal;font-display:block}
+@font-face{font-family:"Archivo";src:url("fuentes/ArchivoExpanded-SemiBold.ttf") format("truetype");font-weight:600;font-stretch:125%;font-style:normal;font-display:block}
+@font-face{font-family:"Instrument Sans";src:url("fuentes/InstrumentSans-Regular.ttf") format("truetype");font-weight:400;font-style:normal;font-display:block}
+@font-face{font-family:"Instrument Sans";src:url("fuentes/InstrumentSans-Medium.ttf") format("truetype");font-weight:500;font-style:normal;font-display:block}
+@font-face{font-family:"Instrument Sans";src:url("fuentes/InstrumentSans-SemiBold.ttf") format("truetype");font-weight:600;font-style:normal;font-display:block}
+@font-face{font-family:"Instrument Sans";src:url("fuentes/InstrumentSans-Bold.ttf") format("truetype");font-weight:700;font-style:normal;font-display:block}
+@font-face{font-family:"Geist Mono";src:url("fuentes/GeistMono-Medium.ttf") format("truetype");font-weight:500;font-style:normal;font-display:block}
+@font-face{font-family:"Geist Mono";src:url("fuentes/GeistMono-SemiBold.ttf") format("truetype");font-weight:600;font-style:normal;font-display:block}
+
+:root{
+  color-scheme:light;
+  /* identidad */
+  --papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;
+  --ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;
+  --line:rgba(17,18,20,.1);--line-2:rgba(17,18,20,.16);--line-3:rgba(17,18,20,.22);
+  --gold:#B8924C;--gold-ink:#8A672C;--gold-lt:#E4CB93;
+  --wa-1:#009E19;--wa-2:#00410A;--wa-luz:#E9FBEC;
+  /* «Coordinar una visita» (1.6.0): el degradado #009E19 → #00410A con la luz blanca del 16 % al 0 % en su primera mitad,
+     ya compuesta en colores opacos, y sus filetes de luz y de sombra también opacos. En pantalla es el mismo botón (la
+     diferencia con las capas translúcidas no pasa de 2 de 255 por canal) y el PDF no depende de transparencias: el
+     lector con que la evidencia rasteriza el PDF (pdf.js en Node) dibujaba la luz translúcida en rosado, aunque Chrome
+     y pdf.js en el navegador la dibujaban bien. */
+  --verde-accion:linear-gradient(180deg,#29AE3E,#1FA033 12%,#149128 24%,#0A821D 36%,#007112 48%,#00410A);
+  --filetes-accion:inset 0 1px 0 #6EC87C,inset 0 -1px 0 #003108;
+  /* 1.8.0 · el botón de cada tema (instrucción del titular del 20 de octubre, tarde: «el botón de llamado de acción también
+     se puede personalizar»): fondo, degradado opaco, letra, icono, filetes, sombra en pantalla y filete al pasar. Sin
+     tema y en Marfil, el verde de la web. Los valores de cada tema los escribe herramientas/derivar-temas.cjs. */
+  --accion-base:#006F12;--accion-degradado:var(--verde-accion);--accion-texto:#FFFFFF;--accion-icono:var(--wa-luz);
+  --accion-filetes:var(--filetes-accion);--accion-sombra:rgba(0,90,20,.7);--accion-anillo:rgba(228,203,147,.85);
+  /* 1.8.0 · banda del tema: degradado opcional, filete bajo la banda y en el rótulo de cada capítulo */
+  --banda-imagen:none;--banda-filete:transparent;--tema-filete:var(--line);
+  /* 1.10.0; 1.11.0 · el color vivo del tema (iconos en su círculo, destacados, filetes y el lema de BROX), el filete
+     exterior del botón, WhatsApp con sus colores y el relieve. Los valores de cada tema los escribe derivar-temas.cjs. */
+  --vivo:#2E60D4;--vivo-tinte:#EAEFFB;--vivo-borde:#C0CFF2;
+  --accion-halo:#A6DDB0;
+  --wa:#25D366;--wa-texto:#075E54;
+  --relieve:0 1px 2px rgba(17,18,20,.06),0 14px 28px -18px rgba(17,18,20,.42);
+  --relieve-foto:0 2px 6px rgba(17,18,20,.12),0 22px 38px -20px rgba(17,18,20,.6);
+  /* operación: color y su tinte al 8 % */
+  --rojo:#B23D49;--rojo-tinte:#F9EFF0;
+  --zafiro:#2E60D4;--zafiro-tinte:#EEF2FC;
+  --hoja:#357A2B;--hoja-tinte:#EFF4EE;
+  --pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;
+  /* panel de la guía: borde de 1 px y una sombra baja */
+  --sombra:0 1px 2px rgba(17,18,20,.04),0 30px 60px -48px rgba(17,18,20,.4);
+  --sombra-alta:0 2px 6px rgba(17,18,20,.06),0 30px 54px -26px rgba(17,18,20,.45);
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Instrument Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"Geist Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  /* letra en pantalla: los nueve niveles de la guía */
+  --t-pagina:32px;--t-cifra:28px;--t-panel:22px;--t-figura:17px;--t-titulo:15px;--t-contexto:13.5px;--t-nota:12.5px;--t-seccion:11px;--t-mono:11.5px;
+  /* espacio: 8 dentro de un grupo, 16 entre grupos, 24 entre zonas */
+  --e-4:4px;--e-8:8px;--e-12:12px;--e-16:16px;--e-24:24px;--e-32:32px;--e-48:48px;--e-64:64px;
+  --maxw:1320px;--gutter:var(--e-48);--sub-h:56px;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+/* TEMAS · inicio (derivado por herramientas/derivar-temas.cjs; no editar a mano) */
+/* Un tema cambia sólo colores. La hoja A4 toma la lectura «papel» (siempre clara); la ficha digital, la vista para
+   teléfono y la imagen para compartir toman la lectura «pantalla». 1.12.0: un color fuerte por tema (banda o filete de la
+   banda, botón, iconos, destacados y filetes) y la tinta negra para el texto. */
+:root,[data-tema="marfil"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#0A8533;--gold-lt:#4CA66A;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#0A8533;--zafiro-tinte:#E2F0E7;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#0A8533;--tema-sobre:#FFFFFF;--vivo:#0A8533;--vivo-tinte:#E2F0E7;--vivo-borde:#93C9A5;--vivo-solido:#0A8533;--vivo-sobre:#FFFFFF;--banda:#111214;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#C9CCD2;--banda-filete:#0A8533;--tema-filete:#0A8533;--accion-base:#0A8533;--accion-degradado:linear-gradient(180deg,#27944B,#168B3D 28%,#0A8533 40%,#09752D);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #67B381,inset 0 -1px 0 #076025;--accion-sombra:rgba(6,80,31,0.45);--accion-halo:#ACD6BA}
+[data-tema="grafito"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#2B2F36;--gold-lt:#E8A317;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#2B2F36;--zafiro-tinte:#FBF0DA;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#E8A317;--tema-sobre:#111214;--vivo:#2B2F36;--vivo-tinte:#FBF0DA;--vivo-borde:#F4D390;--vivo-solido:#E8A317;--vivo-sobre:#111214;--banda:#2B2F36;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#CDD0D6;--banda-filete:#E8A317;--tema-filete:#E8A317;--accion-base:#E8A317;--accion-degradado:linear-gradient(180deg,#EBAE33,#E9A823 28%,#E8A317 40%,#CC8F14);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #F1C66F,inset 0 -1px 0 #A77511,inset 0 0 0 1px #C38913;--accion-sombra:rgba(139,98,14,0.45);--accion-halo:#F7E0B0}
+[data-tema="grafito"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#0A0A0B;--papel-claro:#141518;--marfil:#1C1810;--piedra:#1B1C1F;--piedra-clara:#17181B;--surface:#111214;--ink:#F6F5F1;--ink-2:#C4C7CC;--ink-3:#A3A7AE;--line:rgba(246,245,241,0.12);--line-2:rgba(246,245,241,0.18);--line-3:rgba(246,245,241,0.26);--gold:#E8A317;--gold-lt:#E8A317;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#E8A317;--zafiro-tinte:#382C15;--hoja:#88CB7B;--hoja-tinte:#141E14;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#E8A317;--tema-sobre:#111214;--vivo:#E8A317;--vivo-tinte:#382C15;--vivo-borde:#725315;--vivo-solido:#E8A317;--vivo-sobre:#111214;--banda:#1B1D21;--banda-imagen:none;--banda-texto:#F6F5F1;--banda-texto-2:#C4C7CC;--banda-filete:#E8A317;--tema-filete:#E8A317;--accion-base:#E8A317;--accion-degradado:linear-gradient(180deg,#EBAE33,#E9A823 28%,#E8A317 40%,#CC8F14);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #F1C66F,inset 0 -1px 0 #A77511;--accion-sombra:rgba(139,98,14,0.7);--accion-halo:#7D5B16;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="zafiro"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#0066B1;--gold-lt:#599CCC;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#0066B1;--zafiro-tinte:#E0EDF6;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#0066B1;--tema-sobre:#FFFFFF;--vivo:#0066B1;--vivo-tinte:#E0EDF6;--vivo-borde:#8FBCDD;--vivo-solido:#0066B1;--vivo-sobre:#FFFFFF;--banda:#0066B1;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#DDEAF6;--banda-filete:#00467A;--tema-filete:#00467A;--accion-base:#0066B1;--accion-degradado:linear-gradient(180deg,#1F78BA,#0D6EB5 28%,#0066B1 40%,#005A9C);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #61A0CF,inset 0 -1px 0 #00497F;--accion-sombra:rgba(0,61,106,0.45);--accion-halo:#A8CBE4}
+[data-tema="carmin"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#D50F1A;--gold-lt:#E67178;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#D50F1A;--zafiro-tinte:#FAE2E4;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#D50F1A;--tema-sobre:#FFFFFF;--vivo:#D50F1A;--vivo-tinte:#FAE2E4;--vivo-borde:#ED959A;--vivo-solido:#D50F1A;--vivo-sobre:#FFFFFF;--banda:#D50F1A;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#FFECEE;--banda-filete:#8C0A11;--tema-filete:#8C0A11;--accion-base:#D50F1A;--accion-degradado:linear-gradient(180deg,#DA2C35,#D71B25 28%,#D50F1A 40%,#BB0D17);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #E56A71,inset 0 -1px 0 #990B13;--accion-sombra:rgba(128,9,16,0.45);--accion-halo:#F1ADB1}
+[data-tema="regata"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#E22718;--gold-lt:#EC6E64;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#0066B1;--zafiro-tinte:#E0EDF6;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#E22718;--tema-sobre:#FFFFFF;--vivo:#0066B1;--vivo-tinte:#E0EDF6;--vivo-borde:#8FBCDD;--vivo-solido:#0066B1;--vivo-sobre:#FFFFFF;--banda:#003C78;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#C9D8EC;--banda-filete:#E22718;--tema-filete:#E22718;--accion-base:#E22718;--accion-degradado:linear-gradient(180deg,#E54134,#E33224 28%,#E22718 40%,#C72215);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #ED7970,inset 0 -1px 0 #A31C11;--accion-sombra:rgba(136,23,14,0.45);--accion-halo:#F5B6B0}
+[data-tema="bosque"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#00703C;--gold-lt:#5CA382;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#00703C;--zafiro-tinte:#E0EEE8;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#00703C;--tema-sobre:#FFFFFF;--vivo:#00703C;--vivo-tinte:#E0EEE8;--vivo-borde:#8FC0A9;--vivo-solido:#00703C;--vivo-sobre:#FFFFFF;--banda:#00703C;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#D3EBDD;--banda-filete:#004526;--tema-filete:#004526;--accion-base:#00703C;--accion-degradado:linear-gradient(180deg,#1F8153,#0D7746 28%,#00703C 40%,#006335);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #61A686,inset 0 -1px 0 #00512B;--accion-sombra:rgba(0,67,36,0.45);--accion-halo:#A8CEBD}
+[data-tema="bosque"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#0B1712;--papel-claro:#11211A;--marfil:#16271D;--piedra:#16261E;--piedra-clara:#122019;--surface:#0E1C16;--ink:#F1F4EF;--ink-2:#C6D2C8;--ink-3:#A5B4A8;--line:rgba(241,244,239,0.12);--line-2:rgba(241,244,239,0.18);--line-3:rgba(241,244,239,0.26);--gold:#00A651;--gold-lt:#0FAB5B;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#4CC982;--zafiro-tinte:#193B29;--hoja:#9BD49A;--hoja-tinte:#122419;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#00A651;--tema-sobre:#111214;--vivo:#4CC982;--vivo-tinte:#193B29;--vivo-borde:#2A6A47;--vivo-solido:#00A651;--vivo-sobre:#111214;--banda:#0E1C16;--banda-imagen:none;--banda-texto:#F1F4EF;--banda-texto-2:#C6D2C8;--banda-filete:#00A651;--tema-filete:#00A651;--accion-base:#00A651;--accion-degradado:linear-gradient(180deg,#1FB166,#0DAA5A 28%,#00A651 40%,#009247);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #61C893,inset 0 -1px 0 #00783A;--accion-sombra:rgba(0,100,49,0.7);--accion-halo:#076134;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="salvia"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#338620;--gold-lt:#43B02A;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#338620;--zafiro-tinte:#E8F6E5;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#43B02A;--tema-sobre:#111214;--vivo:#338620;--vivo-tinte:#E8F6E5;--vivo-borde:#ACDCA1;--vivo-solido:#43B02A;--vivo-sobre:#111214;--banda:#43B02A;--banda-imagen:none;--banda-texto:#111214;--banda-texto-2:#142E0C;--banda-filete:#2A6F1B;--tema-filete:#2A6F1B;--accion-base:#43B02A;--accion-degradado:linear-gradient(180deg,#5AB944,#4CB435 28%,#43B02A 40%,#3B9B25);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #8ACE7B,inset 0 -1px 0 #307F1E,inset 0 0 0 1px #40A928;--accion-sombra:rgba(40,106,25,0.45);--accion-halo:#BFE4B7}
+[data-tema="azabache"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#111214;--gold-lt:#FFD100;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#111214;--zafiro-tinte:#FFF6CC;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#FFD100;--tema-sobre:#111214;--vivo:#111214;--vivo-tinte:#FFF6CC;--vivo-borde:#FFE77A;--vivo-solido:#FFD100;--vivo-sobre:#111214;--banda:#0E0E0F;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#D0CFC9;--banda-filete:#FFD100;--tema-filete:#FFD100;--accion-base:#FFD100;--accion-degradado:linear-gradient(180deg,#FFD71F,#FFD30D 28%,#FFD100 40%,#E0B800);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #FFE261,inset 0 -1px 0 #B89600,inset 0 0 0 1px #B09000;--accion-sombra:rgba(153,125,0,0.45);--accion-halo:#FFEFA8}
+[data-tema="azabache"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#0B0B0C;--papel-claro:#141416;--marfil:#1B1810;--piedra:#1B1B1E;--piedra-clara:#161618;--surface:#111113;--ink:#F5F4EF;--ink-2:#CAC8C1;--ink-3:#A8A69F;--line:rgba(245,244,239,0.12);--line-2:rgba(245,244,239,0.18);--line-3:rgba(245,244,239,0.26);--gold:#FFD100;--gold-lt:#FFD100;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#FFD100;--zafiro-tinte:#3C3410;--hoja:#88CB7B;--hoja-tinte:#141E14;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#FFD100;--tema-sobre:#111214;--vivo:#FFD100;--vivo-tinte:#3C3410;--vivo-borde:#7C670A;--vivo-solido:#FFD100;--vivo-sobre:#111214;--banda:#111113;--banda-imagen:none;--banda-texto:#F5F4EF;--banda-texto-2:#CAC8C1;--banda-filete:#FFD100;--tema-filete:#FFD100;--accion-base:#FFD100;--accion-degradado:linear-gradient(180deg,#FFD71F,#FFD30D 28%,#FFD100 40%,#E0B800);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #FFE261,inset 0 -1px 0 #B89600;--accion-sombra:rgba(153,125,0,0.7);--accion-halo:#88710A;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="ambar"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#111214;--gold-lt:#FFC200;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#111214;--zafiro-tinte:#FFF3CC;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#FFC200;--tema-sobre:#111214;--vivo:#111214;--vivo-tinte:#FFF3CC;--vivo-borde:#FFDF7A;--vivo-solido:#FFC200;--vivo-sobre:#111214;--banda:#FFC200;--banda-imagen:none;--banda-texto:#111214;--banda-texto-2:#3A2E00;--banda-filete:#111214;--tema-filete:#111214;--accion-base:#FFC200;--accion-degradado:linear-gradient(180deg,#FFC91F,#FFC50D 28%,#FFC200 40%,#E0AB00);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #FFD961,inset 0 -1px 0 #B88C00,inset 0 0 0 1px #BA8E00;--accion-sombra:rgba(153,116,0,0.45);--accion-halo:#FFEAA8}
+[data-tema="obsidiana"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#111214;--gold-lt:#FF6B00;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#111214;--zafiro-tinte:#FFE7D6;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#FF6B00;--tema-sobre:#111214;--vivo:#111214;--vivo-tinte:#FFE7D6;--vivo-borde:#FFB885;--vivo-solido:#FF6B00;--vivo-sobre:#111214;--banda:#111111;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#CFCAC2;--banda-filete:#FF6B00;--tema-filete:#FF6B00;--accion-base:#FF6B00;--accion-degradado:linear-gradient(180deg,#FF7D1F,#FF720D 28%,#FF6B00 40%,#E05E00);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #FFA361,inset 0 -1px 0 #B84D00,inset 0 0 0 1px #F76800;--accion-sombra:rgba(153,64,0,0.45);--accion-halo:#FFCDA8}
+[data-tema="obsidiana"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#0B0B0B;--papel-claro:#151515;--marfil:#1C1913;--piedra:#1C1C1C;--piedra-clara:#171717;--surface:#111111;--ink:#F4F2EE;--ink-2:#CAC5BD;--ink-3:#A8A39B;--line:rgba(244,242,238,0.12);--line-2:rgba(244,242,238,0.18);--line-3:rgba(244,242,238,0.26);--gold:#FF6B00;--gold-lt:#FF6B00;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#FF8A3D;--zafiro-tinte:#3C2719;--hoja:#88CB7B;--hoja-tinte:#141E14;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#FF6B00;--tema-sobre:#111214;--vivo:#FF8A3D;--vivo-tinte:#3C2719;--vivo-borde:#7C4725;--vivo-solido:#FF6B00;--vivo-sobre:#111214;--banda:#111111;--banda-imagen:none;--banda-texto:#F4F2EE;--banda-texto-2:#CAC5BD;--banda-filete:#FF6B00;--tema-filete:#FF6B00;--accion-base:#FF6B00;--accion-degradado:linear-gradient(180deg,#FF7D1F,#FF720D 28%,#FF6B00 40%,#E05E00);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #FFA361,inset 0 -1px 0 #B84D00;--accion-sombra:rgba(153,64,0,0.7);--accion-halo:#883E09;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="medianoche"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#0B1F44;--gold-lt:#F2B705;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#0B1F44;--zafiro-tinte:#FDF3D7;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#F2B705;--tema-sobre:#0B1F44;--vivo:#0B1F44;--vivo-tinte:#FDF3D7;--vivo-borde:#F9DC87;--vivo-solido:#F2B705;--vivo-sobre:#0B1F44;--banda:#0B1F44;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#C5CEDC;--banda-filete:#F2B705;--tema-filete:#F2B705;--accion-base:#F2B705;--accion-degradado:linear-gradient(180deg,#F4C023,#F3BB12 28%,#F2B705 40%,#D5A104);--accion-texto:#0B1F44;--accion-icono:#0B1F44;--accion-filetes:inset 0 1px 0 #F7D264,inset 0 -1px 0 #AE8404,inset 0 0 0 1px #BA8D04;--accion-sombra:rgba(145,110,3,0.45);--accion-halo:#FBE7AA}
+[data-tema="medianoche"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#0A1220;--papel-claro:#101A2C;--marfil:#141E30;--piedra:#162238;--piedra-clara:#111C2F;--surface:#0D1626;--ink:#EEF2F8;--ink-2:#C3CCDA;--ink-3:#A1ADBF;--line:rgba(238,242,248,0.12);--line-2:rgba(238,242,248,0.18);--line-3:rgba(238,242,248,0.26);--gold:#F2B705;--gold-lt:#F2B705;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#F2B705;--zafiro-tinte:#363320;--hoja:#88CB7B;--hoja-tinte:#141E14;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#F2B705;--tema-sobre:#111214;--vivo:#F2B705;--vivo-tinte:#363320;--vivo-borde:#745E17;--vivo-solido:#F2B705;--vivo-sobre:#111214;--banda:#0D1626;--banda-imagen:none;--banda-texto:#EEF2F8;--banda-texto-2:#C3CCDA;--banda-filete:#F2B705;--tema-filete:#F2B705;--accion-base:#F2B705;--accion-degradado:linear-gradient(180deg,#F4C023,#F3BB12 28%,#F2B705 40%,#D5A104);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #F7D264,inset 0 -1px 0 #AE8404;--accion-sombra:rgba(145,110,3,0.7);--accion-halo:#806716;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="circuito"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#0080A3;--gold-lt:#00B2E3;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#0080A3;--zafiro-tinte:#E0F6FC;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#00B2E3;--tema-sobre:#111214;--vivo:#0080A3;--vivo-tinte:#E0F6FC;--vivo-borde:#8FDDF3;--vivo-solido:#00B2E3;--vivo-sobre:#111214;--banda:#00B2E3;--banda-imagen:none;--banda-texto:#111214;--banda-texto-2:#0A2A36;--banda-filete:#111214;--tema-filete:#111214;--accion-base:#00B2E3;--accion-degradado:linear-gradient(180deg,#1FBBE6,#0DB6E4 28%,#00B2E3 40%,#009DC8);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #61CFEE,inset 0 -1px 0 #0080A3,inset 0 0 0 1px #00A0CC;--accion-sombra:rgba(0,107,136,0.45);--accion-halo:#A8E5F5}
+[data-tema="circuito"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#070D12;--papel-claro:#0D161E;--marfil:#0E1D25;--piedra:#12202A;--piedra-clara:#0F1B23;--surface:#0A131A;--ink:#E6F3F7;--ink-2:#B7CCD5;--ink-3:#94AAB5;--line:rgba(230,243,247,0.12);--line-2:rgba(230,243,247,0.18);--line-3:rgba(230,243,247,0.26);--gold:#00B2E3;--gold-lt:#00B2E3;--rojo:#EE8A9C;--rojo-tinte:#26161A;--zafiro:#33C5EC;--zafiro-tinte:#113340;--hoja:#7FD58E;--hoja-tinte:#0F1D16;--pizarra:#9AA5B3;--pizarra-tinte:#18191C;--tema-color:#00B2E3;--tema-sobre:#111214;--vivo:#33C5EC;--vivo-tinte:#113340;--vivo-borde:#1C6378;--vivo-solido:#00B2E3;--vivo-sobre:#111214;--banda:#0A131A;--banda-imagen:none;--banda-texto:#E6F3F7;--banda-texto-2:#B7CCD5;--banda-filete:#00B2E3;--tema-filete:#00B2E3;--accion-base:#00B2E3;--accion-degradado:linear-gradient(180deg,#1FBBE6,#0DB6E4 28%,#00B2E3 40%,#009DC8);--accion-texto:#111214;--accion-icono:#111214;--accion-filetes:inset 0 1px 0 #61CFEE,inset 0 -1px 0 #0080A3;--accion-sombra:rgba(0,107,136,0.7);--accion-halo:#05637F;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="indigo"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#5B2BD9;--gold-lt:#A084E9;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#5B2BD9;--zafiro-tinte:#EBE6FA;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#5B2BD9;--tema-sobre:#FFFFFF;--vivo:#5B2BD9;--vivo-tinte:#EBE6FA;--vivo-borde:#B7A2EE;--vivo-solido:#5B2BD9;--vivo-sobre:#FFFFFF;--banda:#5B2BD9;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#E6DEFC;--banda-filete:#3A1A9E;--tema-filete:#3A1A9E;--accion-base:#5B2BD9;--accion-degradado:linear-gradient(180deg,#6F44DE,#6336DB 28%,#5B2BD9 40%,#5026BF);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #997CE7,inset 0 -1px 0 #421F9C;--accion-sombra:rgba(55,26,130,0.45);--accion-halo:#C7B7F2}
+[data-tema="sivan-plata"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#1961DC;--gold-lt:#6595E8;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#1961DC;--zafiro-tinte:#E3ECFB;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#1961DC;--tema-sobre:#FFFFFF;--vivo:#1961DC;--vivo-tinte:#E3ECFB;--vivo-borde:#9AB9F0;--vivo-solido:#1961DC;--vivo-sobre:#FFFFFF;--banda:#DADDE2;--banda-imagen:none;--banda-texto:#0B1A44;--banda-texto-2:#2E3A5E;--banda-filete:#0E43A6;--tema-filete:#0E43A6;--accion-base:#1961DC;--accion-degradado:linear-gradient(180deg,#3574E0,#2569DE 28%,#1961DC 40%,#1655C2);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #709DE9,inset 0 -1px 0 #12469E;--accion-sombra:rgba(15,58,132,0.45);--accion-halo:#B1C9F3}
+[data-tema="sivan-noche"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#1961DC;--gold-lt:#6595E8;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#1961DC;--zafiro-tinte:#E3ECFB;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#1961DC;--tema-sobre:#FFFFFF;--vivo:#1961DC;--vivo-tinte:#E3ECFB;--vivo-borde:#9AB9F0;--vivo-solido:#1961DC;--vivo-sobre:#FFFFFF;--banda:#0B1426;--banda-imagen:linear-gradient(180deg,#141F38,#0A1222);--banda-texto:#F1F3F7;--banda-texto-2:#C8CED9;--banda-filete:#1961DC;--tema-filete:#1961DC;--accion-base:#1961DC;--accion-degradado:linear-gradient(180deg,#3574E0,#2569DE 28%,#1961DC 40%,#1655C2);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #709DE9,inset 0 -1px 0 #12469E;--accion-sombra:rgba(15,58,132,0.45);--accion-halo:#B1C9F3}
+[data-tema="sivan-noche"] :is(.digital,.visor,.kairos,.vertical){color-scheme:dark;--papel:#080E1A;--papel-claro:#0E1626;--marfil:#111B2E;--piedra:#131E33;--piedra-clara:#0F1829;--surface:#0B1222;--ink:#F1F3F7;--ink-2:#C8CED9;--ink-3:#A7AFBE;--line:rgba(241,243,247,0.12);--line-2:rgba(241,243,247,0.18);--line-3:rgba(241,243,247,0.26);--gold:#1961DC;--gold-lt:#6595E8;--rojo:#EE8A9C;--rojo-tinte:#24151C;--zafiro:#8FB0F5;--zafiro-tinte:#232E48;--hoja:#94D3A6;--hoja-tinte:#0E1F25;--pizarra:#9AA5B3;--pizarra-tinte:#141B27;--tema-color:#1961DC;--tema-sobre:#FFFFFF;--vivo:#8FB0F5;--vivo-tinte:#232E48;--vivo-borde:#465981;--vivo-solido:#1961DC;--vivo-sobre:#FFFFFF;--banda:#0B1222;--banda-imagen:linear-gradient(180deg,#121C33,#0A1120);--banda-texto:#F1F3F7;--banda-texto-2:#C8CED9;--banda-filete:#3D74E0;--tema-filete:#3D74E0;--accion-base:#1961DC;--accion-degradado:linear-gradient(180deg,#3574E0,#2569DE 28%,#1961DC 40%,#1655C2);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #709DE9,inset 0 -1px 0 #12469E;--accion-sombra:rgba(15,58,132,0.7);--accion-halo:#123A7F;--wa-texto:#25D366;--relieve:0 1px 2px rgba(0,0,0,.45),0 16px 30px -18px rgba(0,0,0,.9);--relieve-foto:0 2px 6px rgba(0,0,0,.5),0 24px 40px -20px rgba(0,0,0,.95);--sombra:0 1px 2px rgba(0,0,0,.3),0 30px 60px -48px rgba(0,0,0,.8);--sombra-alta:0 2px 6px rgba(0,0,0,.35),0 30px 54px -26px rgba(0,0,0,.85)}
+[data-tema="sivan-azul"]{color-scheme:light;--papel:#F5F4F0;--papel-claro:#FBFAF7;--marfil:#FAF6EF;--piedra:#ECE8E0;--piedra-clara:#F3F0E9;--surface:#FFFFFF;--ink:#111214;--ink-2:#2B2E35;--ink-3:#474B54;--line:rgba(17,18,20,0.1);--line-2:rgba(17,18,20,0.16);--line-3:rgba(17,18,20,0.22);--gold:#1961DC;--gold-lt:#6595E8;--rojo:#B23D49;--rojo-tinte:#F9EFF0;--zafiro:#1961DC;--zafiro-tinte:#E3ECFB;--hoja:#357A2B;--hoja-tinte:#EFF4EE;--pizarra:#8A95A3;--pizarra-tinte:#F6F7F8;--tema-color:#1961DC;--tema-sobre:#FFFFFF;--vivo:#1961DC;--vivo-tinte:#E3ECFB;--vivo-borde:#9AB9F0;--vivo-solido:#1961DC;--vivo-sobre:#FFFFFF;--banda:#0E43A6;--banda-imagen:none;--banda-texto:#FFFFFF;--banda-texto-2:#DCE6FA;--banda-filete:#B7B8BC;--tema-filete:#B7B8BC;--accion-base:#1961DC;--accion-degradado:linear-gradient(180deg,#3574E0,#2569DE 28%,#1961DC 40%,#1655C2);--accion-texto:#FFFFFF;--accion-icono:#FFFFFF;--accion-filetes:inset 0 1px 0 #709DE9,inset 0 -1px 0 #12469E;--accion-sombra:rgba(15,58,132,0.45);--accion-halo:#B1C9F3}
+/* TEMAS · fin */
+*,*::before,*::after{box-sizing:border-box;border-radius:0}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:var(--sub-h)}
+body{margin:0;background:var(--papel);color:var(--ink);font-family:var(--f-body);font-size:var(--t-titulo);line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;overflow-x:clip;text-wrap:pretty}
+img,svg{display:block;max-width:100%}
+h1,h2,h3,p,figure,dl,dd,ul,ol{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+::selection{background:var(--ink);color:var(--gold-lt)}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+/* 1.10.0: el logotipo de WhatsApp es un trazo lleno (bloque «Vida, color y relieve», al final) */
+.oculto{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.envoltura{width:100%;max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
+.unidad{margin-left:.24em;font-family:var(--f-body);font-weight:500;letter-spacing:0}
+
+/* vista: una sola lectura en pantalla, siempre A4 al imprimir; desde 1.5.0, también la imagen vertical */
+.digital{background:var(--papel);color:var(--ink)}
+body[data-vista="digital"] .a4,body[data-vista="digital"] .vertical,body[data-vista="a4"] .vertical{display:none}
+body[data-vista="kairos"] :is(.digital,.a4,.vertical),body:not([data-vista="kairos"]) .kairos{display:none}
+body[data-vista="a4"] .digital,body[data-vista="vertical"] .digital,body[data-vista="vertical"] .a4{display:none}
+body[data-vista="a4"],body[data-vista="vertical"]{background:#E4E0D8}
+/* medición de las hojas A4 y de la imagen vertical (§7.5): fuera de pantalla, en la misma tarea, sin pintar */
+body.midiendo-a4:not([data-vista="a4"]) .a4,body.midiendo-vertical:not([data-vista="vertical"]) .vertical{display:block;position:absolute;left:-99999px;top:0;visibility:hidden}
+.cargando{min-height:100vh;display:grid;place-items:center;font:400 var(--t-mono) var(--f-mono);letter-spacing:.06em;color:var(--ink-3)}
+/* datos no válidos: la lista de errores */
+.condiciones{display:grid;gap:1px;background:var(--line);border:1px solid var(--line)}
+.condiciones li{display:grid;gap:var(--e-4);padding:var(--e-12) var(--e-16);background:var(--surface)}
+.c-rotulo{font:600 var(--t-mono) var(--f-mono);color:var(--rojo)}
+.c-valor{font-size:var(--t-contexto);color:var(--ink-2)}
+
+/* 1.5.0 (revisión del 20 de octubre): sin las marcas de corte doradas alrededor de la foto, del mapa y de la hoja; eran un gesto
+   gráfico de la landing que en la ficha que se envía no ayuda a leer */
+.marco{position:relative}
+
+/* =====================================================================
+   Rótulo de capítulo (guía: rótulo de sección): nombre en versalitas de Archivo expandida y un filete de 1 px. 1.5.0
+   (revisión del 20 de octubre): sin número, que se confundía con los números del mapa, y sin texto en oro
+   ===================================================================== */
+/* P6 (≤ 3 tamaños por pantalla fuera de la portada): en los capítulos, el rótulo usa el nivel de contexto (13,5), el
+   cuerpo el de título de ficha (15) y los títulos y cifras el de panel (22) */
+.capitulo-rotulo{display:flex;align-items:center;gap:var(--e-12);margin:0 0 var(--e-16);font-family:var(--f-display);font-stretch:125%;font-weight:600;font-size:var(--t-contexto);line-height:1.4;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)}
+.capitulo-sigue{font-family:var(--f-body);font-stretch:100%;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink-3)}
+.capitulo-filete{flex:1;height:1px;margin-left:var(--e-4);background:var(--line)}
+
+/* =====================================================================
+   Firma comercial y marcas (1.4.0)
+   ===================================================================== */
+/* 1.5.0 (revisiones entregadas por el titular el 20 de octubre): la firma va una vez, al comienzo, en una banda horizontal
+   con dos grupos en el mismo eje: la empresa a la izquierda (logotipo o nombre comercial) y, a la derecha, quien atiende con
+   su fotografía pequeña junto al nombre (rectangular 4:5, sin marcos ni efectos), para que foto y nombre se lean como una
+   unidad. Sin empresa (independiente), la persona ocupa la izquierda con la foto delante. Una línea fina cierra la banda. */
+.identidad{background:var(--surface);border-bottom:1px solid var(--line)}
+.identidad .envoltura{display:flex;align-items:center;min-height:76px;padding-block:var(--e-12)}
+.firma{display:flex;align-items:center;justify-content:space-between;gap:var(--e-12) var(--e-32);width:100%;min-width:0}
+.firma-empresa{display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex:0 1 auto;min-width:0}
+.firma-persona{display:flex;align-items:center;gap:var(--e-12);flex:0 1 auto;min-width:0;margin-left:auto}
+.firma-persona .firma-textos{align-items:flex-end;text-align:right}
+.firma.sin-empresa .firma-persona{flex-direction:row-reverse;justify-content:flex-end;margin-left:0}
+.firma.sin-empresa .firma-persona .firma-textos{align-items:flex-start;text-align:left}
+.firma-retrato{flex:none;display:block;width:48px;aspect-ratio:4/5;overflow:hidden;background:var(--piedra)}
+.firma-retrato img{width:100%;height:100%;object-fit:cover}
+.firma-logo{display:block}
+.firma-logo img{width:auto;height:40px;max-width:220px;object-fit:contain;object-position:left center}
+.firma-textos{display:flex;flex-direction:column;gap:2px;min-width:0}
+.firma-nombre{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-figura);line-height:1.2;letter-spacing:-.015em;color:var(--ink);text-wrap:balance}
+.firma-quien{font-weight:600;font-size:var(--t-titulo);line-height:1.3;color:var(--ink);text-wrap:balance}
+.firma-meta{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-3)}
+/* Banda de la firma (1.7.0, temas): un tema tiñe la banda de la firma; la letra toma el color de la banda y el logotipo va
+   en una placa blanca sobre un fondo oscuro o de color: un logotipo oscuro no se leería sobre él. En el papel, la banda
+   llega a los bordes de la hoja.
+   1.8.0 (instrucción del titular: «en los PDF que se noten más los cambios»): todos los temas salvo Marfil llevan banda,
+   con un filete de su acento debajo; en el papel, las hojas siguientes llevan una franja de la banda en el borde superior
+   y el rótulo de cada capítulo empieza con un trazo del acento del tema. */
+.con-banda :is(.identidad,.hoja-cabeza:not(.detalle),.v-cabeza,.k-cabeza){background:var(--banda);background-image:var(--banda-imagen);--ink:var(--banda-texto);--ink-2:var(--banda-texto-2);--ink-3:var(--banda-texto-2);border-bottom:3px solid var(--banda-filete)}
+.con-banda .hoja-cabeza:not(.detalle){margin:-10mm -12mm 4mm;padding:5mm 12mm 4.4mm;border-bottom-width:.8mm}
+.con-banda .hoja{background-image:linear-gradient(var(--banda),var(--banda)),linear-gradient(var(--banda-filete),var(--banda-filete));background-size:100% 2.4mm,100% .7mm;background-position:0 0,0 2.4mm;background-repeat:no-repeat}
+.con-banda .capitulo-filete{height:2px;background:linear-gradient(var(--gold),var(--gold)) 0 0/28px 2px no-repeat,linear-gradient(var(--line),var(--line)) 0 50%/100% 1px no-repeat}
+.con-banda .v-cabeza{margin:-20px -20px 0;padding:14px 20px}
+.con-banda .firma-logo,.tema-oscuro :is(.digital,.kairos,.vertical) .firma-logo{padding:6px 10px;background:#FFFFFF}
+.con-banda .hoja .firma-logo{padding:1.5mm 2.5mm}
+/* la X de BROX: en la línea de la operación, a la derecha, pequeña y sin caja; nunca dentro de la firma comercial */
+.marca-x{flex:none;display:block;margin-left:auto;padding:0 0 0 var(--e-12)}
+.marca-x img{width:auto;height:20px}
+.resumen-operacion{display:flex;align-items:center;justify-content:space-between;gap:var(--e-12);min-height:20px}
+/* la firma de BROX al pie, «Inteligencia inmobiliaria con» y el logotipo, sobre la misma línea */
+.brox{display:inline-flex;align-items:center;gap:var(--e-8);flex:none;font-size:var(--t-contexto);line-height:1.2;color:var(--ink-3);white-space:nowrap}
+.brox img{width:auto;height:13px}
+.marca-clara{display:none!important}
+.tema-oscuro :is(.digital,.kairos,.vertical) .marca-tinta{display:none!important}
+.tema-oscuro :is(.digital,.kairos,.vertical) .marca-clara{display:block!important}
+
+/* =====================================================================
+   Contacto y acción (1.4.0): quién atiende, cómo escribirle y una sola acción
+   ===================================================================== */
+.contacto-banda{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) auto;align-items:center;gap:var(--e-16) var(--e-32);padding:var(--e-24);background:var(--surface);border:1px solid var(--line);box-shadow:var(--sombra)}
+.contacto-banda.sin-accion{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}
+.contacto-banda.sin-lista{grid-template-columns:minmax(0,1fr) auto}
+.contacto-banda.sin-lista.sin-accion{grid-template-columns:minmax(0,1fr)}
+.contacto-quien{display:grid;gap:2px;min-width:0}
+.contacto-rotulo{margin-bottom:var(--e-4);font-family:var(--f-display);font-stretch:125%;font-weight:600;font-size:var(--t-seccion);letter-spacing:.18em;text-transform:uppercase;color:var(--ink-2)}
+.contacto-nombre{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.2;letter-spacing:-.015em;color:var(--ink);text-wrap:balance}
+.contacto-meta{font-size:var(--t-contexto);line-height:1.45;color:var(--ink-2)}
+.contacto-lista{display:flex;flex-wrap:wrap;gap:var(--e-12) var(--e-24);min-width:0}
+/* 1.5.0 (revisión del 20 de octubre: los subrayados oro de cada enlace hacían que el contacto pareciera una fila de
+   interfaz): el contacto es texto con su icono en tinta; al pasar o con el foco, se subraya en tinta. */
+.contacto{display:inline-flex;align-items:center;gap:var(--e-8);max-width:100%;font-weight:600;font-size:var(--t-titulo);line-height:1.35;color:var(--ink);overflow-wrap:break-word;text-decoration:none}
+.contacto .ico{width:16px;height:16px;color:var(--ink)}
+.contacto-tipo{font-weight:400;color:var(--ink-2)}
+a.contacto:hover span,a.contacto:focus-visible span{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+/* «Coordinar una visita» (1.6.0; instrucción del titular del 20 de octubre: el mismo botón y el mismo color en todos los
+   casos, también en el PDF): el verde de la web, con luz arriba y sin borde, para WhatsApp, teléfono, correo o web; el icono
+   claro dice por dónde se coordina. Al pasar, filete oro. El color de base es el punto medio del degradado, donde va el
+   texto (contraste de 6,4:1 con el blanco), y queda debajo del degradado para un lector de PDF que no dibuje sombreados.
+   Degradado y filetes opacos (--verde-accion, --filetes-accion); la sombra difusa queda para la pantalla.
+   1.8.0: los colores del botón vienen del tema (--accion-*); sin tema y en Marfil siguen siendo el verde de la web. */
+.accion{display:inline-flex;align-items:center;justify-content:center;gap:var(--e-12);height:44px;padding:0 20px;font-weight:600;font-size:var(--t-titulo);line-height:1;white-space:nowrap;color:var(--accion-texto);background-color:var(--accion-base);background-image:var(--accion-degradado);box-shadow:var(--accion-filetes),0 14px 28px -16px var(--accion-sombra);transition:box-shadow .3s var(--ease)}
+.accion .ico{width:18px;height:18px;color:var(--accion-icono)}
+.accion:hover{box-shadow:inset 0 0 0 1px var(--accion-anillo),var(--accion-filetes),0 18px 34px -16px var(--accion-sombra)}
+
+/* =====================================================================
+   Avisos para el profesional: no son contenido de la ficha. La franja de estado va antes de la cabecera (tinte al
+   8 % y línea de 3 px del estado) y los espacios reservados ocupan el lugar de las fotos, del mapa y de la firma, sobre
+   el plano oro en piedra clara que la guía usa cuando no hay foto. Una pieza lista para difusión no lleva ninguno.
+   ===================================================================== */
+.estado,.hoja-estado{--aviso:var(--pizarra);--aviso-tinte:var(--pizarra-tinte);--aviso-texto:var(--ink)}
+.estado[data-estado="borrador"],.estado[data-estado="desactualizada"],.hoja-estado[data-estado="borrador"],.hoja-estado[data-estado="desactualizada"]{--aviso:var(--rojo);--aviso-tinte:var(--rojo-tinte);--aviso-texto:var(--rojo)}
+.estado[data-estado="privada"],.hoja-estado[data-estado="privada"]{--aviso:var(--zafiro);--aviso-tinte:var(--zafiro-tinte);--aviso-texto:var(--ink)}
+.estado{background:var(--aviso-tinte);border-bottom:1px solid var(--line)}
+.estado .envoltura{padding-block:var(--e-8)}
+.estado-item{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--e-4) var(--e-12);padding:var(--e-4) 0 var(--e-4) var(--e-16);border-left:3px solid var(--aviso)}
+.estado-item b{font-weight:600;font-size:var(--t-titulo);line-height:1.45;color:var(--aviso-texto)}
+.estado-texto{font-size:var(--t-contexto);line-height:1.45;color:var(--ink-2)}
+/* el plano de la guía: oro al 14 % sobre piedra clara, en una retícula de 12 px */
+
+/* =====================================================================
+   DIGITAL · portada (P5; NN/g: las cifras junto a la galería). A la izquierda, la galería; a la derecha, el panel con
+   qué es, el precio, sus condiciones, las cifras, lo que distingue al inmueble, la descripción y la acción.
+   ===================================================================== */
+.portada{position:relative;padding-block:var(--e-24) var(--e-48);background:var(--papel)}
+.portada-rejilla{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,452px);gap:var(--e-32);align-items:stretch}
+/* galería */
+.galeria-portada{display:flex;flex-direction:column;gap:var(--e-8);min-width:0}
+.escenario{position:relative;flex:1 1 auto;min-height:clamp(320px,30vw,460px);overflow:hidden;background:var(--piedra)}
+.escenario.marco{overflow:visible}
+.escenario-foto{position:absolute;inset:0;overflow:hidden;background:#0B0B0C;box-shadow:var(--sombra-alta)}
+.escenario-foto img,.lateral-marco img,.foto-marco img{position:absolute;top:0;left:var(--enc-x,0);width:var(--enc-w,100%);max-width:none;height:100%;object-fit:cover}
+.escenario-foto img{transition:opacity .45s var(--ease)}
+.escenario-foto img.entrando{opacity:0}
+.escenario-cabeza{position:absolute;left:var(--e-16);right:var(--e-16);top:var(--e-16);display:flex;flex-wrap:wrap;gap:var(--e-8);pointer-events:none}
+.escenario-pie{position:absolute;left:var(--e-16);right:var(--e-16);bottom:var(--e-16);display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:var(--e-8)}
+.escenario-controles{display:flex;align-items:center;gap:var(--e-8);margin-left:auto}
+.cristal{background:rgba(11,11,12,.74);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);color:#F6F5F1}
+.chip{display:inline-flex;align-items:center;gap:var(--e-8);min-height:40px;padding:var(--e-8) var(--e-16);font-weight:600;font-size:var(--t-contexto);line-height:1.3}
+.chip i{width:7px;height:7px;flex:none;background:var(--gold)}
+.boton-cuadro{display:grid;place-items:center;width:40px;height:40px;transition:border-color .3s var(--ease)}
+.boton-cuadro .ico{width:18px;height:18px}
+.boton-cuadro:hover,.boton-linea:hover{border-color:var(--gold)}
+.contador{display:inline-flex;align-items:center;height:40px;padding:0 var(--e-12);font:600 var(--t-mono) var(--f-mono);letter-spacing:.06em}
+.boton-linea{display:inline-flex;align-items:center;gap:var(--e-12);height:40px;padding:0 var(--e-16);font-weight:600;font-size:var(--t-contexto);white-space:nowrap;transition:border-color .3s var(--ease)}
+.boton-linea .ico{width:16px;height:16px;color:var(--gold-lt)}
+/* una foto de cada otro ambiente; la última lleva a todas */
+.laterales{display:grid;grid-template-columns:repeat(var(--lat,4),minmax(0,1fr));gap:var(--e-8);height:clamp(96px,8.6vw,128px);flex:none}
+.lateral{position:relative;display:block;min-width:0;overflow:hidden;background:var(--piedra);box-shadow:var(--sombra)}
+.lateral-marco{position:absolute;inset:0;overflow:hidden}
+.lateral-marco img{transition:transform .6s var(--ease)}
+.lateral:hover .lateral-marco img{transform:scale(1.04)}
+.lateral-rotulo{position:absolute;left:var(--e-8);bottom:var(--e-8);max-width:calc(100% - 16px);padding:2px var(--e-8);font-weight:600;font-size:var(--t-nota);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* selección (guía): 2 px blanco + 2 px oro */
+.lateral[aria-current="true"]{box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px var(--gold)}
+.lateral-mas{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--e-8);background:rgba(11,11,12,.64);color:#F6F5F1;font-weight:600;font-size:var(--t-contexto);text-align:center}
+.lateral-mas .ico{width:20px;height:20px;color:var(--gold-lt)}
+/* tira de ambientes (guía: segmentado de 34 px, activo en tinta con texto blanco) */
+.tira{display:flex;flex-wrap:wrap;gap:var(--e-8)}
+.tira button{display:inline-flex;align-items:center;gap:var(--e-8);height:34px;padding:0 var(--e-12);background:var(--surface);border:1px solid var(--line-3);font-weight:600;font-size:var(--t-contexto);line-height:1;white-space:nowrap;color:var(--ink-2);transition:border-color .25s var(--ease)}
+.tira button:hover{border-color:var(--ink);color:var(--ink)}
+.tira-cuenta{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 var(--e-4);background:var(--piedra);font:600 var(--t-mono) var(--f-mono);color:var(--ink)}
+.tira button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.tira button[aria-pressed="true"] .tira-cuenta{background:#2B2E35;color:var(--gold-lt)}
+.tema-oscuro .tira button[aria-pressed="true"] .tira-cuenta{background:#2B2E35;color:var(--gold-lt)}
+/* panel del resumen */
+.resumen{position:relative;display:flex;flex-direction:column;gap:var(--e-16);min-width:0;padding:var(--e-24) var(--e-24) var(--e-24);background:var(--surface);border:1px solid var(--line);box-shadow:var(--sombra-alta)}
+.resumen-cabeza{display:grid;gap:var(--e-8)}
+.antetitulo{display:flex;align-items:center;gap:var(--e-8);min-width:0;font-weight:600;font-size:var(--t-contexto);line-height:1.2;color:var(--ink-2)}
+.antetitulo i{width:7px;height:7px;flex:none;background:var(--gold)}
+.titulo{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-pagina);line-height:1.06;letter-spacing:-.025em;color:var(--ink);text-wrap:balance}
+.zona-linea{display:flex;align-items:center;gap:var(--e-8);font-size:var(--t-titulo);line-height:1.4;color:var(--ink-2)}
+.zona-linea .ico{width:16px;height:16px;color:var(--ink)}
+/* el precio (guía, dinero previsto): marfil con filete oro de 2 px, rótulo, importe de 28 px en tinta y su nota */
+.precio-portada{position:relative;padding:var(--e-12) 18px var(--e-16);background:var(--marfil);border:1px solid var(--line);box-shadow:inset 0 2px 0 var(--gold)}
+.precio-rotulo{font-weight:600;font-size:var(--t-contexto);line-height:1.3;color:var(--ink)}
+.precio-cifra{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .3em;margin-top:var(--e-4);font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-cifra);line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.precio-cifra small{font-size:var(--t-figura);font-weight:600;letter-spacing:.02em}
+.precio-cifra .periodo{font-family:var(--f-body);font-stretch:100%;font-size:var(--t-titulo);font-weight:500;letter-spacing:0;color:var(--ink-2)}
+.precio-nota{margin-top:var(--e-4);font-size:var(--t-nota);line-height:1.45;color:var(--ink-3)}
+/* 1.5.0: dentro del bloque del precio, lo que incluye, lo que se paga cada mes y lo que se exige al firmar, separados por
+   espacio (sin tarjetas ni líneas nuevas); lo incluido lleva el check en hoja y el texto en tinta, sin tinte sobre el marfil */
+.precio-grupos{display:grid;gap:var(--e-12);margin-top:var(--e-12);padding-top:var(--e-8);border-top:1px solid var(--line)}
+.precio-incluye{display:grid;gap:var(--e-4)}
+.precio-incluye li{display:flex;align-items:center;gap:var(--e-8);font-weight:600;font-size:var(--t-contexto);line-height:1.4;color:var(--ink)}
+.precio-incluye .ico{flex:none;width:15px;height:15px;color:var(--ink-3)}
+.precio-incluye li.si .ico{color:var(--hoja)}
+.precio-extra{display:grid;gap:var(--e-4)}
+.precio-extra div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 var(--e-12);font-size:var(--t-contexto);line-height:1.45}
+.precio-extra dt{color:var(--ink-2)}
+.precio-extra dt small{display:block;font-size:inherit;color:var(--ink-3)}
+.precio-extra dd{margin-left:auto;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+/* sin precio, el mismo lugar invita a consultar (1.3.1) */
+.precio-consulta{margin-top:var(--e-4);font-weight:600;font-size:var(--t-figura);line-height:1.3;color:var(--ink)}
+/* condiciones junto al precio: a favor, tinte hoja con línea de 3 px; las demás, en neutro */
+.condiciones-clave,.hoja-condiciones{display:grid;gap:var(--e-8)}
+.condiciones-clave li,.hoja-condiciones li{display:flex;align-items:center;gap:var(--e-12);padding:var(--e-8) 14px var(--e-8) 13px;font-size:var(--t-contexto);line-height:1.35;color:var(--ink)}
+.condiciones-clave li.si,.hoja-condiciones li.si{background:var(--hoja-tinte);border-left:3px solid var(--hoja);font-weight:600;color:var(--hoja)}
+.condiciones-clave li.no,.hoja-condiciones li.no{padding-left:16px;background:var(--surface);border:1px solid var(--line)}
+.condiciones-clave .ico,.hoja-condiciones .ico{width:16px;height:16px}
+/* cifras clave: celdas blancas separadas por 1 px; el icono en tinta acompaña a la cifra */
+.cifras-clave{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line)}
+.cifras-clave li{flex:1 1 150px;display:flex;min-width:0;background:var(--surface)}
+.cifra-enlace{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:var(--e-12) 14px var(--e-12) var(--e-16)}
+.cifra-enlace::after{content:"→";position:absolute;right:var(--e-12);top:var(--e-12);font-size:var(--t-contexto);line-height:1;color:var(--ink-3);opacity:0;transition:opacity .3s var(--ease),transform .3s var(--ease)}
+.cifra-enlace:hover::after{opacity:1;transform:translateX(4px)}
+.cifra-ico{display:grid;place-items:center;height:20px;margin-bottom:var(--e-8);color:var(--ink)}
+.cifra-ico .ico{width:18px;height:18px}
+.cifras-clave b{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.1;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cifras-clave b .unidad{font-size:var(--t-contexto)}
+.cifras-clave span{font-size:var(--t-contexto);line-height:1.35;color:var(--ink-2)}
+.cifras-clave span.nota{color:var(--ink-3)}
+.cifras-clave li.texto{flex-basis:160px}
+.cifras-clave li.texto b{font-family:var(--f-body);font-stretch:100%;font-size:var(--t-titulo);line-height:1.3;letter-spacing:0}
+/* 1.3.1: filas sin huecos de una rejilla de seis columnas (ficha.js, filasCifras); la cifra con desglose ocupa el doble
+   y la que queda sola en su fila se lee en una línea, con su desglose al lado */
+.cifras-clave.en-filas,.hoja-cifras.en-filas{display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+.en-filas>li.s2{grid-column:span 2}
+.en-filas>li.s3{grid-column:span 3}
+.en-filas>li.s4{grid-column:span 4}
+.en-filas>li.s5{grid-column:span 5}
+.en-filas>li.s6{grid-column:span 6}
+.cifras-clave li.sola:not(.texto) .cifra-enlace,.hoja-cifras li.sola:not(.texto){display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;column-gap:var(--e-12);row-gap:0}
+.cifras-clave li.sola:not(.texto) .cifra-ico,.hoja-cifras li.sola:not(.texto) .cifra-ico{grid-row:1/3;margin:0}
+.cifras-clave li.sola:not(.texto) b,.hoja-cifras li.sola:not(.texto) b{grid-row:1/3}
+.cifras-clave li.sola:not(.texto) .cifra-enlace>span:not(.cifra-ico),.hoja-cifras li.sola:not(.texto)>span:not(.cifra-ico){grid-column:3;align-self:end}
+.cifras-clave li.sola:not(.texto) .cifra-enlace>span.nota,.hoja-cifras li.sola:not(.texto)>span.nota{align-self:start}
+.cifras-clave li.sola:not(.texto) .cifra-enlace>span:not(.cifra-ico):last-child:not(.nota),.hoja-cifras li.sola:not(.texto)>span:not(.cifra-ico):last-child:not(.nota){grid-row:1/3;align-self:center}
+.cifras-clave span.nota,.hoja-cifras span.nota,.celda-nota{text-wrap:balance}
+/* el número de pisos con su pictograma, en tinta como los iconos */
+.cifra-ico.pisos{display:grid;place-items:end start;height:auto;min-height:20px}
+.picto-pisos{display:flex;flex-direction:column-reverse;align-items:flex-start;gap:2px}
+.picto-pisos i{display:block;width:18px;height:3px;background:var(--ink);opacity:.38}
+.picto-pisos i:last-child{opacity:1}
+/* destacados del profesional: lo que distingue al inmueble, en zafiro, con la forma aprobada (tinte, tesela clara,
+   icono azul y letra de cuerpo); la tesela es blanca, para no poner un tinte sobre otro */
+.destacados{display:flex;flex-wrap:wrap;gap:var(--e-8)}
+.destacados li{display:inline-flex;align-items:center;gap:var(--e-12);padding:var(--e-4) var(--e-16) var(--e-4) var(--e-4);background:var(--zafiro-tinte);border:1px solid rgba(46,96,212,.26);font-weight:600;font-size:var(--t-titulo);line-height:1.3;color:var(--ink)}
+.destacados .ico{width:32px;height:32px;padding:7px;background:var(--surface);color:var(--zafiro)}
+/* descripción: «Sobre el inmueble» */
+.lead{display:grid;gap:var(--e-4)}
+.lead-rotulo{font-family:var(--f-body);font-stretch:100%;font-weight:600;font-size:var(--t-titulo);letter-spacing:0;text-transform:none;color:var(--ink)}
+.lead-texto{font-size:var(--t-titulo);line-height:1.55;color:var(--ink-2);text-wrap:pretty}
+/* la acción al pie del panel, con quién atiende */
+.resumen-accion{display:grid;gap:var(--e-8);margin-top:var(--e-4);padding-top:var(--e-16);border-top:1px solid var(--line)}
+.resumen-accion .accion{width:100%}
+.resumen-quien{font-size:var(--t-contexto);line-height:1.45;color:var(--ink-2);text-align:center}
+.resumen-quien b{font-weight:600;color:var(--ink)}
+/* portada sin fotografía (pieza lista para difusión): el panel a todo el ancho */
+.portada.sin-foto{padding-block:var(--e-48)}
+.portada.sin-foto .portada-rejilla{grid-template-columns:minmax(0,1fr)}
+/* el panel tiene dos grupos (1.5.0): con galería, una sola columna en este orden; sin fotos, dos columnas: a la izquierda qué
+   es, dónde y sus cifras; a la derecha el precio y sus condiciones; debajo, la descripción y la acción a todo el ancho */
+.resumen-izq,.resumen-der{display:contents}
+.resumen .resumen-cabeza{order:1}.resumen .precio-portada{order:2}.resumen .condiciones-clave{order:3}.resumen .cifras-clave{order:4}.resumen .destacados{order:5}.resumen .lead{order:6}.resumen .resumen-accion{order:7}
+.portada.sin-foto .resumen{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);align-items:start;gap:var(--e-24) var(--e-48);padding:var(--e-32)}
+.portada.sin-foto .resumen-izq,.portada.sin-foto .resumen-der{display:flex;flex-direction:column;gap:var(--e-16);min-width:0}
+.portada.sin-foto .lead,.portada.sin-foto .resumen-accion{grid-column:1/-1}
+
+/* =====================================================================
+   DIGITAL · subnavegación anclada (guía: pestañas de 15 px, activa en tinta con línea de 2 px, inactiva #474B54)
+   ===================================================================== */
+.subnav{position:sticky;top:0;z-index:20;height:var(--sub-h);background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+/* 1.7.0: la barra toma el panel del tema (antes, blanco o grafito fijos) */
+.subnav .envoltura{display:flex;align-items:stretch;height:100%;gap:var(--e-16)}
+.subnav ol{display:flex;align-items:stretch;gap:0;overflow-x:auto;scrollbar-width:none;margin-left:calc(var(--e-12) * -1)}
+.subnav ol::-webkit-scrollbar{display:none}
+.subnav a{position:relative;display:flex;align-items:center;gap:var(--e-8);height:100%;padding:0 var(--e-12);font-weight:500;font-size:var(--t-titulo);line-height:1;white-space:nowrap;color:var(--ink-3);transition:color .25s var(--ease)}
+.subnav a::after{content:"";position:absolute;left:var(--e-12);right:var(--e-12);bottom:-1px;height:2px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
+.subnav a:hover,.subnav a[aria-current="true"]{color:var(--ink)}
+.subnav a[aria-current="true"]{font-weight:600}
+.subnav a[aria-current="true"]::after{transform:scaleX(1)}
+.subnav-precio{display:flex;align-items:center;gap:var(--e-12);margin-left:auto;padding-left:var(--e-24);border-left:1px solid var(--line);font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-titulo);white-space:nowrap;color:var(--ink);font-variant-numeric:tabular-nums}
+.subnav-precio span{display:none;font-family:var(--f-body);font-stretch:100%;font-weight:500;color:var(--ink-3)}
+.subnav-progreso{position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--gold);transform:scaleX(var(--p,0));transform-origin:left;pointer-events:none}
+
+/* =====================================================================
+   DIGITAL · capítulos sobre papel; cada pieza es un panel blanco
+   ===================================================================== */
+.capitulo{position:relative;padding-block:var(--e-48);background:transparent}
+.capitulo+.capitulo{border-top:1px solid var(--line)}
+.cap-cabeza{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--e-8) var(--e-32);margin-bottom:var(--e-24)}
+.cap-titulo{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.2;letter-spacing:-.015em;text-wrap:balance}
+.cap-entrada{max-width:72ch;font-size:var(--t-titulo);line-height:1.55;color:var(--ink-2);text-wrap:pretty}
+.capitulo-contacto .contacto-banda{box-shadow:var(--sombra-alta)}
+
+/* =====================================================================
+   Tablero (1.2.3; 1.4.0): piezas que se reparten el ancho según su peso (--k) y celdas que crecen hasta llenar su
+   fila. Cada pieza es un panel de la guía: borde de 1 px, banda del título en papel claro y cuerpo blanco.
+   ===================================================================== */
+.tablero{display:flex;flex-direction:column;gap:var(--e-16)}
+.fila{display:flex;gap:var(--e-16)}
+.fila>.pieza{flex:var(--k,1) 1 0}
+.pieza{position:relative;flex:var(--k,1) 1 calc(var(--k,1) * 210px);display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sombra)}
+.pieza-titulo{display:flex;align-items:center;gap:var(--e-8);padding:10px 16px;background:var(--papel-claro);border-bottom:1px solid var(--line);font-weight:600;font-size:var(--t-titulo);line-height:1.3;color:var(--ink)}
+.pieza-nota{padding:10px 16px 0;font-size:var(--t-contexto);line-height:1.45;color:var(--ink-2)}
+.pieza-nota+.celdas{margin-top:10px}
+.celdas{display:flex;flex-wrap:wrap;align-content:stretch;gap:1px;flex:1 1 auto;background:var(--line)}
+/* una cifra: su icono, el valor y, pegado debajo, qué es */
+.celda{flex:1 1 168px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;min-width:0;padding:var(--e-12) 14px var(--e-12) var(--e-16);background:var(--surface)}
+.celda-ico{display:grid;place-items:center start;height:20px;margin-bottom:var(--e-8);color:var(--ink)}
+.celda-ico .ico{width:18px;height:18px}
+.celda-ico.pisos{height:auto;min-height:20px;align-items:end}
+.celda-valor{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.2;letter-spacing:-.01em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.celda-valor .unidad{font-size:var(--t-contexto)}
+.celda.texto .celda-valor{font-family:var(--f-body);font-stretch:100%;font-size:var(--t-titulo);line-height:1.35;letter-spacing:0}
+.celda-rotulo{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-2)}
+.celda-nota{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-3)}
+/* un hecho: una fila con la línea de su sentido (guía: ficha de estado, tinte al 8 % y línea de 3 px). Hoja si está a
+   favor; zafiro si distingue al inmueble; neutro, sin línea, si es una condición, una ausencia o un hecho de la zona */
+.celda.hecho{--fila:var(--line-3);--fila-tinte:var(--surface);flex-direction:row;align-items:center;gap:var(--e-12);flex-basis:220px;padding:10px 14px 10px 13px;background:var(--fila-tinte);border-left:3px solid var(--fila)}
+.celdas:has(.celda:not(.hecho)) .celda.hecho{flex-basis:100%}
+.celda.largo{flex-basis:320px}
+.celda.ancha{flex-grow:2}
+.celda.hecho .celda-ico{height:auto;margin:0;color:var(--fila)}
+.celda.si{--fila:var(--hoja);--fila-tinte:var(--hoja-tinte)}
+.celda.si .celda-frase{font-weight:600;color:var(--hoja)}
+.celda.rasgo,.celda.destacado{--fila:var(--zafiro);--fila-tinte:var(--zafiro-tinte)}
+.celda.rasgo .celda-frase,.celda.destacado .celda-frase{font-weight:600;color:var(--ink)}
+.celda.no,.celda.neutro{--fila:transparent;--fila-tinte:var(--surface);padding-left:var(--e-16);border-left:0}
+.celda.no .celda-ico,.celda.neutro .celda-ico{color:var(--ink)}
+.celda-frase{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 var(--e-12);font-weight:500;font-size:var(--t-titulo);line-height:1.4;color:var(--ink)}
+/* el respaldo de un hecho documental cuando difiere del de su grupo (1.4.0) */
+.celda-respaldo{font-weight:400;font-size:var(--t-contexto);color:var(--ink-2);white-space:nowrap}
+/* un capítulo sin contenido invita a consultar (1.3.1): una fila con su icono, sin marca de «falta» */
+.pieza-consulta{flex-direction:row;align-items:center}
+.consulta-fila{display:flex;align-items:center;gap:var(--e-12);padding:14px var(--e-16);font-size:var(--t-titulo);line-height:1.5;color:var(--ink-2)}
+.consulta-fila b{font-weight:600;color:var(--ink)}
+.consulta-fila .ico{width:18px;height:18px;color:var(--ink)}
+/* 02: el precio en su pieza, en marfil con su filete oro; solo en su fila, a lo ancho, con la nota a su lado */
+.pieza-precio{background:var(--marfil);box-shadow:inset 0 2px 0 var(--gold),var(--sombra)}
+.pieza-precio .pieza-titulo{background:transparent;border-bottom:0;padding-bottom:0}
+.precio-bloque{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--e-4) var(--e-24);padding:var(--e-8) var(--e-16) 14px}
+.pieza-precio .precio-valor{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.15;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pieza-precio.consulta .precio-valor{font-family:var(--f-body);font-stretch:100%;font-size:var(--t-titulo);letter-spacing:0}
+.pieza-precio .pieza-nota{padding:0;font-size:var(--t-contexto);color:var(--ink-3)}
+.uso-texto{display:grid;gap:var(--e-8);margin:var(--e-12) var(--e-16) var(--e-16);padding:var(--e-12) var(--e-16);background:var(--papel-claro);border:1px solid var(--line)}
+.uso-condiciones{max-width:80ch;font-size:var(--t-titulo);line-height:1.5;color:var(--ink)}
+.uso-fuente{font-size:var(--t-contexto);line-height:1.5;color:var(--ink-2)}
+
+/* 01 · Ubicación (1.5.0; revisión entregada por el titular el 20 de octubre): un encabezado; la dirección autorizada con la
+   zona, o la zona rotulada una vez como aproximada; el mapa con el inmueble marcado en grafito y los lugares públicos en
+   segundo plano, con su tiempo; la atribución breve debajo del mapa. Sin párrafos que expliquen cómo leer el mapa. */
+.pieza-ubicacion{flex-direction:row;flex-wrap:wrap;align-items:stretch}
+.ubicacion-tarjeta{flex:1 1 300px;display:flex;align-items:flex-start;gap:var(--e-16);min-width:0;padding:var(--e-16)}
+.ubicacion-tarjeta>.ico{width:22px;height:22px;margin-top:2px;color:var(--ink)}
+.ubicacion-textos{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.ubicacion-etiqueta{font-weight:600;font-size:var(--t-contexto);line-height:1.4;color:var(--ink-2)}
+.ubicacion-direccion{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.2;letter-spacing:-.015em;color:var(--ink);text-wrap:balance}
+.ubicacion-zona{font-size:var(--t-titulo);line-height:1.4;color:var(--ink-2)}
+.pieza-ubicacion .celdas{flex:2 1 320px}
+.pieza-ubicacion.sola{justify-content:flex-start}
+/* enlace (guía): un solo enlace discreto, con el subrayado oro de 1 px de la guía; al pasar, la flecha avanza 4 px */
+.enlace-ver{display:inline-flex;align-items:center;gap:var(--e-8);margin-top:var(--e-8);padding-bottom:2px;border-bottom:1px solid var(--gold);font-weight:600;font-size:var(--t-contexto);line-height:1.3;color:var(--ink)}
+.enlace-ver .ico{width:14px;height:14px;color:var(--ink);transition:transform .3s var(--ease)}
+.enlace-ver:hover .ico{transform:translateX(4px)}
+.zona-con-mapa{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(320px,1fr);gap:var(--e-32);align-items:start}
+.zona-lado{display:flex;flex-direction:column;gap:var(--e-16);min-width:0}
+.zona-lado .pieza-ubicacion{flex:none}
+.zona-con-mapa:has(.reserva-mapa){align-items:stretch}
+.figura-mapa{position:relative;margin:0}
+.mapa-boton{display:block;width:100%;position:relative;background:var(--piedra);border:1px solid var(--line);box-shadow:var(--sombra)}
+.mapa-boton img{width:100%;height:auto}
+.mapa-oscuro{display:none}
+.tema-oscuro :is(.digital,.kairos) .mapa-claro{display:none}
+.tema-oscuro :is(.digital,.kairos) .mapa-oscuro{display:block}
+.mapa-ampliar{position:absolute;right:var(--e-16);bottom:var(--e-16);font-size:var(--t-contexto)}
+/* el inmueble sobre el mapa: una capa con la posición del punto autorizado (CSSOM: --x, --y en %; --radio en % del ancho) */
+.mapa-lienzo{position:relative;display:block}
+.mapa-capa{position:absolute;inset:0;pointer-events:none}
+.capa-compacto{display:none}
+.mapa-marca{position:absolute;left:calc(var(--x,50) * 1%);top:calc(var(--y,50) * 1%);transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center}
+.mapa-marca-caja{display:grid;place-items:center;width:34px;height:34px;background:#111214;color:#FFFFFF;box-shadow:0 0 0 2px #FFFFFF,0 8px 18px -8px rgba(17,18,20,.6)}
+.mapa-marca-caja .ico{width:20px;height:20px;color:#FFFFFF}
+.mapa-marca::after{content:"";width:0;height:0;margin-top:1px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #111214;filter:drop-shadow(0 2px 0 #FFFFFF)}
+.mapa-zona{position:absolute;left:calc(var(--x,50) * 1%);top:calc(var(--y,50) * 1%);width:calc(var(--radio,10) * 2%);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:rgba(17,18,20,.08);border:2px dashed #111214}
+.mapa-pie{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--e-4) var(--e-16);margin-top:var(--e-8)}
+.mapa-atribucion{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-3)}
+.mapa-atribucion a{color:inherit;text-decoration:none}
+.mapa-atribucion a:hover{text-decoration:underline;text-underline-offset:3px}
+.mapa-pie .enlace-ver{margin-top:0}
+/* sin fotografías, el mapa con el inmueble es la imagen de la portada */
+.portada.con-mapa .galeria-portada{justify-content:center}
+.portada.con-mapa .figura-mapa{width:100%}
+.leyenda{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);box-shadow:var(--sombra)}
+.leyenda li{display:flex;align-items:center;gap:var(--e-12);padding:var(--e-12) var(--e-16);background:var(--surface)}
+.leyenda-tiempo{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;padding-left:var(--e-12);text-align:right}
+.leyenda-tiempo b{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-titulo);line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums}
+.leyenda-tiempo span{font-size:var(--t-contexto);line-height:1.3;color:var(--ink-2);white-space:nowrap}
+.mapa-tiempos{font-size:var(--t-contexto);line-height:1.5;color:var(--ink-2)}
+/* lugares públicos: en segundo plano, como en el mapa (cuadro blanco, filete y número de tinta) */
+.leyenda-no{display:grid;place-items:center;width:28px;height:28px;flex:none;background:var(--surface);border:1.5px solid var(--ink);font:600 var(--t-contexto) var(--f-mono);color:var(--ink)}
+.leyenda-texto{display:flex;flex-direction:column;min-width:0}
+.leyenda-texto b{font-weight:600;font-size:var(--t-titulo);line-height:1.3}
+.leyenda-texto span{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-2)}
+.visor-lugares .leyenda-no{width:24px;height:24px}
+.visor-marco{position:relative;display:block}
+.visor[data-modo="foto"] .visor-marco .mapa-capa{display:none}
+
+/* recorrido visual: todas las fotos, por ambiente, en una rejilla de doce columnas sin huecos */
+.ambiente{margin-top:var(--e-48)}
+.ambiente:first-of-type{margin-top:0}
+.ambiente-cabeza{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--e-8) var(--e-16);margin-bottom:var(--e-16);padding-bottom:var(--e-12);border-bottom:1px solid var(--line-2)}
+.ambiente-no{display:inline-grid;place-items:center;min-width:32px;height:24px;padding:0 var(--e-4);align-self:center;background:#111214;font:600 var(--t-contexto) var(--f-mono);letter-spacing:.06em;color:var(--gold-lt)}
+.ambiente-cabeza h3{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);line-height:1.2;letter-spacing:-.015em}
+.ambiente-cuenta{font-size:var(--t-contexto);color:var(--ink-2)}
+/* enlace (guía): subrayado oro de 1 px; al pasar, la flecha avanza 4 px */
+.ver-ambiente{display:inline-flex;align-items:center;gap:var(--e-8);margin-left:auto;padding-bottom:2px;border-bottom:1px solid var(--gold);font-weight:600;font-size:var(--t-contexto);color:var(--ink)}
+.ver-ambiente .ico{width:14px;height:14px;color:var(--ink);transition:transform .3s var(--ease)}
+.ver-ambiente:hover .ico{transform:translateX(4px)}
+.ambiente-fotos{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:clamp(120px,12.5vw,184px);grid-auto-flow:dense;gap:var(--e-8)}
+.foto{position:relative;grid-column:span var(--c,3);grid-row:span var(--r,1);min-width:0;overflow:hidden;background:var(--piedra);box-shadow:var(--sombra)}
+.ambiente.espejo .foto[data-c="6"][data-r="2"]{grid-column:7 / span 6}
+.foto-marco{position:absolute;inset:0;overflow:hidden}
+.foto-marco img{transition:transform .6s var(--ease)}
+.foto:hover .foto-marco img{transform:scale(1.03)}
+.foto-rotulo{position:absolute;left:var(--e-8);bottom:var(--e-8);max-width:calc(100% - 16px);padding:2px var(--e-8);font-weight:600;font-size:var(--t-contexto);line-height:1.4}
+.foto-rotulo em{display:block;font-style:normal;font-weight:400}
+.ambiente.unica{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--e-8) var(--e-24);align-items:stretch}
+.ambiente.unica .ambiente-cabeza{grid-column:span 4;flex-direction:column;align-items:flex-start;margin:0;padding:var(--e-16) 0 0;border-bottom:0;border-top:1px solid var(--line-2)}
+.ambiente.unica .ver-ambiente{margin:auto 0 0}
+.ambiente.unica .ambiente-fotos{grid-column:span 8;grid-template-columns:repeat(8,minmax(0,1fr))}
+
+/* pie de la pieza digital: de dónde salen los datos y «Ficha generada con BROX» con la versión y su fecha */
+.pie{background:var(--papel);border-top:1px solid var(--line)}
+.pie .envoltura{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--e-16) var(--e-48);align-items:center;padding-block:var(--e-32)}
+.pie-fuente{max-width:90ch;font-size:var(--t-contexto);line-height:1.55;color:var(--ink-3)}
+.pie-brox{display:grid;justify-items:end;gap:var(--e-4)}
+
+/* =====================================================================
+   DIGITAL · visor (fotos por ambiente y mapa ampliado)
+   ===================================================================== */
+.visor{width:100%;max-width:min(1240px,96vw);max-height:96vh;padding:0;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);overflow:hidden;box-shadow:var(--sombra-alta)}
+.visor::backdrop{background:rgba(245,244,240,.94);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.visor[open]{display:flex;flex-direction:column}
+.visor-cabeza{display:flex;align-items:center;justify-content:space-between;gap:var(--e-16);padding:var(--e-16) var(--e-24);background:var(--papel-claro);border-bottom:1px solid var(--line)}
+.visor-cabeza small{display:block;font-weight:600;font-size:var(--t-contexto);color:var(--ink-3)}
+.visor-cabeza strong{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--t-panel);letter-spacing:-.015em}
+.visor-cerrar{display:inline-flex;align-items:center;gap:var(--e-8);height:40px;padding:0 var(--e-16);background:var(--surface);border:1px solid var(--line-3);font-weight:600;font-size:var(--t-contexto)}
+.visor-cerrar:hover{border-color:var(--ink)}
+.visor-ambientes{display:flex;gap:var(--e-8);overflow-x:auto;padding:var(--e-12) var(--e-24);scrollbar-width:thin;border-bottom:1px solid var(--line)}
+.visor-ambientes button{white-space:nowrap;height:34px;padding:0 var(--e-12);border:1px solid var(--line-3);font-size:var(--t-contexto);color:var(--ink-2)}
+.visor-ambientes button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.visor-lienzo{position:relative;background:var(--piedra);overflow:auto}
+.visor-lienzo img{width:100%;height:min(60vh,640px);object-fit:contain}
+.visor[data-modo="mapa"] .visor-lienzo img{height:auto;max-height:none}
+.visor-pie{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--e-16);align-items:center;padding:var(--e-16) var(--e-24)}
+.visor-pie strong{font-weight:600;font-size:var(--t-titulo)}
+.visor-pie p{margin-top:var(--e-4);font-size:var(--t-contexto);line-height:1.5;color:var(--ink-2)}
+.visor-flecha{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line-3)}
+.visor-flecha:hover{border-color:var(--ink)}
+.visor-miniaturas{display:flex;gap:var(--e-8);overflow-x:auto;padding:0 var(--e-24) var(--e-16);scrollbar-width:thin}
+.visor-miniaturas button{flex:0 0 88px;height:56px;padding:2px;border:1px solid var(--line-2);background:var(--piedra)}
+.visor-miniaturas button[aria-pressed="true"]{box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px var(--gold)}
+.visor-miniaturas img{width:100%;height:100%;object-fit:cover}
+.visor-lugares{display:flex;flex-wrap:wrap;gap:var(--e-8) var(--e-24);padding:var(--e-16) var(--e-24) 0}
+.visor-lugares li{display:flex;align-items:center;gap:var(--e-8);font-size:var(--t-contexto)}
+.visor[data-modo="mapa"] .visor-ambientes,.visor[data-modo="mapa"] .visor-miniaturas,.visor[data-modo="mapa"] .visor-flecha{display:none}
+.visor[data-modo="foto"] .visor-lugares{display:none}
+
+/* =====================================================================
+   Movimiento (guía): responde a un clic; nada se anima al entrar. Se respeta la preferencia del sistema y la opción
+   «reducido» (las corridas de evidencia la usan)
+   ===================================================================== */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.mov-reducido *,.mov-reducido *::before,.mov-reducido *::after{transition:none!important;animation:none!important}
+
+/* =====================================================================
+   DIGITAL · tableta y móvil (mismos nombres, valores más chicos)
+   ===================================================================== */
+/* Las consultas de ancho son de la lectura digital: la hoja A4 se imprime con 794 px de ancho y no debe recibirlas. */
+@media (min-width:1560px){.digital .subnav-precio span{display:inline}}
+@media (max-width:1099px){
+  .digital{--gutter:var(--e-32)}
+  .digital .portada-rejilla{grid-template-columns:minmax(0,1fr) minmax(340px,400px);gap:var(--e-24)}
+  .digital .resumen{padding:var(--e-24)}
+  .digital .zona-con-mapa{grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr);gap:var(--e-24)}
+  .digital .contacto-banda{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .digital .contacto-banda .accion{grid-column:1/-1;justify-self:start}
+}
+@media (max-width:899px){
+  /* en pantallas angostas las filas se deshacen y las piezas se acomodan solas */
+  .digital .tablero{flex-direction:row;flex-wrap:wrap}
+  .digital .fila{display:contents}
+  .digital .fila>.pieza{flex:var(--k,1) 1 calc(var(--k,1) * 210px)}
+  .digital .portada-rejilla{grid-template-columns:minmax(0,1fr)}
+  .digital .escenario{min-height:clamp(300px,56vw,460px)}
+  .digital .zona-con-mapa{grid-template-columns:minmax(0,1fr)}
+  .digital .portada.sin-foto .resumen{display:flex;flex-direction:column}
+  .digital .portada.sin-foto .resumen-izq,.digital .portada.sin-foto .resumen-der{display:contents}
+}
+@media (max-width:759px){
+  :root{--sub-h:52px}
+  .digital{--t-pagina:28px;--t-cifra:28px;--t-panel:20px;--gutter:var(--e-16)}
+  .digital .identidad .envoltura{min-height:0}
+  /* en el teléfono, la empresa ocupa la primera línea y, debajo, la fotografía de 40 × 50 px con el nombre al lado */
+  .digital .firma{flex-direction:column;align-items:stretch;gap:var(--e-8)}
+  .digital .firma-persona{flex-direction:row-reverse;justify-content:flex-end;margin-left:0}
+  .digital .firma-persona .firma-textos{align-items:flex-start;text-align:left}
+  .digital .firma-retrato{width:40px}
+  .digital .firma-logo img{height:30px;max-width:150px}
+  .digital .marca-x img{height:18px}
+  .digital .estado-item{display:block;line-height:1.5}
+  .digital .estado-item b{margin-right:var(--e-8)}
+  /* D-B · En el móvil la foto va arriba, con sus controles, la tira de ambientes y las miniaturas; el título, la zona,
+     el precio y las cifras debajo, sobre papel: el texto no queda sobre la foto. */
+  .digital .portada{padding-block:0 var(--e-32)}
+  .digital .portada-rejilla{padding-inline:0;gap:var(--e-16)}
+  .digital .escenario{min-height:0;height:clamp(250px,72vw,330px);flex:none}
+  .digital .escenario-foto{box-shadow:none}
+  .digital .escenario-cabeza{left:var(--e-12);right:var(--e-12);top:var(--e-12)}
+  .digital .escenario-pie{left:var(--e-12);right:var(--e-12);bottom:var(--e-12)}
+  .digital .contador,.digital .boton-linea.ver-original span{display:none}
+  .digital .boton-linea.ver-original{padding:0 var(--e-12)}
+  .digital .aviso-escena{font-size:var(--t-nota)}
+  .digital .laterales{height:76px;padding-inline:var(--gutter)}
+  .digital .lateral-rotulo{display:none}
+  .digital .lateral-mas{font-size:var(--t-nota);gap:var(--e-4)}
+  .digital .tira{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-inline:var(--gutter)}
+  .digital .tira::-webkit-scrollbar{display:none}
+  .digital .resumen{margin-inline:var(--gutter);padding:var(--e-16)}
+  .digital .portada.sin-foto{padding-block:var(--e-32)}
+  .digital .portada.sin-foto .resumen{padding:var(--e-16)}
+  .digital .cifras-clave li{flex-basis:130px}
+  .digital .subnav-precio{display:none}
+  .digital .subnav ol{margin-left:calc(var(--e-8) * -1)}
+  .digital .subnav a{padding:0 var(--e-8);font-size:var(--t-contexto)}
+  .digital .subnav a::after{left:var(--e-8);right:var(--e-8)}
+  .digital .capitulo{padding-block:var(--e-32)}
+  .digital .tablero,.digital .fila{gap:var(--e-12)}
+  .digital .celda{flex-basis:130px}
+  .digital .celda.hecho,.digital .celda.largo{flex-basis:100%}
+  .digital .zona-tarjeta{flex-basis:100%}
+  .digital .mapa-ampliar span{display:none}
+  .digital .capa-ancho{display:none}
+  .digital .capa-compacto{display:block}
+  .digital .mapa-ampliar{right:var(--e-8);bottom:var(--e-8);padding:0 var(--e-12)}
+  .digital .contacto-banda{grid-template-columns:minmax(0,1fr);padding:var(--e-16)}
+  .digital .contacto-banda .accion{width:100%}
+  .digital .ambiente{margin-top:var(--e-32)}
+  .digital .ambiente-fotos,.digital .ambiente.unica .ambiente-fotos{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:120px}
+  .digital .foto{grid-column:span 1;grid-row:span 1}
+  .digital .foto:first-child,.digital .foto:last-child:nth-child(even),.digital .ambiente.espejo .foto[data-c="6"][data-r="2"]{grid-column:span 2}
+  .digital .foto:first-child{grid-row:span 2}
+  .digital .ambiente.unica{display:block}
+  .digital .ambiente.unica .ambiente-cabeza{flex-direction:row;align-items:baseline;margin-bottom:var(--e-16);padding:0 0 var(--e-12);border-top:0;border-bottom:1px solid var(--line-2)}
+  .digital .ambiente.unica .ver-ambiente{margin:0 0 0 auto}
+  .digital .pie .envoltura{grid-template-columns:1fr}
+  .digital .pie-brox{justify-items:start}
+  .visor{max-width:100vw;max-height:100vh;width:100vw;height:100vh;border:0}
+  .visor-lienzo img{height:46vh}
+  .visor[data-modo="mapa"] .visor-lienzo img{width:820px;max-width:none;max-height:none;height:auto}
+}
+
+/* =====================================================================
+   A4 · hojas estáticas (vista previa en pantalla e impresión). 210 × 297 mm, sin animación ni scripts. Escala de la
+   hoja (1.4.0): título 28 · precio 28 · cifra de portada 22 · cifra del detalle 17 · cuerpo 15 · contexto 13,5 px, el
+   menor texto (10,1 pt). Hoja 1: portada; después, el detalle a todo el ancho; cada hoja termina con el contacto.
+   ===================================================================== */
+.a4{display:flex;flex-direction:column;align-items:center;gap:var(--e-32);padding:var(--e-48) var(--e-16) var(--e-64)}
+.hoja>*{flex-shrink:0}
+.hoja{--a-titulo:28px;--a-precio:28px;--a-cifra:22px;--a-figura:17px;--a-cuerpo:15px;--a-contexto:13.5px;
+  position:relative;width:210mm;height:297mm;overflow:hidden;display:flex;flex-direction:column;padding:10mm 12mm 8mm;background:var(--surface);color:var(--ink);font-family:var(--f-body);font-size:var(--a-contexto);line-height:1.45;box-shadow:0 30px 60px -36px rgba(17,18,20,.45),0 10px 24px -18px rgba(17,18,20,.25)}
+/* la hoja es siempre clara (paleta «papel» de cada tema, 1.7.0); sin sombras en el papel */
+.hoja{--sombra:none;--sombra-alta:none}
+.hoja .marca-tinta{display:block!important}
+.hoja .marca-clara{display:none!important}
+/* cabecera de la portada (1.5.0; revisiones del 20 de octubre): la banda de la firma, con la empresa a la izquierda (nombre
+   comercial de 12,75 pt o su logotipo) y quien atiende a la derecha (11,25 pt) con su fotografía de 12 × 15 mm a 3 mm del
+   nombre; una línea fina la cierra. La X de BROX va debajo, al extremo derecho de la línea de la operación, de unos 5,5 mm de
+   ancho. Las demás hojas: el título breve y la X. */
+.hoja-cabeza{display:flex;align-items:center;gap:var(--e-16);min-height:10mm;padding-bottom:3mm;border-bottom:1px solid var(--line-3)}
+.hoja-cabeza.detalle{min-height:9mm;padding-bottom:2mm}
+.hoja .firma{gap:3mm 8mm;align-items:center}
+.hoja .firma-persona{gap:3mm}
+.hoja .firma-retrato{width:12mm;height:15mm}
+.hoja .firma-logo img{height:9mm;max-width:46mm}
+.hoja .firma-nombre{font-size:var(--a-figura);line-height:1.2}
+.hoja .firma-quien{font-size:var(--a-cuerpo);line-height:1.3}
+.hoja .firma-meta{font-size:var(--a-contexto);line-height:1.35}
+.hoja .marca-x{padding:0 0 0 var(--e-12)}
+.hoja .marca-x img{height:4mm}
+.hoja-titulo{display:flex;align-items:center;justify-content:space-between;gap:var(--e-12);min-height:4mm;margin-top:4mm}
+.hoja>.hoja-titulo:first-child{margin-top:0}
+.hoja .antetitulo{font-size:var(--a-contexto);color:var(--ink-2)}
+.hoja h1{margin:var(--e-4) 0 var(--e-4);font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--a-titulo);line-height:1.06;letter-spacing:-.022em;text-wrap:balance}
+.hoja .zona-linea{font-size:var(--a-cuerpo);color:var(--ink-2)}
+.hoja .zona-linea .ico{width:16px;height:16px}
+.hoja-detalle-titulo{flex:1 1 auto;min-width:0;font-weight:600;font-size:var(--a-cuerpo);line-height:1.35;color:var(--ink)}
+/* en la portada, el 02 no repite el precio que está a su lado (1.5.0): si su primera fila trae grupos, quedan los grupos */
+.portada-a4 [data-cap="precio"] .pieza-precio{display:none}
+/* sin fotografías (1.5.0), el mapa con el inmueble es la imagen de la portada: a la izquierda, a 3/5 del ancho (el rótulo
+   del mapa sigue sobre 10 pt), y a su lado el precio con lo que decide; desde 1.12.0, también las cifras, de dos en dos (antes iban debajo, a todo el ancho) */
+.hoja-mapa-fila{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:4mm;align-items:stretch;margin-top:4mm}
+.hoja-mapa-fila>.hoja-resumen-b{display:flex;flex-direction:column;gap:3mm;min-width:0}
+.hoja-mapa-fila>.hoja-resumen-b>.hoja-precio{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
+.hoja-mapa-portada{margin:0;min-width:0}
+.hoja-mapa-portada .mapa-lienzo{border:1px solid var(--line-2);background:var(--piedra)}
+.hoja-mapa-portada img{width:100%;height:auto}
+.hoja-resumen.solo-cifras{grid-template-columns:minmax(0,1fr)}
+/* galería de la portada: la foto de portada y, a su lado, una de cada otro ambiente; ocupa el alto que queda */
+.hoja-galeria-portada{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:2.5mm;flex:1 1 auto!important;min-height:60mm;margin-top:4mm}
+.hoja-galeria-portada.sola{grid-template-columns:minmax(0,1fr)}
+.hoja-foto,.hoja-foto-lado{position:relative;min-height:0;margin:0;background:var(--piedra);overflow:hidden}
+.hoja-foto img,.hoja-foto-lado img{position:absolute;top:0;left:var(--enc-x,0);width:var(--enc-w,100%);max-width:none;height:100%;object-fit:cover}
+.hoja-foto figcaption{position:absolute;left:0;bottom:0;display:flex;gap:var(--e-8);align-items:center;padding:var(--e-4) var(--e-8);background:rgba(255,255,255,.95);font-size:var(--a-contexto);color:var(--ink)}
+.hoja-foto figcaption i{width:7px;height:7px;background:var(--gold)}
+.hoja-fotos-lado{display:grid;grid-auto-rows:minmax(0,1fr);gap:2.5mm;min-height:0}
+.hoja-foto-lado figcaption{position:absolute;left:0;bottom:0;max-width:100%;padding:2px var(--e-8);background:rgba(255,255,255,.95);font-weight:600;font-size:var(--a-contexto);line-height:1.35;color:var(--ink)}
+/* resumen: cifras a la izquierda; precio y condiciones a la derecha; destacados y descripción a todo el ancho (1.12.0) */
+.hoja-resumen{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(0,1fr);gap:3mm 4mm;align-items:stretch;margin-top:4mm}
+.hoja-resumen.solo-precio{grid-template-columns:minmax(0,1fr)}
+.hoja-resumen-a,.hoja-resumen-b{display:flex;flex-direction:column;gap:3mm;min-width:0}
+.hoja-resumen>.hoja-lead{grid-column:1/-1}
+/* hasta 1.11.0 el precio llenaba el alto de su columna; desde 1.12.0 mide lo que su contenido (bloque final) */
+.hoja-resumen-b>.hoja-precio{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
+.hoja-precio{position:relative;padding:var(--e-8) 14px var(--e-12);background:var(--marfil);border:1px solid var(--line);box-shadow:inset 0 2px 0 var(--gold)}
+.hoja-precio .precio-rotulo{font-size:var(--a-contexto)}
+.hoja-precio .precio-cifra{margin-top:2px;font-size:var(--a-precio)}
+.hoja-precio .precio-cifra small{font-size:var(--a-figura)}
+.hoja-precio .precio-cifra .periodo{font-size:var(--a-cuerpo)}
+.hoja-precio .precio-nota{margin-top:2px;font-size:var(--a-contexto);color:var(--ink-3)}
+.hoja-precio .precio-grupos{gap:2.5mm;margin-top:var(--e-8);padding-top:var(--e-8)}
+.hoja-precio .precio-extra div,.hoja-precio .precio-incluye li{font-size:var(--a-contexto)}
+.hoja-precio .precio-consulta{font-size:var(--a-figura)}
+.hoja-condiciones{gap:var(--e-4)}
+.hoja-condiciones li{padding:5px 12px 5px 11px;font-size:var(--a-contexto)}
+.hoja-condiciones li.no{padding-left:14px}
+.hoja-condiciones .ico{width:16px;height:16px}
+.hoja-cifras{display:flex;flex-wrap:wrap;gap:1px;align-content:stretch;background:var(--line);border:1px solid var(--line)}
+.hoja-cifras li{flex:1 1 27mm;display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;padding:var(--e-8) 10px var(--e-8) var(--e-12);background:var(--surface)}
+.hoja-cifras .cifra-ico{height:18px;margin-bottom:var(--e-4)}
+.hoja-cifras .cifra-ico .ico{width:17px;height:17px}
+.hoja-cifras .cifra-ico.pisos{height:auto;min-height:18px}
+.hoja-cifras .picto-pisos i{width:16px;height:2.5px}
+.hoja-cifras b{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--a-cifra);line-height:1.1;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hoja-cifras b .unidad{font-size:var(--a-contexto)}
+.hoja-cifras span{font-size:var(--a-contexto);line-height:1.3;color:var(--ink-2)}
+.hoja-cifras span.nota{color:var(--ink-3)}
+.hoja-cifras li.texto b{font-family:var(--f-body);font-stretch:100%;font-size:var(--a-cuerpo);line-height:1.3;letter-spacing:0;white-space:normal}
+.hoja-destacados{display:flex;flex-wrap:wrap;gap:var(--e-8)}
+.hoja-destacados li{display:inline-flex;align-items:center;gap:var(--e-8);padding:3px var(--e-12) 3px 3px;background:var(--zafiro-tinte);border:1px solid rgba(46,96,212,.3);font-weight:600;font-size:var(--a-cuerpo);line-height:1.3;color:var(--ink)}
+.hoja-destacados .ico{width:26px;height:26px;padding:5px;background:var(--surface);color:var(--zafiro)}
+.hoja-lead{display:grid;gap:2px}
+.hoja-lead .lead-rotulo{font-family:var(--f-body);font-stretch:100%;font-weight:600;font-size:var(--a-contexto);letter-spacing:0;text-transform:none;color:var(--ink)}
+.hoja-lead .lead-texto{font-size:var(--a-cuerpo);line-height:1.45;color:var(--ink-2)}
+.hoja-lead-detalle{padding:var(--e-8) 0 var(--e-4)}
+/* contacto en la hoja (1.5.0): el enlace es texto con su icono, sin subrayado; el botón de la acción va sólo en la portada */
+.hoja .contacto{font-size:var(--a-contexto);line-height:1.3}
+.hoja .contacto .ico{width:15px;height:15px}
+.hoja .accion{height:38px;padding:0 18px;font-size:var(--a-cuerpo);box-shadow:var(--accion-filetes)}
+.hoja .accion .ico{width:17px;height:17px}
+/* flujo del detalle: una columna a todo el ancho; el reparto (ajustarA4) evita que un bloque no quepa */
+.hoja>.hoja-flujo{display:flex;flex:1 1 auto;flex-shrink:1;min-height:0;margin-top:4mm}
+.hoja-col{flex:1 1 auto;display:flex;flex-direction:column;gap:3.5mm;min-height:0;min-width:0;overflow:hidden}
+.hoja .capitulo-rotulo{margin:0 0 2.5mm;font-size:var(--a-contexto);letter-spacing:.14em;gap:var(--e-12)}
+.hoja .capitulo-no{font-size:var(--a-contexto)}
+/* 01 · Ubicación en la hoja (1.5.0): el mapa de 100 mm de ancho (el rótulo del mapa no baja de 10 pt) con el inmueble
+   marcado y la atribución debajo; a su lado, la dirección con «Ver ubicación» y los lugares con su tiempo. Si el mapa ya es
+   la imagen de la portada, el 01 lleva la dirección y los lugares, uno al lado del otro. */
+.hoja-zona{display:grid;grid-template-columns:100mm minmax(0,1fr);gap:4mm;align-items:start}
+.hoja-zona.solo-lado{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.hoja-mapa{margin:0;min-width:0}
+.hoja-mapa .mapa-lienzo{border:1px solid var(--line-2);background:var(--piedra)}
+.hoja-mapa img{width:100%;height:auto}
+.hoja .mapa-atribucion{margin-top:1.5mm;font-size:var(--a-contexto);line-height:1.35}
+.hoja-zona-lado,.hoja-zona-lugares{display:flex;flex-direction:column;gap:2.5mm;min-width:0}
+.hoja .mapa-marca-caja{width:24px;height:24px;box-shadow:0 0 0 1.5px #FFFFFF}
+.hoja .mapa-marca-caja .ico{width:15px;height:15px}
+.hoja .mapa-marca::after{border-left-width:5px;border-right-width:5px;border-top-width:7px}
+.hoja .mapa-zona{border-width:1.5px}
+.hoja-leyenda{display:grid;gap:var(--e-8)}
+.hoja-leyenda li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:0 var(--e-8);align-items:center;font-size:var(--a-contexto);line-height:1.3}
+.hoja-leyenda .leyenda-no{width:22px;height:22px;border-width:1.5px;font-size:var(--a-contexto);line-height:1;font-weight:500}
+.hoja-leyenda .leyenda-texto{display:block;color:var(--ink-2)}
+.hoja-leyenda .leyenda-texto b{font-weight:600;font-size:var(--a-contexto);color:var(--ink)}
+.hoja-leyenda .leyenda-texto span{font-size:var(--a-contexto)}
+.hoja-leyenda .leyenda-texto span::before{content:" · "}
+.hoja-leyenda .leyenda-tiempo{display:block;padding-left:0}
+.hoja-leyenda .leyenda-tiempo b{font-family:var(--f-body);font-stretch:100%;font-weight:600;font-size:var(--a-contexto)}
+.hoja-leyenda .leyenda-tiempo span{font-size:var(--a-contexto)}
+.hoja-leyenda .leyenda-tiempo span::before{content:" "}
+.hoja-nota{font-size:var(--a-contexto);line-height:1.4;color:var(--ink-2)}
+.hoja .pieza-ubicacion .ubicacion-tarjeta{flex-basis:100%;gap:var(--e-12);padding:var(--e-8) var(--e-12)}
+.hoja .pieza-ubicacion .ubicacion-tarjeta>.ico{width:20px;height:20px}
+.hoja .ubicacion-direccion{font-size:var(--a-figura)}
+.hoja .ubicacion-zona,.hoja .ubicacion-etiqueta{font-size:var(--a-contexto)}
+.hoja .enlace-ver{margin-top:var(--e-4);font-size:var(--a-contexto)}
+.hoja .pieza-ubicacion .celdas{flex-basis:100%}
+/* tablero a la escala de la hoja: las piezas lado a lado en su fila, a todo el ancho */
+.hoja .tablero,.hoja .fila{gap:3mm}
+.hoja .pieza{gap:0;border-color:var(--line-2)}
+.hoja .pieza-titulo{padding:5px 12px;font-size:var(--a-cuerpo)}
+.hoja .pieza-nota{padding:6px 12px 0;font-size:var(--a-contexto)}
+.hoja .pieza-nota+.celdas{margin-top:6px}
+/* en la hoja, el icono va a la izquierda de su cifra: la fila es más baja y la letra no cambia */
+.hoja .celda:not(.hecho){display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:var(--e-8);row-gap:1px;align-content:start;flex-basis:30mm;padding:var(--e-8) 10px var(--e-8) var(--e-12)}
+.hoja .celda:not(.hecho)>:not(.celda-ico){grid-column:2}
+.hoja .celda:not(.hecho)>.celda-ico{grid-column:1;grid-row:1;align-self:center;height:auto;margin:0}
+.hoja .celda-ico .ico{width:17px;height:17px}
+.hoja .celda-ico.pisos{min-height:0}
+.hoja .celda-valor{font-size:var(--a-figura)}
+.hoja .celda-valor .unidad{font-size:var(--a-contexto)}
+.hoja .celda.texto .celda-valor{font-size:var(--a-cuerpo)}
+.hoja .celda-rotulo,.hoja .celda-nota,.hoja .celda-respaldo{font-size:var(--a-contexto)}
+.hoja .celda.hecho{flex-basis:100%;gap:var(--e-8);padding:5px 10px 5px 9px}
+.hoja .celda.no,.hoja .celda.neutro{padding-left:var(--e-12)}
+.hoja .celda.hecho .celda-ico .ico{width:16px;height:16px}
+.hoja .celda-frase{font-size:var(--a-cuerpo);line-height:1.35}
+.hoja .picto-pisos i{width:16px;height:2.5px}
+.hoja .precio-bloque{gap:2px var(--e-24);padding:var(--e-4) var(--e-12) var(--e-8)}
+.hoja .pieza-precio .precio-valor{font-size:var(--a-cifra)}
+.hoja .pieza-precio.consulta .precio-valor{font-size:var(--a-figura)}
+.hoja .pieza-precio .pieza-nota{padding:0;font-size:var(--a-contexto)}
+.hoja .zona-tarjeta{flex-basis:100%;gap:var(--e-12);padding:var(--e-8) var(--e-12)}
+.hoja .zona-tarjeta>.ico{width:20px;height:20px}
+.hoja .zona-nombre{font-size:var(--a-figura)}
+.hoja .zona-detalle{font-size:var(--a-contexto)}
+.hoja .pieza-zona .celdas{flex-basis:100%}
+.hoja .uso-texto{margin:var(--e-8) var(--e-12) var(--e-12);padding:var(--e-8) var(--e-12)}
+.hoja .uso-condiciones{font-size:var(--a-cuerpo);line-height:1.4;max-width:none}
+.hoja .uso-fuente{font-size:var(--a-contexto);line-height:1.4}
+.hoja .consulta-fila{gap:var(--e-8);padding:var(--e-8) var(--e-12);font-size:var(--a-cuerpo)}
+.hoja .consulta-fila .ico{width:17px;height:17px}
+/* pie de cada hoja (1.5.0; revisiones entregadas por el titular el 20 de octubre), en dos niveles bajo una sola línea fina:
+   arriba, quien atiende y su canal principal a la izquierda y «Coordinar una visita» a la derecha; abajo, «Inteligencia
+   inmobiliaria con BROX» y, en el extremo opuesto, la paginación. Sin la empresa, que ya está en la firma, ni versión,
+   fecha técnica o fuente. Unos 15 a 18 mm. */
+/* 1.6.0 (instrucción del titular del 20 de octubre: pulir la franja del contacto y separarla con líneas antes y después):
+   la franja va entre dos líneas, con quien atiende, un filete vertical y su canal; a la derecha, el botón. Un nombre largo
+   salta de línea dentro de su lugar y el canal no se parte. */
+.hoja-pie{display:grid;gap:0;margin-top:auto}
+.pie-contacto{display:flex;align-items:center;justify-content:space-between;gap:2mm 6mm;min-width:0;padding:2.2mm 0;border-top:1px solid var(--line-3);border-bottom:1px solid var(--line-3)}
+.pie-datos{flex:1 1 auto;display:flex;align-items:center;gap:0;min-width:0}
+.pie-datos .pie-quien{flex:0 1 auto;min-width:0}
+.pie-datos .pie-canales{flex:0 0 auto;margin-left:4mm;padding-left:4mm;border-left:1px solid var(--line-2)}
+.hoja-pie .contacto{font-size:var(--a-cuerpo)}
+.hoja-pie .pie-marca{padding-top:2mm}
+.hoja-pie.sin-contacto .pie-marca{border-top:1px solid var(--line-3)}
+.pie-quien{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 2.5mm;min-width:0;font-size:var(--a-contexto);line-height:1.35;color:var(--ink-2)}
+.pie-quien b{font-weight:600;font-size:var(--a-cuerpo);color:var(--ink);text-wrap:balance}
+.pie-canales{display:flex;flex-wrap:wrap;align-items:center;gap:1mm 5mm;min-width:0}
+.pie-contacto .accion{flex:none}
+/* detalle compacto (1.5.0): si la última hoja quedaría casi vacía, el detalle se arma con menos aire y la ficha tiene una
+   hoja menos; la letra no cambia (ajustarA4) */
+.hoja.compacta .hoja-col{gap:2.2mm}
+.hoja.compacta .capitulo-rotulo{margin-bottom:1.5mm}
+.hoja.compacta>.hoja-flujo{margin-top:3mm}
+.hoja.compacta .pieza-titulo{padding-top:3px;padding-bottom:3px}
+.hoja.compacta .celda:not(.hecho){padding-top:5px;padding-bottom:5px}
+.hoja.compacta .celda.hecho{padding-top:3px;padding-bottom:3px}
+.hoja.compacta .tablero,.hoja.compacta .fila{gap:2.2mm}
+.pie-marca{display:flex;align-items:center;gap:3mm 6mm;min-height:4mm}
+.hoja-pie .brox{font-size:var(--a-contexto)}
+.hoja-pie .brox img{height:3.4mm}
+.pie-demo{font-size:var(--a-contexto);line-height:1.3;color:var(--ink-3)}
+.pie-pagina{margin-left:auto;font-size:var(--a-contexto);line-height:1.3;white-space:nowrap;color:var(--ink-3);font-variant-numeric:tabular-nums}
+/* portada para imprimir (1.5.0): el QR de 35 mm, con su zona libre de cuatro módulos incluida, grafito sobre blanco, y a
+   su lado qué hace el código, a quién llama y los canales escritos. La banda mide unos 40 mm. */
+.pie-qr{display:grid;grid-template-columns:35mm minmax(0,1fr);gap:5mm;align-items:center;padding:3mm 0;border-top:1px solid var(--line-3);border-bottom:1px solid var(--line-3)}
+.qr{display:block;width:35mm;height:35mm;background:#FFFFFF}
+.pie-qr-texto{display:flex;flex-direction:column;align-items:flex-start;gap:1.5mm;min-width:0}
+.pie-qr-accion{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--a-cifra);line-height:1.15;letter-spacing:-.015em;color:var(--ink)}
+.pie-qr-instruccion{max-width:120mm;font-size:var(--a-contexto);line-height:1.4;color:var(--ink-2)}
+/* galería opcional */
+.hoja-galeria-cabeza{margin-top:4mm}
+.hoja-galeria-cabeza h2{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:var(--a-cifra);line-height:1.15;letter-spacing:-.015em}
+.rejilla{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:4mm 6mm;margin-top:3mm}
+.rejilla figure{margin:0;min-width:0}
+.rejilla .foto-celda{--celda-h:47mm;display:flex;align-items:center;justify-content:center;position:relative;height:var(--celda-h);background:var(--piedra);overflow:hidden}
+/* recorte de presentación: sólo quita las columnas blancas completas del original (encuadre medido en V07) */
+.foto-recorte{position:relative;overflow:hidden;aspect-ratio:var(--ar,1.5);width:min(100%,calc(var(--celda-h) * var(--ar,1.5)))}
+.foto-recorte img{position:absolute;top:0;left:var(--enc-x,0);width:var(--enc-w,100%);max-width:none;height:100%;object-fit:cover}
+.rejilla figcaption{margin-top:var(--e-8);font-size:var(--a-contexto);line-height:1.3}
+.rejilla figcaption b{display:block;font-weight:600;font-size:var(--a-cuerpo);color:var(--ink)}
+.rejilla figcaption span{color:var(--ink-2)}
+.rejilla.una{grid-template-columns:1fr}
+.rejilla.una .foto-celda{--celda-h:112mm}
+.rejilla.dos .foto-celda{--celda-h:74mm}
+.hoja-galeria-nota{margin-top:3mm;font-size:var(--a-contexto);line-height:1.4;color:var(--ink-2)}
+
+/* =====================================================================
+   VERTICAL · imagen para compartir por WhatsApp (1.5.0): una composición propia de 390 px, siempre clara, con letra de 16 px
+   para leer y 14 px como mínimo; el anfitrión o Core la rasterizan (a 2×: 780 px de ancho). El contacto no se dibuja como
+   botón: la imagen no conserva enlaces y el enlace va en el texto que la acompaña.
+   ===================================================================== */
+.vertical{--sombra:none;--sombra-alta:none}
+.vertical{display:flex;justify-content:center;padding:var(--e-24) var(--e-16) var(--e-48)}
+.vertical-pieza{flex:none;width:390px;display:flex;flex-direction:column;gap:14px;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;box-shadow:0 30px 60px -36px rgba(17,18,20,.45)}
+.estatica .vertical{padding:0;background:var(--surface)}
+.estatica .vertical-pieza{box-shadow:none}
+.v-cabeza{display:flex;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line-3)}
+.v-cabeza .firma{flex-direction:column;align-items:stretch;gap:8px}
+.v-cabeza .firma-persona{flex-direction:row-reverse;justify-content:flex-end;gap:10px;margin-left:0}
+.v-cabeza .firma-persona .firma-textos{align-items:flex-start;text-align:left}
+.v-cabeza .firma-retrato{width:40px}
+.v-cabeza .firma-logo img{height:28px;max-width:170px}
+.v-cabeza .firma-nombre{font-size:17px}
+.v-cabeza .firma-quien{font-size:16px}
+.v-cabeza .firma-meta{font-size:14px}
+.v-titulo{display:grid;gap:4px}
+.v-operacion{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.v-operacion .marca-x img{height:18px}
+.v-titulo .antetitulo{font-size:14px}
+.v-titulo h1{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:24px;line-height:1.1;letter-spacing:-.02em;text-wrap:balance}
+.v-titulo .zona-linea{font-size:16px;align-items:flex-start}
+.v-titulo .zona-linea .ico{margin-top:3px}
+.v-foto{position:relative;height:220px;margin:0 -20px;overflow:hidden;background:var(--piedra)}
+.foto-baja .v-foto{height:160px}
+.v-foto img{position:absolute;top:0;left:var(--enc-x,0);width:var(--enc-w,100%);max-width:none;height:100%;object-fit:cover}
+.v-foto figcaption{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;max-width:calc(100% - 24px);padding:4px 10px;background:rgba(255,255,255,.95);font-weight:600;font-size:14px;line-height:1.3;color:#111214}
+.v-foto figcaption i{width:7px;height:7px;flex:none;background:var(--gold)}
+.v-mapa{margin:0}
+.v-mapa .mapa-lienzo{border:1px solid var(--line-2);background:var(--piedra)}
+.v-mapa img{width:100%;height:auto}
+.v-mapa .mapa-atribucion{margin-top:6px;font-size:14px}
+.v-mapa .mapa-marca-caja{width:26px;height:26px}
+.v-mapa .mapa-marca-caja .ico{width:16px;height:16px}
+.v-resumen{display:flex;flex-direction:column;gap:12px}
+.v-precio{position:relative;padding:12px 16px 14px;background:var(--marfil);border:1px solid var(--line);box-shadow:inset 0 2px 0 var(--gold)}
+.v-precio .precio-rotulo{font-size:14px}
+.v-precio .precio-cifra{font-size:30px}
+.v-precio .precio-cifra small{font-size:18px}
+.v-precio .precio-cifra .periodo{font-size:16px}
+.v-precio .precio-nota{font-size:14px;color:var(--ink-3)}
+.v-precio .precio-extra div,.v-precio .precio-incluye li{font-size:15px}
+.v-precio .precio-grupos{gap:8px}
+.v-precio .precio-consulta{font-size:18px}
+.v-condiciones{display:grid;gap:6px}
+.v-condiciones li{display:flex;align-items:center;gap:10px;padding:7px 12px 7px 11px;font-size:15px;line-height:1.35;color:var(--ink)}
+.v-condiciones li.si{background:var(--hoja-tinte);border-left:3px solid var(--hoja);font-weight:600;color:var(--hoja)}
+.v-condiciones li.no{padding-left:14px;border:1px solid var(--line)}
+.v-condiciones .ico{width:16px;height:16px}
+.v-cifras{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line)}
+.v-cifras li{flex:1 1 92px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;padding:10px 8px 10px 10px;background:var(--surface)}
+.v-cifras .cifra-ico{height:18px;margin-bottom:4px}
+.v-cifras .cifra-ico .ico{width:17px;height:17px}
+.v-cifras b{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;font-size:21px;line-height:1.1;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.v-cifras b .unidad{font-size:14px}
+.v-cifras span{font-size:14px;line-height:1.3;color:var(--ink-2)}
+.v-cifras span.nota{color:var(--ink-3)}
+.v-cifras li.ancha{flex:2 1 184px}
+.hoja-cifras:not(.en-filas) li.ancha{flex-grow:2}
+.v-cifras li.texto b{font-family:var(--f-body);font-stretch:100%;font-size:16px;line-height:1.3;letter-spacing:0;white-space:normal}
+.v-destacados{display:flex;flex-wrap:wrap;gap:8px}
+.v-destacados li{display:inline-flex;align-items:center;gap:8px;padding:3px 12px 3px 3px;background:var(--zafiro-tinte);border:1px solid rgba(46,96,212,.3);font-weight:600;font-size:15px;line-height:1.3;color:var(--ink)}
+.v-destacados .ico{width:26px;height:26px;padding:5px;background:var(--surface);color:var(--zafiro)}
+.v-contacto{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line-3)}
+.v-accion{display:flex;align-items:center;justify-content:center;gap:10px;height:48px;padding:0 16px;color:var(--accion-texto);background-color:var(--accion-base);background-image:var(--accion-degradado);box-shadow:var(--accion-filetes),0 12px 24px -16px var(--accion-sombra)}
+.v-accion .ico{width:20px;height:20px;color:var(--accion-icono)}
+.v-accion b{font-weight:600;font-size:17px;line-height:1.2;color:var(--accion-texto)}
+.v-canal{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:16px;line-height:1.35;color:var(--ink);overflow-wrap:anywhere}
+.v-canal .contacto-tipo{font-weight:400}
+.v-contacto .pie-quien{gap:0 8px;font-size:14px}
+.v-contacto .pie-quien b{font-size:16px}
+.v-brox{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px}
+.v-brox .brox{font-size:14px}
+.v-brox .brox img{height:13px}
+.v-brox .pie-demo{font-size:14px;color:var(--ink-3)}
+
+@page{size:A4;margin:0}
+/* =====================================================================
+   1.7.0 · ESPACIOS RESERVADOS (vista de preparación; instrucción del titular del 20 de octubre: «en todos los PDF quiero
+   ver los placeholders donde saldrán»). Borde discontinuo, piedra clara y el nombre de lo que irá ahí con su icono; sin
+   avisos ni números dentro de la pieza. Tienen la forma de lo que reservan: la firma con el logotipo, quien atiende y su
+   foto; el botón; cada foto con su ambiente; el mapa.
+   ===================================================================== */
+.reserva-espacio{display:grid;place-items:center;min-width:0;min-height:96px;padding:var(--e-12);background:var(--piedra-clara);border:1px dashed var(--line-3);box-shadow:none;color:var(--ink-2)}
+.reserva-espacio-texto{display:grid;justify-items:center;gap:2px;max-width:100%;text-align:center}
+.reserva-espacio .ico{width:20px;height:20px;margin-bottom:var(--e-4);color:var(--ink-2)}
+.reserva-espacio b{font-weight:600;font-size:var(--t-titulo);line-height:1.3;color:var(--ink)}
+.reserva-espacio-texto>span{font-size:var(--t-contexto);line-height:1.4;color:var(--ink-2)}
+.galeria-portada.reservas{display:flex;flex-direction:column;gap:var(--e-8)}
+.galeria-portada.reservas .escenario{flex:1 1 auto}
+.galeria-portada.reservas .lateral{min-height:0}
+.reservas-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--e-12)}
+.reservas-lista .reserva-espacio{min-height:150px}
+.reserva-espacio.reserva-mapa{width:100%;aspect-ratio:1600/660}
+.zona-con-mapa:has(.reserva-mapa){align-items:stretch}
+/* la firma reservada: el logotipo, quien atiende y su foto */
+.reserva-logo{display:inline-grid;place-items:center;width:150px;height:40px;background:var(--piedra-clara);border:1px dashed var(--line-3);font-weight:600;font-size:var(--t-contexto);letter-spacing:.02em;color:var(--ink-2)}
+.firma-reservada .firma-quien,.firma-reservada .firma-meta{color:var(--ink-2)}
+.reserva-retrato{display:grid;place-items:center;background:var(--piedra-clara);border:1px dashed var(--line-3);color:var(--ink-2)}
+.reserva-retrato .ico{width:20px;height:20px}
+/* el botón reservado: su lugar y su nombre, sin color ni enlace */
+.accion-reservada{display:inline-flex;align-items:center;justify-content:center;gap:var(--e-12);height:44px;padding:0 20px;background:var(--piedra-clara);border:1px dashed var(--line-3);font-weight:600;font-size:var(--t-titulo);line-height:1;white-space:nowrap;color:var(--ink-2)}
+.accion-reservada .ico{width:18px;height:18px}
+.resumen-accion.reservado .accion-reservada{width:100%}
+.reservado .contacto span{font-weight:400}
+.reservado .pie-quien b,.reservado .contacto,.contacto-banda.reservado .contacto-nombre,.contacto-banda.reservado .contacto-meta{color:var(--ink-2)}
+/* en el papel */
+.hoja .reserva-espacio b{font-size:var(--a-cuerpo)}
+.hoja .reserva-espacio-texto>span{font-size:var(--a-contexto)}
+.hoja .reserva-espacio .ico{width:18px;height:18px}
+.hoja .reserva-logo{width:38mm;height:11mm;font-size:var(--a-contexto)}
+.hoja .accion-reservada{height:38px;padding:0 18px;font-size:var(--a-cuerpo)}
+.hoja-mapa.reserva-espacio{aspect-ratio:2/1;height:auto}
+/* «Ver las N fotos» con el enlace de la ficha digital: sobre la última foto lateral de la portada y al final de la galería */
+.hoja-foto-lado{position:relative}
+.hoja-ver-fotos{position:absolute;top:2mm;right:2mm;display:inline-flex;align-items:center;gap:6px;padding:1.6mm 2.6mm;background:var(--ink);color:var(--surface);font-weight:600;font-size:var(--a-contexto);line-height:1.2}
+.hoja-ver-fotos .ico{width:15px;height:15px}
+.hoja-ver-todas{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;margin-top:5mm;padding:2.6mm 4mm;border:1px solid var(--ink);font-weight:600;font-size:var(--a-cuerpo);color:var(--ink)}
+.hoja-ver-todas .ico{width:16px;height:16px}
+
+/* QR en pantalla (1.7.0): sólo en pantallas grandes con puntero, junto al botón de la ficha digital, para seguir en el
+   teléfono; en el teléfono no se puede escanear la propia pantalla. */
+.qr-pantalla{display:none}
+@media (min-width:1024px) and (hover:hover) and (pointer:fine){
+  .digital .resumen-accion:has(.qr-pantalla){grid-template-columns:minmax(0,1fr) auto;column-gap:var(--e-24);align-items:center}
+  .digital .resumen-accion:has(.qr-pantalla)>:not(.qr-pantalla){grid-column:1}
+  .digital .resumen-accion:has(.qr-pantalla) .accion{align-self:end}
+  .digital .resumen-accion:has(.qr-pantalla) .resumen-quien{align-self:start}
+  .digital .qr-pantalla{grid-column:2;grid-row:1 / span 2;display:grid;justify-items:center;gap:6px}
+  .digital .qr-pantalla .qr{width:122px;height:122px}
+  .digital .qr-pantalla p{max-width:140px;font-size:var(--t-nota);line-height:1.35;text-align:center;color:var(--ink-2)}
+}
+
+/* =====================================================================
+   1.7.0 · VISTA PARA TELÉFONO (para mostrarse dentro de KAIROS). Una columna de teléfono: lo decisivo arriba con la
+   composición de la imagen para compartir, cada capítulo se abre con un toque y la acción queda fija al pie (catálogo
+   operativo 11.9: se agrupa por lo que se decide, un toque revela lo demás, la acción va junto al inmueble). Esquinas
+   rectas y toques de 44 a 56 px.
+   ===================================================================== */
+body[data-vista="kairos"]{background:var(--papel)}
+.kairos{min-height:100vh;background:var(--papel);color:var(--ink);font-size:16px;line-height:1.45}
+.k-ficha{display:flex;flex-direction:column;max-width:480px;min-height:100vh;margin:0 auto;background:var(--surface)}
+.k-cabeza{padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.k-cabeza .firma{gap:12px}
+.k-cabeza .firma-persona{gap:10px}
+.k-cabeza .firma-retrato{width:36px}
+.k-cabeza .firma-logo img{height:26px;max-width:150px}
+.k-cabeza .reserva-logo{width:112px;height:30px}
+.k-cabeza .firma-nombre{font-size:16px}
+.k-cabeza .firma-quien{font-size:15px}
+.k-cabeza .firma-meta{font-size:13.5px}
+.k-fotos{position:relative;background:var(--piedra)}
+.k-tira{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.k-tira::-webkit-scrollbar{display:none}
+.k-tira li{flex:0 0 100%;scroll-snap-align:start}
+.k-foto{position:relative;display:block;width:100%;aspect-ratio:4/3;overflow:hidden;background:var(--piedra)}
+.k-foto img{width:100%;height:100%;object-fit:cover}
+.k-foto-rotulo{position:absolute;left:12px;bottom:12px;max-width:calc(100% - 24px);padding:5px 10px;background:rgba(11,11,12,.74);color:#F6F5F1;font-weight:600;font-size:14px;line-height:1.3}
+.k-foto-todas{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:8px;background:rgba(11,11,12,.64);color:#F6F5F1;font-weight:600;font-size:16px}
+.k-foto-todas .ico{width:24px;height:24px}
+.k-fotos-cuenta{position:absolute;top:12px;right:12px;padding:4px 10px;background:rgba(11,11,12,.74);color:#F6F5F1;font-weight:600;font-size:13.5px;line-height:1.3}
+.k-escena{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);font-size:13.5px;color:var(--ink-2);border-bottom:1px solid var(--line)}
+.k-escena i{width:7px;height:7px;flex:none;background:var(--gold)}
+.k-fotos .reserva-espacio.k-reserva{aspect-ratio:4/3;border-width:0 0 1px}
+.k-visual-mapa .k-mapa{margin:0}
+.k-resumen{display:flex;flex-direction:column;gap:14px;padding:16px}
+.k-lead{display:grid;gap:2px}
+.k-lead .lead-rotulo{font-family:var(--f-body);font-stretch:100%;font-weight:600;font-size:15px;letter-spacing:0;text-transform:none;color:var(--ink)}
+.k-lead .lead-texto{font-size:16px;color:var(--ink)}
+.k-secciones{border-top:1px solid var(--line-2)}
+.k-seccion{border-bottom:1px solid var(--line)}
+.k-seccion summary{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 16px;cursor:pointer;list-style:none}
+.k-seccion summary::-webkit-details-marker{display:none}
+.k-seccion summary .ico{flex:none;width:18px;height:18px;transform:rotate(90deg);transition:transform .2s var(--ease)}
+.k-seccion[open] summary .ico{transform:rotate(-90deg)}
+.k-seccion-nombre{flex:none;font-weight:600;font-size:16px;line-height:1.3}
+.k-seccion-pista{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-size:13.5px;color:var(--ink-2)}
+.k-seccion-cuerpo{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px}
+.k-seccion-cuerpo .tablero{flex-direction:row;flex-wrap:wrap;gap:12px}
+.k-seccion-cuerpo .fila{display:contents}
+.k-seccion-cuerpo .pieza,.k-seccion-cuerpo .fila>.pieza{flex:1 1 100%}
+.k-seccion-cuerpo .celda{flex-basis:130px}
+.k-seccion-cuerpo .celda.hecho,.k-seccion-cuerpo .celda.largo{flex-basis:100%}
+.k-mapa{margin:0}
+.k-mapa .mapa-lienzo{position:relative;display:block;border:1px solid var(--line-2);background:var(--piedra)}
+.k-mapa img{width:100%;height:auto}
+.k-mapa .mapa-atribucion{margin-top:6px;font-size:13.5px}
+.k-mapa.reserva-espacio{aspect-ratio:2/1}
+.k-completa{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;margin:16px;border:1px solid var(--ink);font-weight:600;font-size:15px;color:var(--ink)}
+.k-completa .ico{width:16px;height:16px}
+.k-brox{padding:12px 16px 16px}
+.k-contacto{position:sticky;bottom:0;z-index:5;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-top:auto;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line-2);box-shadow:0 -12px 24px -20px rgba(17,18,20,.35)}
+.k-quien{display:grid;gap:0;min-width:0;font-size:13.5px;line-height:1.35;color:var(--ink-2)}
+.k-quien b{font-weight:600;font-size:15px;line-height:1.3;color:var(--ink)}
+.kairos .pieza,.kairos .leyenda{box-shadow:none}
+.k-contacto .accion,.k-contacto .accion-reservada{height:48px;padding:0 16px;font-size:15px}
+@media print{
+  html,body{width:210mm;margin:0;padding:0;background:#FFFFFF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .digital,.visor,.cargando,.vertical,.kairos{display:none!important}
+  body[data-vista] .a4{display:block!important;padding:0;gap:0}
+  .hoja{box-shadow:none;break-after:page;page-break-after:always}
+  .hoja:last-child{break-after:auto;page-break-after:auto}
+  /* 1.6.0: el botón conserva su degradado en el PDF, como en la web, opaco y sin la sombra difusa de la pantalla; debajo
+     queda el verde liso para un lector que no dibuje sombreados */
+}
+/* =====================================================================
+   1.12.0 · UN DISEÑO Y UN COLOR FUERTE POR TEMA. Revisión del titular a la 1.11.0 (26 de octubre, noche): «La tarjeta
+   del precio de venta ocupa espacio de más tranquilamente puede ingresar en una tarjeta más pequeña y reorganizar los
+   elementos para que se vea mejor», «el pie de página de "Inteligencia inmobiliaria con BROX" no debe tener colores debe
+   ser al centro de color negro y el logo», «al botón de llamado de acción haz que se vea más claro», «revisa toda la
+   ficha, porque me estás enviando dos diseños distintos», «el llamado de acción debe ir con un color de acorde al tema» y
+   «que los temas sean de colores llamativos, como para anuncios es decir usa amarillo fuerte, rojo fuerte y así con todos
+   los colores, sin que sea informal».
+     Un diseño   todos los temas llevan la banda de la firma, también Marfil, que hasta 1.11.0 iba sin banda y parecía
+                 otro diseño. La banda es lisa (sin el brillo de 1.10.0) y la cierra un filete de 1 mm: del color del tema
+                 si la banda es oscura; de un tono más profundo de la banda si la banda es el color.
+     Color       un color fuerte por tema (--tema-color): el botón, el filete del precio y de los capítulos y el cuadro del
+                 icono de los destacados; sus iconos (--vivo) en un círculo de su tinte. El texto va en tinta; sobre un
+                 color claro (amarillo, naranja, cian, verde claro), la letra es negra. Lo confirmado y a favor sigue en
+                 verde hoja («Documentación sí debe ser verde», 18 de octubre).
+     Botón       el color del tema, casi liso, con su letra y la flecha, y un halo de 2,5 px de su propio tinte pegado
+                 al botón. Sin el filete separado por el blanco de 1.11.0, que lo hacía ver doble.
+     Precio      la tarjeta mide lo que su contenido, arriba de su columna: el rótulo, el importe y lo que se paga además
+                 en una línea por concepto. Las condiciones, al pie de su columna.
+     Lema        «Inteligencia inmobiliaria con BROX» al centro, en tinta, sin color, con el logotipo.
+   Se conservan las esquinas rectas (las únicas curvas: los círculos de los iconos y los puntos), el relieve opaco de las
+   fotos y las tarjetas, WhatsApp una sola vez junto al número y la letra con sus tamaños, desde 10 pt en el A4.
+   ===================================================================== */
+/* --- relieve opaco del papel: escalones de tinta sobre el blanco de la hoja (1.11.0) --- */
+.hoja{--s1:color-mix(in srgb,var(--ink) 20%,var(--surface));--s2:color-mix(in srgb,var(--ink) 13%,var(--surface));--s3:color-mix(in srgb,var(--ink) 8%,var(--surface));--s4:color-mix(in srgb,var(--ink) 4.5%,var(--surface));--s5:color-mix(in srgb,var(--ink) 2%,var(--surface));
+  --relieve:0 1px 0 var(--s2),0 3px 0 -1px var(--s3),0 5px 0 -2px var(--s4),0 7px 0 -3px var(--s5);
+  --relieve-foto:0 0 0 1px var(--s3),0 2px 0 var(--s1),0 4px 0 -1px var(--s2),0 7px 0 -2px var(--s3),0 10px 0 -4px var(--s4),0 13px 0 -6px var(--s5)}
+
+/* --- la banda de la firma, en todos los temas --- */
+:is(.identidad,.hoja:not(.hoja-dossier)>.hoja-cabeza:not(.detalle),.v-cabeza,.k-cabeza){background:var(--banda);background-image:var(--banda-imagen);--ink:var(--banda-texto);--ink-2:var(--banda-texto-2);--ink-3:var(--banda-texto-2);border-bottom:3px solid var(--banda-filete)}
+.hoja:not(.hoja-dossier)>.hoja-cabeza:not(.detalle){margin:-10mm -12mm 4mm;padding:5mm 12mm 4.4mm;border-bottom-width:1mm}
+.hoja:not(.hoja-dossier){background-image:linear-gradient(var(--banda),var(--banda)),linear-gradient(var(--banda-filete),var(--banda-filete));background-size:100% 2.4mm,100% .8mm;background-position:0 0,0 2.4mm;background-repeat:no-repeat}
+.v-cabeza{margin:-20px -20px 0;padding:14px 20px}
+.firma-logo{padding:6px 10px;background:#FFFFFF}
+.hoja .firma-logo{padding:1.5mm 2.5mm}
+/* en la vista de preparación, los lugares reservados de la firma se dibujan sobre la banda, con su letra */
+:is(.identidad,.hoja-cabeza,.v-cabeza,.k-cabeza) :is(.reserva-logo,.reserva-retrato){background:var(--banda);border-color:var(--banda-texto-2);color:var(--banda-texto-2)}
+
+/* --- el botón «Coordinar una visita»: el color del tema, su letra y la flecha, con un halo de su tinte --- */
+.accion,.v-accion{gap:10px;padding:0 18px 0 20px;background-color:var(--accion-base);background-image:var(--accion-degradado);color:var(--accion-texto);box-shadow:var(--accion-filetes),0 0 0 2.5px var(--accion-halo),0 12px 22px -14px var(--accion-sombra)}
+.accion:hover{box-shadow:var(--accion-filetes),0 0 0 3.5px var(--accion-halo),0 16px 28px -14px var(--accion-sombra)}
+.accion .ico,.v-accion .ico,.accion-reservada .ico{width:17px;height:17px;color:var(--accion-icono)}
+.accion-reservada .ico{color:var(--ink-2)}
+.hoja .accion{padding:0 16px 0 18px;box-shadow:var(--accion-filetes),0 0 0 2.5px var(--accion-halo)}
+.hoja .accion .ico{width:16px;height:16px}
+.k-contacto .accion{padding:0 14px 0 16px}
+
+/* --- WhatsApp: su logotipo, una sola vez, junto al número y en sus colores (1.11.0) --- */
+.ico-wa,.ico-wa path{fill:currentColor;stroke:none}
+.contacto[data-tipo="WHATSAPP"],.contacto[data-tipo="WHATSAPP"] .contacto-tipo,.reservado .contacto[data-tipo="WHATSAPP"],.v-canal[data-tipo="WHATSAPP"],.v-canal[data-tipo="WHATSAPP"] .contacto-tipo{color:var(--wa-texto)}
+.contacto .ico-wa,.v-canal .ico-wa,.k-quien .ico-wa{color:var(--wa)}
+.v-canal .ico{width:20px;height:20px}
+.k-quien .contacto-wa,.k-quien .k-canal{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.k-quien .contacto-wa>span{white-space:nowrap}
+.k-quien .k-canal>span{overflow-wrap:anywhere}
+.k-quien .contacto-wa{color:var(--wa-texto)}
+.k-quien .contacto-wa .ico,.k-quien .k-canal .ico{flex:none;width:15px;height:15px}
+
+/* --- el lema de BROX: al centro, en tinta y sin color, con el logotipo --- */
+.brox{font-family:var(--f-display);font-stretch:112.5%;font-weight:600;letter-spacing:-.005em;color:var(--ink)}
+.brox-lema b{font-weight:inherit;color:inherit}
+.pie-marca{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:2mm 6mm}
+.pie-marca .brox{grid-column:2;grid-row:1}
+.pie-marca .pie-demo{grid-column:1;grid-row:1}
+.pie-marca .pie-pagina{grid-column:3;grid-row:1;justify-self:end;margin-left:0}
+.pie .envoltura{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center}
+.pie-brox{justify-items:center}
+.v-brox{flex-direction:column;justify-content:center;text-align:center}
+
+/* --- relieve: fotos y tarjetas, rectas (1.11.0) --- */
+.hoja-foto,.hoja-foto-lado,.rejilla .foto-celda,.escenario-foto{box-shadow:var(--relieve-foto)}
+.hoja-foto figcaption,.hoja-foto-lado figcaption{background:#FFFFFF}
+.lateral,.pieza,.contacto-banda,.cifras-clave,.v-cifras,.hoja .pieza,.hoja-cifras{box-shadow:var(--relieve)}
+.hoja-mapa .mapa-lienzo,.hoja-mapa-portada .mapa-lienzo,.v-mapa .mapa-lienzo{box-shadow:var(--relieve)}
+
+/* --- el precio: una tarjeta del alto de su contenido, con el filete del color del tema --- */
+.precio-portada,.hoja-precio,.v-precio,.pieza-precio{background:linear-gradient(var(--tema-color),var(--tema-color)) top/100% 3px no-repeat,var(--marfil);box-shadow:var(--relieve)}
+.hoja-mapa-fila{align-items:start}
+.hoja-mapa-fila>.hoja-resumen-b>.hoja-cifras{margin-top:auto}
+/* las dos columnas, de alto parejo: el precio arriba y las condiciones al pie de su columna */
+.hoja-resumen-b>.hoja-condiciones{margin-top:auto}
+.hoja-resumen-b>.hoja-precio,.hoja-mapa-fila>.hoja-resumen-b>.hoja-precio{flex:none;display:block}
+.hoja-precio{padding:3mm 14px 3.2mm}
+.hoja-precio .precio-cifra{margin-top:1px}
+.hoja-precio .precio-grupos{gap:1.8mm;margin-top:2mm;padding-top:1.8mm}
+.hoja-precio .precio-extra{gap:1px}
+.hoja-resumen>.hoja-destacados{grid-column:1/-1}
+
+/* --- color: iconos en círculos (las únicas curvas), destacados, condiciones y filetes --- */
+:is(.cifras-clave,.hoja-cifras,.v-cifras) .cifra-ico:not(.pisos){width:28px;height:28px;border-radius:50%;background:var(--vivo-tinte);color:var(--vivo);box-shadow:inset 0 0 0 1px var(--vivo-borde)}
+:is(.cifras-clave,.hoja-cifras,.v-cifras) .cifra-ico:not(.pisos) .ico{width:16px;height:16px}
+/* en el A4, círculos más chicos: la hoja conserva su alto (una ficha de una hoja sigue en una) */
+.hoja-cifras .cifra-ico:not(.pisos){width:22px;height:22px;margin-bottom:2px}
+.hoja-cifras .cifra-ico:not(.pisos) .ico{width:13px;height:13px}
+.picto-pisos i{background:var(--vivo)}
+.celda:not(.hecho)>.celda-ico:not(.pisos){display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--vivo-tinte);color:var(--vivo);box-shadow:inset 0 0 0 1px var(--vivo-borde)}
+.celda:not(.hecho)>.celda-ico:not(.pisos) .ico{width:14px;height:14px}
+.hoja .celda:not(.hecho)>.celda-ico:not(.pisos){width:20px;height:20px}
+.hoja .celda:not(.hecho)>.celda-ico:not(.pisos) .ico{width:12px;height:12px}
+.destacados li,.hoja-destacados li,.v-destacados li{background:var(--vivo-tinte);border-color:var(--vivo-borde)}
+.destacados .ico,.hoja-destacados .ico,.v-destacados .ico{background:var(--vivo-solido);color:var(--vivo-sobre)}
+/* lo confirmado y a favor (las condiciones junto al precio, lo que incluye el precio y la documentación) sigue en verde
+   hoja, con su tinte y su línea: «Documentación sí debe ser verde» (titular, 18 de octubre). Lo que distingue al inmueble,
+   en el detalle, toma el color del tema: la línea de su color y el icono */
+.celda.rasgo,.celda.destacado{--fila:var(--vivo-solido);--fila-tinte:var(--vivo-tinte)}
+.celda.rasgo .celda-ico,.celda.destacado .celda-ico{color:var(--vivo)}
+.capitulo-filete,.con-banda .capitulo-filete{height:3px;background:linear-gradient(var(--tema-color),var(--tema-color)) 0 50%/40px 3px no-repeat,linear-gradient(var(--line),var(--line)) 0 50%/100% 1px no-repeat}
+.antetitulo i,.chip i,.k-escena i,.hoja-foto figcaption i,.v-foto figcaption i{border-radius:50%}

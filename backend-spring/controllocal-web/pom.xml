@@ -19,9 +19,19 @@
     <name>ControlLocal v2 - web</name>
 
     <dependencies>
+        <!-- PDF privado del Encargo; sin proveedor externo ni motor de reglas en Web. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
+        </dependency>
         <dependency>
             <groupId>com.controllocal</groupId>
             <artifactId>controllocal-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.controllocal</groupId>
+            <artifactId>controllocal-asistencia</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

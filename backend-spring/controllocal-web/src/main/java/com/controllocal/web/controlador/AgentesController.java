@@ -8,19 +8,16 @@ import com.controllocal.web.dto.AgenteResponse;
 import com.controllocal.web.dto.AgentesResumenResponse;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.seguridad.SesionActual;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Contrato congelado de {@code AgentesRest}. */
+/** Directorio y edición local; el ingreso se formaliza mediante invitación y aceptación. */
 @RestController
 @RequestMapping("agentes")
 @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
@@ -79,26 +76,12 @@ public class AgentesController {
         return AgenteFichaResponse.desde(agentes.ficha(id, SesionActual.actor()));
     }
 
-    /**
-     * Alta de agente: <b>gobierno del tenant</b> (D-S0-17 fila 17, D-S0-18 "un
-     * broker no crea cuentas"). Exige {@code idBrokerSupervisor} en el cuerpo,
-     * porque quien gobierna no supervisa a nadie de quien deducirlo.
-     */
-    @PostMapping
+    @GetMapping("{id}/perfil")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    public ResponseEntity<AgenteResponse> registrar(
-            @RequestBody(required = false) AgenteRequest dto) {
-        AgenteResponse creado = AgenteResponse.desde(
-                agentes.registrar(dto == null ? null : dto.aDatos(),
-                        SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+    public AgenteResponse perfilParaGobierno(@PathVariable long id) {
+        return AgenteResponse.desde(agentes.consultarParaGobierno(id,SesionActual.actor()));
     }
 
-    /**
-     * Edicion de agente: gobierno (fila 18). Lo editable es identidad
-     * administrativa — el {@code PUT} ya descartaba en silencio documento,
-     * usuario, contrasena y codigo.
-     */
     @PutMapping("{id}")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     public AgenteResponse actualizar(@PathVariable long id,

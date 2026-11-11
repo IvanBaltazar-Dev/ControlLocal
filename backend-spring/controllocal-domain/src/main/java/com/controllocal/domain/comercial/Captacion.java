@@ -20,32 +20,64 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * Captacion: el encargo formal del propietario, revisado por el broker.
- * Maquina (codigos del cable): P Pendiente de revision -> {A Activa | O Observada |
- * R Rechazada}; O vuelve a P al reenviarse; A -> {C Cerrada | V Vencida}.
- * El estado SOLO muta via Transiciones (auditoria RC-002).
+ * Fila del episodio Encargo conservada junto a sus claves y antecedentes.
+ * Estado propio: EN_PREPARACION(P), APROBADO(A), FINALIZADO(C), RESCINDIDO(S).
+ * Pendiente/observada/rechazada pertenecen a PeticionRevisionEncargo;
+ * vencimiento y habilitación se derivan de fechas, suficiencia y revisión exacta.
+ * El estado sólo muta mediante Transiciones, con auditoría RC-002.
  */
 @Entity
 @Table(name = "captacion")
 public class Captacion extends EntidadDeOrganizacion implements Transicionable {
 
-    public static final String PENDIENTE_REVISION = Codigos.Captacion.PENDIENTE;
-    public static final String OBSERVADA = Codigos.Captacion.OBSERVADA;
-    public static final String RECHAZADA = Codigos.Captacion.RECHAZADA;
-    public static final String ACTIVA = Codigos.Captacion.ACTIVA;
-    public static final String CERRADA = Codigos.Captacion.CERRADA;
-    public static final String VENCIDA = Codigos.Captacion.VENCIDA;
+    public static final String EN_PREPARACION = Codigos.Captacion.EN_PREPARACION;
+    public static final String APROBADO = Codigos.Captacion.APROBADO;
+    public static final String FINALIZADO = Codigos.Captacion.FINALIZADO;
+    public static final String RESCINDIDO = Codigos.Captacion.RESCINDIDO;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_captacion")
     private Long id;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
+    /** Versión material: las decisiones y consultas no reinterpretan el contenido presentado. */
+    @Column(name = "version_contenido", nullable = false)
+    private long versionContenido = 1;
+
+    @Column(name="tipo_origen_prospeccion",nullable=false,length=20)
+    private String tipoOrigenProspeccion="DESCONOCIDO";
+    @Column(name="id_prospeccion_origen") private Long idProspeccionOrigen;
+    @Column(name="origen_registrado_en") private OffsetDateTime origenRegistradoEn;
+    public String getTipoOrigenProspeccion(){return tipoOrigenProspeccion;}
+    public Long getIdProspeccionOrigen(){return idProspeccionOrigen;}
+    public OffsetDateTime getOrigenRegistradoEn(){return origenRegistradoEn;}
+    /** Procedencia comercial; no modifica el instrumento firmado ni concede permisos. */
+    public void declararOrigenProspeccion(String tipo,Long prospeccion,OffsetDateTime registrado){
+        if(tipo==null||!java.util.Set.of("DIRECTO","PROSPECCION","DESCONOCIDO").contains(tipo)
+            ||("PROSPECCION".equals(tipo)!=(prospeccion!=null))||prospeccion!=null&&prospeccion<=0)
+            throw new IllegalArgumentException("Origen del Encargo incoherente.");
+        if(!"DESCONOCIDO".equals(tipoOrigenProspeccion)
+            &&(!tipoOrigenProspeccion.equals(tipo)||!java.util.Objects.equals(idProspeccionOrigen,prospeccion)))
+            throw new IllegalStateException("El origen declarado se conserva; otro vínculo es antecedente.");
+        tipoOrigenProspeccion=tipo;idProspeccionOrigen=prospeccion;
+        if(origenRegistradoEn==null||!"DESCONOCIDO".equals(tipo))origenRegistradoEn=java.util.Objects.requireNonNull(registrado);
+    }
+    @Column(name = "id_documento_actual") private Long idDocumentoActual;
+    @Column(name = "id_peticion_actual") private Long idPeticionActual;
+    @Column(name = "id_revision_aplicable") private Long idRevisionAplicable;
+    @Column(name = "id_composicion_actual") private Long idComposicionActual;
+    @Column(name = "terminos_aceptados", nullable = false) private boolean terminosAceptados;
 
     @Column(name = "codigo_captacion", nullable = false, length = 20)
     private String codigoCaptacion;
@@ -59,7 +91,7 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "fecha_fin_encargo")
     private LocalDate fechaFinEncargo;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "id_condicion_economica")
     private CondicionEconomicaCaptacion condicionEconomica;
 
@@ -184,32 +216,16 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
     }
 
     // ------------------------------------------------------------------
-    // Efectos laterales (semantica calcada del modelo v1).
+    // Efectos del episodio; revisión y vencimiento conservan sus contratos propios.
     // ------------------------------------------------------------------
 
-    /** Deja constancia de quien reviso y con que observacion (el estado va por Transiciones). */
-    public void registrarRevision(DetalleBroker broker, String observacion) {
-        this.brokerRevisor = broker;
-        this.fechaRevision = OffsetDateTime.now();
-        this.observacionRevision = observacion;
-        touch();
-    }
-
-    /** El cierre fija el fin de vigencia si no estaba pactado. */
-    public void marcarFinVigencia(LocalDate hoy) {
-        if (fechaFinEncargo == null) {
-            fechaFinEncargo = hoy;
-        }
-        touch();
-    }
 
     public boolean editable() {
-        return PENDIENTE_REVISION.equals(estadoActual()) || OBSERVADA.equals(estadoActual());
+        return esVivo(estadoActual()) && !terminosAceptados;
     }
 
     /**
-     * <b>Un encargo VIVO es el que sigue en juego: {@code P}, {@code O} o
-     * {@code A}.</b>
+     * <b>Vivo es EN_PREPARACION o APROBADO; una petición observada no cambia ese estado.</b>
      *
      * <p>La definicion estaba escrita tres veces --en el {@code where} de
      * {@code encargosVivosDe}, en el indice {@code uq_captacion_viva_por_operacion}
@@ -222,7 +238,7 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
      * es que haya dos vivos a la vez.
      */
     public static boolean esVivo(String estado) {
-        return PENDIENTE_REVISION.equals(estado) || OBSERVADA.equals(estado) || ACTIVA.equals(estado);
+        return EN_PREPARACION.equals(estado) || APROBADO.equals(estado);
     }
 
     private void touch() {
@@ -234,6 +250,20 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
     public Long getId() {
         return id;
     }
+
+    public long getVersion() { return version; }
+    public long getVersionContenido() { return versionContenido; }
+    public Long getIdDocumentoActual() { return idDocumentoActual; }
+    public Long getIdPeticionActual() { return idPeticionActual; }
+    public Long getIdRevisionAplicable() { return idRevisionAplicable; }
+    public Long getIdComposicionActual() { return idComposicionActual; }
+    public boolean isTerminosAceptados() { return terminosAceptados; }
+    public void renovarContenido() { versionContenido++; touch(); }
+    public void presentarDocumento(long documento, long peticion) {
+        idDocumentoActual=documento; idPeticionActual=peticion; terminosAceptados=true; touch();
+    }
+    public void registrarRevisionAplicable(long revision) { idRevisionAplicable=revision; touch(); }
+    public void declararComposicion(long composicion) { idComposicionActual=composicion; touch(); }
 
     public String getCodigoCaptacion() {
         return codigoCaptacion;
@@ -275,14 +305,6 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
         return condicionEconomica.getValorComision();
     }
 
-    public void setComisionPactada(BigDecimal comisionPactada) {
-        if (condicionEconomica == null) condicionEconomica = new CondicionEconomicaCaptacion();
-        condicionEconomica.setTipoComision(CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES);
-        condicionEconomica.setBaseCalculo(CondicionEconomicaCaptacion.RENTA_MENSUAL);
-        condicionEconomica.setValorComision(comisionPactada == null ? null
-                : comisionPactada.divide(BigDecimal.valueOf(100)));
-    }
-
     public String getObservaciones() {
         return observaciones;
     }
@@ -299,9 +321,6 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
         return observacionRevision;
     }
 
-    public void setObservacionRevision(String observacionRevision) {
-        this.observacionRevision = observacionRevision;
-    }
 
     public Propiedad getPropiedad() {
         return propiedad;

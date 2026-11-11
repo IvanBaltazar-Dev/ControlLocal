@@ -31,7 +31,7 @@ public record SeguimientoComercialItemResponse(
         String icono,
         String tono,
         LocalDateTime fechaOrden,
-        String monto) {
+        String monto, String moneda) {
 
     public static SeguimientoComercialItemResponse desde(SeguimientoComercialService.Fila fila) {
         return new SeguimientoComercialItemResponse(
@@ -39,6 +39,6 @@ public record SeguimientoComercialItemResponse(
                 fila.local(), fila.distrito(), fila.agente(), fila.propietario(),
                 fila.propietarioId(), fila.estado(), fila.ultimoHito(), fila.ruta(),
                 fila.rutaRevision(), fila.icono(), fila.tono(), fila.fechaOrden(),
-                fila.monto());
+                fila.monto(),fila.moneda());
     }
 }

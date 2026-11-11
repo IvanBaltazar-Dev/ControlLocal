@@ -4,6 +4,7 @@ import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.Titular;
@@ -21,6 +22,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -91,6 +94,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadUniversalService propiedades;
+    @Autowired ProspeccionService prospecciones;
+    @Autowired PlatformTransactionManager transacciones;
     // Se inyecta para poder preguntarle DIRECTAMENTE por la rama que hoy
     // ningun consumidor alcanza: ver `unAgenteNoAlcanzaElInventarioSinDueno`.
     @Autowired Alcances alcances;
@@ -116,6 +121,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         Actor duena = agenteDelEquipo(0);
         Actor ajena = agenteDeOtroEquipo();
         long idPropiedad = registrar(duena);
+
 
         // El broker que NO supervisa al destino. Su banda es correcta y su
         // tenant tambien: lo unico que le falta es el alcance sobre ESE agente.
@@ -399,27 +405,17 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 () -> propiedades.traspasosDe(idPropiedad, duena),
                 "ni lee el expediente");
 
-        // Un broker de otro equipo: desde C7 (CONTROL, 2026-09-01) la ficha YA
-        // NO le ofrece el traspaso, porque la propiedad responde ante alguien
-        // que no supervisa y `puedeTraspasar` lleva el alcance del SALIENTE --
-        // el mismo predicado que el POST pregunta en `asignar`.
-        //
-        // Aqui estaba la asimetria que C6 dejo ANOTADA y sin decidir: el cable
-        // ofrecia un boton que el POST rechazaba siempre (el POST exigia
-        // `alcanzaIncluidoSinDueno(actor, saliente)` y el booleano no). La
-        // inversion de esta linea es la decision C7, tomada de forma consciente
-        // sobre la respuesta que C5 dejo medida; el POST no cambio ni una
-        // guarda, y la excepcion FALTANTE (C5) queda intacta.
-        //
-        // OJO con lo que esta prueba sigue sosteniendo: puede traspasar y leer
-        // el expediente SON dos autorizaciones distintas, una de ficha y otra de
-        // comando. Que coincidan en falso para este broker no las funde -- la
-        // separacion sigue viva en las tres respuestas distintas del responsable
-        // de arriba (edita, no traspasa, no lee).
+        // C1 separa tambien la lectura fisica de la preparacion de gobierno.
+        // El broker ajeno no obtiene una ficha completa para descubrir que no
+        // puede iniciar el traspaso. Las tres puertas conservan su negativa.
         Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
-        assertFalse(propiedades.consultar(idPropiedad, brokerAjeno).responsabilidad()
-                        .puedeTraspasar(),
-                "C7: el booleano del cable lleva el alcance del saliente, no solo la banda");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, brokerAjeno),
+                "C1: un broker ajeno no obtiene la ficha fisica para conocer un permiso "
+                        + "que tampoco tiene; la lectura necesita su propio ambito");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.candidatosAResponsable(idPropiedad, null, 1, 20, brokerAjeno),
+                "la puerta de gobierno tampoco le permite iniciar el traspaso ajeno");
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
                 "y aun asi no lee el expediente: son dos preguntas distintas");
@@ -430,9 +426,9 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
      * propiedad.</b>
      *
      * <p>Las respuestas del booleano, medidas contra la misma propiedad: el
-     * broker del equipo (C7-C), el gobierno del tenant (C7-E, por autoridad de
-     * gobierno y no como super-broker), y en FALTANTE cualquier broker del
-     * tenant (C7-B). La que falta -- el broker ajeno ante un saliente que no
+     * broker del equipo (C7-C). C1 deja al gobierno del tenant y al broker de
+     * FALTANTE su preparacion minima de candidatos, sin concederles una ficha
+     * fisica completa por esa atribucion. La que falta -- el broker ajeno ante un saliente que no
      * supervisa (C7-D) -- la mide
      * {@code traspasarYLeerElExpedienteSiguenSiendoDosPreguntas}, que es la
      * respuesta que C6 dejo medida y C7 invirtio de forma consciente.
@@ -457,27 +453,28 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 "el broker del equipo puede iniciar el traspaso de una propiedad cuyo "
                         + "responsable si supervisa");
 
-        // C7-E y C7-I: el gobierno del tenant, por AUTORIDAD DE GOBIERNO. Puede
-        // gobernar quien responde -- entre equipos, si hace falta -- y NO gana
-        // por eso la edicion de los hechos: gobernar no es registrar.
-        var delGobierno = propiedades.consultar(idPropiedad, tenantAdmin()).responsabilidad();
-        assertTrue(delGobierno.puedeTraspasar(),
-                "el TENANT_ADMIN gobierna el cambio de responsable de SU tenant");
-        assertFalse(delGobierno.puedeEditar(),
-                "y no por eso escribe los hechos de la propiedad ni gana autoridad comercial: "
-                        + "no es un super-broker");
+        // C1 / C7-E: puede gobernar quien responde, con proyeccion minima;
+        // administrar no concede lectura fisica ni edicion comercial.
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.consultar(idPropiedad, tenantAdmin()),
+                "C1: gobierno no recibe la ficha comercial para decidir una reasignacion");
+        assertFalse(propiedades.candidatosAResponsable(idPropiedad, null, 1, 20, tenantAdmin())
+                        .items().isEmpty(),
+                "su puerta minima de gobierno si permite preparar el traspaso del tenant");
 
-        // C7-B: sin dueno no hay saliente a quien supervisar, asi que la ficha
-        // lo ofrece a cualquier broker del tenant -- incluido uno que no
-        // supervisaba a quien la llevaba (C5 intacta).
+        // C7-B: sin responsable no hay saliente a quien supervisar. C1 conserva
+        // esa preparacion de gobierno, sin abrir el registro fisico ajeno.
         dejarSinResponsable(idPropiedad);
         Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
-        assertTrue(propiedades.consultar(idPropiedad, brokerAjeno).responsabilidad()
-                        .puedeTraspasar(),
-                "FALTANTE: puede iniciarla cualquier broker del tenant");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, brokerAjeno),
+                "FALTANTE no concede al otro broker la lectura fisica por autor del registro");
+        assertFalse(propiedades.candidatosAResponsable(idPropiedad, null, 1, 20, brokerAjeno)
+                        .items().isEmpty(),
+                "FALTANTE: su puerta minima de gobierno permite preparar el traspaso");
 
-        // C7-G: ese true NO autoriza el destino. La ficha dijo true y el POST
-        // igual rechaza a un agente que ese broker no supervisa.
+        // C7-G: ofrecer candidatos no autoriza otro destino. El POST vuelve
+        // a comprobar la supervision de quien finalmente recibe.
         Actor destinoAjeno = unAgenteQueNoSupervisa(brokerAjeno, duena.idRolOperativo());
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.asignarResponsable(idPropiedad, destinoAjeno.idRolOperativo(),
@@ -491,7 +488,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
      * dueno</b> (C5, la tercera fila de la tabla).
      *
      * <h2>Por que hace falta, y por que en dos niveles</h2>
-     * {@code Alcances.alcanzaIncluidoSinDueno} responde {@code !esAgente()}
+     * {@code Alcances.alcanzaParaGobiernoDeTraspasoFisico} responde {@code !esAgente()}
      * cuando no hay dueno. Esa rama <b>no la alcanza hoy ningun consumidor</b>:
      * los dos —{@code exigirLecturaDelExpediente} y {@code asignar}— cortan al
      * agente por banda <b>antes</b> de preguntar. Consecuencia medida:
@@ -531,15 +528,15 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 "y el broker si la alcanza: es inventario sin dueno de su tenant (C5)");
 
         // 2. La rama, preguntada donde vive. Esto es lo unico que se pone rojo
-        //    si `alcanzaIncluidoSinDueno` pasa a devolver `true` sin mirar.
-        assertFalse(alcances.alcanzaIncluidoSinDueno(duena, null),
+        //    si `alcanzaParaGobiernoDeTraspasoFisico` pasa a devolver `true` sin mirar.
+        assertFalse(alcances.alcanzaParaGobiernoDeTraspasoFisico(duena, null),
                 "sin dueno, un AGENTE no alcanza. Si esto pasa a ser cierto, la excepcion de C5 "
                         + "deja de ser «lo gobierna el broker» y se convierte en «es de todos», "
                         + "que es justo lo que NO se decidio");
-        assertTrue(alcances.alcanzaIncluidoSinDueno(broker(), null),
+        assertTrue(alcances.alcanzaParaGobiernoDeTraspasoFisico(broker(), null),
                 "el broker si, o la asercion de arriba se cumpliria con una funcion que niega "
                         + "siempre");
-        assertTrue(alcances.alcanzaIncluidoSinDueno(tenantAdmin(), null),
+        assertTrue(alcances.alcanzaParaGobiernoDeTraspasoFisico(tenantAdmin(), null),
                 "y el gobierno del tenant tambien");
     }
 
@@ -765,10 +762,10 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
      * consultando las supervisiones <b>abiertas</b>, y {@code idBrokerConEquipo()}
      * exige un broker con dos o mas. Una fila que se quedara cerrada no rompería
      * esta prueba sino las <b>siguientes</b>, con un mensaje que no habla de
-     * esto. Por eso el cierre vive en un {@code try} cuyo {@code finally} la
-     * reabre, y por eso los tres actores se capturan <b>antes</b>: dentro de la
-     * ventana no se llama a ningun ayudante que vuelva a consultar el
-     * organigrama.
+     * esto. El montaje usa una transaccion con rollback y un supervisor actual
+     * de reemplazo. Se fuerzan los constraints antes de actuar: el caso no
+     * deja al agente activo huerfano para poder medir al ex-supervisor. Los
+     * actores se capturan antes de cambiar el organigrama.
      */
     @Test
     @DisplayName("C6: una supervision EXPIRADA cierra el traspaso por los dos extremos")
@@ -776,6 +773,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         Actor b = broker();
         Actor a1 = agenteDelEquipo(1);
         Actor a0 = agenteDelEquipo(0);
+        Actor reemplazo = brokerQueNoSupervisaA(a1.idRolOperativo());
         long p1 = registrar(a1);
         long p0 = registrar(a0);
 
@@ -787,9 +785,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 "y si lee su expediente: responde ante un agente que supervisa hoy");
 
         // La fila viva se identifica ANTES de tocarla, y por su CLAVE PRIMARIA:
-        // es la unica referencia que no depende de la fecha. Se captura fuera
-        // del `try` a proposito -- si no hubiera fila que cerrar, el `finally`
-        // no debe entrar a restituir con un id nulo y tapar el error real.
+        // es la unica referencia que no depende de la fecha. El rollback del
+        // montaje repone la fila exacta y no depende de que siga siendo hoy.
         Long idSupervision = jdbc.queryForObject("""
                 select id_supervision from supervision_agente
                  where id_rol_broker = ? and id_rol_agente = ? and fecha_fin is null
@@ -799,7 +796,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                         + "sobre ese agente: sin ella no hay nada que expirar y esta prueba no "
                         + "mediria lo que dice medir");
 
-        try {
+        new TransactionTemplate(transacciones).executeWithoutResult(estado -> {
+            estado.setRollbackOnly();
             int cerradas = jdbc.update("""
                     update supervision_agente set fecha_fin = current_date
                      where id_supervision = ? and fecha_fin is null
@@ -808,9 +806,20 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                     "esta prueba tiene que cerrar EXACTAMENTE una supervision viva: si cerro "
                             + "cero, el escenario no era el que dice medir");
 
-            assertFalse(propiedades.consultar(p1, b).responsabilidad().puedeTraspasar(),
-                    "supervision cerrada es supervision que ya no alcanza: la ficha no puede "
-                            + "seguir ofreciendo un traspaso que el POST va a negar");
+            jdbc.update("""
+                    insert into supervision_agente
+                        (organizacion_id, id_rol_broker, id_rol_agente, fecha_asignacion, motivo)
+                    values (?, ?, ?, current_date, 'Fixture C6: reemplazo competente')
+                    """, b.idOrganizacion(), reemplazo.idRolOperativo(), a1.idRolOperativo());
+            // La empresa no queda con un agente activo sin supervisor. Se comprueban
+            // los constraints reales antes de ejercer las puertas; no se difieren
+            // hasta un rollback que pudiera esconder un montaje invalido.
+            jdbc.execute("set constraints all immediate");
+            assertTrue(propiedades.consultar(p1, reemplazo).responsabilidad().puedeTraspasar(),
+                    "el supervisor actual si alcanza el mismo registro fisico");
+            assertThrows(NoEncontradoException.class,
+                    () -> propiedades.consultar(p1, b),
+                    "C1: el ex-supervisor tampoco recibe la ficha fisica por su relacion cerrada");
             assertThrows(AccesoNoAutorizadoException.class,
                     () -> propiedades.traspasosDe(p1, b),
                     "ni el expediente de un agente al que ya no supervisa");
@@ -829,18 +838,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
             assertEquals(a1.idRolOperativo(), responsableDe(p1),
                     "un traspaso rechazado no deja la propiedad a medias");
             assertEquals(a0.idRolOperativo(), responsableDe(p0));
-        } finally {
-            // Restituir SIEMPRE, tambien si una asercion fallo, y por CLAVE
-            // PRIMARIA: filtrar por `fecha_fin = current_date` ataba la
-            // restitucion al reloj -- una corrida que cruzara la medianoche
-            // entre el cierre y este `finally` no restituiria nada, en silencio
-            // y con la suite en verde, y dejaria la supervision cerrada para las
-            // pruebas SIGUIENTES, que se apoyan en el mismo organigrama.
-            // `uq_supervision_activa` es parcial por AGENTE y a este no le queda
-            // ninguna otra abierta, asi que reabrir esta no choca con nada.
-            jdbc.update("update supervision_agente set fecha_fin = null where id_supervision = ?",
-                    idSupervision);
-        }
+        }); // Revierte solamente el montaje; conserva el organigrama e historia anteriores.
 
         assertTrue(propiedades.consultar(p1, b).responsabilidad().puedeTraspasar(),
                 "restituida la vigencia vuelve a poder, y eso prueba dos cosas: que la "
@@ -1109,8 +1107,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 "el destino tiene que traer credencial: sin ella esta prueba no apagaria nada");
         try {
             assertEquals(1, jdbc.update("""
-                    update credencial_usuario set estado_administrativo = 'I'
-                     where id_persona_rol = ? and estado_administrativo = 'A'
+                    update cuenta_acceso set estado = 'I'
+                     where id_cuenta_acceso = ? and estado = 'A'
                     """, idCredencial),
                     "tiene que suspender EXACTAMENTE una cuenta activa");
 
@@ -1127,8 +1125,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
             assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
                     "y la propiedad no se movio");
         } finally {
-            jdbc.update("update credencial_usuario set estado_administrativo = 'A' "
-                    + "where id_persona_rol = ?", idCredencial);
+            jdbc.update("update cuenta_acceso set estado = 'A' "
+                    + "where id_cuenta_acceso = ?", idCredencial);
         }
 
         // CONTROL POSITIVO: con la cuenta restituida, el mismo traspaso entra.
@@ -1235,11 +1233,37 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         long idPropiedad = registrar(duena);
         String censoAntes = censo();
 
-        try {
+        new TransactionTemplate(transacciones).executeWithoutResult(estado -> {
+            estado.setRollbackOnly();
             assertEquals(1, jdbc.update("""
                     update persona_rol set vigencia_hasta = current_date
                      where id_persona_rol = ? and vigencia_hasta is null
                     """, destino.idRolOperativo()));
+            assertEquals(1, jdbc.update("""
+                    update supervision_agente set fecha_fin = current_date
+                     where organizacion_id = ? and id_rol_agente = ? and fecha_fin is null
+                    """, destino.idOrganizacion(), destino.idRolOperativo()));
+            Long rolActual = jdbc.queryForObject("""
+                    insert into persona_rol
+                        (organizacion_id, id_persona, tipo_rol, vigencia_desde)
+                    values (?, ?, 'AGENTE', current_date) returning id_persona_rol
+                    """, Long.class, destino.idOrganizacion(), destino.idPersona());
+            jdbc.update("""
+                    insert into detalle_agente
+                        (organizacion_id, id_persona_rol, codigo_agente, fecha_ingreso, estado_operativo)
+                    values (?, ?, ?, current_date, 'D')
+                    """, destino.idOrganizacion(), rolActual, "ROL-C8-" + rolActual);
+            jdbc.update("""
+                    insert into supervision_agente
+                        (organizacion_id, id_rol_broker, id_rol_agente, fecha_asignacion, motivo)
+                    values (?, ?, ?, current_date, 'Fixture C8: rol vigente de la misma persona')
+                    """, destino.idOrganizacion(), b.idRolOperativo(), rolActual);
+            jdbc.execute("set constraints all immediate");
+            List<Long> candidatos = idsDeCandidatos(idPropiedad, null, b);
+            assertTrue(candidatos.contains(rolActual),
+                    "la misma cuenta/persona sigue activa y su rol actual si es elegible");
+            assertFalse(candidatos.contains(destino.idRolOperativo()),
+                    "el rol historico cerrado no vuelve a ser un candidato por compartir persona");
 
             assertThrows(AccesoNoAutorizadoException.class,
                     () -> propiedades.asignarResponsable(idPropiedad, destino.idRolOperativo(),
@@ -1248,13 +1272,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                             + "ELEGIBILIDAD: el agente sigue existiendo y el expediente lo sigue "
                             + "nombrando");
             assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
-        } finally {
-            // Por clave primaria y no por `vigencia_hasta = current_date`: atar la
-            // restitucion al reloj deja la fila cerrada si la corrida cruza la
-            // medianoche, en silencio y con la suite en verde.
-            jdbc.update("update persona_rol set vigencia_hasta = null where id_persona_rol = ?",
-                    destino.idRolOperativo());
-        }
+        }); // El rollback repone exactamente los roles y la supervision compartidos.
 
         propiedades.asignarResponsable(idPropiedad, destino.idRolOperativo(), MOTIVO,
                 observado(idPropiedad), b);
@@ -1436,7 +1454,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
      * <b>La lista responde lo mismo que el boton</b>, y por el mismo predicado.
      *
      * <p>Un broker que no supervisa al responsable no puede iniciar el traspaso
-     * —{@code puedeTraspasar=false} en la ficha (C7)— asi que tampoco recibe la
+     * —C1 no le entrega la ficha ajena— asi que tampoco recibe la
      * lista de destinos: seria ofrecerle el paso siguiente de algo que no puede
      * empezar. Y es <b>403</b>, no una lista vacia: «no hay candidatos» y «no te
      * corresponde» son dos respuestas distintas, y devolver la primera por la
@@ -1449,9 +1467,9 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         long idPropiedad = registrar(duena);
         Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
 
-        assertFalse(propiedades.consultar(idPropiedad, brokerAjeno).responsabilidad()
-                        .puedeTraspasar(),
-                "el escenario: la ficha ya le dice que no puede iniciarlo (C7)");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.consultar(idPropiedad, brokerAjeno),
+                "C1: el broker ajeno tampoco recibe una ficha comercial fuera de su ambito");
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.candidatosAResponsable(idPropiedad, null, 1, 20, brokerAjeno),
                 "asi que la lista de destinos responde 403 y no una lista vacia");
@@ -1494,8 +1512,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         assertNotNull(idCredencial);
         try {
             assertEquals(1, jdbc.update("""
-                    update credencial_usuario set estado_administrativo = 'I'
-                     where id_persona_rol = ? and estado_administrativo = 'A'
+                    update cuenta_acceso set estado = 'I'
+                     where id_cuenta_acceso = ? and estado = 'A'
                     """, idCredencial));
 
             assertFalse(idsDeCandidatos(idPropiedad, null, b).contains(destino.idRolOperativo()),
@@ -1508,8 +1526,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                             + "puede suspender");
             assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
         } finally {
-            jdbc.update("update credencial_usuario set estado_administrativo = 'A' "
-                    + "where id_persona_rol = ?", idCredencial);
+            jdbc.update("update cuenta_acceso set estado = 'A' "
+                    + "where id_cuenta_acceso = ?", idCredencial);
         }
         assertEquals(censoAntes, censo());
     }
@@ -1549,8 +1567,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         assertNotNull(idCredencial);
         try {
             assertEquals(1, jdbc.update("""
-                    update credencial_usuario set estado_administrativo = 'I'
-                     where id_persona_rol = ? and estado_administrativo = 'A'
+                    update cuenta_acceso set estado = 'I'
+                     where id_cuenta_acceso = ? and estado = 'A'
                     """, idCredencial));
 
             // 1. NO se movio nada.
@@ -1586,8 +1604,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
             assertEquals(otro.idRolOperativo(), responsableDe(porElBroker),
                     "asi que el BROKER que lo supervisa tambien resuelve la situacion");
         } finally {
-            jdbc.update("update credencial_usuario set estado_administrativo = 'A' "
-                    + "where id_persona_rol = ?", idCredencial);
+            jdbc.update("update cuenta_acceso set estado = 'A' "
+                    + "where id_cuenta_acceso = ?", idCredencial);
         }
         assertEquals(censoAntes, censo(),
                 "y las cuatro tablas de identidad quedaron exactamente como estaban: este corte "
@@ -1626,21 +1644,12 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                    and r.tipo_rol = 'AGENTE'
                    and r.vigencia_hasta is null
                    and a.estado_operativo = 'D'
-                   and exists (select 1 from credencial_usuario c
-                                 join persona_rol rc on rc.id_persona_rol = c.id_persona_rol
-                                where rc.id_persona = r.id_persona
-                                  and rc.organizacion_id = r.organizacion_id
-                                  and rc.tipo_rol = 'USUARIO_INTERNO'
-                                  and rc.vigencia_hasta is null
-                                  and c.estado_administrativo = 'A')
                    and exists (select 1 from usuario_organizacion uo
-                                 join persona_rol ru on ru.id_persona_rol = uo.id_usuario
-                                where ru.id_persona = r.id_persona
-                                  and ru.organizacion_id = r.organizacion_id
-                                  and ru.tipo_rol = 'USUARIO_INTERNO'
-                                  and ru.vigencia_hasta is null
-                                  and uo.organizacion_id = r.organizacion_id
-                                  and uo.estado = 'A')
+                                 join cuenta_acceso c on c.id_cuenta_acceso=uo.id_usuario
+                                where uo.id_persona=r.id_persona
+                                  and uo.organizacion_id=r.organizacion_id
+                                  and uo.rol='AGENTE' and uo.estado='A' and c.estado='A'
+                                  and c.correo_confirmado_en is not null)
                    and (?::bigint is null
                         or exists (select 1 from supervision_agente s
                                     where s.id_rol_broker = ?
@@ -1652,35 +1661,25 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 excluir);
     }
 
-    /** La credencial del USUARIO_INTERNO de la misma persona en la misma organizacion. */
+    /** La cuenta personal ligada explícitamente al miembro organizacional. */
     private Long credencialDe(long idRolAgente) {
         List<Long> ids = jdbc.queryForList("""
-                select c.id_persona_rol
-                  from credencial_usuario c
-                  join persona_rol rc on rc.id_persona_rol = c.id_persona_rol
-                  join persona_rol ra on ra.id_persona = rc.id_persona
-                                     and ra.organizacion_id = rc.organizacion_id
-                 where ra.id_persona_rol = ?
-                   and rc.tipo_rol = 'USUARIO_INTERNO'
-                   and rc.vigencia_hasta is null
-                """, Long.class, idRolAgente);
+                select uo.id_usuario from usuario_organizacion uo
+                  join persona_rol ra on ra.id_persona=uo.id_persona
+                                     and ra.organizacion_id=uo.organizacion_id
+                 where ra.id_persona_rol=? and uo.rol='AGENTE' and uo.estado='A'
+                """,Long.class,idRolAgente);
         return ids.isEmpty() ? null : ids.get(0);
     }
 
-    /** Su membresia activa en la organizacion, por ese mismo rol interno. */
+    /** Su membresia activa en la organizacion, por la persona local y organización exactas. */
     private Long membresiaDe(long idRolAgente) {
         List<Long> ids = jdbc.queryForList("""
-                select uo.id_usuario_organizacion
-                  from usuario_organizacion uo
-                  join persona_rol ru on ru.id_persona_rol = uo.id_usuario
-                  join persona_rol ra on ra.id_persona = ru.id_persona
-                                     and ra.organizacion_id = ru.organizacion_id
-                 where ra.id_persona_rol = ?
-                   and ru.tipo_rol = 'USUARIO_INTERNO'
-                   and ru.vigencia_hasta is null
-                   and uo.organizacion_id = ru.organizacion_id
-                   and uo.estado = 'A'
-                """, Long.class, idRolAgente);
+                select uo.id_usuario_organizacion from usuario_organizacion uo
+                  join persona_rol ra on ra.id_persona=uo.id_persona
+                                     and ra.organizacion_id=uo.organizacion_id
+                 where ra.id_persona_rol=? and uo.rol='AGENTE' and uo.estado='A'
+                """,Long.class,idRolAgente);
         return ids.isEmpty() ? null : ids.get(0);
     }
 
@@ -1695,7 +1694,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
      */
     private String censo() {
         return "credencial=" + jdbc.queryForList("""
-                select estado_administrativo, count(*) from credencial_usuario
+                select estado, count(*) from cuenta_acceso
                  group by 1 order by 1
                 """).toString()
                 + " membresia=" + jdbc.queryForList("""
@@ -1771,12 +1770,17 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         Actor duena = agenteDelEquipo(0);
         Actor ajena = agenteDeOtroEquipo();
         long idPropiedad = registrar(duena);
+        long versionFisicaObservada=propiedades.consultar(idPropiedad,duena).versionFisica();
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(idPropiedad,
+                "Prospección TEST para lectura legítima sin edición física", null), ajena);
+        assertNotNull(propiedades.consultar(idPropiedad, ajena),
+                "El negativo debe alcanzar la guarda de edición después de una lectura autorizada");
 
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.editar(idPropiedad,
                         new PropiedadUniversalService.ComandoEdicion(null, null, null, null, null,
                                 List.of(new ValorAtributo("dormitorios", "9")), null, null,
-                                null),
+                                null).conVersion(versionFisicaObservada),
                         ajena),
                 "escribir `dormitorios` en la propiedad de otro es escribir un hecho gobernado "
                         + "del inmueble ajeno");
@@ -1787,7 +1791,8 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.editar(idPropiedad,
                         new PropiedadUniversalService.ComandoEdicion(null, null, null, null, null,
-                                null, null, List.of("dormitorios"), null),
+                                null, null, List.of("dormitorios"), null).conVersion(versionFisicaObservada)
+                                .conMotivoRetiro("Retiro solicitado por actor sin autoridad en el fixture"),
                         ajena),
                 "y retirarlo tampoco -- el borrado es fisico, asi que es la escritura mas "
                         + "irreversible de las tres");
@@ -1804,7 +1809,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
                 "Caso de alcance",
                 new Ubicacion("Av. Alcance " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "Unidad TEST 101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
@@ -2115,9 +2120,9 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
             return ids.get(0);
         }
         return jdbc.queryForObject("""
-                insert into propiedad (codigo, direccion, distrito, metraje, tipo_inmueble, uso,
+                insert into propiedad (codigo, direccion, distrito, tipo_inmueble, uso,
                                        organizacion_id, estado_registro, origen_incorporacion)
-                values (?, 'Av. Frontera 100', 'Miraflores', 80.00, 'D', 'C', ?, 'A', 'SEMILLA')
+                values (?, 'Av. Frontera 100', 'Miraflores', 'D', 'C', ?, 'A', 'SEMILLA')
                 returning id_propiedad
                 """, Long.class, "VECINO-" + idOrganizacion, idOrganizacion);
     }

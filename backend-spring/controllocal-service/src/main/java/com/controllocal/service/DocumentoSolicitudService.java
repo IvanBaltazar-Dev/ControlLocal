@@ -26,13 +26,16 @@ public interface DocumentoSolicitudService {
                           String observaciones) {
     }
 
-    /** Espejo de DocumentoSolicitudResponse. {@code tipoDocumento} es el codigo del cable (I, R, V...). */
+    /** Respuesta: rutaArchivo es la referencia UUID Core; tipoDocumento es el código I, R, V... */
     record FichaDocumento(Long id, Long idSolicitud, String tipoDocumento, String tipoNombre,
                           String nombreArchivo, String rutaArchivo, LocalDateTime fechaEntrega,
                           String estado, String resultadoRevision, String observaciones) {
     }
 
     List<FichaDocumento> listarPorSolicitud(long idSolicitud, Actor actor);
+
+    /** Autoridad y tipo documental actuales antes de iniciar la carga del binario. */
+    String prepararCarga(long idSolicitud,String tipoDocumento,Actor actor);
 
     /** Alta del AGENTE. El documento nace Registrado con revision Pendiente. */
     FichaDocumento registrar(long idSolicitud, DatosDocumento datos, Actor actor);

@@ -20,6 +20,31 @@ import java.util.Optional;
  */
 public interface TitularidadPropiedadRepository extends JpaRepository<TitularidadPropiedad, Long> {
 
+    interface IdentidadParte { Long getId(); String getNombre(); }
+    @Query(value="select id_persona as id,nombres_o_razon_social as nombre from persona where organizacion_id=:org and id_persona in :ids order by id_persona",nativeQuery=true)
+    List<IdentidadParte> identidades(@Param("org") long org,@Param("ids") Collection<Long> ids);
+
+    /** Congela nombres ya declarados sin convertir el contacto en poder de representación. */
+    @Query(value="select id_persona from persona where organizacion_id=:org and id_persona in :ids order by id_persona for share",nativeQuery=true)
+    List<Long> bloquearIdentidades(@Param("org") long org,@Param("ids") Collection<Long> ids);
+
+    /** Proyección fresca de las partes; es_representante sigue siendo interlocución, no poderes. */
+    interface ParteActual {
+        Long getId(); Long getPropiedad(); Long getPersona(); Long getRol();
+        String getNombre(); BigDecimal getCuota(); java.time.LocalDate getDesde();
+    }
+    @Query(value="""
+       select t.id_titularidad as id,t.id_propiedad as propiedad,p.id_persona as persona,
+              r.id_persona_rol as rol,p.nombres_o_razon_social as nombre,t.cuota as cuota,t.vigente_desde as desde
+         from titularidad_propiedad t
+         join persona_rol r on r.id_persona_rol=t.id_rol_propietario and r.organizacion_id=t.organizacion_id
+         join persona p on p.id_persona=r.id_persona and p.organizacion_id=r.organizacion_id
+        where t.organizacion_id=:org and t.id_propiedad=:propiedad
+          and t.vigente_hasta is null and t.vigente_desde<=:hoy order by t.id_titularidad
+       """,nativeQuery=true)
+    List<ParteActual> partesActuales(@Param("org") long org,@Param("propiedad") long propiedad,
+                                     @Param("hoy") java.time.LocalDate hoy);
+
     /** Los titulares vigentes de una propiedad, el representante primero. */
     @Query("""
             select t from TitularidadPropiedad t

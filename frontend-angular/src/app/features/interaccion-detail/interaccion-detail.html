@@ -109,8 +109,11 @@
         <header><div><h2>Datos fijos</h2></div></header>
         <div class="cl-pares apiladas">
           <div><span>Contexto</span><strong>{{ contexto() }}</strong></div>
-          <div><span>Persona</span><strong>{{ persona() }}</strong></div>
-          <div><span>Tipo</span><strong>{{ valor(i.personaTipo) }}</strong></div>
+          <div><span>Interlocutor</span><strong>{{ persona() }}</strong></div>
+          <div><span>Rol</span><strong>{{ tipoPersona() }}</strong></div>
+          @if (telefonoPersona() !== '—') {
+            <div><span>Teléfono</span><strong>{{ telefonoPersona() }}</strong></div>
+          }
           <div><span>Referencia</span><strong>{{ referencia() }}</strong></div>
           <div><span>Canal</span><strong>{{ canal() }}</strong></div>
           <div><span>Fecha y hora</span><strong>{{ momento(i.fechaHora) }}</strong></div>

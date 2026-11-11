@@ -64,10 +64,6 @@ export class Brokers implements OnInit {
   protected readonly esAdmin = computed(() => this.auth.sesion()?.rol === 'TENANT_ADMIN');
   protected readonly filas = computed(() => this.datos().items ?? []);
   protected readonly total = computed(() => this.datos().totalRecords ?? 0);
-  /** Si ya hay administrador, el alta con esa marca responderá 400. */
-  protected readonly yaHayAdministrador = computed(() =>
-    this.filas().some((broker) => broker.esAdministrador === true),
-  );
 
   ngOnInit(): void {
     this.ruta.queryParamMap

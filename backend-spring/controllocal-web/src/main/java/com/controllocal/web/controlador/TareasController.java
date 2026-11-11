@@ -47,8 +47,8 @@ public class TareasController {
 
     @GetMapping
     @PreAuthorize("hasRole('AGENTE')")
-    public List<TareaResponse> bandeja() {
-        return tareas.bandejaDe(SesionActual.actor()).stream()
+    public List<TareaResponse> bandeja(@org.springframework.web.bind.annotation.ModelAttribute com.controllocal.service.soporte.PoliticaDeDespacho.Consulta consulta) {
+        return tareas.bandejaDe(consulta,SesionActual.actor()).stream()
                 .map(TareaResponse::desde)
                 .toList();
     }
@@ -60,8 +60,9 @@ public class TareasController {
     @GetMapping("pendientes")
     @PreAuthorize("hasRole('AGENTE')")
     public PageResponse<TareaResponse> pendientes(@RequestParam(defaultValue = "1") int pagina,
-                                                  @RequestParam(defaultValue = "5") int tamano) {
-        List<TareaResponse> fuente = tareas.bandejaDe(SesionActual.actor()).stream()
+                                                  @RequestParam(defaultValue = "5") int tamano,
+                                                  @org.springframework.web.bind.annotation.ModelAttribute com.controllocal.service.soporte.PoliticaDeDespacho.Consulta consulta) {
+        List<TareaResponse> fuente = tareas.bandejaDe(consulta,SesionActual.actor()).stream()
                 .map(TareaResponse::desde)
                 .toList();
         int paginaValida = Math.max(1, pagina);

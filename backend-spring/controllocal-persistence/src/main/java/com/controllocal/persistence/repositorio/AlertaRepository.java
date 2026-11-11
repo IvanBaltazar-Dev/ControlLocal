@@ -1,134 +1,77 @@
 package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.comercial.Alerta;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
+import java.util.*;
 
-import java.time.LocalDate;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
+/** Cabeceras sin mensajes; Core autoriza antes de hidratar, contar o paginar. */
+public interface AlertaRepository extends JpaRepository<Alerta,Long> {
+    interface NombreAgente {Long getId();String getNombre();}
+    @Query("select a.id as id,p.nombresORazonSocial as nombre from DetalleAgente a join a.rol r join r.persona p where a.organizacionId=:org and a.id in :ids")
+    List<NombreAgente> nombresDeAgentes(@Param("org")long org,@Param("ids")Collection<Long> ids);
+    interface Cabecera {
+        Long getId(); String getTipo(); String getEntidadTipo(); Long getEntidadId();
+        Long getIdAgente(); String getMarcaCausa(); String getEstado();
+        String getHuellaCausaC7();String getFuenteCausaC7();String getEstadoCausaC7();
+    }
+    String CABECERA="select a.id as id,a.tipo as tipo,a.entidadTipo as entidadTipo,a.entidadId as entidadId,"
+            +"a.agente.id as idAgente,a.marcaCausa as marcaCausa,a.estado as estado,"
+            +"a.huellaCausaC7 as huellaCausaC7,a.fuenteCausaC7 as fuenteCausaC7,a.estadoCausaC7 as estadoCausaC7 from Alerta a ";
 
-/**
- * Alertas de la campana, con el tenant por delante y el scope del actor en el
- * WHERE (V6 / RC-001).
- *
- * <p>Como la alerta cuelga SIEMPRE de un agente (§1 del contrato), el alcance
- * es el mismo {@code Alcance} que usa el resto del sistema: el AGENTE pasa su
- * rol, el BROKER los de su equipo y el ADMIN va sin filtro. No hace falta una
- * consulta distinta por rol como en la v1.
- *
- * <p>Cierra la deuda de la v1: alli {@code listar} traia la lista completa y
- * cortaba con {@code subList}; aqui la paginacion baja al LIMIT/OFFSET
- * (MEJ-05 / RC-003, igual que en {@code /evaluaciones}) con la misma respuesta.
- */
-public interface AlertaRepository extends JpaRepository<Alerta, Long> {
+    @Query(CABECERA+"where a.organizacionId=:org and a.estado='A' and (a.huellaCausaC7 is not null or :global=true or a.agente.id in :roles)")
+    List<Cabecera> cabecerasActivas(@Param("org") long org,@Param("global") boolean global,@Param("roles") Collection<Long> roles);
 
-    /** La campana SOLO muestra activas: las tres ramas de rol de la v1 filtran por ACTIVA. */
-    String DESDE = """
-            from Alerta a
-              join a.agente ag
-            where a.organizacionId = :idOrganizacion
-              and a.estado = 'A'
-              and (:sinScope = true or ag.id in :roles)
-            """;
+    @Query(CABECERA+"where a.organizacionId=:org and a.id=:id")
+    Optional<Cabecera> cabecera(@Param("org") long org,@Param("id") long id);
 
-    /**
-     * Una alerta VISIBLE para el actor. Se llama asi y no "conAcceso" a
-     * proposito: el cable responde <b>404</b> cuando la alerta existe pero no
-     * es visible, no 403 (D-F6-3), asi que quien la use debe traducir el vacio
-     * a "no encontrada".
-     */
-    @Query("""
-            select a from Alerta a
-              join fetch a.agente ag
-              join fetch ag.rol agRol
-              join fetch agRol.persona
-            where a.organizacionId = :idOrganizacion
-              and a.id = :id
-              and a.estado = 'A'
-              and (:sinScope = true or ag.id in :roles)
-            """)
-    Optional<Alerta> buscarVisible(@Param("idOrganizacion") long idOrganizacion,
-                                   @Param("id") long id,
-                                   @Param("sinScope") boolean sinScope,
-                                   @Param("roles") Collection<Long> roles);
+    @Query(CABECERA+"where a.organizacionId=:org and a.tipo='SIN_RESPUESTA' and a.entidadTipo='PROSPECCION' and a.entidadId in :prospecciones")
+    List<Cabecera> cabecerasRecontacto(@Param("org") long org,@Param("prospecciones") Collection<Long> prospecciones);
 
-    /**
-     * "¿Ya hay una activa de este tipo para esta entidad?" — es lo que evita
-     * que el barrido de recontacto duplique la alerta en cada pasada.
-     */
-    @Query("""
-            select count(a) > 0 from Alerta a
-            where a.organizacionId = :idOrganizacion
-              and a.entidadTipo = :entidadTipo
-              and a.entidadId = :entidadId
-              and a.tipo = :tipo
-              and a.estado = 'A'
-            """)
-    boolean existeActivaDe(@Param("idOrganizacion") long idOrganizacion,
-                           @Param("entidadTipo") String entidadTipo,
-                           @Param("entidadId") long entidadId,
-                           @Param("tipo") String tipo);
+    @Query(value="select a from Alerta a "
+            +"where a.organizacionId=:org and a.estado='A' and a.id in :permitidas order by a.fechaGeneracion desc,a.id desc",
+            countQuery="select count(a) from Alerta a where a.organizacionId=:org and a.estado='A' and a.id in :permitidas")
+    Page<Alerta> buscarAutorizadas(@Param("org") long org,@Param("permitidas") Collection<Long> permitidas,Pageable pagina);
 
-    /**
-     * <b>Avisos de recontacto que ya no aplican.</b> La otra mitad de la
-     * reconciliacion: {@link #existeActivaDe} impide crear dos, y esto cierra
-     * los que sobrevivieron a su motivo.
-     *
-     * <p>La condicion es <b>la misma</b> que la de
-     * {@code ProspeccionRepository.recontactables} —fecha de recontacto vencida
-     * y prospeccion en proceso—, negada. Se escribe aqui como {@code not
-     * exists} y no restando conjuntos en memoria por una razon concreta: el
-     * barrido que crea esta acotado a 500, y una diferencia de conjuntos
-     * cerraria en falso todos los avisos cuya prospeccion quedo fuera de esa
-     * pagina.
-     *
-     * <p>Sin filtro de alcance a proposito: el barrido es del tenant entero,
-     * igual que el de creacion. Cerrar un aviso que ya no aplica no depende de
-     * quien abra la campana.
-     */
-    @Query("""
-            select a from Alerta a
-            where a.organizacionId = :idOrganizacion
-              and a.estado = 'A'
-              and a.tipo = :tipo
-              and a.entidadTipo = :entidadTipo
-              and not exists (
-                select 1 from Prospeccion p
-                where p.id = a.entidadId
-                  and p.organizacionId = :idOrganizacion
-                  and p.fechaRecontacto is not null
-                  and p.fechaRecontacto <= :limite
-                  and p.estado not in ('T', 'D')
-              )
-            """)
-    List<Alerta> recontactosQueYaNoAplican(@Param("idOrganizacion") long idOrganizacion,
-                                           @Param("entidadTipo") String entidadTipo,
-                                           @Param("tipo") String tipo,
-                                           @Param("limite") LocalDate limite);
+    @Query(value="select id_alerta from alerta where organizacion_id=:org and entidad_tipo=:tipo and entidad_id=:recurso and tipo=:finalidad and huella_causa_c7 is not null and huella_causa_c7<>:huella order by id_alerta desc limit 1",nativeQuery=true)
+    Optional<Long> antecedenteC7(@Param("org")long org,@Param("tipo")String tipo,@Param("recurso")long recurso,@Param("finalidad")String finalidad,@Param("huella")String huella);
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+      insert into alerta(organizacion_id,tipo,severidad,entidad_tipo,entidad_id,id_rol_agente,mensaje,estado,fecha_generacion,
+                         huella_causa_c7,fuente_causa_c7,estado_causa_c7,id_antecedente_c7)
+      values(:org,:tipo,:severidad,:entidad,:recurso,:agente,:mensaje,'A',clock_timestamp(),:huella,:fuente,'VIGENTE',:antecedente)
+      on conflict(organizacion_id,huella_causa_c7) where huella_causa_c7 is not null do nothing
+      """,nativeQuery=true)
+    int crearCausaC7(@Param("org")long org,@Param("tipo")String tipo,@Param("severidad")String severidad,@Param("entidad")String entidad,
+                    @Param("recurso")long recurso,@Param("agente")long agente,@Param("mensaje")String mensaje,
+                    @Param("huella")String huella,@Param("fuente")String fuente,@Param("antecedente")Long antecedente);
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+      update alerta set estado='T',fecha_resolucion=clock_timestamp()
+       where organizacion_id=:org and id_alerta=:id and estado='A'
+         and marca_causa is not distinct from :marca and huella_causa_c7 is not distinct from :huella
+         and (huella_causa_c7 is null or estado_causa_c7='VIGENTE')
+      """,nativeQuery=true)
+    int atenderSiActiva(@Param("org")long org,@Param("id")long id,@Param("marca")String marca,@Param("huella")String huella);
 
-    /**
-     * La pagina de la campana, con la persona resuelta en el mismo select: la
-     * respuesta lleva {@code agenteNombre} y sin el fetch join cada fila
-     * dispararia su lazy.
-     */
-    @Query(value = """
-            select a from Alerta a
-              join fetch a.agente ag
-              join fetch ag.rol agRol
-              join fetch agRol.persona
-            where a.organizacionId = :idOrganizacion
-              and a.estado = 'A'
-              and (:sinScope = true or ag.id in :roles)
-            order by a.fechaGeneracion desc, a.id desc
-            """,
-            countQuery = "select count(a) " + DESDE)
-    Page<Alerta> buscarConAgente(@Param("idOrganizacion") long idOrganizacion,
-                                 @Param("sinScope") boolean sinScope,
-                                 @Param("roles") Collection<Long> roles,
-                                 Pageable pageable);
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+        insert into alerta(organizacion_id,tipo,severidad,entidad_tipo,entidad_id,id_rol_agente,mensaje,estado,fecha_generacion,marca_causa)
+        values(:org,'SIN_RESPUESTA','MEDIA','PROSPECCION',:prospeccion,:responsable,
+          'Revisa el recontacto pendiente del propietario o representante.','A',clock_timestamp(),:marca)
+        on conflict do nothing
+        """,nativeQuery=true)
+    int crearRecontacto(@Param("org") long org,@Param("prospeccion") long prospeccion,
+                        @Param("responsable") long responsable,@Param("marca") String marca);
+
+    @Modifying(flushAutomatically=true)
+    @Query(value="update alerta set id_rol_agente=:responsable where organizacion_id=:org and id_alerta=:id and marca_causa=:marca and estado='A'",nativeQuery=true)
+    int actualizarResponsableRecontacto(@Param("org") long org,@Param("id") long id,
+                                        @Param("marca") String marca,@Param("responsable") long responsable);
+
+    @Modifying(flushAutomatically=true)
+    @Query(value="update alerta set estado='D',fecha_resolucion=clock_timestamp() where organizacion_id=:org and id_alerta=:id and marca_causa=:marca and estado='A'",nativeQuery=true)
+    int retirarRecontactoSustituido(@Param("org") long org,@Param("id") long id,@Param("marca") String marca);
 }
+

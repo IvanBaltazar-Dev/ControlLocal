@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -70,7 +71,7 @@ public class Oferta extends EntidadDeOrganizacion implements Transicionable {
             case PRESENTADA -> "Presentada";
             case ACEPTADA -> "Aceptada";
             case RECHAZADA -> "Rechazada";
-            case SUPERADA -> "Superada por contraoferta";
+            case SUPERADA -> "Superada por nueva propuesta";
             case RETIRADA -> "Retirada";
             default -> estado;
         };
@@ -114,6 +115,17 @@ public class Oferta extends EntidadDeOrganizacion implements Transicionable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_oferta")
     private Long id;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
+    public long getVersion() { return version; }
+
+    @Column(name = "id_oferta_anterior", updatable = false)
+    private Long idOfertaAnterior;
+    public Long getIdOfertaAnterior() { return idOfertaAnterior; }
+    public void setIdOfertaAnterior(Long idOfertaAnterior) { this.idOfertaAnterior=idOfertaAnterior; }
 
     @Column(name = "id_oportunidad", nullable = false)
     private Long idOportunidad;

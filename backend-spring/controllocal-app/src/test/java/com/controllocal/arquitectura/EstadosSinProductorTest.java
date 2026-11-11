@@ -78,6 +78,15 @@ class EstadosSinProductorTest {
     }};
 
     @Test
+    void el_episodio_de_c2_no_confunde_estado_revision_y_vencimiento() {
+        Set<String> actuales=Set.of("EN_PREPARACION","APROBADO","FINALIZADO","RESCINDIDO");
+        assertTrue(actuales.equals(nombres(EstadosDominio.EstadoCaptacion.class)),
+                "C2 conserva cuatro estados propios; la petición y el plazo no se incorporan al episodio.");
+        assertTrue(actuales.equals(documentados().get("Captación")),
+                "La decisión ejecutable tiene que documentar el episodio vigente completo, sin O/R/V antiguos.");
+    }
+
+    @Test
     void el_documento_clasifica_todos_los_estados_del_vocabulario() {
         Map<String, Set<String>> documentados = documentados();
 

@@ -1,24 +1,14 @@
 package com.controllocal.service;
 
 import java.time.OffsetDateTime;
+import com.controllocal.service.soporte.FuentesAsuntos.Origen;
 
 /**
- * Avisos de la campana. Los records espejan el contrato CONGELADO
- * (Dtos.AlertaResponse / AtenderAlertaResponse v1).
- *
- * <p><b>La regla que ordena el modulo</b>: la alerta se ata SIEMPRE a un
- * AGENTE. El agente la ve como propia y su broker supervisor la ve a traves de
- * la supervision, asi que <b>el destinatario lo decide el TIPO, no una
- * columna</b>. No hay ni hace falta un {@code idDestinatario}.
- *
- * <p>Alcance (§6): AGENTE = las suyas; BROKER = las de sus agentes
- * supervisados; ADMIN = todo el tenant. Es el mismo {@code Alcance} del resto
- * del sistema, sin una consulta por rol como hacia la v1.
- *
- * <p>Ademas de leerse, este service es el <b>emisor</b> que usan las nueve
- * bocas del flujo comercial (§4 del contrato): captacion, solicitud,
- * documentos, evaluacion, contrato y comision avisan a traves de
- * {@link #emitir}.
+ * Avisos privados de Core. Conserva la forma pública de ficha y reautoriza
+ * causa, recurso y finalidad antes de contar, entregar o atender. La fuente
+ * identifica al agente original; la ficha C7 identifica al responsable actual.
+ * Administrar una organización no concede operación comercial. R27 utiliza su
+ * seguimiento canónico; los productores C7 deben identificar el hecho real.
  */
 public interface AlertaService {
 
@@ -29,12 +19,12 @@ public interface AlertaService {
     }
 
     /**
-     * Lo que necesita una emision. {@code idRolAgente} es el
-     * {@code persona_rol.id} del agente al que se ata el aviso — que no es
-     * necesariamente quien lo va a leer (ver la regla de arriba).
+     * Emisión interna en la TX del productor. El agente es el responsable al
+     * detectar el hecho; origen identifica una revisión canónica, nunca una
+     * fecha de lectura, una versión irrelevante o un ID recibido sin comprobar.
      */
     record DatosAlerta(String tipo, String severidad, String entidadTipo, Long entidadId,
-                       Long idRolAgente, String mensaje) {
+                       Long idRolAgente, String mensaje,Origen origen) {
     }
 
     Pagina<FichaAlerta> listar(int pagina, int tamano, Actor actor);
@@ -50,18 +40,16 @@ public interface AlertaService {
     boolean atender(long id, Actor actor);
 
     /**
-     * Emite un aviso. La llaman los nueve puntos del flujo comercial DENTRO de
-     * su propia transaccion, asi que si la emision falla cae la operacion
-     * entera — igual que en la v1. Lo unico que se tolera en silencio es la
-     * falta de datos (sin agente o sin entidad no hay a quien avisar).
+     * Emite en la transacción del productor. Un origen incompleto, una fuente
+     * ajena o un fallo técnico no se convierten en éxito sin aviso.
      */
     void emitir(DatosAlerta datos, Actor actor);
 
     /**
-     * Barrido de recontacto vencido: crea una alerta {@code SIN_RESPUESTA} por
-     * cada prospeccion en proceso que lleva 7 dias sin accion y que no tenga ya
-     * una activa. Lo dispara la propia lectura de la campana (§2), porque en la
-     * v1 no hay planificador.
+     * Proyecta las necesidades vencidas autorizadas de CAT-R27 que acreditan
+     * intento fechado sin respuesta. Cada marca material conserva su aviso;
+     * atender, posponer, reasignar o recuperar no fabrica otro. No aplica otro
+     * plazo ni contacta al propietario. Una posposición no es una resolución.
      *
      * @return cuantas alertas nuevas se crearon
      */

@@ -43,10 +43,8 @@ const RESUMEN: IndicadoresResumen = {
   operativo: {
     recontactosVencidos: 1,
     recontactosAlDia: 2,
-    diasPromedioSinSeguimiento: 8,
     visitasPendientes: 1,
     solicitudesSinCierre: 0,
-    conversionProspeccionCaptacion: 40,
   },
   // Esta pantalla no las pinta todavía; viajan en la respuesta desde E1.
   senales: [
@@ -149,6 +147,8 @@ const RESUMEN: IndicadoresResumen = {
 
 function sesion(rol: RolSesion): Sesion {
   return {
+      idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+      modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
     token: 't',
     expiraEnSegundos: 3600,
     rol,
@@ -467,30 +467,6 @@ describe('Indicadores', () => {
     // «Vigilar» no sale: ninguna señal llegó en nivel MEDIO, y un rótulo sobre
     // el vacío no informa.
     expect(columnas).toEqual(['Atender ya', 'Al día', 'Para mirar']);
-  });
-
-  /**
-   * `DEMORA_DE_SEGUIMIENTO` vale **días**, no cosas. Sin decirlo, la columna
-   * sumaría peras con manzanas — el mismo error que hacía decir «17 cosas»
-   * donde había 8 pendientes y 9 días de atraso.
-   */
-  it('la senal que se mide en dias lo dice', async () => {
-    conResumen({
-      senales: [
-        {
-          concepto: 'DEMORA_DE_SEGUIMIENTO',
-          valor: 9,
-          nivelAtencion: 'MEDIO',
-          requiereAtencion: true,
-          prioridad: 5,
-        },
-      ],
-    });
-    await montar('BROKER');
-    const senal = raiz().querySelector('.ind');
-
-    expect(senal?.querySelector('.n')?.textContent?.trim()).toBe('Demora de seguimiento');
-    expect(senal?.querySelector('.c small')?.textContent?.trim()).toBe('días');
   });
 
   // ==================================================================

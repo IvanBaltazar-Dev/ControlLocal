@@ -10,7 +10,7 @@ import java.math.BigDecimal;
  * <p>Que exista «dias hasta contrato» no dice nada sobre «propuestas por visita».
  * Cada media se calcula, se comprueba contra su muestra minima y se publica o se
  * degrada <b>por separado</b>. Agruparlas en un «hay medias / no hay medias»
- * esconderia que dos de las tres no tienen ni un caso.
+ * esconderia que una de ellas no tiene ni un caso.
  *
  * <h2>Cero base no es cero valor</h2>
  *
@@ -20,8 +20,7 @@ import java.math.BigDecimal;
  * reproche por un trabajo que nadie ha registrado.
  */
 public record MediasPropias(Media propuestasPorVisita,
-                            Media diasHastaContrato,
-                            Media plazoRealDeRecontacto) {
+                            Media diasHastaContrato) {
 
     /**
      * Una media con su N.

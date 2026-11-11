@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * <b>Un hallazgo no vuelve a la bandeja</b> (E2.3).
@@ -46,6 +48,9 @@ class HallazgoFueraDelFocoTest {
     /** Lo que el motor de la bandeja no puede volver a conocer. */
     private static final List<String> PROHIBIDO = List.of(
             "CoincidenciaCartera",
+            "MotorMatchingDeterminista",
+            "FuenteCarteraMatching",
+            "CoincidenciaService",
             "HallazgoService",
             "RequerimientoClienteRepository");
 
@@ -55,7 +60,7 @@ class HallazgoFueraDelFocoTest {
         String motor = leer(rutaDelRepo().resolve(MOTOR_DE_LA_BANDEJA));
 
         List<String> hallados = PROHIBIDO.stream()
-                .filter(nombre -> motor.contains("import ") && importa(motor, nombre))
+                .filter(nombre -> importa(motor, nombre))
                 .toList();
 
         if (!hallados.isEmpty()) {
@@ -68,7 +73,7 @@ class HallazgoFueraDelFocoTest {
                     accion, porque la politica las trata como ocasion y lo son.
 
                     Los hallazgos se calculan en `HallazgoService`, con la MISMA evidencia de
-                    `CoincidenciaCartera`, y viajan en `hallazgos[]`. Si hace falta un
+                    `MotorMatchingDeterminista`, y viajan en `hallazgos[]`. Si hace falta un
                     descubrimiento nuevo, se anade alli (E2.3).
                     """.formatted(hallados));
         }
@@ -106,11 +111,25 @@ class HallazgoFueraDelFocoTest {
 
     // ------------------------------------------------------------------
 
-    /** Un import de verdad, no una mencion en un comentario. */
+    @Test void reconoceLasEntradasNuevasSinExigirImportExplicito() {
+        assertTrue(importa("import com.controllocal.service.CoincidenciaService;", "CoincidenciaService"));
+        assertTrue(importa("var m = new com.controllocal.service.matching.MotorMatchingDeterminista();", "MotorMatchingDeterminista"));
+        assertTrue(importa("import com.controllocal.service.matching.*;\nMotorMatchingDeterminista m;", "MotorMatchingDeterminista"));
+    }
+    @Test void unLocalizadorHistoricoEnComentarioNoEsDependencia() {
+        assertFalse(importa("// Antes usaba CoincidenciaCartera.\nint cantidad = 1;", "CoincidenciaCartera"));
+        assertFalse(importa("/* MotorMatchingDeterminista */", "MotorMatchingDeterminista"));
+    }
+    /** Import explícito, uso cualificado o uso con import del paquete; no un comentario histórico. */
     private static boolean importa(String fuente, String nombre) {
-        return fuente.lines()
-                .map(String::trim)
-                .anyMatch(linea -> linea.startsWith("import ") && linea.contains("." + nombre + ";"));
+        String codigo=fuente.lines().filter(linea->!esComentario(linea)).collect(java.util.stream.Collectors.joining("\n"));
+        return codigo.lines().map(String::trim)
+                .anyMatch(linea -> linea.startsWith("import ") && linea.contains("." + nombre + ";")
+                        || linea.contains("com.controllocal.service.matching."+nombre)
+                        || linea.contains("com.controllocal.service."+nombre))
+                || (codigo.contains("import com.controllocal.service.matching.*;")
+                        || codigo.contains("import com.controllocal.service.*;"))
+                && java.util.regex.Pattern.compile("\\b"+java.util.regex.Pattern.quote(nombre)+"\\b").matcher(codigo).find();
     }
 
     private static boolean esComentario(String linea) {

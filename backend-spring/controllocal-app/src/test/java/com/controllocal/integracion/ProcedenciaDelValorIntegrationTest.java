@@ -6,7 +6,6 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
-import com.controllocal.service.PropiedadUniversalService.CondicionesDeEncargo;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
@@ -83,7 +82,34 @@ class ProcedenciaDelValorIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void prepararPertenenciaTecnicaDePrueba(){
+        com.controllocal.integracion.soporte.SemillaDeIdentidadPruebas.aplicar(jdbc);
+        sesiones=null;
+    }
+
     @Autowired PropiedadUniversalService propiedades;
+
+    @Autowired com.controllocal.service.encargo.EncargoService encargos;
+    @Autowired com.controllocal.service.ContextosService contextos;
+    @Autowired com.controllocal.service.CuentaService cuentas;
+    @Autowired com.controllocal.persistence.repositorio.FactorAutenticacionRepository factores;
+    @Autowired com.controllocal.service.soporte.CifradoSecretos cifrado;
+    private com.controllocal.integracion.soporte.SesionesComercialesDePrueba sesiones;
+    private com.controllocal.service.actuacion.ActuacionesService.ContextoSesion sesionDe(Actor actor){
+        if(sesiones==null)sesiones=new com.controllocal.integracion.soporte.SesionesComercialesDePrueba(jdbc,contextos,cuentas,factores,cifrado);
+        return sesiones.de(actor);
+    }
+    private com.controllocal.service.encargo.EncargoService.Ficha editarCondiciones(long encargo,
+            List<ValorAtributo> valores,List<String> retiradas,Actor actor){
+        var observacion=encargos.consultar(encargo,actor);
+        return encargos.editar(encargo,new com.controllocal.service.encargo.EncargoService.Edicion(
+                observacion.version(),null,null,null,null,null,
+                "Corrección de condiciones expresamente declarada por el fixture",valores,retiradas),
+                actor,sesionDe(actor),java.util.UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
+    }
+
     @Autowired com.controllocal.service.soporte.LectorPorAutoridad lector;
     @Autowired com.controllocal.persistence.repositorio.PropiedadRepository fichaFisica;
 
@@ -366,7 +392,7 @@ class ProcedenciaDelValorIntegrationTest {
 
         // La edicion por el MISMO hueco del cable que usa el SPA.
         propiedades.editar(idPropiedad, new ComandoEdicion(null, Procedencia.deLaPantalla(),
-                null, ubicacionConPiso("8"), null, null, null, null), actor);
+                null, ubicacionConPiso("8"), null, null, null, null).conVersion(propiedades.consultar(idPropiedad,actor).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor);
 
         Map<String, Object> edicion = ultima(actor, PROPIEDAD, idPropiedad, "piso");
         assertEquals("EDICION", edicion.get("verbo"));
@@ -396,7 +422,7 @@ class ProcedenciaDelValorIntegrationTest {
         // los dos. Se acepta y se escribe una sola vez.
         propiedades.editar(idPropiedad, new ComandoEdicion(
                 null, Procedencia.deLaPantalla(), null, ubicacionConPiso("5"), null,
-                List.of(new ValorAtributo("piso", "5")), null, null), actor);
+                List.of(new ValorAtributo("piso", "5")), null, null).conVersion(propiedades.consultar(idPropiedad,actor).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor);
         assertEquals("5", pisoDe(idPropiedad));
         assertEquals(1, historia(actor, PROPIEDAD, idPropiedad, "piso").size(),
                 "el mismo valor por dos huecos es UNA escritura, no dos");
@@ -405,7 +431,7 @@ class ProcedenciaDelValorIntegrationTest {
         ReglaNegocioException dosVeces = assertThrows(ReglaNegocioException.class,
                 () -> propiedades.editar(idPropiedad, new ComandoEdicion(
                         null, Procedencia.deLaPantalla(), null, ubicacionConPiso("6"), null,
-                        List.of(new ValorAtributo("piso", "9")), null, null), actor));
+                        List.of(new ValorAtributo("piso", "9")), null, null).conVersion(propiedades.consultar(idPropiedad,actor).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor));
         assertTrue(dosVeces.getMessage().contains("valores distintos"), dosVeces.getMessage());
 
         // Y no escribio ninguna de las dos: el piso sigue siendo el de antes y
@@ -657,14 +683,9 @@ class ProcedenciaDelValorIntegrationTest {
                 conjunto(((Number) equipo.get(0).get("id_rastro")).longValue(), "ESCRITO"));
 
         // EDICION, con su naturaleza propia y el hallazgo del valor anterior.
-        propiedades.editar(idPropiedad, new ComandoEdicion(null, Procedencia.deLaPantalla(),
-                null, null, null, null, null, null,
-                List.of(new CondicionesDeEncargo(idEncargo,
-                        List.of(new ValorAtributo("garantia_meses", "3", null, null,
-                                "DECLARADO", null, null, null),
-                                ValorAtributo.multiple("equipamiento_incluido",
-                                        List.of("COCINA", "LAVADORA"))),
-                        null))), actor);
+        editarCondiciones(idEncargo,List.of(new ValorAtributo("garantia_meses", "3", null, null,
+                "DECLARADO", null, null, null),
+                ValorAtributo.multiple("equipamiento_incluido",List.of("COCINA", "LAVADORA"))),null,actor);
 
         Map<String, Object> edicion = ultima(actor, ENCARGO, idEncargo, "garantia_meses");
         assertEquals("EDICION", edicion.get("verbo"));
@@ -678,10 +699,7 @@ class ProcedenciaDelValorIntegrationTest {
         assertEquals(List.of("COCINA", "LAVADORA"), conjunto(idEquipoEdicion, "ESCRITO"));
 
         // RETIRADA, con lo que se llevo.
-        propiedades.editar(idPropiedad, new ComandoEdicion(null, Procedencia.deLaPantalla(),
-                null, null, null, null, null, null,
-                List.of(new CondicionesDeEncargo(idEncargo, null,
-                        List.of("garantia_meses")))), actor);
+        editarCondiciones(idEncargo,null,List.of("garantia_meses"),actor);
 
         Map<String, Object> retirada = ultima(actor, ENCARGO, idEncargo, "garantia_meses");
         assertEquals("RETIRADA", retirada.get("verbo"));
@@ -892,12 +910,13 @@ class ProcedenciaDelValorIntegrationTest {
     private void editar(Actor actor, long idPropiedad, Procedencia procedencia,
                         List<ValorAtributo> atributos, List<String> aBorrar) {
         propiedades.editar(idPropiedad, new ComandoEdicion(null, procedencia, null, null, null,
-                atributos.isEmpty() ? null : atributos, null, aBorrar), actor);
+                atributos.isEmpty() ? null : atributos, null, aBorrar).conVersion(propiedades.consultar(idPropiedad,actor).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor);
     }
 
     /**
      * Una CASA, que es un tipo al que el catalogo NO le aplica {@code piso}.
-     * Sus dos claves ALT son {@code metraje_total} y {@code dormitorios}.
+     * Declara superficie y dormitorios para este montaje; C2 no los exige
+     * como mínimos universales para guardar o identificar.
      */
     private long registrarCasa(Actor actor, String marca, Ubicacion ubicacion,
                                List<ValorAtributo> extra) {
@@ -923,7 +942,7 @@ class ProcedenciaDelValorIntegrationTest {
     /** El mismo hueco del cable que usa el SPA: `piso` dentro de `ubicacion`. */
     private Ubicacion ubicacionConPiso(String piso) {
         return new Ubicacion("Av. Procedencia " + UUID.randomUUID().toString().substring(0, 8),
-                "Miraflores", null, null, null, null, piso, null, null);
+                "Miraflores", null, null, null, "101", piso, null, null);
     }
 
     private String pisoDe(long idPropiedad) {
@@ -933,7 +952,7 @@ class ProcedenciaDelValorIntegrationTest {
 
     private Ubicacion ubicacion() {
         return new Ubicacion("Av. Procedencia " + UUID.randomUUID().toString().substring(0, 8),
-                "Miraflores", null, null, null, null, null, null, null);
+                "Miraflores", null, null, null, "101", null, null, null);
     }
 
     private long encargoDe(long idPropiedad) {

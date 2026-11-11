@@ -5,8 +5,6 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -60,8 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LinajeDeTodaEscrituraTest {
 
-    private static final JavaClasses CLASES = new ClassFileImporter()
-            .withImportOption(new ImportOption.DoNotIncludeTests())
+    private static final JavaClasses CLASES = ImportacionesDeProducto.importador()
             .importPackages("com.controllocal");
 
     private static final String LINAJE = "com.controllocal.service.soporte.LinajeDelValor";
@@ -146,7 +143,14 @@ class LinajeDeTodaEscrituraTest {
      * aqui es la decision consciente que este gate quiere forzar.
      */
     private static final Set<String> EXIGEN_APLICABILIDAD = Set.of(
-            "convertir", "convertirMultivalor",
+            // `escribirMultivalor` sustituye a `convertirMultivalor` (`N22`,
+            // WP-C): la guarda estaba dentro del metodo que CREA el ancla, asi
+            // que solo corria en el alta -- editar una lista que ya tenia
+            // valores no consultaba el catalogo ni una vez, y por ahi se le
+            // podian quitar opciones a una clave retirada. Ahora se exige al
+            // principio de la escritura, con ancla o sin ella, y el metodo que
+            // solo construia el ancla desaparecio por innecesario.
+            "convertir", "escribirMultivalor",
             "aplicarEstructuralesAlAlta", "escribirAlAlta", "escribirEnEdicion");
 
     private static final String GUARDA_APLICABILIDAD = "exigirQueAplique";

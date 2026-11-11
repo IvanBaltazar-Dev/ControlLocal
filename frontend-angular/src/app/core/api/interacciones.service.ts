@@ -10,10 +10,10 @@ import { PageResponse } from './api.types';
  * cuatro entidades según `contexto`, y las otras tres FK vienen vacías. Desde
  * V7 lo garantiza un CHECK de la base (la v1 solo lo validaba en REST).
  *
- * `personaTipo`/`personaNombre` son el atajo de presentación del cable: quién
- * está al otro lado de la conversación, ya resuelto —cliente o propietario—
- * para no obligar a la pantalla a elegir entre `clienteNombre` y
- * `propietarioNombre` según el contexto.
+ * `personaTipo`/`personaNombre` son el atajo de presentación del cable cuando
+ * no hay snapshot. Si existe `contactoTipo`, `contactoNombre` o
+ * `contactoTelefono`, esos campos describen al interlocutor de ese contacto y
+ * no sustituyen la atribución del cliente o del propietario.
  */
 export interface Interaccion {
   id: number;
@@ -36,6 +36,10 @@ export interface Interaccion {
   propietarioNombre?: string;
   personaTipo?: string;
   personaNombre?: string;
+  /** Snapshot opcional del interlocutor atendido en este contacto. */
+  contactoTipo?: string;
+  contactoNombre?: string;
+  contactoTelefono?: string;
   codigoCaptacion?: string;
   agenteNombre?: string;
 }
@@ -80,6 +84,61 @@ export interface DatosInteraccion {
   resultado?: string;
   observaciones?: string;
   transcripcionNota?: string;
+  /** Snapshot opcional del interlocutor atendido en este contacto. */
+  contactoTipo?: string;
+  contactoNombre?: string;
+  contactoTelefono?: string;
+}
+
+/** Hay snapshot aunque sólo se conozca el rol o el teléfono del interlocutor. */
+export function tieneSnapshotDeContacto(
+  interaccion: Partial<Interaccion> | null | undefined,
+): boolean {
+  if (!interaccion) {
+    return false;
+  }
+  return Boolean(
+    textoNoVacio(interaccion.contactoTipo) ||
+    textoNoVacio(interaccion.contactoNombre) ||
+    textoNoVacio(interaccion.contactoTelefono),
+  );
+}
+
+/** Nombre del interlocutor sin atribuir un contacto parcial al propietario. */
+export function nombreDelInterlocutor(
+  interaccion: Partial<Interaccion> | null | undefined,
+): string {
+  if (tieneSnapshotDeContacto(interaccion)) {
+    return textoNoVacio(interaccion?.contactoNombre) ?? 'FALTANTE';
+  }
+  return (
+    textoNoVacio(interaccion?.personaNombre) ??
+    textoNoVacio(interaccion?.clienteNombre) ??
+    textoNoVacio(interaccion?.propietarioNombre) ??
+    'FALTANTE'
+  );
+}
+
+/** Rol del snapshot; si no se declaró, el hueco se muestra como FALTANTE. */
+export function tipoDelInterlocutor(interaccion: Partial<Interaccion> | null | undefined): string {
+  if (tieneSnapshotDeContacto(interaccion)) {
+    return textoNoVacio(interaccion?.contactoTipo) ?? 'FALTANTE';
+  }
+  return textoNoVacio(interaccion?.personaTipo) ?? 'FALTANTE';
+}
+
+/** Teléfono del snapshot, si fue declarado. */
+export function telefonoDelInterlocutor(
+  interaccion: Partial<Interaccion> | null | undefined,
+): string | undefined {
+  return tieneSnapshotDeContacto(interaccion)
+    ? textoNoVacio(interaccion?.contactoTelefono)
+    : undefined;
+}
+
+function textoNoVacio(valor: string | undefined): string | undefined {
+  const limpio = valor?.trim();
+  return limpio || undefined;
 }
 
 const RECURSO = 'interacciones';

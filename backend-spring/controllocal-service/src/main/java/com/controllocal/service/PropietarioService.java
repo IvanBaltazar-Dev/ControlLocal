@@ -13,11 +13,12 @@ import java.time.LocalDateTime;
  * y en el cable {@code id} = {@code persona_rol.id} del rol PROPIETARIO — el
  * mismo id con el que {@code /locales} referencia a su dueno.
  *
- * <p>Alcance (§ del cable v1): <b>ADMIN y AGENTE ven el catalogo entero</b>; el
+ * <p>Alcance (§ del cable v1, conciliado C1): <b>AGENTE ve el catalogo entero</b>; el
  * BROKER solo los duenos de locales que su equipo prospecta o capta, mas los de
  * las captaciones que el revisa. Es la misma forma que en clientes —el unico rol
  * acotado es el broker—, pero por un camino distinto: alli via oportunidades,
- * aqui via propiedades.
+ * aqui via propiedades. CAT-R19 excluye a TENANT_ADMIN de este catalogo comercial;
+ * el gobierno usa su padron y proyecciones minimas, sin adquirir cartera.
  *
  * <p>No hay baja fisica: {@code desactivar} deja la persona en estado {@code I}.
  */
@@ -66,6 +67,8 @@ public interface PropietarioService {
     ResumenPropietarios resumen(FiltrosPropietario filtros, Actor actor);
 
     FichaPropietario obtener(long id, Actor actor);
+    /** Identidad mínima con el mismo alcance del lector directo, sin datos personales. */
+    java.util.Optional<Long> personaLegible(long id,Actor actor);
 
     FichaPropietario registrar(DatosPropietario datos, Actor actor);
 

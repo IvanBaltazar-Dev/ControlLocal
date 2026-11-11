@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
@@ -176,6 +177,19 @@ public class CatalogoAtributo {
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
 
+    @Version
+    @Column(name = "version_definicion", nullable = false)
+    private long versionDefinicion;
+
+    @Column(name = "jurisdiccion", length = 160)
+    private String jurisdiccion;
+
+    @Column(name = "version_fuente", length = 100)
+    private String versionFuente;
+
+    @Column(name = "fuente_definicion")
+    private String fuenteDefinicion;
+
     /**
      * <b>De quien es esta clave</b> (Corte 0C, V73). Es la pregunta anterior a
      * la autoridad: primero de quien, luego donde.
@@ -264,6 +278,36 @@ public class CatalogoAtributo {
 
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
+
+    /**
+     * <b>Cuando dejo de preguntarse</b> (V91). {@code null} en una clave viva
+     * y tambien en las que se retiraron <b>antes</b> de V91: de aquellas la
+     * fecha no consta en ninguna columna y no se deduce.
+     *
+     * <p>Lo estampa el trigger {@code tg_catalogo_fecha_de_retiro}, no la mano
+     * de quien retira: retirar una clave es un {@code UPDATE ... SET activo =
+     * false} de una linea, y la linea que se olvide de la fecha no la ve nadie.
+     *
+     * <p>No es {@code insertable = false}: una migracion puede sembrar una
+     * clave ya retirada con su fecha. Lo que no puede es retirarla sin fecha.
+     */
+    @Column(name = "fecha_retiro")
+    private OffsetDateTime fechaRetiro;
+
+    /**
+     * <b>La clave que ocupo su sitio</b>, si la hubo (V91). {@code null}
+     * significa que se retiro sin sustituta — que es distinto de «no se sabe»:
+     * la sustituta se declara al retirar, y una retirada anterior a V91 tampoco
+     * la declara.
+     *
+     * <p>Sin FK a proposito: la unicidad de {@code clave} es por
+     * {@code (organizacion, clave)}, asi que una FK exigiria decidir <b>de que
+     * ambito</b> es la sustituta y una clave de tenant no puede sustituir a una
+     * del sistema para las demas organizaciones. Quien la lee publica el rotulo
+     * si puede resolverlo y la clave tal cual si no: no se inventa un nombre.
+     */
+    @Column(name = "sustituida_por", length = 60)
+    private String sustituidaPor;
 
     /**
      * A que tipos de propiedad aplica, y en cuales es obligatorio. Coleccion de
@@ -447,6 +491,8 @@ public class CatalogoAtributo {
         return valorMinimo;
     }
 
+    public void setValorMinimo(java.math.BigDecimal valorMinimo) { this.valorMinimo = valorMinimo; }
+
     public java.math.BigDecimal getValorMaximo() {
         return valorMaximo;
     }
@@ -559,12 +605,38 @@ public class CatalogoAtributo {
         return activo;
     }
 
+    public long getVersionDefinicion() { return versionDefinicion; }
+    public String getJurisdiccion() { return jurisdiccion; }
+    public void setJurisdiccion(String jurisdiccion) { this.jurisdiccion = jurisdiccion; }
+    public String getVersionFuente() { return versionFuente; }
+    public void setVersionFuente(String versionFuente) { this.versionFuente = versionFuente; }
+    public String getFuenteDefinicion() { return fuenteDefinicion; }
+    public void setFuenteDefinicion(String fuenteDefinicion) { this.fuenteDefinicion = fuenteDefinicion; }
+
     public void setActivo(boolean activo) {
         this.activo = activo;
     }
 
     public OffsetDateTime getFechaCreacion() {
         return fechaCreacion;
+    }
+
+    /** Cuando se retiro, o {@code null} si sigue viva o la fecha no consta. */
+    public OffsetDateTime getFechaRetiro() {
+        return fechaRetiro;
+    }
+
+    public void setFechaRetiro(OffsetDateTime fechaRetiro) {
+        this.fechaRetiro = fechaRetiro;
+    }
+
+    /** La clave que ocupo su sitio, o {@code null} si se retiro sin sustituta. */
+    public String getSustituidaPor() {
+        return sustituidaPor;
+    }
+
+    public void setSustituidaPor(String sustituidaPor) {
+        this.sustituidaPor = sustituidaPor;
     }
 
     /** El vocabulario declarado, ya ordenado y sin las opciones retiradas. */

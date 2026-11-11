@@ -49,8 +49,8 @@ import java.util.Map;
  *
  * <h2>El mismo motor, sin excepciones</h2>
  * Pasa por la <b>misma</b> {@link PoliticaDeDespacho} de E2.2 y produce la
- * <b>misma</b> {@link Interpretacion} de E2.4. Si el broker necesitara pesos
- * distintos, se añadiría un criterio a la política — no una política nueva.
+ * <b>misma</b> {@link Interpretacion} de E2.4. Catálogo16/D5 sustituye los
+ * pesos anteriores por bandas y consultas explícitas comunes de Core.
  *
  * <h2>Y nunca comparte identidad con el agente</h2>
  * D-E2-1 §7.1 lo aprendió a golpes: con un solo id, el mismo encargo salía dos
@@ -64,18 +64,19 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
     private final CaptacionRepository captaciones;
     private final SolicitudAlquilerRepository solicitudes;
     private final Alcances alcances;
+    private final com.controllocal.service.actividad.ContextosDeActividad contexto;
 
     public FocoDelBrokerServiceImpl(CaptacionRepository captaciones,
                                     SolicitudAlquilerRepository solicitudes,
-                                    Alcances alcances) {
+                                    Alcances alcances,com.controllocal.service.actividad.ContextosDeActividad contexto) {
         this.captaciones = captaciones;
         this.solicitudes = solicitudes;
-        this.alcances = alcances;
+        this.alcances = alcances;this.contexto=contexto;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AsuntoDelBroker> de(Actor actor) {
+    public List<AsuntoDelBroker> de(PoliticaDeDespacho.Consulta consulta,Actor actor) {
         if (!actor.esBroker()) {
             // El TENANT_ADMIN no tiene asuntos, y es deliberado: desde D-F4-5 no
             // decide ninguna operacion comercial. Un Inicio con asuntos para
@@ -87,14 +88,15 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
         if (alcance.vacio()) {
             return List.of();
         }
-        LocalDate hoy = LocalDate.now();
+        contexto.exigirOperador(actor);
+        LocalDate hoy = contexto.hoy();
         List<AsuntoDelBroker> asuntos = new ArrayList<>();
 
         for (CandidatoTarea c : captaciones.porRevisarDelBroker(
                 alcance.idOrganizacion(), alcance.global(), alcance.paramRoles())) {
             asuntos.add(asunto(CAPTACION_POR_REVISAR, "CAPTACION", c, hoy,
                     "Falta tu decision sobre la captacion",
-                    "El local no se puede ofrecer hasta que la apruebes",
+                    null, // Presentar una versión no demuestra por sí solo un bloqueo de la oferta vigente.
                     "captaciones/pendientes"));
         }
         // Las solicitudes producen UN asunto cada una, y sus documentos deciden
@@ -125,25 +127,8 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
                         "solicitudes/revisar"));
             }
         }
-        for (CandidatoTarea c : captaciones.comisionesSinCobrarDelBroker(
-                alcance.idOrganizacion(), alcance.global(), alcance.paramRoles())) {
-            asuntos.add(asunto(COMISION_SIN_COBRAR, "CONTRATO_ALQUILER", c, hoy,
-                    "Falta registrar el cobro de la comision",
-                    null,
-                    "comisiones"));
-        }
-
-        // La MISMA politica de despacho del agente. Sin orden previo, el criterio
-        // 6 desempata por id y dos lecturas seguidas devuelven lo mismo.
-        return PoliticaDeDespacho.despachar(asuntos,
-                a -> new PoliticaDeDespacho.Asunto(
-                        a.entidadId() == null ? 0L : a.entidadId(),
-                        true,                       // todo lo que llega aqui es suyo
-                        null,                       // ningun disparador trae plazo propio
-                        false,                      // la ocasion es del agente
-                        a.freno() != null,          // desbloquea cuando algo queda parado
-                        a.diasEsperando()),
-                List.of());
+        // Catálogo16: orden explícito por banda, precisión y detección original.
+        return PoliticaDeDespacho.despachar(asuntos,AsuntoDelBroker::fuenteOrden,consulta,contexto.ahora());
     }
 
     // ------------------------------------------------------------------
@@ -185,13 +170,13 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
      * comisión sin cobrar es dinero que espera, pero no deja ningún proceso
      * parado. Inventarle una consecuencia convertiría la marca roja en ruido.
      */
-    private static AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
+    private AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
                                           LocalDate hoy, String falta, String freno,
                                           String destino) {
         return asunto(tipo, entidadTipo, c, hoy, falta, freno, destino, null);
     }
 
-    private static AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
+    private AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
                                           LocalDate hoy, String falta, String freno,
                                           String destino, Avance avance) {
         int dias = c.getFechaPlazo() == null ? 0
@@ -207,6 +192,8 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
         }
 
         LadoDeLaOperacion.Ubicacion ubicacion = LadoDeLaOperacion.de(entidadTipo);
+        var fuente=new PoliticaDeDespacho.Asunto(idDelBroker(entidadTipo,c.getEntidadId()),entidadTipo,c.getEntidadId(),true,
+                null,null,c.getDetectadoEn()==null?null:c.getDetectadoEn().toInstant(),false,null,false,false);
         return new AsuntoDelBroker(
                 idDelBroker(entidadTipo, c.getEntidadId()),
                 tipo, entidadTipo, c.getEntidadId(), c.getEntidadCodigo(),
@@ -217,7 +204,7 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
                         // Sin expediente todavia no hay cuatro renglones que
                         // relacionar, y una sintesis de uno solo seria un eco
                         // (E2.4). Se respeta el null.
-                        InterpretacionDelAsunto.sintetizar(List.of())));
+                        InterpretacionDelAsunto.sintetizar(List.of())),fuente,PoliticaDeDespacho.clasificar(fuente,contexto.ahora()));
     }
 
     /**

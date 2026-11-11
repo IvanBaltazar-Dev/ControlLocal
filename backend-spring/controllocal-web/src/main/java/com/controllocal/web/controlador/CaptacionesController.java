@@ -2,19 +2,14 @@ package com.controllocal.web.controlador;
 
 import com.controllocal.service.CaptacionService;
 import com.controllocal.service.CierreVentaService;
-import com.controllocal.service.CoincidenciaService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.web.dto.OfertaDtos.CierreVentaRequest;
 import com.controllocal.web.dto.OfertaDtos.CierreVentaResponse;
 import com.controllocal.web.dto.CandidatoAgenteResponse;
-import com.controllocal.web.dto.CaptacionRequest;
 import com.controllocal.web.dto.CaptacionResponse;
-import com.controllocal.web.dto.CierreRequest;
-import com.controllocal.web.dto.CoincidenciasResponse;
-import com.controllocal.web.dto.DecisionRequest;
 import com.controllocal.web.dto.PropiedadEquipoResponse;
-import com.controllocal.web.dto.ReasignacionRequest;
+import com.controllocal.web.dto.EncargoReasignableResponse;
+import com.controllocal.web.dto.ResultadoReasignacionResponse;
 import com.controllocal.web.dto.ResumenEquipoResponse;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.seguridad.SesionActual;
@@ -24,7 +19,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.soporte.Procedencia;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,7 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Contrato CONGELADO del CaptacionesRest Jakarta. El alcance por rol y las
  * guardas de estado viven en el service; aqui el gate por rol: el AGENTE
- * registra/edita lo suyo, el BROKER/ADMIN decide/reasigna/cierra. Las rutas
+ * registra/edita lo suyo, el BROKER decide/cierra; la reasignación conserva
+ * la puerta de gobierno BROKER/TENANT_ADMIN y su proyección específica. Las rutas
  * literales (pendientes, reasignables, codigo) ganan a {id} por especificidad.
  * {@code {idOrCodigo}/coincidencias} llego con F3. Los cuatro PDF Jasper de la
  * v1 (contrato de exclusividad, ficha de captacion, ficha de propiedad y el
@@ -46,14 +44,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class CaptacionesController {
 
     private final CaptacionService captaciones;
-    private final CoincidenciaService coincidencias;
     /** El cierre de una VENTA (WP-A). Vive aparte del ciclo del encargo. */
     private final CierreVentaService cierresDeVenta;
 
-    public CaptacionesController(CaptacionService captaciones, CoincidenciaService coincidencias,
+    public CaptacionesController(CaptacionService captaciones,
                                  CierreVentaService cierresDeVenta) {
         this.captaciones = captaciones;
-        this.coincidencias = coincidencias;
         this.cierresDeVenta = cierresDeVenta;
     }
 
@@ -69,7 +65,7 @@ public class CaptacionesController {
     }
 
     @GetMapping("pendientes")
-    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @PreAuthorize("hasRole('BROKER')")
     public PageResponse<CaptacionResponse> pendientes(@RequestParam(defaultValue = "1") int pagina,
                                                       @RequestParam(defaultValue = "10") int tamano,
                                                       @RequestParam(required = false) String estado,
@@ -86,11 +82,10 @@ public class CaptacionesController {
      * el filtro, el orden, la paginacion y el conteo bajan a SQL — misma
      * convencion que {@code /locales} (docs/ai/contrato-listados-paginados.md).
      *
-     * <p>El alcance es el mismo del resto del recurso: el BROKER ve los
-     * inmuebles de sus supervisados y el ADMIN los del tenant.
+     * <p>El BROKER ve los inmuebles de sus supervisados en su actuación comercial.
      */
     @GetMapping("propiedades-equipo")
-    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @PreAuthorize("hasRole('BROKER')")
     public PageResponse<PropiedadEquipoResponse> propiedadesEquipo(
             @RequestParam(defaultValue = "1") int pagina,
             @RequestParam(defaultValue = "10") int tamano,
@@ -112,7 +107,7 @@ public class CaptacionesController {
      * proposito: el resumen es lo que ese filtro acota.
      */
     @GetMapping("propiedades-equipo/resumen")
-    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @PreAuthorize("hasRole('BROKER')")
     public ResumenEquipoResponse resumenPropiedadesEquipo(
             @RequestParam(required = false) String texto) {
         var actor = SesionActual.actor();
@@ -122,10 +117,12 @@ public class CaptacionesController {
 
     @GetMapping("reasignables")
     @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
-    public PageResponse<CaptacionResponse> reasignables(@RequestParam(defaultValue = "1") int pagina,
+    public PageResponse<EncargoReasignableResponse> reasignables(@RequestParam(defaultValue = "1") int pagina,
                                                         @RequestParam(defaultValue = "10") int tamano,
                                                         @RequestParam(required = false) String q) {
-        return pagina(captaciones.reasignables(pagina, tamano, q, SesionActual.actor()), pagina, tamano);
+        var resultado = captaciones.reasignables(pagina, tamano, q, SesionActual.actor());
+        return new PageResponse<>(resultado.items().stream().map(EncargoReasignableResponse::desde).toList(),
+                resultado.total(), Math.max(1, pagina), Math.max(1, Math.min(100, tamano)));
     }
 
     @GetMapping("{id}")
@@ -142,40 +139,6 @@ public class CaptacionesController {
      * Captacion -> clientes compatibles, accionable ("Proponer"). Acepta id o
      * codigo en la misma ruta, como el cable v1.
      */
-    @GetMapping("{idOrCodigo}/coincidencias")
-    public CoincidenciasResponse coincidencias(@PathVariable String idOrCodigo,
-                                               @RequestParam(required = false) Integer page,
-                                               @RequestParam(required = false) Integer pagina,
-                                               @RequestParam(name = "page_size", required = false) Integer pageSize,
-                                               @RequestParam(required = false) Integer tamano) {
-        return CoincidenciasResponse.desde(coincidencias.clientesParaCaptacion(idOrCodigo,
-                ClientesController.paginaSolicitada(page, pagina),
-                ClientesController.tamanoSolicitado(pageSize, tamano), SesionActual.actor()));
-    }
-
-    @PostMapping
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<CaptacionResponse> registrar(@RequestBody(required = false) CaptacionRequest dto) {
-        CaptacionResponse creada = CaptacionResponse.desde(
-                captaciones.registrar(dto == null ? null : dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
-    }
-
-    @PutMapping("{id}")
-    @PreAuthorize("hasRole('AGENTE')")
-    public CaptacionResponse actualizar(@PathVariable long id,
-                                        @RequestBody(required = false) CaptacionRequest dto) {
-        return CaptacionResponse.desde(
-                captaciones.actualizar(id, dto == null ? null : dto.aDatos(), SesionActual.actor()));
-    }
-
-    @PostMapping("{id}/decision")
-    @PreAuthorize("hasRole('BROKER')")
-    public CaptacionResponse decidir(@PathVariable long id, @RequestBody(required = false) DecisionRequest dto) {
-        String accion = dto != null ? dto.accion() : null;
-        String observacion = dto != null ? dto.observacion() : null;
-        return CaptacionResponse.desde(captaciones.decidir(id, accion, observacion, SesionActual.actor()));
-    }
 
     /**
      * <b>El traspaso de la autoridad del ENCARGO</b> (D-S0-17 fila 6, D-P0-7 y
@@ -195,15 +158,15 @@ public class CaptacionesController {
      * traspaso de una propiedad) y que la escritura es un compare-and-set sobre
      * el agente observado.
      */
+    @com.controllocal.web.capacidades.CapacidadReconocida("reasignar_encargo")
     @PostMapping("{id}/reasignar")
     @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
-    public CaptacionResponse reasignar(@PathVariable long id,
-                                       @RequestBody(required = false) ReasignacionRequest dto) {
-        if (dto == null) {
-            throw new ReglaNegocioException("El agente destino es obligatorio.");
-        }
-        return CaptacionResponse.desde(captaciones.reasignar(id, dto.destino(), dto.motivo(),
-                dto.observado(), SesionActual.actor()));
+    public ResultadoReasignacionResponse reasignar(@PathVariable long id,
+            @RequestBody CaptacionService.DatosReasignacion datos,
+            @RequestHeader("Idempotency-Key") String clave,
+            @RequestHeader(value="X-Origen",required=false) String origen) {
+        return ResultadoReasignacionResponse.desde(captaciones.reasignar(id,datos,SesionActual.actor(),
+                ContextoSesion.de(SesionActual.sesion().acceso()),clave,Procedencia.deCabecera(origen)));
     }
 
     /**
@@ -227,6 +190,7 @@ public class CaptacionesController {
      * <p>Paginado y buscable en el servidor por la misma razon que el de la
      * propiedad. <b>Y no autoriza nada</b>: el POST revalida.
      */
+    @com.controllocal.web.capacidades.CapacidadReconocida("candidatos_reasignacion_encargo")
     @GetMapping("{id}/reasignacion/candidatos")
     @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
     public PageResponse<CandidatoAgenteResponse> candidatosAReasignacion(
@@ -244,32 +208,6 @@ public class CaptacionesController {
                 resultado.items().stream().map(CandidatoAgenteResponse::desde).toList(),
                 resultado.total(), Math.max(1, paginaSolicitada),
                 Math.max(1, Math.min(100, tamanoSolicitado)));
-    }
-
-    @PostMapping("{id}/cierre")
-    @PreAuthorize("hasRole('BROKER')")
-    public CaptacionResponse cerrar(@PathVariable long id, @RequestBody(required = false) CierreRequest dto) {
-        return CaptacionResponse.desde(
-                captaciones.cerrar(id, dto != null ? dto.motivo() : null, SesionActual.actor()));
-    }
-
-    /**
-     * <b>El cierre de una VENTA</b> (WP-A, D-N-3).
-     *
-     * <p>Es el gemelo de {@code POST /contratos} por el lado de la compraventa,
-     * y lleva su misma banda —AGENTE— por la misma razon: <b>el broker decide,
-     * el agente registra</b>, y un cierre es el registro de un hecho consumado.
-     * No es el {@code POST {id}/cierre} de arriba: aquel es la decision del
-     * bróker de sacar un encargo de cartera, este es la firma de una venta con
-     * su importe, su comprador y su oferta aceptada.
-     */
-    @PostMapping("{id}/cierre-venta")
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<CierreVentaResponse> cerrarVenta(
-            @PathVariable long id, @RequestBody(required = false) CierreVentaRequest dto) {
-        CierreVentaResponse creado = CierreVentaResponse.desde(cierresDeVenta.cerrar(id,
-                dto == null ? null : dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
     }
 
     /** El cierre de venta ya registrado de este encargo; 404 si no hay ninguno. */

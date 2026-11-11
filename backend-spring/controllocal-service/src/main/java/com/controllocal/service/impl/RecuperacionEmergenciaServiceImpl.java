@@ -2,7 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comun.EstadosDominio.Codigos;
 import com.controllocal.domain.organizacion.UsuarioOrganizacion;
-import com.controllocal.domain.persona.CredencialUsuario;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.seguridad.AccionRecuperacion;
 import com.controllocal.domain.seguridad.AprobacionRecuperacion;
@@ -10,7 +10,7 @@ import com.controllocal.domain.seguridad.ConcesionRecuperacion;
 import com.controllocal.persistence.repositorio.AccionRecuperacionRepository;
 import com.controllocal.persistence.repositorio.AprobacionRecuperacionRepository;
 import com.controllocal.persistence.repositorio.ConcesionRecuperacionRepository;
-import com.controllocal.persistence.repositorio.CredencialUsuarioRepository;
+import com.controllocal.persistence.repositorio.CuentaAccesoRepository;
 import com.controllocal.persistence.repositorio.PersonaRepository;
 import com.controllocal.persistence.repositorio.UsuarioOrganizacionRepository;
 import com.controllocal.service.MfaService;
@@ -52,7 +52,7 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
     private final ConcesionRecuperacionRepository concesiones;
     private final AprobacionRecuperacionRepository aprobaciones;
     private final AccionRecuperacionRepository acciones;
-    private final CredencialUsuarioRepository credenciales;
+    private final CuentaAccesoRepository cuentas;
     private final UsuarioOrganizacionRepository membresias;
     private final PersonaRepository personas;
     private final CustodiosConfigurados custodios;
@@ -67,7 +67,7 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
             ConcesionRecuperacionRepository concesiones,
             AprobacionRecuperacionRepository aprobaciones,
             AccionRecuperacionRepository acciones,
-            CredencialUsuarioRepository credenciales,
+            CuentaAccesoRepository cuentas,
             UsuarioOrganizacionRepository membresias,
             PersonaRepository personas,
             CustodiosConfigurados custodios,
@@ -80,7 +80,7 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
         this.concesiones = concesiones;
         this.aprobaciones = aprobaciones;
         this.acciones = acciones;
-        this.credenciales = credenciales;
+        this.cuentas = cuentas;
         this.membresias = membresias;
         this.personas = personas;
         this.custodios = custodios;
@@ -117,6 +117,7 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
                 .filter(p -> p.getOrganizacionId() != null
                         && p.getOrganizacionId() == emision.idOrganizacion())
                 .orElseThrow(() -> new NoEncontradoException("Persona"));
+        cuentaActual(emision.idOrganizacion(),objetivo.getId());
 
         ConcesionRecuperacion concesion = new ConcesionRecuperacion();
         concesion.setOrganizacionId(emision.idOrganizacion());
@@ -318,7 +319,7 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
         long persona = concesion.getIdPersonaObjetivo();
         return switch (tipo) {
             case AccionRecuperacion.REACTIVAR_CUENTA -> reactivar(organizacion, persona);
-            case AccionRecuperacion.REVOCAR_MFA -> mfa.revocarPorRecuperacion(organizacion, persona);
+            case AccionRecuperacion.REVOCAR_MFA -> mfa.revocarPorRecuperacion(cuentaActual(organizacion,persona));
             case AccionRecuperacion.REPONER_MEMBRESIA -> reponerMembresia(organizacion, persona);
             default -> throw new ReglaNegocioException("Accion desconocida.");
         };
@@ -330,14 +331,24 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
      * una emergencia.
      */
     private boolean reactivar(long idOrganizacion, long idPersona) {
-        CredencialUsuario cuenta = credenciales.buscarPorPersona(idOrganizacion, idPersona)
-                .orElseThrow(() -> new NoEncontradoException("Usuario"));
-        if (Codigos.ActivoInactivo.ACTIVO.equals(cuenta.getEstadoAdministrativo())) {
+        var ids=membresias.cuentasActivasDePersona(idOrganizacion,idPersona);
+        if(ids.size()!=1) throw new NoEncontradoException("Usuario");
+        CuentaAcceso cuenta=cuentas.bloquearCambioAcceso(ids.getFirst())
+                .orElseThrow(()->new NoEncontradoException("Usuario"));
+        if (Codigos.ActivoInactivo.ACTIVO.equals(cuenta.getEstado())) {
             return false;
         }
-        cuenta.setEstadoAdministrativo(Codigos.ActivoInactivo.ACTIVO);
-        credenciales.save(cuenta);
+        if(membresias.contarOtrasPertenenciasActivas(cuenta.getId(),idOrganizacion)>0)
+            throw new ReglaNegocioException("La concesion local no modifica el acceso global de otros espacios.");
+        cuenta.setEstado(Codigos.ActivoInactivo.ACTIVO);
+        cuentas.save(cuenta);
         return true;
+    }
+
+    private long cuentaActual(long org,long persona) {
+        var ids=membresias.cuentasActivasDePersona(org,persona);
+        if(ids.size()!=1)throw new NoEncontradoException("Cuenta de miembro actual");
+        return ids.getFirst();
     }
 
     /**
@@ -346,19 +357,19 @@ public class RecuperacionEmergenciaServiceImpl implements RecuperacionEmergencia
      * gobierno, no puebla el tenant.
      */
     private boolean reponerMembresia(long idOrganizacion, long idPersona) {
-        CredencialUsuario cuenta = credenciales.buscarPorPersona(idOrganizacion, idPersona)
-                .orElseThrow(() -> new NoEncontradoException("Usuario"));
+        var ids=membresias.cuentasActivasDePersona(idOrganizacion,idPersona);
+        if(ids.size()!=1) throw new NoEncontradoException("Usuario");
         UsuarioOrganizacion membresia = membresias
-                .buscarActivaPorCuenta(idOrganizacion, cuenta.getId())
+                .buscarActivaPorCuenta(idOrganizacion, ids.getFirst())
                 .orElseThrow(() -> new ReglaNegocioException(
                         "Esa persona no tiene membresia activa en la organizacion. La concesion "
                                 + "repone gobierno, no crea cuentas."));
-        if (UsuarioOrganizacion.ROL_TENANT_ADMIN.equals(membresia.getRol())) {
+        if (membresia.isAdministrar()) {
             return false;
         }
         Persona persona = personas.findById(idPersona)
                 .orElseThrow(() -> new NoEncontradoException("Persona"));
-        usuarios.concederGobierno(idOrganizacion, persona, membresia);
+        usuarios.concederGobierno(idOrganizacion, persona, membresia, java.time.LocalDate.now(java.time.ZoneId.of("America/Lima")));
         return true;
     }
 

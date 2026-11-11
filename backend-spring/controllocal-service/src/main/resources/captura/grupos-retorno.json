@@ -1,0 +1,224 @@
+[
+  {
+    "codigo": "CU01",
+    "resultado": "PREPARACION_CONTACTO",
+    "claves": [
+      "codigo",
+      "descripcion",
+      "direccion",
+      "distrito",
+      "interiorUnidad",
+      "latitud",
+      "longitud",
+      "nombreEdificioGaleria",
+      "referenciaInterna",
+      "titulares",
+      "torre_bloque",
+      "zonaUrbanizacion"
+    ]
+  },
+  {
+    "codigo": "CU02",
+    "resultado": "FICHA_COMPARATIVA",
+    "claves": [
+      "antiguedad_anios",
+      "area_terreno",
+      "estado_conservacion",
+      "etapa_entrega",
+      "metraje_arrendable",
+      "metraje_construido",
+      "metraje_total"
+    ]
+  },
+  {
+    "codigo": "CU03",
+    "resultado": "DISTRIBUCION_OFRECIDA",
+    "claves": [
+      "ambientes",
+      "bano_servicio",
+      "banos",
+      "cuarto_servicio",
+      "dormitorios",
+      "estudio",
+      "lavanderia",
+      "medios_banos",
+      "niveles_internos",
+      "pisos_edificacion",
+      "tipo_cocina",
+      "tipologia"
+    ]
+  },
+  {
+    "codigo": "CU04",
+    "resultado": "RECORRIDO_VISITA",
+    "claves": [
+      "accesibilidad_movilidad_reducida",
+      "ascensores",
+      "en_condominio",
+      "horario_acceso_edificio",
+      "mascotas_reglamento",
+      "piso",
+      "recepcion_edificio",
+      "restriccion_reglamento_interno",
+      "unidades_por_piso",
+      "vigilancia"
+    ]
+  },
+  {
+    "codigo": "CU05",
+    "resultado": "INCLUIDOS_OFERTA",
+    "claves": [
+      "amoblado",
+      "area_jardin_patio",
+      "area_terraza",
+      "areas_comunes",
+      "balcon",
+      "deposito_area",
+      "depositos",
+      "estacionamientos",
+      "jardin",
+      "nivel_implementacion",
+      "patio",
+      "piscina",
+      "terraza",
+      "tipo_estacionamiento"
+    ]
+  },
+  {
+    "codigo": "CU06",
+    "resultado": "UBICACION_COMERCIAL",
+    "claves": [
+      "en_esquina",
+      "estado_via",
+      "posicion_en_manzana",
+      "tipo_via_acceso",
+      "via_de_acceso",
+      "vista"
+    ]
+  },
+  {
+    "codigo": "CU07",
+    "resultado": "DESGLOSE_MENSUAL",
+    "claves": [
+      "cuota_mantenimiento"
+    ]
+  },
+  {
+    "codigo": "CU08",
+    "resultado": "CONDICIONES_ENTREGA",
+    "claves": [
+      "agua_caliente",
+      "agua_desague",
+      "aire_acondicionado",
+      "carga_electrica_kw",
+      "energia_electrica",
+      "extraccion_humos",
+      "fibra_optica",
+      "gas",
+      "medidor_servicios",
+      "respaldo_electrico",
+      "sistema_contra_incendios",
+      "suministro_electrico"
+    ]
+  },
+  {
+    "codigo": "CU09",
+    "resultado": "USO_OFRECIDO",
+    "claves": [
+      "apto_licencia_funcionamiento",
+      "rubro_permitido",
+      "uso",
+      "usos_compatibles",
+      "zonificacion"
+    ]
+  },
+  {
+    "codigo": "CU10",
+    "resultado": "PREPARACION_DOCUMENTAL",
+    "claves": [
+      "area_segun_partida",
+      "cargas_gravamenes",
+      "declaratoria_fabrica",
+      "independizado",
+      "oficina_registral",
+      "partida_registral",
+      "situacion_registral"
+    ]
+  },
+  {
+    "codigo": "CU11",
+    "resultado": "COMPATIBILIDAD_ACCESO",
+    "claves": [
+      "acceso_vehiculo_maximo",
+      "alto_puerta_ingreso",
+      "altura_libre",
+      "ancho_puerta_ingreso",
+      "fondo",
+      "frente",
+      "profundidad_patio_maniobras",
+      "puertas_ingreso",
+      "tipo_acceso"
+    ]
+  },
+  {
+    "codigo": "CU12",
+    "resultado": "CONDICIONES_LOGISTICAS",
+    "claves": [
+      "area_libre",
+      "area_oficinas",
+      "balanza_camionera",
+      "capacidad_portante_piso",
+      "condicion_almacenamiento",
+      "estacionamientos_camiones",
+      "luz_entre_columnas",
+      "muelles_carga",
+      "posiciones_pallet",
+      "tipo_muelle",
+      "tipo_piso"
+    ]
+  },
+  {
+    "codigo": "CU13",
+    "resultado": "CAPACIDAD_ACREDITADA",
+    "claves": [
+      "aforo_itse",
+      "certificacion_sostenible",
+      "certificado_itse",
+      "clase_edificio"
+    ]
+  },
+  {
+    "codigo": "CU14",
+    "resultado": "CONFIGURACION_OFICINA",
+    "claves": [
+      "banos_comunes_piso",
+      "posiciones_trabajo",
+      "salas_reunion"
+    ]
+  },
+  {
+    "codigo": "CU15",
+    "resultado": "POTENCIAL_DOCUMENTADO",
+    "claves": [
+      "altura_normativa_pisos",
+      "area_libre_minima",
+      "cercado",
+      "certificado_parametros_vigente",
+      "coeficiente_edificacion",
+      "condicion_terreno",
+      "edificacion_existente",
+      "lote_minimo_normativo",
+      "restriccion_arqueologica",
+      "retiro_municipal",
+      "topografia",
+      "zona_de_riesgo"
+    ]
+  },
+  {
+    "codigo": "CU16",
+    "resultado": "COORDINACION_DISPONIBILIDAD",
+    "claves": [
+      "estado_ocupacion"
+    ]
+  }
+]

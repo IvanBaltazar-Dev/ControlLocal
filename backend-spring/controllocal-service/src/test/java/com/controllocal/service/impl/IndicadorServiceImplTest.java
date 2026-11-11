@@ -1,30 +1,30 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.query.IndicadorCaptacion;
 import com.controllocal.persistence.query.IndicadorContrato;
-import com.controllocal.persistence.query.IndicadorInteraccion;
 import com.controllocal.persistence.query.IndicadorOportunidad;
 import com.controllocal.persistence.query.IndicadorProspeccion;
 import com.controllocal.persistence.query.IndicadorSolicitud;
 import com.controllocal.persistence.query.IndicadorVisita;
 import com.controllocal.persistence.query.MotivoPorCaptacion;
-import com.controllocal.persistence.query.SupervisionVigente;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
-import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.ProspeccionService.RevisionSeguimiento;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion;
+import com.controllocal.service.InteraccionService.MedicionInteraccion;
+import com.controllocal.service.InteraccionService.VinculoFicha;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.IndicadorService.AvanceComercial;
 import com.controllocal.service.IndicadorService.AvancePropiedad;
 import com.controllocal.service.IndicadorService.Conteo;
@@ -48,13 +48,17 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -66,6 +70,19 @@ import static org.mockito.Mockito.when;
  * contrato, fallback de prospecciones— y los bugs que se replican a proposito.
  */
 class IndicadorServiceImplTest {
+    @Test void analisisPreparadosNoSePublicanPorElResumenLegado() throws Exception {
+        var salida=service.resumen("7d",agente);
+        var json=new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(salida);
+        assertFalse(json.contains("\"primeraRespuesta\""));assertFalse(json.contains("\"efectividadDeCierre\""));
+        assertTrue(json.contains("\"contactoEfectivoProspeccion\""));
+    }
+    @Test void permisoActualNoAtribuyeAlNuevoResponsableElCierreHistoricoDeOtraPersona(){
+        var hoy=LocalDate.now(ZoneId.of("America/Lima"));
+        var f=new com.controllocal.service.actividad.IndicadoresIndividuales.Fuente("OPORTUNIDAD",99L,1L,java.time.Instant.now().minusSeconds(60),OTRO_AGENTE);
+        when(desenlaces.leer(org.mockito.ArgumentMatchers.eq(agente),any())).thenReturn(List.of(
+                new com.controllocal.service.actividad.IndicadoresIndividuales.Desenlace(f,"VENTA",hoy,true,true)));
+        var tasa=service.resumen("7d",agente).efectividadDeCierre().get("VENTA");assertEquals(0,tasa.evaluables());assertEquals(0,tasa.exitos());assertNull(tasa.porcentaje());
+    }
 
     private static final long ORG = 1L;
     private static final long AGENTE = 30L;
@@ -78,29 +95,35 @@ class IndicadorServiceImplTest {
     private final SolicitudAlquilerRepository solicitudes = mock(SolicitudAlquilerRepository.class);
     private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
     private final VisitaRepository visitas = mock(VisitaRepository.class);
-    private final InteraccionComercialRepository interacciones =
-            mock(InteraccionComercialRepository.class);
+    private final InteraccionService interacciones = mock(InteraccionService.class);
     private final ProspeccionRepository prospecciones = mock(ProspeccionRepository.class);
     private final MotivoNoContinuidadRepository motivos = mock(MotivoNoContinuidadRepository.class);
     private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
-    private final DetalleBrokerRepository brokers = mock(DetalleBrokerRepository.class);
-    private final SupervisionAgenteRepository supervisiones =
-            mock(SupervisionAgenteRepository.class);
     private final Alcances alcances = mock(Alcances.class);
+    private final SeguimientoDeProspeccion seguimiento = mock(SeguimientoDeProspeccion.class);
+    private final com.controllocal.service.actividad.DesenlacesDeOportunidad desenlaces = mock(com.controllocal.service.actividad.DesenlacesDeOportunidad.class);
+    private final com.controllocal.service.actividad.ConversionDeProspecciones conversiones = mock(com.controllocal.service.actividad.ConversionDeProspecciones.class);
+
+    private final com.controllocal.service.actividad.MedicionDeCompromisos compromisos = mock(com.controllocal.service.actividad.MedicionDeCompromisos.class);
+
+    private final com.controllocal.service.actividad.MedicionesC7 mediciones = new com.controllocal.service.actividad.MedicionesC7(interacciones,desenlaces,conversiones,compromisos,mock(com.controllocal.service.actividad.ContextosDeActividad.class),alcances);
 
     private final IndicadorServiceImpl service = new IndicadorServiceImpl(
             captaciones, oportunidades, solicitudes, contratos, visitas, interacciones,
-            prospecciones, motivos, agentes, brokers, supervisiones, alcances);
+            prospecciones, motivos, agentes, alcances, seguimiento,mediciones);
 
     private final Actor admin = new Actor(ORG, 1L, 20L, "TENANT_ADMIN");
     private final Actor broker = new Actor(ORG, 2L, BROKER, "BROKER");
     private final Actor agente = new Actor(ORG, 3L, AGENTE, "AGENTE");
 
-    private final LocalDate hoy = LocalDate.now();
+    private final LocalDate hoy = LocalDate.now(ZoneId.of("America/Lima"));
 
     @BeforeEach
     void vacio() {
-        when(alcances.de(admin)).thenReturn(new Alcances.Alcance(ORG, true, List.of()));
+        when(compromisos.leer(any(),any(),any())).thenAnswer(inv->{
+            var v=(com.controllocal.service.actividad.IndicadoresIndividuales.Ventana)inv.getArgument(1);
+            return new com.controllocal.service.actividad.MedicionDeCompromisos.Lectura(com.controllocal.service.actividad.IndicadoresIndividuales.seguimiento(List.of(),v),true);
+        });
         when(alcances.de(broker)).thenReturn(
                 new Alcances.Alcance(ORG, false, List.of(AGENTE)));
         when(alcances.de(agente)).thenReturn(
@@ -109,13 +132,14 @@ class IndicadorServiceImplTest {
         when(oportunidades.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of());
         when(solicitudes.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of());
         when(visitas.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of());
-        when(interacciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of());
+        when(interacciones.indicadores(any(Actor.class))).thenReturn(new InteraccionService.LecturaIndicadores(List.of(),Set.of()));
+        when(conversiones.leer(any(Actor.class),any())).thenReturn(new com.controllocal.service.actividad.ConversionDeProspecciones.Lectura(List.of(),true));
+        when(seguimiento.enAlcance(any(Actor.class))).thenReturn(List.of());
+        when(seguimiento.vencidas(any(Actor.class))).thenReturn(List.of());
         when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of());
         when(motivos.principalPorCaptacion(anyLong(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of());
         when(contratos.indicadores(anyLong())).thenReturn(List.of());
-        when(supervisiones.equiposVigentes(anyLong())).thenReturn(List.of());
-        when(brokers.listarFichas(anyLong())).thenReturn(List.of());
         when(agentes.listarFichas(anyLong())).thenReturn(List.of());
         when(agentes.buscarFichas(anyLong(), anyCollection())).thenReturn(List.of());
         when(agentes.countByOrganizacionId(anyLong())).thenReturn(0L);
@@ -125,7 +149,7 @@ class IndicadorServiceImplTest {
 
     @Test
     void unPeriodoDesconocidoCaeEnSeisMesesYSerieMensual() {
-        Resumen resumen = service.resumen("gibberish", admin);
+        Resumen resumen = service.resumen("gibberish", agente);
 
         // 180 dias caen fuera del tramo diario (<= 31), asi que la serie es mensual y
         // toca 6 o 7 cubos segun el dia del mes en que se consulte.
@@ -140,7 +164,7 @@ class IndicadorServiceImplTest {
 
     @Test
     void hastaTreintaYUnDiasLaSerieEsDiariaConEtiquetaDiaMes() {
-        Resumen resumen = service.resumen("7d", admin);
+        Resumen resumen = service.resumen("7d", agente);
 
         assertEquals(7, resumen.mesesEtiquetas().size());
         assertEquals(String.format("%02d/%02d", hoy.getDayOfMonth(), hoy.getMonthValue()),
@@ -151,15 +175,15 @@ class IndicadorServiceImplTest {
 
     @Test
     void losSinonimosDelPeriodoCoincidenConSuCodigo() {
-        assertEquals(30, service.resumen("mes", admin).mesesEtiquetas().size());
-        assertEquals(15, service.resumen("15", admin).mesesEtiquetas().size());
+        assertEquals(30, service.resumen("mes", agente).mesesEtiquetas().size());
+        assertEquals(15, service.resumen("15", agente).mesesEtiquetas().size());
         // 1m son 30 dias: sigue siendo serie diaria; 3m ya es mensual.
-        assertTrue(service.resumen("3m", admin).mesesEtiquetas().size() <= 4);
+        assertTrue(service.resumen("3m", agente).mesesEtiquetas().size() <= 4);
     }
 
     @Test
     void elAmbitoDependeDelRol() {
-        assertEquals("Reportes globales", service.resumen(null, admin).ambito());
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.resumen(null, admin));
         assertEquals("Mi actividad", service.resumen(null, agente).ambito());
 
         // El broker decia "Reportes de equipo", que se lee como el titulo de una
@@ -169,6 +193,14 @@ class IndicadorServiceImplTest {
         // que D-E2-2 seccion 4 cerro al prohibir pedirsela.
         assertEquals("Mi equipo", service.resumen(null, broker).ambito(),
                 "el ambito dice de quien habla el Inicio, no como se titula un informe");
+    }
+
+    @Test
+    void gobiernoNoObtieneIndicadoresAunqueUnMockOfrezcaAlcanceGlobal() {
+        when(alcances.de(admin)).thenReturn(new Alcances.Alcance(ORG,true,List.of()));
+        assertThrows(AccesoNoAutorizadoException.class,()->service.resumen("7d",admin));
+        assertThrows(AccesoNoAutorizadoException.class,()->service.avance(admin));
+        verifyNoInteractions(captaciones,oportunidades,solicitudes,contratos,visitas,prospecciones,interacciones);
     }
 
     // ---------- escalares ----------
@@ -206,21 +238,12 @@ class IndicadorServiceImplTest {
 
     @Test
     void agentesYBrokersActivosSeCuentanPorRol() {
-        when(agentes.countByOrganizacionId(ORG)).thenReturn(15L);
-        when(brokers.listarFichas(ORG)).thenReturn(List.of(
-                broker(20L, "Administrador", true),
-                broker(21L, "Rosa Salas", false),
-                broker(22L, "Sergio Ramirez", false)));
-
-        assertEquals(15, service.resumen(null, admin).agentesActivos());
-        assertEquals(2, service.resumen(null, admin).brokersActivos(),
-                "el administrador no es broker productor");
-        assertEquals(1, service.resumen(null, broker).brokersActivos());
-        assertEquals(0, service.resumen(null, agente).brokersActivos());
-        assertEquals(1, service.resumen(null, agente).agentesActivos());
+        when(alcances.de(broker)).thenReturn(new Alcances.Alcance(ORG,false,List.of(AGENTE,OTRO_AGENTE)));
+        assertEquals(2,service.resumen(null,broker).agentesActivos());
+        assertEquals(1,service.resumen(null,broker).brokersActivos());
+        assertEquals(0,service.resumen(null,agente).brokersActivos());
+        assertEquals(1,service.resumen(null,agente).agentesActivos());
     }
-
-    // ---------- donut de etapas ----------
 
     @Test
     void elDonutEsUnaParticionExclusivaConPrecedencia() {
@@ -355,7 +378,8 @@ class IndicadorServiceImplTest {
                 contrato(42L, hoy, OTRO_AGENTE, 3L, OTRO_AGENTE, 3L)));// de nadie del alcance
 
         assertEquals(2, service.resumen("7d", agente).cierres());
-        assertEquals(3, service.resumen("7d", admin).cierres(), "el ADMIN ve el tenant");
+        when(alcances.de(broker)).thenReturn(new Alcances.Alcance(ORG,false,List.of(AGENTE,OTRO_AGENTE)));
+        assertEquals(3, service.resumen("7d", broker).cierres(), "el broker ve ambos agentes que supervisa");
     }
 
     @Test
@@ -375,26 +399,7 @@ class IndicadorServiceImplTest {
 
     // ---------- desempeno ----------
 
-    @Test
-    void elAdminComparaBrokersYExcluyeAlAdministradorYAlBrokerSinEquipo() {
-        when(brokers.listarFichas(ORG)).thenReturn(List.of(
-                broker(20L, "Administrador", true),
-                broker(21L, "Rosa Salas", false),
-                broker(22L, "Sin equipo", false)));
-        when(supervisiones.equiposVigentes(ORG)).thenReturn(List.of(
-                supervision(21L, AGENTE), supervision(20L, OTRO_AGENTE)));
-        when(captaciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
-                captacion(1L, AGENTE, "A", hoy, 101L),
-                captacion(2L, OTRO_AGENTE, "A", hoy, 102L)));
 
-        List<Desempeno> desempeno = service.resumen("7d", admin).desempeno();
-
-        assertEquals(1, desempeno.size(), "solo Rosa: el admin no compite y el otro no tiene equipo");
-        assertEquals("Rosa Salas", desempeno.getFirst().nombre());
-        assertEquals(1, desempeno.getFirst().captaciones());
-        assertEquals(0, desempeno.getFirst().cierres());
-        assertEquals(0, desempeno.getFirst().conversion());
-    }
 
     @Test
     void elDesempenoOmiteLasFilasEnCeroYCortaEnOcho() {
@@ -417,6 +422,52 @@ class IndicadorServiceImplTest {
         assertFalse(desempeno.stream().anyMatch(d -> "Sin actividad".equals(d.nombre())));
     }
 
+    private static RevisionSeguimiento revision(long prospeccion, LocalDate proxima, LocalDate pospuesta) {
+        return new RevisionSeguimiento(prospeccion + 1000, 1, prospeccion,
+                "PROPIETARIO", "RECONTACTAR_PROPIETARIO", null, 0, proxima, "ACORDADA",
+                pospuesta, pospuesta == null ? null : "Posposición propia", false, false, false,null);
+    }
+
+    @Test
+    void unaEsperaSinFechaNoEsAlDiaYUnaPosposicionConFechaSeRespeta() {
+        when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(90)),
+                prospeccion(61L, AGENTE, "S", hoy, hoy.minusDays(90)),
+                prospeccion(62L, AGENTE, "T", hoy, hoy.minusDays(90)),
+                prospeccion(63L, AGENTE, "S", hoy, hoy.minusDays(90))));
+        var espera = revision(60, null, null);
+        var pospuesta = revision(61, hoy.minusDays(10), hoy.plusDays(2));
+        var restringida = new RevisionSeguimiento(1063, 1, 63, "PROPIETARIO", "RESTRINGIDO",
+                null, 0, hoy.plusDays(2), "ACORDADA", null, null, false, true, false,null);
+        // La fila captada ya no forma parte del seguimiento canónico; sus fechas antiguas no mandan.
+        when(seguimiento.enAlcance(agente)).thenReturn(List.of(espera, pospuesta, restringida));
+
+        var resultado = service.resumen("7d", agente).operativo();
+
+        assertEquals(0, resultado.recontactosVencidos());
+        assertEquals(1, resultado.recontactosAlDia());
+        sinLegados(resultado);
+    }
+
+    @Test
+    void laCohorteNoSeAmpliaPorUnSeguimientoVencidoFueraDelPeriodo() {
+        when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                prospeccion(60L, AGENTE, "S", hoy.minusYears(2), hoy.minusDays(90))));
+        when(seguimiento.enAlcance(agente)).thenReturn(List.of(revision(60, hoy.minusDays(1), null)));
+        when(seguimiento.vencidas(agente)).thenReturn(List.of(revision(60, hoy.minusDays(1), null)));
+
+        var resultado = service.resumen("7d", agente).operativo();
+
+        assertEquals(0, resultado.recontactosVencidos());
+        assertEquals(0, resultado.recontactosAlDia());
+    }
+
+    @Test
+    void unFalloDelSeguimientoCanonicoNoEsCeroVencidos() {
+        when(seguimiento.vencidas(agente)).thenThrow(new IllegalStateException("R27 no disponible"));
+        assertThrows(IllegalStateException.class, () -> service.resumen("7d", agente));
+    }
+
     // ---------- operativo ----------
 
     @Test
@@ -435,8 +486,7 @@ class IndicadorServiceImplTest {
 
         assertEquals(0, operativo.recontactosVencidos(),
                 "ninguna de las dos cae en la ventana de 7 dias");
-        assertEquals(0, operativo.conversionProspeccionCaptacion(),
-                "sin prospecciones en el periodo no hay conversion que calcular");
+        sinLegados(operativo);
     }
 
     @Test
@@ -446,16 +496,16 @@ class IndicadorServiceImplTest {
         when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
                 prospeccion(62L, AGENTE, "S", hoy, hoy.minusDays(30)),
                 prospeccion(63L, AGENTE, "T", hoy, null)));
+        when(seguimiento.vencidas(agente)).thenReturn(List.of(revision(62, hoy, null)));
 
         var operativo = service.resumen("7d", agente).operativo();
 
         assertEquals(1, operativo.recontactosVencidos());
-        assertEquals(50, operativo.conversionProspeccionCaptacion(),
-                "1 captada sobre las 2 del periodo");
+        sinLegados(operativo);
     }
 
     @Test
-    void elRecontactoVenceEnElMismoUmbralQueLaBandeja() {
+    void elVencimientoEsElDelPuertoR27SinReinterpretarLasFechasAntiguas() {
         when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
                 prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(7)),  // vencido, 7 dias
                 prospeccion(61L, AGENTE, "S", hoy, hoy.minusDays(6)),  // aun al dia
@@ -463,12 +513,17 @@ class IndicadorServiceImplTest {
                 prospeccion(63L, AGENTE, "T", hoy, hoy.minusDays(30)), // captada: no cuenta
                 prospeccion(64L, AGENTE, "D", hoy, hoy.minusDays(30)), // descartada: no cuenta
                 prospeccion(65L, AGENTE, "S", hoy, null)));            // sin recontacto
+        when(seguimiento.enAlcance(agente)).thenReturn(List.of(
+                revision(60, hoy, null), revision(61, hoy.plusDays(2), null),
+                revision(62, hoy.minusDays(1), null)));
+        when(seguimiento.vencidas(agente)).thenReturn(List.of(
+                revision(60, hoy, null), revision(62, hoy.minusDays(1), null)));
 
         var operativo = service.resumen("7d", agente).operativo();
 
         assertEquals(2, operativo.recontactosVencidos());
         assertEquals(1, operativo.recontactosAlDia());
-        assertEquals(9, operativo.diasPromedioSinSeguimiento(), "(7 + 11) / 2");
+        sinLegados(operativo);
     }
 
     @Test
@@ -504,23 +559,20 @@ class IndicadorServiceImplTest {
                 "el orden lo fija la politica, no quien pinta");
     }
 
-    /**
-     * El caso del enunciado de R-07: el backend no manda 9 dias esperando que
-     * Angular sepa que mas de 7 es preocupante; manda 9 <b>y</b> su lectura.
-     */
+    /** CAT20.8 sustituye la magnitud antigua sin alterar los pendientes R27. */
     @Test
-    void unaDemoraDeNueveDiasViajaYaClasificada() {
+    void laDemoraNoDefinidaViajaNoEvaluableSinInventarCeroNiClasificacion() {
         when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
                 prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(7)),
                 prospeccion(62L, AGENTE, "S", hoy, hoy.minusDays(11))));
+        when(seguimiento.vencidas(agente)).thenReturn(List.of(
+                revision(60, hoy, null), revision(62, hoy, null)));
 
         Resumen resumen = service.resumen("7d", agente);
-        Senal demora = senal(resumen, Concepto.DEMORA_DE_SEGUIMIENTO);
-
-        assertEquals(9, resumen.operativo().diasPromedioSinSeguimiento(), "(7 + 11) / 2");
-        assertEquals(9, demora.valor(), "el numero sigue viajando: al usuario le importa");
-        assertEquals(NivelAtencion.MEDIO.name(), demora.nivelAtencion());
-        assertTrue(demora.requiereAtencion());
+        sinLegados(resumen.operativo());
+        assertFalse(resumen.senales().stream().anyMatch(s->"DEMORA_DE_SEGUIMIENTO".equals(s.concepto())));
+        assertEquals("SIN_BASE",resumen.cumplimientoDeSeguimiento().estadoCalculo());
+        assertNull(resumen.cumplimientoDeSeguimiento().medicion().porcentaje());
 
         Senal vencidos = senal(resumen, Concepto.RECONTACTO_VENCIDO);
         assertEquals(2, vencidos.valor());
@@ -592,8 +644,8 @@ class IndicadorServiceImplTest {
     /**
      * E2.1. La cabecera abre con "N cosas necesitan tu atencion", y ese N no se
      * puede derivar sumando las senales en el cliente: la demora de seguimiento
-     * vale DIAS. Con 1 solicitud + 2 recontactos + 9 dias de atraso, el titular
-     * son 3 cosas, no 12.
+     * vale DIAS. Con 1 solicitud + 2 recontactos y una demora no evaluable,
+     * el titular conserva las 3 cosas conocidas.
      */
     @Test
     void pendientesDeAtencionSumaCosasYNoMagnitudes() {
@@ -602,12 +654,14 @@ class IndicadorServiceImplTest {
         when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
                 prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(7)),
                 prospeccion(62L, AGENTE, "S", hoy, hoy.minusDays(11))));
+        when(seguimiento.vencidas(agente)).thenReturn(List.of(
+                revision(60, hoy, null), revision(62, hoy, null)));
 
         Resumen resumen = service.resumen("7d", agente);
 
-        assertEquals(9, resumen.operativo().diasPromedioSinSeguimiento(), "la demora esta ahi");
+        sinLegados(resumen.operativo());
         assertEquals(3, resumen.pendientesDeAtencion(),
-                "1 solicitud por evaluar + 2 recontactos vencidos; los 9 dias NO son cosas");
+                "1 solicitud por evaluar + 2 recontactos vencidos; la demora no aporta un conteo ficticio");
     }
 
     @Test
@@ -698,12 +752,49 @@ class IndicadorServiceImplTest {
                 captacion(1L, AGENTE, "A", hoy, 101L, "CAP-0001", "Av. Uno", "Lince")));
         when(oportunidades.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
                 oportunidad(20L, AGENTE, "A", hoy, 1L, 300L)));
-        when(interacciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+        when(interacciones.indicadores(agente)).thenReturn(new InteraccionService.LecturaIndicadores(List.of(
                 interaccion(70L, AGENTE, 1L, null),   // directa a la captacion
                 interaccion(71L, AGENTE, null, 20L),  // via la oportunidad
-                interaccion(72L, AGENTE, 1L, 20L)));  // por las dos: cuenta UNA vez
+                interaccion(72L, AGENTE, 1L, 20L)),Set.of()));  // por las dos: cuenta UNA vez
 
         assertEquals(3, service.avance(agente).detalle().getFirst().interacciones());
+    }
+
+    @Test
+    void elTotalGlobalNoSumaContextosSolapadosDeUnaMismaComunicacion() {
+        when(captaciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                captacion(1L, AGENTE, "A", hoy, 101L, "CAP-0001", "Av. Uno", "Lince"),
+                captacion(2L, AGENTE, "A", hoy, 101L, "CAP-0002", "Av. Uno", "Lince")));
+        when(interacciones.indicadores(agente)).thenReturn(new InteraccionService.LecturaIndicadores(List.of(new MedicionInteraccion(
+                70, 0, AGENTE, hoy, instante(hoy).toInstant(), null, null, List.of(),
+                List.of(new VinculoFicha("ENCARGO", 1, null), new VinculoFicha("ENCARGO", 2, null)))),Set.of()));
+
+        AvanceComercial avance = service.avance(agente);
+
+        assertEquals(2, avance.detalle().stream().mapToInt(AvancePropiedad::interacciones).sum());
+        assertEquals(1, avance.interacciones());
+    }
+
+    @Test
+    void fechaDeRegistroNoSeConvierteEnFechaEfectivaParaElIndicadorTemporal() {
+        when(interacciones.indicadores(agente)).thenReturn(new InteraccionService.LecturaIndicadores(List.of(new MedicionInteraccion(
+                70, 0, AGENTE, null, instante(hoy).toInstant(), null, null, List.of(), List.of())),Set.of()));
+
+        assertEquals(0, service.resumen("7d", agente).interacciones());
+    }
+
+    @Test
+    void unFalloTecnicoDelLectorAutorizadoNoProduceUnIndicadorVacio() {
+        when(interacciones.indicadores(agente)).thenThrow(new IllegalStateException("fallo técnico"));
+
+        assertThrows(IllegalStateException.class, () -> service.resumen("7d", agente));
+    }
+    @Test void fuenteDeRespuestaRestringidaNoSePresentaComoCeroOConsultaSinResponder(){
+        var q=new MedicionInteraccion(70,0,AGENTE,hoy.minusDays(1),java.time.Instant.now(),null,null,List.of(),List.of(),null,
+                new InteraccionService.DatoAtencionConsultas(true,new InteraccionService.MomentoHecho(hoy.minusDays(1),java.time.LocalTime.NOON,java.time.ZoneOffset.ofHours(-5)),List.of(),0));
+        when(interacciones.indicadores(agente)).thenReturn(new InteraccionService.LecturaIndicadores(List.of(q),Set.of(70L)));
+        var r=service.resumen("7d",agente).primeraRespuesta();assertEquals("NO_EVALUABLE",r.estadoCalculo());
+        assertTrue(r.causa().contains("Permiso insuficiente"));assertNull(r.medicion());
     }
 
     @Test
@@ -745,7 +836,7 @@ class IndicadorServiceImplTest {
 
     @Test
     void elAvanceDelAdminYDelBrokerLlevanSuPropioAmbito() {
-        assertEquals("Avance comercial global", service.avance(admin).ambito());
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.avance(admin));
         assertEquals("Avance comercial del equipo", service.avance(broker).ambito());
     }
 
@@ -784,9 +875,13 @@ class IndicadorServiceImplTest {
         return new VisitaFila(id, idAgente, estado, fecha, idOportunidad);
     }
 
-    private IndicadorInteraccion interaccion(long id, long idAgente, Long idCaptacion,
+    private MedicionInteraccion interaccion(long id, long idAgente, Long idCaptacion,
                                              Long idOportunidad) {
-        return new InteraccionFila(id, idAgente, instante(hoy), idCaptacion, idOportunidad);
+        List<VinculoFicha> vinculos = new ArrayList<>();
+        if (idCaptacion != null) vinculos.add(new VinculoFicha("ENCARGO", idCaptacion, null));
+        if (idOportunidad != null) vinculos.add(new VinculoFicha("OPORTUNIDAD", idOportunidad, null));
+        return new MedicionInteraccion(id, 0, idAgente, hoy, instante(hoy).toInstant(),
+                null, null, List.of(), List.copyOf(vinculos));
     }
 
     private IndicadorProspeccion prospeccion(long id, long idAgente, String estado,
@@ -798,9 +893,6 @@ class IndicadorServiceImplTest {
         return new MotivoFila(idCaptacion, razon, total);
     }
 
-    private SupervisionVigente supervision(long idBroker, long idAgente) {
-        return new SupervisionFila(idBroker, idAgente);
-    }
 
     private static OffsetDateTime instante(LocalDate fecha) {
         return fecha == null ? null
@@ -814,13 +906,6 @@ class IndicadorServiceImplTest {
         return detalle;
     }
 
-    private static DetalleBroker broker(long id, String nombre, boolean esAdministrador) {
-        DetalleBroker detalle = new DetalleBroker();
-        ReflectionTestUtils.setField(detalle, "id", id);
-        ReflectionTestUtils.setField(detalle, "rol", rol(nombre));
-        ReflectionTestUtils.setField(detalle, "esAdministrador", esAdministrador);
-        return detalle;
-    }
 
     private static PersonaRol rol(String nombre) {
         Persona persona = new Persona();
@@ -977,30 +1062,6 @@ class IndicadorServiceImplTest {
         }
     }
 
-    private record InteraccionFila(long id, long idAgente, OffsetDateTime fechaHora,
-                                   Long idCaptacion, Long idOportunidad)
-            implements IndicadorInteraccion {
-        public Long getId() {
-            return id;
-        }
-
-        public Long getIdAgente() {
-            return idAgente;
-        }
-
-        public OffsetDateTime getFechaHora() {
-            return fechaHora;
-        }
-
-        public Long getIdCaptacion() {
-            return idCaptacion;
-        }
-
-        public Long getIdOportunidad() {
-            return idOportunidad;
-        }
-    }
-
     private record ProspeccionFila(long id, long idAgente, String estado, OffsetDateTime registro,
                                    LocalDate recontacto) implements IndicadorProspeccion {
         public Long getId() {
@@ -1039,13 +1100,9 @@ class IndicadorServiceImplTest {
         }
     }
 
-    private record SupervisionFila(long idBroker, long idAgente) implements SupervisionVigente {
-        public Long getIdBroker() {
-            return idBroker;
-        }
-
-        public Long getIdAgente() {
-            return idAgente;
-        }
+    private static void sinLegados(Object operativo){
+        try{var serializado=new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(operativo);
+            assertFalse(serializado.contains("diasPromedioSinSeguimiento"));assertFalse(serializado.contains("conversionProspeccionCaptacion"));
+        }catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new AssertionError(e);}
     }
 }

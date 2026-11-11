@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -84,6 +85,7 @@ class PropiedadSinEncargoIntegrationTest {
     @Autowired PropiedadUniversalService propiedades;
     @Autowired ProspeccionService prospecciones;
     @Autowired PublicacionService publicaciones;
+    @Autowired com.controllocal.service.encargo.EncargoService encargos;
 
     // ==================================================================
     // 1. El alta sin operaciones no deja rastro comercial
@@ -167,7 +169,7 @@ class PropiedadSinEncargoIntegrationTest {
      *
      * <p>La garantia no se perdio: <b>se hizo mas fuerte</b>. Ya no hay un metodo
      * que lo rechace en tiempo de ejecucion; no hay metodo al que pedirselo. Toda
-     * creacion pasa por {@code crearEnEncargo(idEncargo, ...)}, y sin encargo no
+     * creacion pasa por {@code crearBorradorAnuncio(idEncargo, ...)}, y sin encargo no
      * hay id que pasarle.
      *
      * <p>Se deja constancia aqui --y no solo en el test de arquitectura-- porque
@@ -190,7 +192,7 @@ class PropiedadSinEncargoIntegrationTest {
 
         // Y la unica que crea exige el ENCARGO, no la propiedad.
         assertTrue(Arrays.stream(PublicacionService.class.getMethods())
-                        .anyMatch(m -> m.getName().equals("crearEnEncargo")),
+                        .anyMatch(m -> m.getName().equals("crearBorradorAnuncio")),
                 "la via canonica tiene que seguir existiendo");
     }
 
@@ -209,29 +211,27 @@ class PropiedadSinEncargoIntegrationTest {
     }
 
     // ==================================================================
-    // 2. Con operaciones, el alta se comporta exactamente igual que antes
+    // 2. Operación explícita: borrador comercial, sin autorización inferida
     // ==================================================================
 
     @Test
-    @DisplayName("con una operacion, el alta sigue abriendo su encargo con todo lo suyo")
-    void conOperacionesElAltaNoCambia() {
+    @DisplayName("una operación explícita abre borrador de Encargo sin autorizar oferta")
+    void conOperacionElAltaAbreBorradorSinAutorizarOferta() {
         long id = registrarConAlquiler();
 
         assertEquals(1, contar("select count(*) from captacion where id_propiedad = ?", id),
                 "un encargo, como siempre");
-        assertEquals(1, contar("""
+        assertEquals(0, contar("""
                 select count(*) from precio_propiedad
                  where id_propiedad = ? and hito = 'U'
                 """, id),
-                "y su hito 'U': el importe autorizado al abrirlo");
+                "El precio pedido de un borrador no es un hito autorizado");
+        assertNull(jdbc.queryForObject("select disponibilidad_comercial from propiedad where id_propiedad=?",String.class,id));
+        assertEquals("P",jdbc.queryForObject("select estado from captacion where id_propiedad=?",String.class,id));
         assertNotNull(jdbc.queryForMap(
                         "select precio_referencial from propiedad where id_propiedad = ?", id)
                         .get("precio_referencial"),
                 "la proyeccion heredada se sigue escribiendo cuando hay de donde");
-        assertEquals("D", jdbc.queryForObject(
-                "select disponibilidad_comercial from propiedad where id_propiedad = ?",
-                String.class, id),
-                "y la propiedad si se declara disponible, porque ya se esta ofreciendo");
     }
 
     // ==================================================================
@@ -242,7 +242,7 @@ class PropiedadSinEncargoIntegrationTest {
     @DisplayName("prospectar una propiedad no le abre ningun encargo")
     void prospectarNoAbreEncargo() {
         long id = registrarSinEncargo();
-        prospecciones.registrar(new ProspeccionService.DatosProspeccion(id, "Prospeccion de prueba"),
+        prospecciones.registrar(new ProspeccionService.DatosProspeccion(id, "Prospeccion de prueba", null),
                 actor());
         assertEquals(0, contar("select count(*) from captacion where id_propiedad = ?", id),
                 "la prospeccion es la INTENCION del agente; el encargo lo da el propietario");
@@ -296,15 +296,18 @@ class PropiedadSinEncargoIntegrationTest {
     }
 
     @Test
-    @DisplayName("captar sin importe se rechaza: el precio lo trae el encargo")
-    void captarSinImporteSeRechaza() {
+    @DisplayName("captar sin importe conserva un borrador sin precio inventado ni oferta habilitada")
+    void captarSinImporteConservaBorradorPendiente() {
         long id = registrarSinEncargo();
         long idProspeccion = prospectar(id);
 
-        assertThrows(ReglaNegocioException.class,
-                () -> prospecciones.captar(idProspeccion, capturaDe("ALQUILER", null, "PEN"),
-                        actor()),
-                "una propiedad sin encargo no tiene precio del que tirar");
+        prospecciones.captar(idProspeccion,capturaDe("ALQUILER",null,"PEN"),actor());
+        long encargo=jdbc.queryForObject("select id_captacion from captacion where id_propiedad=?",Long.class,id);
+        assertNull(jdbc.queryForObject("select ce.importe_referencia from condicion_economica_captacion ce join captacion c on c.id_condicion_economica=ce.id_condicion_economica where c.id_captacion=?",BigDecimal.class,encargo));
+        assertEquals("EN_PREPARACION",encargos.consultar(encargo,actor()).estado());
+        assertFalse(encargos.consultarVigencia(encargo,null,actor()).habilitado());
+        assertEquals(0,contar("select count(*) from precio_propiedad where id_propiedad=?",id));
+        assertNull(jdbc.queryForObject("select disponibilidad_comercial from propiedad where id_propiedad=?",String.class,id));
     }
 
     // ==================================================================
@@ -365,33 +368,21 @@ class PropiedadSinEncargoIntegrationTest {
     // ==================================================================
 
     /**
-     * <b>Toda propiedad con un encargo vivo declara su disponibilidad.</b>
-     *
-     * <p>Es la otra mitad de la regla, y hace falta escribirla: las pruebas de
-     * arriba comprueban que sin encargo NO se declara, y ninguna comprobaria
-     * que con encargo SI. Sin esta, una regresion que dejara de llamar a
-     * «entrar en oferta» pasaria en verde y la propiedad captada de verdad
-     * desapareceria del matcher de cartera y de las coincidencias, que exigen
-     * disponibilidad {@code 'D'}.
-     *
-     * <p>Se mide sobre los datos REALES del repositorio, no sobre un caso
-     * fabricado: una invariante que solo se comprueba en su propio fixture
-     * comprueba el fixture.
+     * CAT-E12–15/C2 separa abrir de habilitar: un episodio P es legítimo sin
+     * disponibilidad ni revisión aprobatoria. La disponibilidad tras aceptación
+     * y revisión competentes se demuestra en EncargoC2IntegrationTest; este
+     * recorrido comprueba que la mera presencia del borrador no concede oferta.
      */
     @Test
-    @DisplayName("invariante: una propiedad con encargo vivo nunca se queda sin disponibilidad")
-    void conEncargoVivoSiempreHayDisponibilidad() {
-        List<Long> mudas = jdbc.queryForList("""
-                select distinct p.id_propiedad
-                  from propiedad p
-                  join captacion c on c.id_propiedad = p.id_propiedad
-                 where c.estado in ('P', 'O', 'A')
-                   and p.disponibilidad_comercial is null
-                """, Long.class);
-        assertTrue(mudas.isEmpty(),
-                "estas propiedades tienen un encargo vivo y no dicen si se ofrecen: " + mudas
-                        + ". Abrir el encargo es lo que las pone en el mercado; sin eso "
-                        + "desaparecen del matcher aunque esten captadas.");
+    @DisplayName("la presencia de un Encargo pendiente no concede disponibilidad ni publicación")
+    void unEncargoEnPreparacionNoConcedeDisponibilidad() {
+        long id=registrarConAlquiler();
+        long encargo=jdbc.queryForObject("select id_captacion from captacion where id_propiedad=?",Long.class,id);
+        var vigente=encargos.consultarVigencia(encargo,null,actor());
+        assertFalse(vigente.habilitado());assertTrue(vigente.faltantes().contains("REVISION_APROBATORIA"));
+        assertThrows(ReglaNegocioException.class,()->encargos.exigirHabilitado(encargo,actor()));
+        assertNull(jdbc.queryForObject("select disponibilidad_comercial from propiedad where id_propiedad=?",String.class,id));
+        assertEquals(0,contar("select count(*) from publicacion where id_propiedad=?",id));
     }
 
     // ==================================================================
@@ -430,7 +421,7 @@ class PropiedadSinEncargoIntegrationTest {
 
     private long prospectar(long idPropiedad) {
         return prospecciones.registrar(
-                new ProspeccionService.DatosProspeccion(idPropiedad, "Intento de captacion"),
+                new ProspeccionService.DatosProspeccion(idPropiedad, "Intento de captacion", null),
                 actor()).id();
     }
 
@@ -438,11 +429,6 @@ class PropiedadSinEncargoIntegrationTest {
                                                              String moneda) {
         return new ProspeccionService.DatosCaptura(operacion, importe, moneda,
                 new BigDecimal("100"), null, null, null, null, null, null);
-    }
-
-    private PublicacionService.DatosPublicacion publicacionDePrueba() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null, new BigDecimal("2500"),
-                "PEN", "Anuncio de prueba", null, null);
     }
 
     private int contar(String sql, Object... parametros) {

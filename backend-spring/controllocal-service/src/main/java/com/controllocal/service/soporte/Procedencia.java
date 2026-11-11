@@ -126,6 +126,11 @@ public record Procedencia(String canal, String agente, String modelo, String mod
                 mensajeId, peticion, herramienta);
     }
 
+    /** Referencia técnica para entrega; el texto original permanece en su antecedente privado. */
+    public Procedencia sinPeticion() {
+        return new Procedencia(canal,agente,modelo,modeloVersion,conversacionId,turnoId,mensajeId,null,herramienta);
+    }
+
     /** Estampa la procedencia en un evento ya construido. */
     public EventoDominio sellar(EventoDominio evento) {
         return evento.porEncargoDe(agente, modelo, modeloVersion, conversacionId, turnoId,

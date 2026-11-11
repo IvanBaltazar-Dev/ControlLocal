@@ -66,7 +66,7 @@ public class CatalogoProductoresTest {
      * desaparezcan sin que nada avise, que es justo el accidente contra el que
      * existe este recuento.
      */
-    private static final int FILAS_MINIMAS = 117;
+    private static final int FILAS_MINIMAS = 127;
 
     /**
      * {@code MfaServiceImpl}, {@code TokenAcceso}: CamelCase de dos jorobas o
@@ -242,10 +242,12 @@ public class CatalogoProductoresTest {
 
     /** Los estados que este tramo va a implementar siguen marcados como tales. */
     @Test
-    @DisplayName("los tres huerfanos pendientes no aparecen disfrazados de PRODUCIDO")
+    @DisplayName("los pendientes conservan su clasificación y el estado V retirado de Captacion no reaparece")
     void losPendientesSiguenDeclaradosComoPendientes() throws IOException {
         List<Fila> filas = leerCatalogo();
-        for (String clave : List.of("captacion.estado.V", "solicitud_alquiler.estado.D",
+        assertFalse(filas.stream().anyMatch(f->f.clave().equals("captacion.estado.V")),
+                "V104 retira V del episodio: vencimiento es derivado, no un estado futuro sin productor.");
+        for (String clave : List.of("solicitud_alquiler.estado.D",
                 "oportunidad_comercial.estado.X")) {
             Fila fila = filas.stream().filter(f -> f.clave().equals(clave)).findFirst()
                     .orElseThrow(() -> new AssertionError("falta del catalogo: " + clave));
@@ -253,6 +255,24 @@ public class CatalogoProductoresTest {
                     clave + " figura como PRODUCIDO pero todavia no tiene productor. Si ya se "
                             + "implemento, actualiza el catalogo con la evidencia.");
         }
+    }
+
+    @Test
+    @DisplayName("C1 clasifica cuenta, pertenencia y foto actuales sin fabricar productor de suspensión")
+    void losProductoresDeC1NoConservanLaCredencialRetirada() throws IOException {
+        List<Fila> filas=leerCatalogo();
+        assertFalse(filas.stream().anyMatch(f->f.columna().startsWith("credencial_usuario.")),
+                "La tabla retirada no tiene productores vigentes.");
+        for(String clave:List.of("cuenta_acceso.estado.A","usuario_organizacion.estado.A",
+                "usuario_organizacion.estado.I","foto_propiedad.estado.A","foto_propiedad.estado.I")) {
+            Fila fila=filas.stream().filter(f->f.clave().equals(clave)).findFirst()
+                    .orElseThrow(()->new AssertionError("Falta productor vigente: "+clave));
+            assertEquals("PRODUCIDO",fila.clase(),clave);
+        }
+        Fila cuentaInactiva=filas.stream().filter(f->f.clave().equals("cuenta_acceso.estado.I")).findFirst()
+                .orElseThrow(()->new AssertionError("Falta clasificar el CHECK de cuenta inactiva."));
+        assertEquals("RESERVADO_FUTURO",cuentaInactiva.clase(),
+                "Un setter o un fixture no crean una operación de suspensión ni autoridad de gobierno.");
     }
 
     public static List<Fila> leerCatalogo() throws IOException {
@@ -392,4 +412,19 @@ public class CatalogoProductoresTest {
                 .orElseThrow(() -> new IllegalStateException(
                         "No se encontro docs/ai/catalogo-productores-canonico.md"));
     }
+    @Test
+    @DisplayName("C2: episodio, petición y solicitud tienen productores distintos sin estados antiguos del episodio")
+    void losProductoresDeC2SeparanLosTresCiclos() throws IOException {
+        List<Fila> filas=leerCatalogo();
+        Map<String,Set<String>> esperados=Map.of("captacion.estado",Set.of("P","A","C","S"),
+                "peticion_revision_encargo.estado",Set.of("P","O","A","R"),
+                "solicitud_finalizacion_encargo.estado",Set.of("P","O","A","R","C"));
+        for(var entrada:esperados.entrySet()) {
+            List<Fila> ciclo=filas.stream().filter(f->f.columna().equals(entrada.getKey())).toList();
+            assertEquals(entrada.getValue(),ciclo.stream().map(Fila::codigo).collect(java.util.stream.Collectors.toSet()),entrada.getKey());
+            assertTrue(ciclo.stream().allMatch(f->"PRODUCIDO".equals(f.clase())&&f.evidencia().contains("EncargoServiceImpl.")),
+                    entrada.getKey()+": cada estado necesita su productor vigente, no el servicio retirado ni una reserva ficticia.");
+        }
+    }
+
 }

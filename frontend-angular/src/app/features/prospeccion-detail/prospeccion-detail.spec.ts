@@ -92,6 +92,8 @@ describe('ProspeccionDetail', () => {
   async function montar(rol: RolSesion): Promise<ComponentFixture<ProspeccionDetail>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't', expiraEnSegundos: 3600, rol, idUsuario: 1, idDominio: 30,
       nombre: 'Prueba', usuario: 'prueba', expiraEn: '2099-01-01T00:00:00',
     });

@@ -55,6 +55,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Autowired TareaService tareas;
     @Autowired InterpreteDeLaBandeja interprete;
     @Autowired CaptacionRepository captaciones;
+    @Autowired com.controllocal.service.actividad.SeguimientoDeProspeccion seguimiento;
 
     /**
      * Las palabras que D-E2-1 §10.3.2 rechaza.
@@ -72,7 +73,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("cada asunto llega interpretado: como esta, expediente y lectura")
     void cadaAsuntoLlegaInterpretado() {
-        List<FichaTarea> bandeja = tareas.bandejaDe(actorAgente());
+        List<FichaTarea> bandeja = tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente());
         assertFalse(bandeja.isEmpty(), "el escenario exige una bandeja con asuntos");
 
         for (FichaTarea asunto : bandeja) {
@@ -91,7 +92,7 @@ class InterpretacionDelInicioIntegrationTest {
     @DisplayName("un hecho resuelto sale verde aunque el asunto este en rojo")
     void elEstadoEsDelHechoYNoDelAsunto() {
         conElAsuntoQueEsperaAOtro(() -> {
-            List<FichaTarea> bandeja = tareas.bandejaDe(actorAgente());
+            List<FichaTarea> bandeja = tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente());
 
             // El asunto que espera al broker es de prioridad ALTA y aun asi su
             // primer hecho es un HECHO: la parte del agente esta cumplida. Si el
@@ -161,7 +162,7 @@ class InterpretacionDelInicioIntegrationTest {
         // proposito: comprobar solo que la fila se borro no diria nada sobre el
         // efecto que tenia.
         List<String> sinExpediente = new ArrayList<>();
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             if (asunto.interpretacion().expediente().size()
                     != InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE) {
                 sinExpediente.add(asunto.entidadTipo() + "#" + asunto.entidadId());
@@ -175,7 +176,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("el orden de los hechos es narrativo: lo que esta, lo que falta, lo que frena")
     void elOrdenEsNarrativo() {
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             List<Hecho> hechos = asunto.interpretacion().comoEsta().hechos();
             int posicionDelFreno = -1;
             int posicionDeLoQueFalta = -1;
@@ -195,7 +196,7 @@ class InterpretacionDelInicioIntegrationTest {
     @DisplayName("ningun codigo tecnico llega al texto visible")
     void ningunCodigoTecnicoEnLoVisible() {
         List<String> colados = new java.util.ArrayList<>();
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             var interpretacion = asunto.interpretacion();
             for (Hecho hecho : interpretacion.comoEsta().hechos()) {
                 if (InterpretacionDelAsunto.llevaCodigoTecnico(hecho.texto())) {
@@ -228,7 +229,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("la lectura sintetiza y no recita ninguno de los cuatro renglones")
     void laLecturaNoRecita() {
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             var interpretacion = asunto.interpretacion();
             if (interpretacion.lectura() == null) {
                 continue; // sin nada que concluir, no se rellena
@@ -245,7 +246,7 @@ class InterpretacionDelInicioIntegrationTest {
     @DisplayName("ninguna comparacion invoca al sector: todo sale de la casa")
     void ningunaEstadisticaDelSector() {
         List<String> colados = new java.util.ArrayList<>();
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             var interpretacion = asunto.interpretacion();
             List<String> textos = new java.util.ArrayList<>();
             interpretacion.comoEsta().hechos().forEach(h -> textos.add(h.texto()));
@@ -283,7 +284,7 @@ class InterpretacionDelInicioIntegrationTest {
     @DisplayName("todo asunto lleva cuatro renglones; nunca cero y nunca cuatro guiones")
     void todoAsuntoLlevaCuatroRenglones() {
         List<String> sinExpediente = new ArrayList<>();
-        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+        for (FichaTarea asunto : tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente())) {
             List<Renglon> expediente = asunto.interpretacion().expediente();
             if (expediente.size() != InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE) {
                 sinExpediente.add(asunto.entidadTipo() + "#" + asunto.entidadId()
@@ -360,22 +361,35 @@ class InterpretacionDelInicioIntegrationTest {
     /**
      * <b>Una fecha ausente se dice; no se rellena.</b>
      *
-     * <p>42 de las 63 prospecciones de la base no tenían contacto el 2026-08-19.
-     * Eso no es un fallo de carga: es el estado normal de una prospección recién
-     * abierta, y el renglón tiene que decirlo con palabras en vez de enseñar un
-     * guión, una fecha inventada o el día de hoy.
+     * <p>El productor R27 abre una revisión real sin intento fechado. Esa ausencia
+     * no se convierte en contacto, fracaso ni fecha actual. El fixture es propio,
+     * sin Encargo, y se revierte al terminar la prueba.
      */
     @Test
+    @org.springframework.transaction.annotation.Transactional
     @DisplayName("una fecha que falta se declara ausente, nunca se rellena")
     void unaFechaAusenteSeDeclara() {
-        long idSinContacto = unaProspeccionSinContacto();
+        Actor actor=actorAgente();
+        String codigo=java.util.UUID.randomUUID().toString().substring(0,12);
+        Long propiedad=jdbc.queryForObject("""
+                insert into propiedad(codigo,direccion,distrito,metraje,tipo_inmueble,uso,
+                    organizacion_id,estado_registro,origen_incorporacion)
+                values(?,'Av. Interpretación R27','Miraflores',70.00,'D','C',?,'A','SEMILLA')
+                returning id_propiedad
+                """,Long.class,"IR27-"+codigo,actor.idOrganizacion());
+        Long idSinContacto=jdbc.queryForObject("""
+                insert into prospeccion(codigo_prospeccion,estado,id_propiedad,id_rol_agente,organizacion_id)
+                values(?,'P',?,?,?) returning id_prospeccion
+                """,Long.class,"R27-"+codigo,propiedad,actor.idRolOperativo(),actor.idOrganizacion());
+        // Contexto propio sin Encargo; el estado R27 lo crea el productor real con autorización actual.
+        seguimiento.iniciar(idSinContacto,null,actor);
+        var necesidad=seguimiento.necesidadesActuales(actor).stream()
+                .filter(n->n.revision().idProspeccion()==idSinContacto).findFirst().orElseThrow();
+        var asunto=new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO","PROSPECCION",
+                idSinContacto,"sin intento fechado",null,null,true,necesidad.marcaCausa());
 
         List<Renglon> expediente = interprete.de(
-                new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO", "PROSPECCION",
-                        idSinContacto, "sin contacto", null, null, true),
-                interprete.contextoDe(organizacionDelAgente(), List.of(
-                        new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO", "PROSPECCION",
-                                idSinContacto, "sin contacto", null, null, true))),
+                asunto,interprete.contextoDe(actor,List.of(asunto)),
                 LocalDate.now()).expediente();
 
         Renglon contacto = expediente.stream()
@@ -383,14 +397,14 @@ class InterpretacionDelInicioIntegrationTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("falta el renglon de contacto"));
 
-        assertEquals("Sin contacto registrado", contacto.valor(),
+        assertEquals("Sin último intento fechado en este seguimiento", contacto.valor(),
                 "La ausencia se nombra. Un guion obliga a preguntar si falta el dato o el hecho.");
     }
 
     // ------------------------------------------------------------------
 
     private List<Renglon> expedienteDelPrimero(String entidadTipo) {
-        return tareas.bandejaDe(actorAgente()).stream()
+        return tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),actorAgente()).stream()
                 .filter(a -> entidadTipo.equals(a.entidadTipo()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
@@ -405,107 +419,6 @@ class InterpretacionDelInicioIntegrationTest {
     }
 
     // ------------------------------------------------------------------
-
-    /**
-     * <b>Una prospección sin fecha de contacto — construida, no heredada.</b>
-     *
-     * <p>Antes esto era un {@code select … limit 1} y bastaba: en la base de
-     * pruebas compartida había cientos, acumuladas por corridas anteriores.
-     * Contra una base <b>recién migrada</b> no hay ninguna que sirva, y no por
-     * casualidad: <b>la semilla crea dos prospecciones y las dos nacen
-     * contactadas</b> —{@code V5} inserta {@code PRO-0001} con
-     * {@code fecha_contacto} 2026-06-20 y {@code PRO-0002} con 2026-07-01—, y la
-     * única clase que crea una antes que ésta en el orden alfabético de surefire
-     * ({@code AutoridadDeEdicion…}) llama a {@code contactar()} acto seguido,
-     * así que también la deja <b>con</b> fecha. Las que quedan sin contacto las
-     * escriben clases que corren <b>después</b> (las de {@code Propiedad…}).
-     *
-     * <p>La primera versión de este comentario decía «la semilla no crea
-     * prospecciones». Era <b>falso</b> —y salió de un barrido en minúsculas
-     * sobre unas migraciones escritas en mayúsculas, que devolvió cero sin
-     * control positivo—. La conclusión operativa aguanta, porque lo que hace
-     * falta no es una prospección cualquiera sino una <b>sin contactar</b>, y de
-     * ésas la semilla no deja ninguna; pero la premisa escrita es la que usará
-     * quien lea, así que se corrige.
-     *
-     * <p>Medido el 2026-08-30 sobre una instancia dedicada construida por las
-     * migraciones reales: en el momento en que corre esta clase había <b>0</b>
-     * prospecciones sin contacto, y el {@code queryForObject} moría con
-     * {@code EmptyResultDataAccessException} — un rojo que no hablaba de lo que
-     * la prueba mide. En la base compartida había 825, todas residuo.
-     *
-     * <p>Así que se construye. El hecho que la prueba necesita es «una
-     * prospección abierta que todavía no se ha contactado», y eso se puede
-     * escribir; heredarlo hacía que la prueba sólo midiera cuando alguien
-     * hubiera pasado antes.
-     */
-    private long unaProspeccionSinContacto() {
-        List<Long> existentes = jdbc.queryForList("""
-                select p.id_prospeccion from prospeccion p
-                 where p.fecha_contacto is null and p.organizacion_id = ?
-                 order by p.id_prospeccion limit 1
-                """, Long.class, organizacionDelAgente());
-        if (!existentes.isEmpty()) {
-            return existentes.get(0);
-        }
-        Actor agente = actorAgente();
-        // Estado 'P' = abierta y sin contactar, que es exactamente el caso que
-        // el renglón tiene que saber decir. Las tres fechas quedan NULL a
-        // propósito: rellenarlas sería inventar el hecho que se está midiendo.
-        //
-        // `on conflict` sobre la MISMA clave con la que se inserta. La primera
-        // versión buscaba por `fecha_contacto is null` e insertaba por
-        // `codigo_prospeccion`, que es único por (organización, código): el día
-        // que algo contactara esta prospección, la búsqueda dejaría de verla, la
-        // inserción chocaría contra la unicidad y la clase moriría en @Test
-        // tras @Test sobre esa base. Hoy no ocurre, y por eso no se deja para
-        // luego: una idempotencia que sólo funciona mientras nadie toque la fila
-        // no es idempotencia, es una coincidencia con fecha de caducidad.
-        //
-        // Llegar aquí significa que la consulta de arriba no encontró NINGUNA
-        // sin contactar en esta organización — incluida ésta. Así que si la fila
-        // existe es porque fue contactada, y devolverla a su estado es correcto:
-        // es la fila de este montaje, identificada por su propio código, y no
-        // hay ningún otro dueño a quien pisarle nada.
-        return jdbc.queryForObject("""
-                insert into prospeccion (codigo_prospeccion, estado, id_propiedad, id_rol_agente,
-                                         organizacion_id)
-                values (?, 'P', ?, ?, ?)
-                on conflict (organizacion_id, codigo_prospeccion)
-                do update set estado = 'P', fecha_contacto = null
-                returning id_prospeccion
-                """, Long.class, CODIGO_PROSPECCION_DEL_MONTAJE,
-                unaPropiedadDe(agente.idOrganizacion()),
-                agente.idRolOperativo(), agente.idOrganizacion());
-    }
-
-    /** El código de la prospección que este montaje crea, busca y reutiliza. */
-    private static final String CODIGO_PROSPECCION_DEL_MONTAJE = "PR-SIN-CONTACTO";
-
-    /**
-     * Una propiedad de esa organización, creada si todavía no hay ninguna.
-     *
-     * <p>Nace <b>FALTANTE</b>: se inserta por SQL y no por el caso de uso, así
-     * que no hay actor del alta a quien atribuirla, y un responsable inventado
-     * sería justo la procedencia falsa que el P0 vino a quitar. La prospección
-     * sólo necesita colgar de un inmueble; quién responda por él no entra en lo
-     * que esta prueba mide.
-     */
-    private long unaPropiedadDe(long idOrganizacion) {
-        List<Long> ids = jdbc.queryForList("""
-                select id_propiedad from propiedad where organizacion_id = ?
-                 order by id_propiedad limit 1
-                """, Long.class, idOrganizacion);
-        if (!ids.isEmpty()) {
-            return ids.get(0);
-        }
-        return jdbc.queryForObject("""
-                insert into propiedad (codigo, direccion, distrito, metraje, tipo_inmueble, uso,
-                                       organizacion_id, estado_registro, origen_incorporacion)
-                values (?, 'Av. Interpretacion 1', 'Miraflores', 70.00, 'D', 'C', ?, 'A', 'SEMILLA')
-                returning id_propiedad
-                """, Long.class, "INTERP-" + idOrganizacion, idOrganizacion);
-    }
 
     /**
      * La entidad del asunto que espera a otro. Identificador <b>deliberadamente

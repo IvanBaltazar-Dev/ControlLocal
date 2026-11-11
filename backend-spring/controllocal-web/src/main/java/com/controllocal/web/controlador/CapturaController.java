@@ -60,7 +60,9 @@ public class CapturaController {
     }
 
     /** Lo que el cliente sabe hasta ahora, mas lo que el motor responde. */
-    public record AvanceRequest(String intencion, Long idBorrador, Map<String, String> datos) {
+    public record AvanceRequest(String intencion, Long idBorrador, Integer versionEsperada,
+                                Map<String, MotorDeCaptura.Respuesta> respuestas,
+                                com.controllocal.service.captura.SuficienciaInmueble.Contexto contexto) {
     }
 
     /**
@@ -129,7 +131,7 @@ public class CapturaController {
                                    String control, String tipoDato, String unidad,
                                    List<OpcionResponse> opciones, String exigencia,
                                    boolean obligatoria, String ayuda, int orden,
-                                   RestriccionesResponse restricciones) {
+                                   RestriccionesResponse restricciones, String referenciaCatalogo,String versionDefinicion) {
 
         static PreguntaResponse desde(MotorDeCaptura.Pregunta pregunta) {
             return new PreguntaResponse(pregunta.clave(), pregunta.rotulo(), pregunta.seccion(),
@@ -137,7 +139,7 @@ public class CapturaController {
                     pregunta.opciones() == null ? null
                             : pregunta.opciones().stream().map(OpcionResponse::desde).toList(),
                     pregunta.exigencia(), pregunta.obligatoria(), pregunta.ayuda(),
-                    pregunta.orden(), RestriccionesResponse.desde(pregunta.restricciones()));
+                    pregunta.orden(), RestriccionesResponse.desde(pregunta.restricciones()),pregunta.referenciaCatalogo(),pregunta.versionDefinicion());
         }
     }
 
@@ -163,18 +165,20 @@ public class CapturaController {
                                   String canal, Map<String, Object> conocido,
                                   List<String> faltante, PreguntaResponse siguiente,
                                   boolean listoParaEjecutar, String entidadTipo, Long idEntidad,
-                                  LocalDateTime actualizadoEn) {
+                                  LocalDateTime actualizadoEn, int version,
+                                  com.controllocal.service.captura.SuficienciaInmueble.Contexto contexto,
+                                  Map<String, MotorDeCaptura.MetadatoRespuesta> metadatos,
+                                  com.controllocal.service.captura.RetornoCaptura retorno,
+                                  com.controllocal.service.captura.SuficienciaInmueble.Evaluacion suficiencia,
+                                  List<com.controllocal.service.captura.SuficienciaInmueble.Evaluacion> suficienciasEncargo) {
 
         static CapturaResponse desde(EstadoCaptura e) {
             return new CapturaResponse(e.idBorrador(), e.codigo(), e.intencion(), e.estado(),
                     e.canal(), e.conocido(), e.faltante(),
                     e.siguiente() == null ? null : PreguntaResponse.desde(e.siguiente()),
-                    e.listoParaEjecutar(), e.entidadTipo(), e.idEntidad(), e.actualizadoEn());
+                    e.listoParaEjecutar(), e.entidadTipo(), e.idEntidad(), e.actualizadoEn(),
+                    e.version(), e.contexto(), e.metadatos(), e.retorno(),e.suficiencia(),e.suficienciasEncargo());
         }
-    }
-
-    public record EjecucionResponse(Long idBorrador, Long idPropiedad, String codigoPropiedad,
-                                    List<Long> idsEncargos, boolean reintento) {
     }
 
     /**
@@ -182,22 +186,22 @@ public class CapturaController {
      * una nueva; con el, incorpora lo que llegue.
      */
     @PostMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida({"abrir_sesion_captura", "responder_captura"})
     public ResponseEntity<CapturaResponse> avanzar(
             @RequestBody(required = false) AvanceRequest dto, HttpServletRequest peticion) {
         AvanceRequest cuerpo = dto == null
-                ? new AvanceRequest(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, Map.of()) : dto;
-        EstadoCaptura estado = motor.avanzar(cuerpo.intencion(), cuerpo.idBorrador(),
-                cuerpo.datos(), procedencias.de(peticion), SesionActual.actor());
+                ? new AvanceRequest(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null, Map.of(), null) : dto;
+        EstadoCaptura estado = motor.avanzar(new MotorDeCaptura.Avance(cuerpo.intencion(), cuerpo.idBorrador(),
+                cuerpo.versionEsperada(), cuerpo.respuestas(), cuerpo.contexto()), procedencias.de(peticion), SesionActual.actor());
         return ResponseEntity.status(cuerpo.idBorrador() == null ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(CapturaResponse.desde(estado));
     }
 
     /**
-     * Lo que el tenant tiene a medias. No filtra por quien lo empezo: el
-     * borrador es de la organizacion, que es lo que permite que una captura
-     * iniciada por KAIROS la termine otra persona.
+     * Las capturas actualmente autorizadas para el actor; pertenecer al tenant no concede consulta de borradores ajenos.
      */
     @GetMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida({"capturas_en_curso"})
     public List<CapturaResponse> enCurso() {
         return motor.enCurso(SesionActual.actor()).stream()
                 .map(CapturaResponse::desde)
@@ -241,15 +245,18 @@ public class CapturaController {
     }
 
     @GetMapping("definicion")
+    @com.controllocal.web.capacidades.CapacidadReconocida({"catalogo_de_captura"})
     public DefinicionResponse definicion(
             @RequestParam(defaultValue = "REGISTRAR_PROPIEDAD") String intencion,
             @RequestParam String tipoPropiedad,
-            @RequestParam(required = false) String operaciones) {
+            @RequestParam(required = false) String operaciones,
+            @RequestParam(required = false) String jurisdiccion) {
         return DefinicionResponse.desde(
-                motor.definicion(intencion, tipoPropiedad, operaciones, SesionActual.actor()));
+                motor.definicion(intencion, tipoPropiedad, operaciones, jurisdiccion, SesionActual.actor()));
     }
 
     @GetMapping("{id}")
+    @com.controllocal.web.capacidades.CapacidadReconocida("consultar_captura")
     public CapturaResponse consultar(@PathVariable long id) {
         return CapturaResponse.desde(motor.consultar(id, SesionActual.actor()));
     }
@@ -258,24 +265,31 @@ public class CapturaController {
      * Corre el caso de uso con lo que el borrador sabe. Falla con la lista de
      * lo que falta si todavia no hay suficiente: el alta no se ejecuta a medias.
      */
-    @PostMapping("{id}/ejecutar")
+    /** UC-K-07: leer el resultado original no emite otro comando ni reconstruye hechos posteriores. */
+    @GetMapping("{id}/resultado")
     @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<EjecucionResponse> ejecutar(
-            @PathVariable long id,
-            @RequestHeader(value = "Idempotency-Key", required = false) String claveIdempotencia,
-            HttpServletRequest peticion) {
-        MotorDeCaptura.Ejecucion resultado = motor.ejecutar(id, claveIdempotencia,
-                procedencias.de(peticion), SesionActual.actor());
-        EjecucionResponse cuerpo = new EjecucionResponse(resultado.idBorrador(),
-                resultado.idPropiedad(), resultado.codigoPropiedad(), resultado.idsEncargos(),
-                resultado.reintento());
-        return ResponseEntity.status(resultado.reintento() ? HttpStatus.OK : HttpStatus.CREATED)
-                .body(cuerpo);
+    @com.controllocal.web.capacidades.CapacidadReconocida("resultado_de_captura")
+    public MotorDeCaptura.ResultadoConsultado resultado(@PathVariable long id,
+            @RequestHeader(value = "Idempotency-Key", required = false) String claveIdempotencia) {
+        return motor.consultarResultado(id, claveIdempotencia, SesionActual.actor());
     }
 
     /** Abandonada a proposito. No se borra: que alguien la empezara tambien es un hecho. */
     @DeleteMapping("{id}")
-    public CapturaResponse descartar(@PathVariable long id) {
-        return CapturaResponse.desde(motor.descartar(id, SesionActual.actor()));
+    @PreAuthorize("hasRole('AGENTE')")
+    @com.controllocal.web.capacidades.CapacidadReconocida("descartar_captura")
+    public CapturaResponse descartar(@PathVariable long id, @RequestParam Integer versionEsperada,
+                                     HttpServletRequest peticion) {
+        return CapturaResponse.desde(motor.descartar(id, versionEsperada, procedencias.de(peticion), SesionActual.actor()));
+    }
+
+    public record PosposicionRequest(Integer versionEsperada, java.time.LocalDate hasta, String motivo) { }
+    @PostMapping("{id}/revision/posponer")
+    @PreAuthorize("hasRole('AGENTE')")
+    @com.controllocal.web.capacidades.CapacidadReconocida("posponer_revision_captura")
+    public CapturaResponse posponer(@PathVariable long id, @RequestBody PosposicionRequest datos,
+                                    HttpServletRequest peticion) {
+        if(datos==null)throw new com.controllocal.service.excepcion.ReglaNegocioException("Faltan los datos de la posposición.");
+        return CapturaResponse.desde(motor.posponerRevision(id,datos.versionEsperada(),datos.hasta(),datos.motivo(),procedencias.de(peticion),SesionActual.actor()));
     }
 }

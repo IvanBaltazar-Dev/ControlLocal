@@ -2,8 +2,13 @@ package com.controllocal.persistence.query;
 
 import java.math.BigDecimal;
 
-/** Parte del agente asignada en liquidaciones no anuladas, por moneda. */
+/** Reparto histórico en la moneda de su evaluación base, con cobertura conocida. */
 public interface RepartoComisionPorMoneda {
     String getMoneda();
     BigDecimal getParteAgente();
+    BigDecimal getSaldoPagoAgente();
+    Long getDeterminados();
+    Long getPendientes();
+    Long getSaldoDeterminados();
+    Long getSaldoPendientes();
 }

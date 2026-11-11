@@ -1,257 +1,61 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.RequerimientoCliente;
-import com.controllocal.domain.inmueble.CatalogoAtributo;
-import com.controllocal.domain.inmueble.Distrito;
-import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.persona.DetalleCliente;
+import com.controllocal.persistence.query.ConteoPorAgente;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
-import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.HallazgoService.Hallazgo;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
+import com.controllocal.service.*;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValorLogico;
-import com.controllocal.service.soporte.ValoresGobernados;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
-
-import java.math.BigDecimal;
+import org.springframework.dao.DataAccessResourceFailureException;
 import java.util.List;
 import java.util.Map;
+import static com.controllocal.service.matching.ContratoMatching.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * <b>El hallazgo: misma evidencia, otra salida</b> (E2.3).
- *
- * <p>Lo que se protege aquí no es el número: es que el hallazgo <b>lleve consigo
- * por qué apareció</b>. Un descubrimiento sin evidencia es una corazonada, y una
- * corazonada no se puede contradecir — el agente no tiene forma de decidir si
- * vale la pena llamar al cliente.
- */
+/** Un mismo resultado tipado por Demanda/version; concentración mantiene su finalidad propia. */
 class HallazgoServiceImplTest {
+    private static final Actor AGENTE=new Actor(1,2,3,Actor.AGENTE);
+    private static final Actor BROKER=new Actor(1,4,5,Actor.BROKER);
+    private static final Actor GOBIERNO=new Actor(1,4,8,Actor.TENANT_ADMIN);
+    private final CaptacionRepository captaciones=mock(CaptacionRepository.class);
+    private final Alcances alcances=mock(Alcances.class);
+    private final DetalleAgenteRepository agentes=mock(DetalleAgenteRepository.class);
+    private final CoincidenciaService coincidencias=mock(CoincidenciaService.class);
+    private final HallazgoServiceImpl servicio=new HallazgoServiceImpl(captaciones,alcances,agentes,coincidencias);
 
-    private static final long ORG = 1L;
-    private static final long ROL_AGENTE = 30L;
-    private static final long ID_CLIENTE = 77L;
-
-    private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final RequerimientoClienteRepository requerimientos =
-            mock(RequerimientoClienteRepository.class);
-    private final OportunidadComercialRepository oportunidades =
-            mock(OportunidadComercialRepository.class);
-    private final LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
-    private final Alcances alcances = mock(Alcances.class);
-    private final DetalleAgenteRepository agentesRepo = mock(DetalleAgenteRepository.class);
-
-    private final HallazgoServiceImpl service =
-            new HallazgoServiceImpl(captaciones, requerimientos, oportunidades, lector,
-                    alcances, agentesRepo);
-
-    private static final long ID_PROPIEDAD = 900L;
-
-    private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
-    private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
-
-    @BeforeEach
-    void escenarioBase() {
-        when(captaciones.activasConLocalDisponible(anyLong(), anyLong()))
-                .thenReturn(List.of(captacion(500L, "CAP-0007", propiedadQueEncaja())));
-        when(oportunidades.idsClienteDelEquipo(anyLong(), any())).thenReturn(List.of(ID_CLIENTE));
-        when(oportunidades.paresClienteCaptacionDelEquipo(anyLong(), any())).thenReturn(List.of());
-        when(requerimientos.listarActivos(anyLong())).thenReturn(List.of(requerimientoQueEncaja()));
-        // El rubro del local viaja por su AUTORIDAD desde V71. El puntaje que
-        // afirman los casos NO cambia: es la prueba de que mover el dato de
-        // sitio no movio el resultado del matcher.
-        when(lector.deVarias(anyLong(), any())).thenReturn(Map.of(ID_PROPIEDAD,
-                ValoresGobernados.constructor()
-                        .con(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO,
-                                ValorLogico.deTexto("Cafeteria y panaderia"))
-                        .construir()));
+    @Test void gobiernoNoAdquiereLecturaComercialPorAusenciaDeHallazgos() {
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.de(GOBIERNO));
+        verifyNoInteractions(captaciones,alcances,agentes,coincidencias);
     }
-
-    // ==================================================================
-
-    @Test
-    @DisplayName("un hallazgo lleva su evidencia: por que aparecio y que criterios cruza")
-    void elHallazgoTraeSuEvidencia() {
-        List<Hallazgo> hallazgos = service.de(agente);
-
-        assertEquals(1, hallazgos.size());
-        Hallazgo h = hallazgos.get(0);
-
-        assertTrue(h.puntaje() > 0, "el puntaje es el mismo que el panel de coincidencias");
-        assertFalse(h.cumple().isEmpty(),
-                "sin criterios cumplidos, el hallazgo seria una corazonada");
-        assertTrue(h.porQue().contains("Cruza"),
-                "la interpretacion la redacta el dominio, no el cliente: " + h.porQue());
-        assertEquals("cliente-detail/" + ID_CLIENTE, h.destino(),
-                "lleva a donde se actua: la ficha del cliente, que es donde vive el panel");
+    @Test void conservaCadaDemandaSinEscogerMejorClienteNiConvertirEnPorcentaje() {
+        var primera=aptitud("A",2,2);var segunda=aptitud("B",0,0);
+        when(coincidencias.aptitudesPropias(AGENTE)).thenReturn(List.of(
+                new CoincidenciaService.Aptitud(9,1,11,3,"ENC-11",primera),new CoincidenciaService.Aptitud(10,2,11,3,"ENC-11",segunda)));
+        var resultado=servicio.de(AGENTE);
+        assertEquals(2,resultado.size());assertEquals(List.of(10L,9L),resultado.stream().map(HallazgoService.Hallazgo::idDemanda).toList());
+        assertTrue(resultado.stream().anyMatch(h->h.aptitud()==primera));assertTrue(resultado.stream().anyMatch(h->h.aptitud()==segunda));
+        assertTrue(resultado.stream().allMatch(h->h.porQue()==null&&h.destino().isEmpty()));
+        verifyNoInteractions(captaciones,alcances,agentes);
     }
-
-    @Test
-    @DisplayName("la identidad es estable: la misma coincidencia tiene el mismo id entre lecturas")
-    void laIdentidadEsEstable() {
-        String primera = service.de(agente).get(0).id();
-        String segunda = service.de(agente).get(0).id();
-
-        assertEquals(primera, segunda,
-                "si el id cambiara en cada lectura, la pantalla no podria recordar que ya lo miraste");
-        assertTrue(primera.contains(String.valueOf(ID_CLIENTE)) && primera.contains("500"),
-                "se compone de los DOS extremos que la producen: " + primera);
+    @Test void concentracionDelBrokerNoSeConvierteEnAptitudDeMatching() {
+        var roles=List.of(3L,4L,6L);when(alcances.de(BROKER)).thenReturn(new Alcances.Alcance(1,false,roles));
+        var a=conteo(3,100);var b=conteo(4,0);var c=conteo(6,0);
+        when(captaciones.contarEnCarteraPorAgentes(1,roles)).thenReturn(List.of(a,b,c));when(agentes.findAllById(roles)).thenReturn(List.of());
+        var hallazgos=servicio.de(BROKER);assertEquals(1,hallazgos.size());var hallazgo=hallazgos.getFirst();
+        assertEquals(HallazgoService.CONCENTRACION_DEL_EQUIPO,hallazgo.tipo());assertNull(hallazgo.aptitud());assertEquals("agentes",hallazgo.destino());
+        assertNotNull(hallazgo.porQue());verifyNoInteractions(coincidencias);
     }
-
-    @Test
-    @DisplayName("el titulo NO entra en la identidad: cambiarlo no convierte el hallazgo en otro")
-    void elTituloNoEntraEnLaIdentidad() {
-        String antes = service.de(agente).get(0).id();
-
-        when(captaciones.activasConLocalDisponible(anyLong(), anyLong())).thenReturn(
-                List.of(captacion(500L, "CAP-0007", conDireccion(propiedadQueEncaja(), "Otra calle 99"))));
-
-        List<Hallazgo> despues = service.de(agente);
-        assertEquals(antes, despues.get(0).id(), "misma coincidencia, mismo id");
-        assertNotEquals("", despues.get(0).titulo());
+    @Test void equipoMenorAlMinimoVigenteNoInventaConcentracion() {
+        when(alcances.de(BROKER)).thenReturn(new Alcances.Alcance(1,false,List.of(3L,4L)));
+        assertTrue(servicio.de(BROKER).isEmpty());verifyNoInteractions(captaciones,agentes,coincidencias);
     }
-
-    @Test
-    @DisplayName("lo que ya se propuso no vuelve a descubrirse")
-    void loYaPropuestoNoSeRepite() {
-        when(oportunidades.paresClienteCaptacionDelEquipo(anyLong(), any()))
-                .thenReturn(List.<Object[]>of(new Object[]{ID_CLIENTE, 500L}));
-
-        assertTrue(service.de(agente).isEmpty(),
-                "proponer dos veces lo mismo es ruido, no descubrimiento");
+    @Test void errorTecnicoDeLecturaNoSeDevuelveComoSinHallazgos() {
+        when(coincidencias.aptitudesPropias(AGENTE)).thenThrow(new DataAccessResourceFailureException("TEST"));
+        assertThrows(DataAccessResourceFailureException.class,()->servicio.de(AGENTE));
     }
-
-    @Test
-    @DisplayName("por debajo del umbral de la politica no hay hallazgo")
-    void debajoDelUmbralNoHayHallazgo() {
-        RequerimientoCliente imposible = requerimientoQueEncaja();
-        imposible.setRubro("Taller mecanico");
-        imposible.setTipoInmueble("OFICINA");
-        imposible.setDistritos(List.of(distrito("Comas")));
-        imposible.setRentaMin(new BigDecimal("50000"));
-        imposible.setRentaMax(new BigDecimal("90000"));
-        when(requerimientos.listarActivos(anyLong())).thenReturn(List.of(imposible));
-
-        assertTrue(service.de(agente).isEmpty(),
-                "el umbral es el de PoliticaComercial, no uno propio de esta clase");
-    }
-
-    @Test
-    @DisplayName("cambiar la evidencia cambia el hallazgo")
-    void cambiarLaEvidenciaCambiaElHallazgo() {
-        Hallazgo antes = service.de(agente).get(0);
-
-        // Un requerimiento que ya no pide ese distrito: mismo motor, otro resultado.
-        RequerimientoCliente otro = requerimientoQueEncaja();
-        otro.setDistritos(List.of(distrito("San Isidro")));
-        when(requerimientos.listarActivos(anyLong())).thenReturn(List.of(otro));
-
-        Hallazgo despues = service.de(agente).get(0);
-
-        assertNotEquals(antes.puntaje(), despues.puntaje(),
-                "si la evidencia cambia y el hallazgo no, no estaba leyendo la evidencia");
-        assertFalse(despues.noCumple().isEmpty(),
-                "y el pero se declara: un hallazgo que solo presume se decide peor");
-    }
-
-    /**
-     * <b>La superficie es la misma; el productor, no</b> (D-E2-1 seccion 7.1).
-     *
-     * <p>El broker no recibe coincidencias de cartera -- cruzan las captaciones y
-     * los clientes de UN agente-- sino concentracion del equipo. Con un equipo
-     * de dos no hay concentracion que descubrir, asi que aqui no sale nada: lo
-     * que se comprueba es que NO se cuela un hallazgo de cartera.
-     */
-    @Test
-    @DisplayName("el broker no recibe coincidencias de cartera: las suyas son de otra naturaleza")
-    void elBrokerNoRecibeHallazgosDeCartera() {
-        when(alcances.de(broker)).thenReturn(
-                new Alcances.Alcance(ORG, false, List.of(41L, 42L)));
-
-        assertTrue(service.de(broker).isEmpty(),
-                "con dos agentes no hay equipo del que hablar, y una coincidencia de cartera "
-                        + "nunca es del broker");
-        verifyNoInteractions(requerimientos);
-    }
-
-    @Test
-    @DisplayName("leerlo dos veces no cambia nada: un hallazgo es una lectura, no un hecho")
-    void leerloDosVecesNoCambiaNada() {
-        List<Hallazgo> primera = service.de(agente);
-        List<Hallazgo> segunda = service.de(agente);
-
-        // No hay repositorio de escritura inyectado, y esto lo confirma desde
-        // fuera: si un hallazgo dejara rastro, la segunda lectura lo veria y el
-        // rastro sobreviviria al cambio que lo invalide -- mandando a proponer
-        // algo que ya no encaja.
-        assertEquals(primera, segunda, "calcularlo de nuevo da lo mismo y no acumula");
-    }
-
-    // ------------------------------------------------------------------
-    // Fixtures: una cafeteria en Miraflores que encaja con el local demo.
-    // ------------------------------------------------------------------
-
-    private static Captacion captacion(long id, String codigo, Propiedad propiedad) {
-        Captacion captacion = new Captacion();
-        ReflectionTestUtils.setField(captacion, "id", id);
-        captacion.setCodigoCaptacion(codigo);
-        captacion.setPropiedad(propiedad);
-        return captacion;
-    }
-
-    private static Propiedad propiedadQueEncaja() {
-        Propiedad propiedad = new Propiedad();
-        propiedad.setCodigo("LOC-0001");
-        propiedad.setDireccion("Av. Larco 123");
-        propiedad.setDistrito("Miraflores");
-        propiedad.setTipoInmueble(Propiedad.TIPO_LOCAL);
-        propiedad.setMetraje(new BigDecimal("120.00"));
-        propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
-        ReflectionTestUtils.setField(propiedad, "id", ID_PROPIEDAD);
-        return propiedad;
-    }
-
-    private static Propiedad conDireccion(Propiedad propiedad, String direccion) {
-        propiedad.setDireccion(direccion);
-        return propiedad;
-    }
-
-    private static RequerimientoCliente requerimientoQueEncaja() {
-        RequerimientoCliente r = new RequerimientoCliente();
-        DetalleCliente cliente = new DetalleCliente();
-        ReflectionTestUtils.setField(cliente, "id", ID_CLIENTE);
-        r.setCliente(cliente);
-        r.setRubro("Cafeteria");
-        r.setTipoInmueble("LOCAL_COMERCIAL");
-        r.setRentaMin(new BigDecimal("3000"));
-        r.setRentaMax(new BigDecimal("12000"));
-        r.setMoneda("PEN");
-        r.setMetrajeMin(new BigDecimal("80"));
-        r.setMetrajeMax(new BigDecimal("200"));
-        r.setDistritos(List.of(distrito("Miraflores")));
-        return r;
-    }
-
-    private static Distrito distrito(String nombre) {
-        Distrito distrito = new Distrito();
-        distrito.setNombre(nombre);
-        return distrito;
-    }
+    private static CoincidenciaService.Coincidencia aptitud(String ref,long s,long w){return new CoincidenciaService.Coincidencia(ref,3,
+            CoincidenciaService.Capa.L0,Categoria.COMERCIAL_CONFIRMADA,Conclusion.CUMPLE,Conclusion.CUMPLE,s,0,w,List.of(),Map.of(),CoberturaCriterios.COMPLETA,null);}
+    private static ConteoPorAgente conteo(long rol,long total){var c=mock(ConteoPorAgente.class);when(c.getIdAgente()).thenReturn(rol);when(c.getTotal()).thenReturn(total);return c;}
 }

@@ -38,7 +38,7 @@
           <div><span>Exclusividad</span><strong>{{ exclusivo(c.exclusividad) }}</strong></div>
           <div><span>Área</span><strong>{{ area(c.areaM2) }}</strong></div>
           <div><span>Rubro</span><strong>{{ valor(c.rubro) }}</strong></div>
-          <div><span>Renta referencial</span><strong>{{ precio(local()?.precioReferencial, local()?.monedaReferencial) }}</strong></div>
+          <div><span>Importe del encargo</span><strong>{{ precio(c.importeReferencia, c.monedaReferencia) }}</strong></div>
           <div><span>Comisión calculada</span><strong>{{ importeComision() }}</strong></div>
           <div><span>Tratamiento del IGV</span><strong>{{ c.tratamientoIgv === 'I' ? 'Incluido' : c.tratamientoIgv === 'A' ? 'Adicional' : 'No aplica' }}</strong></div>
           @if (c.fechaCierre) { <div><span>Fecha de cierre</span><strong>{{ fecha(c.fechaCierre) }}</strong></div> }
@@ -51,7 +51,7 @@
       <section class="cl-tarjeta">
         <header><div><h2>Origen y propiedad</h2><p>Accesos con nombres distintos según lo que muestran.</p></div></header>
         <div class="origenes">
-          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verLocal()"><strong>Datos del local</strong><span>Registro técnico-operativo · {{ valor(local()?.codigoLocal) }}</span></button>
+          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verPropiedad()"><strong>Datos de la propiedad</strong><span>Registro técnico-operativo · {{ valor(propiedad()?.codigo) }}</span></button>
           <button type="button" class="origen" (click)="resumenComercial()"><strong>Resumen comercial</strong><span>Galería, condiciones, comisión y responsables</span></button>
           <button type="button" class="origen" [disabled]="!prospeccion()" (click)="verProspeccion()"><strong>Seguimiento de prospección</strong><span>{{ valor(prospeccion()?.codigoProspeccion) }} · {{ resultadoPropuesta() }}</span></button>
         </div>
@@ -74,7 +74,7 @@
         <div class="cl-pares apiladas">
           <div><span>ID interno</span><strong>{{ c.id }}</strong></div>
           <div><span>Código</span><strong>{{ valor(c.codigoCaptacion) }}</strong></div>
-          <div><span>Código del local</span><strong>{{ valor(local()?.codigoLocal) }}</strong></div>
+          <div><span>Código de la propiedad</span><strong>{{ valor(propiedad()?.codigo) }}</strong></div>
           <div><span>Prospección de origen</span><strong>{{ valor(prospeccion()?.codigoProspeccion) }}</strong></div>
         </div>
       </section>

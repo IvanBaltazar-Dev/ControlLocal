@@ -209,7 +209,7 @@ class SolicitudServiceImplTest {
     @Test
     void laCaptacionDebeEstarActiva() {
         // Regla invisible del §2 nº1: no se ve en el REST y se pierde al portar.
-        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.CERRADA));
+        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.FINALIZADO));
         when(oportunidades.buscarFicha(ORG, OPORTUNIDAD)).thenReturn(Optional.of(oportunidad));
 
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
@@ -224,7 +224,7 @@ class SolicitudServiceImplTest {
         // Se comprueba DESPUES de la captacion: una oportunidad ya en S con
         // captacion cerrada responde por la captacion, no por la oportunidad.
         OportunidadComercial oportunidad = oportunidad(
-                OportunidadComercial.SOLICITUD_CREADA, captacion(Captacion.ACTIVA));
+                OportunidadComercial.SOLICITUD_CREADA, captacion(Captacion.APROBADO));
         when(oportunidades.buscarFicha(ORG, OPORTUNIDAD)).thenReturn(Optional.of(oportunidad));
 
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
@@ -251,7 +251,7 @@ class SolicitudServiceImplTest {
 
     @Test
     void elAgenteDebeExistirEstarActivoYDisponible() {
-        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.ACTIVA));
+        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.APROBADO));
         when(oportunidades.buscarFicha(ORG, OPORTUNIDAD)).thenReturn(Optional.of(oportunidad));
 
         when(agentes.findById(ROL_AGENTE)).thenReturn(Optional.empty());
@@ -707,7 +707,7 @@ class SolicitudServiceImplTest {
 
     /** Deja el alta lista para pasar todas las precondiciones. */
     private OportunidadComercial prepararAltaValida() {
-        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.ACTIVA));
+        OportunidadComercial oportunidad = oportunidadAbierta(captacion(Captacion.APROBADO));
         when(oportunidades.buscarFicha(ORG, OPORTUNIDAD)).thenReturn(Optional.of(oportunidad));
         when(agentes.findById(ROL_AGENTE))
                 .thenReturn(Optional.of(detalleAgente(ROL_AGENTE, "Valentina Mora")));
@@ -761,7 +761,7 @@ class SolicitudServiceImplTest {
         solicitud.setFechaRegistro(LocalDate.of(2026, 7, 15));
         solicitud.setMontoPropuesto(new BigDecimal("9000.00"));
         solicitud.setAgente(detalleAgente(ROL_AGENTE, "Valentina Mora"));
-        solicitud.setOportunidad(oportunidadAbierta(captacion(Captacion.ACTIVA)));
+        solicitud.setOportunidad(oportunidadAbierta(captacion(Captacion.APROBADO)));
         nuevasTransiciones().iniciar(solicitud, estado);
         ReflectionTestUtils.setField(solicitud, "id", SOLICITUD);
         return solicitud;

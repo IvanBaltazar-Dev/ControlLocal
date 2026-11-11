@@ -139,6 +139,27 @@ describe('ClienteContactoDetail', () => {
     expect(texto(sinRastro)).toContain('No asignado');
   });
 
+  it('muestra el snapshot parcial como FALTANTE y conserva su rol', async () => {
+    interacciones.pagina.and.resolveTo(
+      pagina([
+        {
+          ...INTERACCIONES[0],
+          propietarioNombre: 'Ana Torres',
+          contactoTipo: 'Familiar',
+          contactoTelefono: '+51 999 333 444',
+        },
+      ]),
+    );
+
+    const fixture = await montar();
+    const contenido = texto(fixture);
+
+    expect(contenido).toContain('FALTANTE');
+    expect(contenido).toContain('Familiar');
+    expect(contenido).toContain('+51 999 333 444');
+    expect(contenido).not.toContain('Ana Torres');
+  });
+
   it('cuenta como activas solo las oportunidades abiertas o con solicitud', async () => {
     const fixture = await montar();
     expect(acceder(fixture).activas()).toBe(1);
@@ -187,6 +208,8 @@ describe('ClienteContactoDetail', () => {
   ): Promise<ComponentFixture<ClienteContactoDetail>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

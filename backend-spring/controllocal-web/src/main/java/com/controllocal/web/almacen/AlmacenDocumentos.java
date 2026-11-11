@@ -1,57 +1,23 @@
 package com.controllocal.web.almacen;
 
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Almacen de binarios (fotos, documentos del expediente). La clave es un
- * identificador opaco no adivinable (tipo capability): quien la tiene puede
- * leer el archivo por GET /documentos/contenido.
+ * identificador técnico privado del proveedor. No es una capability ni se
+ * entrega al cliente: GET /documentos/contenido usa una referencia Core y
+ * comprueba de nuevo sesión, recurso y finalidad antes de entregar bytes.
  *
- * <p><b>Esta interfaz es la unica frontera del almacenamiento</b>, y se
- * conserva a proposito: hoy la implementa {@link AlmacenDisco} y manana la
- * implementara la variante S3 (Bloque 8, antes de E5). Nada fuera de este
+ * <p><b>Esta interfaz es la unica frontera del almacenamiento</b>; la
+ * implementan {@link AlmacenDisco} y {@link AlmacenS3}. Nada fuera de este
  * paquete puede saber donde viven los bytes.
  *
- * <p><b>Preparacion para S3 ya aplicada</b>: las claves nuevas se prefijan con
- * la organizacion via {@link #carpetaDeTenant}. Sirve igual en disco (un
- * subdirectorio por tenant) que en un bucket privado (un prefijo por tenant,
- * que es donde se apoyan las politicas de aislamiento). Se hace ahora, y no al
- * migrar, porque cambiar el formato de clave <b>despues</b> de mover los
- * binarios obligaria a moverlos dos veces.
+ * <p>Core preasigna la clave privada con organizacion e intento durable antes
+ * de escribir. La salida comercial usa {@link SalidaBinariaPersistente} con
+ * admision B0; el proveedor no acuna otra clave ni decide permisos o cuotas.
+ * Las referencias existentes se conservan al copiar entre proveedores.
  */
 public interface AlmacenDocumentos {
-
-    /** Raiz de todas las claves nuevas. Un solo sitio donde vive el formato. */
-    String PREFIJO_TENANT = "tenant/";
-
-    /**
-     * Carpeta de una organizacion: {@code tenant/{organizacionId}/{carpeta}}.
-     *
-     * <p>Las claves <b>anteriores</b> a esta preparacion no llevan prefijo y
-     * <b>se siguen leyendo tal cual</b>: la clave guardada en PostgreSQL es la
-     * fuente de verdad y {@link #abrir(String)} la resuelve como venga. No hay
-     * migracion de binarios en este bloque, a proposito — se hara una sola vez,
-     * junto con el paso a S3.
-     */
-    static String carpetaDeTenant(long idOrganizacion, String carpeta) {
-        return PREFIJO_TENANT + idOrganizacion + "/" + carpeta;
-    }
-
-    /**
-     * Clave nueva: {@code carpeta/uuid8-nombre_saneado}.
-     *
-     * <p>Vive aqui, y no en cada implementacion, porque <b>las dos tienen que
-     * generar exactamente la misma forma</b>. Si el disco y S3 construyeran
-     * claves distintas, la migracion de binarios dejaria de ser una copia y
-     * pasaria a ser una traduccion — con su tabla de equivalencias y su
-     * oportunidad de perder archivos.
-     */
-    static String claveNueva(String carpeta, String nombreArchivo) {
-        String saneado = (nombreArchivo == null ? "" : nombreArchivo)
-                .replaceAll("[^a-zA-Z0-9._-]", "_");
-        return carpeta + "/" + UUID.randomUUID().toString().substring(0, 8) + "-" + saneado;
-    }
 
     /**
      * Content-type con el que se <b>sirve</b> un binario, deducido de la clave.
@@ -90,30 +56,36 @@ public interface AlmacenDocumentos {
         return barra >= 0 ? clave.substring(barra + 1) : clave;
     }
 
-    record ArchivoGuardado(String clave, String nombre) {
-    }
-
     record ArchivoDescargado(byte[] contenido, String nombre, String contentType) {
     }
 
     /** Identificador del backend de almacenamiento (informativo en el cable): DISCO | S3. */
     String proveedor();
 
-    ArchivoGuardado guardar(String carpeta, String nombreArchivo, byte[] contenido, String contentType);
+    /** Huella privada y estable del namespace real; no credencial, ruta pública ni permiso. */
+    String identidadTecnica();
+
+    static String huellaIdentidad(String proveedor,String namespace) {
+        if(proveedor==null||proveedor.isBlank()||namespace==null||namespace.isBlank())
+            throw new AlmacenException("No se pudo identificar el almacén privado.",null);
+        try {
+            var bytes=("BROX-ALMACEN\u0000"+proveedor+"\u0000"+namespace).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch(java.security.NoSuchAlgorithmException imposible) {
+            throw new AlmacenException("No se pudo identificar el almacén privado.",null);
+        }
+    }
 
     /**
      * Escribe en una clave <b>exacta</b>, sobrescribiendo si ya existe.
      *
-     * <p>Existe para <b>migrar binarios entre proveedores</b> y no tiene otro
-     * uso legitimo: {@link #guardar} acuña una clave nueva cada vez, que es lo
-     * correcto para un archivo nuevo y justo lo que impide copiar uno
-     * existente — la clave ya esta guardada en PostgreSQL y es la fuente de
-     * verdad, asi que cambiarla al mover los bytes romperia cada fila que la
-     * referencia.
+     * <p>Uso técnico para migrar binarios o para la salida durable RF080 cuyo
+     * intento ya ha preasignado una clave Core. La clave conservada en
+     * PostgreSQL no se traduce al mover bytes entre proveedores.
      *
-     * <p><b>No lo llame desde un caso de uso.</b> Aceptar una clave de fuera
-     * es aceptar que quien la elige decida donde cae el archivo; para eso
-     * estan las carpetas de {@link #carpetaDeTenant}.
+     * <p><b>No lo llame directamente desde un caso de uso.</b> Las escrituras
+     * comerciales pasan por la salida durable y su admision B0. Nunca se
+     * admite una ruta elegida por el cliente como clave de almacenamiento.
      *
      * <p>Sobrescribir es deliberado: hace la migracion <b>idempotente</b>.
      * Repetirla tras un corte de red reescribe los mismos bytes en la misma

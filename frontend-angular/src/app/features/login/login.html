@@ -14,7 +14,22 @@
       <div class="nota" role="status">{{ mensaje }}</div>
     }
 
-    @if (desafio()) {
+    @if (seleccionandoContexto()) {
+      <p class="intro">Elige cómo ingresar. Los contextos disponibles corresponden a tu cuenta y autorización vigentes.</p>
+      <form [formGroup]="formularioContexto" (ngSubmit)="elegirContexto()" novalidate>
+        <label for="contexto">Contexto de trabajo</label>
+        <select id="contexto" formControlName="referencia">
+          <option value="">Selecciona un contexto</option>
+          @for (contexto of contextos(); track contexto.referencia) {
+            <option [value]="contexto.referencia">{{ contexto.nombreOrganizacion }} · {{ etiquetaRol[contexto.rol] }}</option>
+          }
+        </select>
+        @if (contextos().length === 0) { <p class="intro">No hay contextos autorizados disponibles para esta cuenta.</p> }
+        @if (error(); as mensaje) { <div class="alerta" role="alert">{{ mensaje }}</div> }
+        <button type="submit" [disabled]="cargando() || formularioContexto.invalid">Ingresar al contexto</button>
+      </form>
+      <p class="pie"><button type="button" class="enlace" (click)="usarOtraCuenta()">Usar otra cuenta</button></p>
+    } @else if (desafio()) {
       <!-- Segundo paso. La contraseña ya se validó: aquí solo falta el código,
            y por eso el formulario anterior desaparece en vez de quedar a medias. -->
       <p class="intro">
@@ -57,14 +72,14 @@
       </p>
     } @else {
       <form [formGroup]="formulario" (ngSubmit)="ingresar()" novalidate>
-        <label for="usuario">Usuario</label>
+        <label for="correo">Correo BROX</label>
         <input
-          id="usuario"
-          type="text"
-          formControlName="usuario"
+          id="correo"
+          type="email"
+          formControlName="correo"
           autocomplete="username"
-          placeholder="tu usuario"
-          [class.invalido]="formulario.controls.usuario.touched && formulario.controls.usuario.invalid"
+          placeholder="tu correo personal"
+          [class.invalido]="formulario.controls.correo.touched && formulario.controls.correo.invalid"
         />
 
         <label for="contrasena">Contraseña</label>
@@ -95,6 +110,6 @@
       </p>
     }
 
-    <p class="pie">Plataforma inmobiliaria · backend v2</p>
+    <p class="pie">Plataforma inmobiliaria</p>
   </div>
 </div>

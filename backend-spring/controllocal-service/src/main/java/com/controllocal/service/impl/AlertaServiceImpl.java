@@ -1,209 +1,219 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Alerta;
-import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.comercial.Tarea;
 import com.controllocal.persistence.repositorio.AlertaRepository;
-import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.ProspeccionRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService;
-import com.controllocal.service.Pagina;
-import com.controllocal.service.excepcion.NoEncontradoException;
+import com.controllocal.persistence.repositorio.AlertaRepository.Cabecera;
+import com.controllocal.service.*;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion.Necesidad;
+import com.controllocal.service.excepcion.*;
 import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.PoliticaComercial;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import com.controllocal.service.soporte.FuentesAsuntos;
+import com.controllocal.service.soporte.AutoridadAsuntos;
+import com.controllocal.service.soporte.FuentesAsuntos.*;
+import com.controllocal.service.actividad.ContextosDeActividad;
+import com.controllocal.persistence.repositorio.FuentesAsuntosRepository;
+import com.controllocal.persistence.repositorio.FuentesAsuntosRepository.Recurso;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import java.time.LocalDate;
-import java.util.List;
-
-/**
- * Casos de uso de la campana. Corto a proposito: lo que tiene sustancia en F6
- * no es este service, son las <b>nueve bocas</b> del flujo comercial que
- * llaman a {@link #emitir} (§4 del contrato).
- */
+/** Campana: R27 usa el mismo seguimiento que Tarea, sin otro reloj ni envío externo. */
 @Service
 public class AlertaServiceImpl implements AlertaService {
-
-    /** Tope del barrido: acota una operacion que en la v1 no tenia ninguno. */
-    private static final int TOPE_BARRIDO = 500;
-
     private final AlertaRepository alertas;
-    private final ProspeccionRepository prospecciones;
-    private final DetalleAgenteRepository agentes;
     private final Alcances alcances;
+    private final SeguimientoDeProspeccion seguimiento;
+    private final FuentesAsuntos fuentes;
+    private final FuentesAsuntosRepository origenes;
+    private final ContextosDeActividad contexto;
+    private final AutoridadAsuntos autoridad;
 
-    public AlertaServiceImpl(AlertaRepository alertas, ProspeccionRepository prospecciones,
-                             DetalleAgenteRepository agentes, Alcances alcances) {
-        this.alertas = alertas;
-        this.prospecciones = prospecciones;
-        this.agentes = agentes;
-        this.alcances = alcances;
+    public AlertaServiceImpl(AlertaRepository alertas,Alcances alcances,SeguimientoDeProspeccion seguimiento,
+                            FuentesAsuntos fuentes,FuentesAsuntosRepository origenes,ContextosDeActividad contexto,AutoridadAsuntos autoridad) {
+        this.alertas=alertas;this.alcances=alcances;this.seguimiento=seguimiento;
+        this.fuentes=fuentes;this.origenes=origenes;this.contexto=contexto;this.autoridad=autoridad;
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Pagina<FichaAlerta> listar(int pagina, int tamano, Actor actor) {
-        Alcances.Alcance alcance = alcances.de(actor);
-        // Un BROKER sin equipo ve la campana vacia, no un 403 (igual que en el
-        // resto del sistema).
-        if (alcance.vacio()) {
-            return Pagina.vacia();
+    @Override @Transactional
+    public Pagina<FichaAlerta> listar(int pagina,int tamano,Actor actor) {
+        exigirOperador(actor);contexto.exigirOperador(actor);
+        if(actor.esAgente())sincronizarRecontacto(actor);
+        sincronizarDecisionesEncargo(actor);
+        var alcance=alcances.de(actor);
+        if(alcance.vacio())return Pagina.vacia();
+        var cabeceras=alertas.cabecerasActivas(alcance.idOrganizacion(),alcance.global(),alcance.paramRoles());
+        var permitidas=permitidas(cabeceras,actor);
+        if(permitidas.isEmpty())return Pagina.vacia();
+        var page=alertas.buscarAutorizadas(actor.idOrganizacion(),permitidas,
+                PageRequest.of(Math.max(1,pagina)-1,Math.max(1,Math.min(100,tamano))));
+        var recursos=page.getContent().stream().filter(a->a.getFuenteCausaC7()!=null)
+                .map(a->new Recurso(a.getEntidadTipo(),a.getEntidadId())).distinct().toList();
+        var contextosEntrega=recursos.isEmpty()?Map.<Recurso,FuentesAsuntosRepository.Contexto>of():origenes.contextos(actor.idOrganizacion(),recursos);
+        var cabecerasPorId=new HashMap<Long,Cabecera>();cabeceras.forEach(c->cabecerasPorId.put(c.getId(),c));
+        var responsables=new HashMap<Long,Long>();
+        for(var a:page.getContent())if(a.getFuenteCausaC7()!=null){
+            var c=contextosEntrega.get(new Recurso(a.getEntidadTipo(),a.getEntidadId()));
+            if(c==null||FuentesAsuntos.responsableDeEntrega(c)==null)throw new ConflictoException("Cambió el destinatario del aviso; actualiza la bandeja.");
+            responsables.put(a.getId(),FuentesAsuntos.responsableDeEntrega(c));
+        }else{
+            var c=cabecerasPorId.get(a.getId());
+            if(c==null||c.getIdAgente()==null)throw new ConflictoException("Cambió el destinatario del aviso; actualiza la bandeja.");
+            responsables.put(a.getId(),c.getIdAgente());
         }
-        int paginaValida = Math.max(1, pagina);
-        int tamanoValido = Math.max(1, Math.min(100, tamano));
-        Page<Alerta> page = alertas.buscarConAgente(alcance.idOrganizacion(), alcance.global(),
-                alcance.paramRoles(), PageRequest.of(paginaValida - 1, tamanoValido));
-        return new Pagina<>(page.getContent().stream().map(AlertaServiceImpl::ficha).toList(),
-                page.getTotalElements());
+        var nombres=new HashMap<Long,String>();
+        if(!responsables.isEmpty())for(var n:alertas.nombresDeAgentes(actor.idOrganizacion(),Set.copyOf(responsables.values())))nombres.put(n.getId(),n.getNombre());
+        var alcanceFinal=alcances.de(actor);
+        var finales=alertas.cabecerasActivas(actor.idOrganizacion(),alcanceFinal.global(),alcanceFinal.paramRoles());
+        if(!Set.copyOf(permitidas).equals(Set.copyOf(permitidas(finales,actor))))
+            throw new ConflictoException("Cambió la causa o el permiso de los avisos; actualiza la bandeja.");
+        if(finales.stream().anyMatch(c->c.getFuenteCausaC7()==null&&responsables.containsKey(c.getId())
+                &&!Objects.equals(c.getIdAgente(),responsables.get(c.getId()))))
+            throw new ConflictoException("Cambió el destinatario del aviso; actualiza la bandeja.");
+        if(page.getContent().stream().anyMatch(a->!permitidas.contains(a.getId())))throw new IllegalStateException("La página incorporó un aviso no autorizado.");
+        if(!recursos.isEmpty()&&!contextosEntrega.equals(origenes.contextos(actor.idOrganizacion(),recursos)))
+            throw new ConflictoException("Cambió el contexto de entrega de los avisos; actualiza la bandeja.");
+        contexto.exigirOperador(actor);
+        return new Pagina<>(page.getContent().stream().map(a->
+                ficha(a,responsables.get(a.getId()),nombres.get(responsables.get(a.getId())))).toList(),page.getTotalElements());
     }
 
-    @Override
-    @Transactional
-    public boolean atender(long id, Actor actor) {
-        Alcances.Alcance alcance = alcances.de(actor);
-        if (alcance.vacio()) {
-            throw new NoEncontradoException("Alerta");
-        }
-        // El cable comprueba VISIBILIDAD, no propiedad, y responde 404 —no 403—
-        // cuando la alerta existe pero no es del alcance (D-F6-3). Como
-        // buscarVisible ya filtra por ACTIVA, una alerta ya atendida cae aqui:
-        // por eso el "false" del contrato sale de este mismo camino.
-        return alertas.buscarVisible(alcance.idOrganizacion(), id, alcance.global(), alcance.paramRoles())
-                .map(alerta -> {
-                    alerta.atender();
-                    alertas.save(alerta);
-                    return true;
-                })
-                .orElseGet(() -> {
-                    // No estaba activa: puede ser que ya se atendio (respuesta
-                    // false del cable) o que no exista/no se alcance (404). Se
-                    // distinguen mirando si existe dentro del tenant.
-                    if (alertas.findById(id)
-                            .filter(a -> a.getOrganizacionId() == alcance.idOrganizacion())
-                            .isPresent()) {
-                        return false;
-                    }
-                    throw new NoEncontradoException("Alerta");
-                });
+    @Override @Transactional
+    public boolean atender(long id,Actor actor) {
+        exigirOperador(actor);contexto.exigirOperador(actor);
+        var cabecera=alertas.cabecera(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Alerta"));
+        if(!permitidas(List.of(cabecera),actor).contains(id))throw new NoEncontradoException("Alerta");
+        if(!Alerta.ACTIVA.equals(cabecera.getEstado()))return false;
+        int atendidas=alertas.atenderSiActiva(actor.idOrganizacion(),id,cabecera.getMarcaCausa(),cabecera.getHuellaCausaC7());
+        if(!permitidas(List.of(cabecera),actor).contains(id))throw new AccesoNoAutorizadoException();
+        contexto.exigirOperador(actor);return atendidas==1;
     }
 
-    @Override
-    @Transactional
-    public void emitir(DatosAlerta datos, Actor actor) {
-        // Sin agente o sin entidad no hay a quien avisar: la v1 tambien se
-        // salta la emision en silencio en vez de romper la operacion.
-        if (datos == null || datos.idRolAgente() == null || datos.entidadId() == null
-                || datos.entidadId() <= 0) {
-            return;
-        }
-        Alerta alerta = new Alerta();
-        alerta.setOrganizacionId(actor.idOrganizacion());
-        alerta.setTipo(datos.tipo());
-        alerta.setSeveridad(datos.severidad());
-        alerta.setEntidadTipo(datos.entidadTipo());
-        alerta.setEntidadId(datos.entidadId());
-        alerta.setAgente(agentes.getReferenceById(datos.idRolAgente()));
-        alerta.setMensaje(datos.mensaje());
-        alerta.nacer();
-        alertas.save(alerta);
+    @Override @Transactional
+    public void emitir(DatosAlerta datos,Actor actor) {
+        exigirOperador(actor);contexto.exigirOperador(actor);
+        if(datos==null||datos.idRolAgente()==null||datos.idRolAgente()<=0||datos.entidadId()==null||datos.entidadId()<=0
+                ||datos.tipo()==null||!Alerta.SEVERIDADES.contains(datos.severidad())||datos.mensaje()==null||datos.mensaje().isBlank()||datos.mensaje().length()>300)
+            throw new ReglaNegocioException("El aviso debe conservar recurso, destinatario, hecho y contenido permitido.");
+        String selector=switch(datos.tipo()){
+            case Alerta.SOLICITUD_REENVIADA -> "ESTADO_SOLICITUD";
+            case Alerta.SOLICITUD_DOCUMENTO -> "ENTREGA_DOCUMENTO";
+            case Alerta.SOLICITUD_DOCUMENTO_REVISADO -> "REVISION_DOCUMENTO";
+            case Alerta.SOLICITUD_EVALUADA -> "EVALUACION_SOLICITUD";
+            case Alerta.OPORTUNIDAD_CERRADA -> "REVISION_HITO";
+            case Alerta.COMISION_ASIGNADA -> "COMANDO_REPARTO";
+            case Alerta.COMISION_COBRADA -> "COMISION_MOVIMIENTO";
+            case Alerta.CAPTACION_REVISADA -> "REVISION_ENCARGO";
+            default -> throw new ReglaNegocioException("El tipo de aviso no tiene un productor canónico en este contrato.");
+        };
+        if(datos.origen()==null||!selector.equals(datos.origen().selector()))throw new ReglaNegocioException("El aviso no identifica el hecho de su productor.");
+        var causa=fuentes.resolver(new Recurso(datos.entidadTipo(),datos.entidadId()),datos.tipo(),datos.origen(),actor);
+        persistir(datos,causa,actor);
     }
 
-    /**
-     * <b>Reconciliacion simetrica del recontacto.</b>
-     *
-     * <p>Antes esto solo creaba. La tarea equivalente de la bandeja se
-     * auto-completa al reconciliar, asi que en cuanto alguien contactaba la
-     * prospeccion la tarea desaparecia y <b>el aviso se quedaba vivo</b>: la
-     * campana enseñaba PRO-0003, PRO-0005 y PRO-0011 mientras la cola iba por
-     * otras. Dos representaciones activas y contradictorias del mismo hecho.
-     *
-     * <p>Ahora las cuatro transiciones estan declaradas:
-     *
-     * <pre>
-     *   entra en condicion      -> se crea el aviso
-     *   sigue en condicion      -> se mantiene el MISMO (no se duplica)
-     *   deja de cumplirla       -> se descarta solo, con su fecha
-     *   vuelve a incumplir      -> NUEVO ciclo, aviso nuevo
-     * </pre>
-     *
-     * <p>La cuarta es una decision, no un efecto: no se reabre el aviso viejo.
-     * Un recontacto vencido en agosto y otro en octubre son dos hechos, y
-     * reactivar el primero perderia que hubo un contacto en medio — que es
-     * justo lo que la auditoria necesita poder leer.
-     *
-     * <p><b>El plazo sale de {@link PoliticaComercial} y de ningun otro sitio</b>,
-     * que es lo que garantiza que campana, bandeja e indicador hablen del mismo
-     * vencimiento. Y la condicion de cierre es literalmente la de creacion
-     * negada, resuelta en SQL: dos redacciones de la misma regla volverian a
-     * separarse.
-     *
-     * @return cuantos avisos se crearon. Los descartados no se cuentan aqui: el
-     *         cable de la campana declara «creadas», y sumarlos cambiaria el
-     *         significado del numero.
-     */
-    @Override
-    @Transactional
+    @Override @Transactional
     public int sincronizarRecontacto(Actor actor) {
-        // El plazo es el de PoliticaComercial, el mismo que dispara la tarea de
-        // la bandeja y el que cuenta el indicador: la campana no puede avisar de
-        // un atraso que el tablero todavia no reconoce.
-        LocalDate limite = PoliticaComercial.limiteDeRecontacto(LocalDate.now());
-
-        // PRIMERO se cierra lo que ya no aplica. El orden importa: al reves, un
-        // aviso recien creado para una prospeccion al limite podria caer en la
-        // misma pasada si las dos consultas vieran instantes distintos.
-        for (Alerta desfasada : alertas.recontactosQueYaNoAplican(
-                actor.idOrganizacion(), Tarea.ENTIDAD_PROSPECCION, Alerta.SIN_RESPUESTA, limite)) {
-            desfasada.descartar();
-            alertas.save(desfasada);
-        }
-        // El barrido es del TENANT entero, no del alcance del que consulta: la
-        // v1 recorre todas las prospecciones por recontactar sin mirar quien
-        // abrio la campana. Lo unico que se le anade es la frontera de
-        // organizacion, que la v1 no tenia.
-        Page<Prospeccion> vencidas = prospecciones.recontactables(actor.idOrganizacion(), true,
-                List.of(-1L), limite, PageRequest.of(0, TOPE_BARRIDO));
-        int creadas = 0;
-        for (Prospeccion p : vencidas.getContent()) {
-            Long idAgente = p.getAgente() != null ? p.getAgente().getId() : null;
-            if (idAgente == null) {
-                continue;
+        exigirOperador(actor);contexto.exigirOperador(actor);
+        var actuales=seguimiento.necesidadesActuales(actor);
+        var vigentes=seguimiento.marcasActuales(actor);
+        Set<Long> prospecciones=actuales.stream().map(n->n.revision().idProspeccion()).collect(Collectors.toSet());
+        Map<String,Necesidad> porMarca=actuales.stream().collect(Collectors.toMap(Necesidad::marcaCausa,n->n));
+        if(!prospecciones.isEmpty())for(var anterior:alertas.cabecerasRecontacto(actor.idOrganizacion(),prospecciones)) {
+            if(!Alerta.ACTIVA.equals(anterior.getEstado())||anterior.getMarcaCausa()==null)continue;
+            if(!vigentes.contains(anterior.getMarcaCausa())) {
+                // Un contexto maestro legible acredita sustitución; no inferirla desde una revocación.
+                alertas.retirarRecontactoSustituido(actor.idOrganizacion(),anterior.getId(),anterior.getMarcaCausa());
+            } else {
+                var actual=porMarca.get(anterior.getMarcaCausa());
+                if(actual!=null&&actual.revision().idProspeccion()==anterior.getEntidadId()
+                        &&!Objects.equals(anterior.getIdAgente(),actual.responsableActual()))
+                    alertas.actualizarResponsableRecontacto(actor.idOrganizacion(),anterior.getId(),
+                            actual.marcaCausa(),actual.responsableActual());
             }
-            if (alertas.existeActivaDe(actor.idOrganizacion(), Tarea.ENTIDAD_PROSPECCION, p.getId(),
-                    Alerta.SIN_RESPUESTA)) {
-                continue;
-            }
-            String codigo = p.getCodigoProspeccion() != null && !p.getCodigoProspeccion().isBlank()
-                    ? p.getCodigoProspeccion()
-                    : "#" + p.getId();
-            emitir(new DatosAlerta(Alerta.SIN_RESPUESTA, Alerta.MEDIA, Tarea.ENTIDAD_PROSPECCION, p.getId(),
-                    idAgente, "Recontacta o evalua descartar la prospeccion " + codigo + "."), actor);
-            creadas++;
         }
+        int creadas=0;
+        for(var n:sinRespuesta(seguimiento.necesidadesVencidas(actor)).values())
+            creadas+=alertas.crearRecontacto(actor.idOrganizacion(),n.revision().idProspeccion(),
+                    n.responsableActual(),n.marcaCausa());
         return creadas;
     }
 
-    // ------------------------------------------------------------------
-
-    private static FichaAlerta ficha(Alerta a) {
-        return new FichaAlerta(a.getId(), a.getTipo(), a.getSeveridad(), a.getEntidadTipo(),
-                a.getEntidadId(),
-                a.getAgente() != null ? a.getAgente().getId() : null,
-                nombreDe(a),
-                a.getMensaje(), a.getEstado(), a.getFechaGeneracion(), a.getFechaResolucion(),
-                ruta(a.getEntidadTipo(), a.getEntidadId()));
+    private List<Long> permitidas(List<Cabecera> cabeceras,Actor actor){
+        var alcance=alcances.de(actor);
+        var vencidas=cabeceras.stream().anyMatch(AlertaServiceImpl::esRecontacto)
+                ?sinRespuesta(seguimiento.necesidadesVencidas(actor)):Map.<String,Necesidad>of();
+        var causas=new LinkedHashMap<Long,Causa>();
+        var consultas=cabeceras.stream().filter(c->c.getFuenteCausaC7()!=null)
+                .map(c->new AutoridadAsuntos.Consulta(new Recurso(c.getEntidadTipo(),c.getEntidadId()),c.getTipo())).toList();
+        var legibles=consultas.isEmpty()?Set.<AutoridadAsuntos.Consulta>of():autoridad.legibles(consultas,actor);
+        for(var c:cabeceras)if(c.getFuenteCausaC7()!=null&&legibles.contains(new AutoridadAsuntos.Consulta(new Recurso(c.getEntidadTipo(),c.getEntidadId()),c.getTipo()))){
+            var causa=fuentes.leer(c.getFuenteCausaC7());
+            if(!causa.recurso().equals(new Recurso(c.getEntidadTipo(),c.getEntidadId()))||!Objects.equals(c.getTipo(),causa.finalidad())
+                    ||!Objects.equals(c.getHuellaCausaC7(),fuentes.huella(actor.idOrganizacion(),causa)))
+                throw new IllegalStateException("El aviso no conserva su fuente y causa.");
+            causas.put(c.getId(),causa);
+        }
+        var vigentes=fuentes.vigentes(causas.values(),actor);
+        return cabeceras.stream().filter(c->esRecontacto(c)
+                ?alcance.rolesAgente().contains(c.getIdAgente())&&autorizada(c,vencidas)
+                :"VIGENTE".equals(c.getEstadoCausaC7())&&causas.containsKey(c.getId())&&vigentes.contains(causas.get(c.getId())))
+                .map(Cabecera::getId).toList();
+    }
+    private void persistir(DatosAlerta datos,Causa causa,Actor actor){
+        if(!Objects.equals(datos.idRolAgente(),causa.responsableAlDetectar()))
+            throw new ConflictoException("Cambió el responsable del aviso; conserva el hecho y actualiza su destinatario.");
+        String huella=fuentes.huella(actor.idOrganizacion(),causa);
+        Long anterior=alertas.antecedenteC7(actor.idOrganizacion(),datos.entidadTipo(),datos.entidadId(),datos.tipo(),huella).orElse(null);
+        alertas.crearCausaC7(actor.idOrganizacion(),datos.tipo(),datos.severidad(),datos.entidadTipo(),datos.entidadId(),
+                datos.idRolAgente(),datos.mensaje(),huella,fuentes.guardar(causa),anterior);
+    }
+    private void sincronizarDecisionesEncargo(Actor actor){
+        if(!actor.esAgente())return;
+        var decisiones=origenes.decisionesActualesEncargo(actor.idOrganizacion(),List.of(actor.idRolOperativo()));
+        if(decisiones.isEmpty())return;
+        var causas=fuentes.decisiones(decisiones,actor);
+        // Sólo ahora se leen los motivos de las revisiones acreditadas para este actor.
+        var resultados=origenes.resultadosDecision(actor.idOrganizacion(),causas.keySet());
+        var porRevision=new HashMap<Long,FuentesAsuntosRepository.Decision>();decisiones.forEach(d->porRevision.put(d.revision(),d));
+        for(var r:resultados){var causa=causas.get(r.revision());var d=porRevision.get(r.revision());
+            if(causa==null||d==null)throw new IllegalStateException("La devolución incorporó una revisión no autorizada.");
+            boolean observada="OBSERVAR".equals(r.accion());
+            String mensaje=observada?"El broker observó la petición del Encargo. "+Objects.toString(r.motivo(),"")
+                    :"El broker aprobó la petición del Encargo.";
+            if(mensaje.length()>300)mensaje=mensaje.substring(0,299)+"…";
+            persistir(new DatosAlerta(Alerta.CAPTACION_REVISADA,observada?Alerta.MEDIA:Alerta.INFO,"CAPTACION",d.encargo(),d.responsable(),mensaje,
+                    Origen.de("REVISION_ENCARGO",r.revision())),causa,actor);
+        }
+        if(fuentes.vigentes(causas.values(),actor).size()!=new HashSet<>(causas.values()).size())
+            throw new ConflictoException("Cambió la decisión o el permiso del Encargo; actualiza la bandeja.");
     }
 
-    private static String nombreDe(Alerta a) {
-        if (a.getAgente() == null || a.getAgente().getRol() == null
-                || a.getAgente().getRol().getPersona() == null) {
-            return null;
-        }
-        return a.getAgente().getRol().getPersona().getNombresORazonSocial();
+    private static Map<String,Necesidad> sinRespuesta(List<Necesidad> necesidades) {
+        return necesidades.stream().filter(n->n.revision().fechaUltimoIntento()!=null)
+                .collect(Collectors.toMap(Necesidad::marcaCausa,n->n));
+    }
+    private static boolean esRecontacto(Cabecera c) {
+        return Alerta.SIN_RESPUESTA.equals(c.getTipo())&&Tarea.ENTIDAD_PROSPECCION.equals(c.getEntidadTipo());
+    }
+    private static boolean autorizada(Cabecera c,Map<String,Necesidad> vencidas) {
+        var n=c.getMarcaCausa()==null?null:vencidas.get(c.getMarcaCausa());
+        return n!=null&&Objects.equals(c.getEntidadId(),n.revision().idProspeccion())
+                &&Objects.equals(c.getIdAgente(),n.responsableActual());
+    }
+    private static void exigirOperador(Actor actor) {
+        if(actor==null||(!actor.esAgente()&&!actor.esBroker()))throw new AccesoNoAutorizadoException();
+    }
+
+    private static FichaAlerta ficha(Alerta a,Long responsableActual,String nombreActual) {
+        return new FichaAlerta(a.getId(), a.getTipo(), a.getSeveridad(), a.getEntidadTipo(),
+                a.getEntidadId(),
+                responsableActual,
+                nombreActual,
+                a.getMensaje(), a.getEstado(), a.getFechaGeneracion(), a.getFechaResolucion(),
+                ruta(a.getEntidadTipo(), a.getEntidadId()));
     }
 
     /**

@@ -43,9 +43,14 @@ public class OpcionDeAtributo {
     }
 
     public OpcionDeAtributo(String valor, String rotulo, int orden) {
+        this(valor, rotulo, orden, true);
+    }
+
+    public OpcionDeAtributo(String valor, String rotulo, int orden, boolean activo) {
         this.valor = valor;
         this.rotulo = rotulo;
         this.orden = orden;
+        this.activo = activo;
     }
 
     public String getValor() {

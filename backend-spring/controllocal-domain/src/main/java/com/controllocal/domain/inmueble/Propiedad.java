@@ -72,10 +72,14 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "id_propiedad")
     private Long id;
 
+    /** RF013: revisión del físico; no es la versión de un Encargo ni de disponibilidad comercial. */
+    @Column(name = "version_fisica", nullable = false, updatable = false)
+    private long versionFisica;
+
     @Column(name = "codigo", nullable = false, length = 20)
     private String codigo;
 
-    @Column(name = "direccion", nullable = false, length = 200)
+    @Column(name = "direccion", length = 200)
     private String direccion;
 
     /** Nombre de distrito tal como se escribio (cable congelado; ver Distrito). */
@@ -86,7 +90,7 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "id_distrito")
     private Long idDistrito;
 
-    @Column(name = "metraje", nullable = false, precision = 10, scale = 2)
+    @Column(name = "metraje", precision = 10, scale = 2)
     private BigDecimal metraje;
 
     @Column(name = "precio_referencial", nullable = false, precision = 12, scale = 2)
@@ -98,6 +102,22 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
 
     @Column(name = "descripcion")
     private String descripcion;
+
+    /** Contexto declarado/versionado de suficiencia; no duplica valores físicos. */
+    @Column(name = "contexto_captura", nullable = false, columnDefinition = "text")
+    private String contextoCaptura = "{}";
+
+    @Column(name = "metadatos_atributos", nullable = false, columnDefinition = "text")
+    private String metadatosAtributos = "{}";
+
+    public String getContextoCaptura() { return contextoCaptura; }
+    public void setContextoCaptura(String contextoCaptura) {
+        this.contextoCaptura = contextoCaptura == null ? "{}" : contextoCaptura;
+    }
+    public String getMetadatosAtributos() { return metadatosAtributos; }
+    public void setMetadatosAtributos(String metadatosAtributos) {
+        this.metadatosAtributos = metadatosAtributos == null ? "{}" : metadatosAtributos;
+    }
 
     @Column(name = "estado_registro", nullable = false, length = 1)
     private String estadoRegistro;
@@ -120,8 +140,8 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "tipo_inmueble", nullable = false, length = 1)
     private String tipoInmueble = TIPO_LOCAL;
 
-    @Column(name = "uso", nullable = false, length = 1)
-    private String uso = USO_COMERCIAL;
+    @Column(name = "uso", length = 1)
+    private String uso;
 
     // ------------------------------------------------------------------
     // Aqui vivian ambientes, antiguedad_anios, frente, zonificacion,
@@ -450,6 +470,9 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     public Long getId() {
         return id;
     }
+
+    public long getVersionFisica() { return versionFisica; }
+
 
     public String getCodigo() {
         return codigo;

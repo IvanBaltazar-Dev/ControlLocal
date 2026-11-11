@@ -1,115 +1,117 @@
 package com.controllocal.service;
 
-import com.controllocal.domain.comercial.ContratoAlquiler;
-import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
-
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.encargo.PactosDeEncargo.ReferenciaPacto;
+import com.controllocal.service.formalizacion.HitosConfirmados.*;
+import com.controllocal.service.soporte.Procedencia;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.databind.JsonNode;
 
-/**
- * Liquidacion de la comision del contrato: nace con el cierre y la cobra
- * despues el broker supervisor. Es el unico sitio donde vive la aritmetica de
- * la comision (bruta, reparto agente/empresa).
- *
- * <p>Aqui NO hay alcance por rol: la liquidacion cuelga 1:1 del contrato, y
- * quien decide si el actor puede tocarla es {@link ContratoService}, que es
- * el que conoce la regla de alcance por CAPTACION. Este service asume que el
- * contrato ya viene autorizado, igual que hacia {@code ContratosRest} con su
- * BL.
- *
- * <p>Estado y forma de pago viajan con el <b>NOMBRE</b> del enum
- * (PENDIENTE/PARCIAL/COBRADA/ANULADA, TRANSFERENCIA/...), no como CHAR(1):
- * es una de las dos rupturas de la convencion de esta vertical (§1).
- */
+/** RF062–064/CAT-E26–27: cálculo, devengo, exigibilidad y fondos conservan fuentes distintas. */
 public interface ComisionService {
-
-    /** Proyeccion de la liquidacion; el filtro de montos netos por rol lo aplica ContratoService. */
-    record FichaComision(Long id, Long idContrato, BigDecimal monto, String moneda,
-                         BigDecimal montoAgente, BigDecimal montoEmpresa, LocalDate fechaCobro,
-                         String formaPago, String estado, BigDecimal montoCobrado,
-                         BigDecimal saldoCobro, BigDecimal montoPagadoAgente,
-                         BigDecimal saldoPagoAgente) {
-        public FichaComision(Long id, Long idContrato, BigDecimal monto, String moneda,
-                             BigDecimal montoAgente, BigDecimal montoEmpresa, LocalDate fechaCobro,
-                             String formaPago, String estado) {
-            this(id, idContrato, monto, moneda, montoAgente, montoEmpresa, fechaCobro,
-                    formaPago, estado, BigDecimal.ZERO,
-                    monto == null ? BigDecimal.ZERO : monto,
-                    BigDecimal.ZERO,
-                    montoAgente == null ? BigDecimal.ZERO : montoAgente);
-        }
+    record Dinero(BigDecimal importe, String moneda) { }
+    record Calculo(Dinero cuantia, List<String> faltantes) {
+        public Calculo { faltantes=List.copyOf(faltantes); }
     }
+    record Devengo(String estado, Dinero cuantiaAcreditada, List<ReferenciaHito> hechos, List<String> faltantes) {
+        public Devengo { hechos=List.copyOf(hechos); faltantes=List.copyOf(faltantes); }
+    }
+    record Exigibilidad(Boolean exigible, LocalDate fechaAcreditada, List<String> faltantes) {
+        public Exigibilidad { faltantes=List.copyOf(faltantes); }
+    }
+    record Vencimiento(Integer indiceTramo, LocalDate fechaAcreditada, String condicionLiteral, List<String> faltantes) {
+        public Vencimiento { faltantes=List.copyOf(faltantes); }
+    }
+    record Reparto(BigDecimal agente, BigDecimal empresa, BigDecimal pagadoAgente, BigDecimal saldoPagoAgente,
+                   Long evaluacionBase, String moneda) { }
+    record Cobro(List<Dinero> ingresosRecibidos, Dinero saldoInformativoSobreCalculo, String estado) {
+        public Cobro { ingresosRecibidos=List.copyOf(ingresosRecibidos); }
+    }
+    record GestionCobro(boolean concluida, LocalDate proximaRevision, String motivo, OffsetDateTime registradoEn) { }
+    record TramoRealizado(long id, int indicePacto, ReferenciaPacto pacto,
+                          Calculo calculo, Devengo devengo, Exigibilidad exigibilidad) { }
+    record FichaComision(Long id, Long version, ReferenciaContextoEconomico contexto,
+                         ReferenciaPacto pacto, long versionContenidoPacto,
+                         ReferenciaFuenteEconomica fuenteFinal, Calculo calculo, Devengo devengo,
+                         Exigibilidad exigibilidad, List<Vencimiento> calendario,
+                         List<TramoRealizado> tramos, Cobro cobro, Reparto reparto, GestionCobro gestion) {
+        public FichaComision { calendario=List.copyOf(calendario); tramos=List.copyOf(tramos); }
+    }
+    /** Contexto ausente: preview del pacto, sin crear expediente ni liquidación ficticios. */
+    FichaComision consultar(ReferenciaPacto pacto, ReferenciaContextoEconomico contexto, Actor actor);
+    /** D5: proyección mínima desde la aritmética C5; null no equivale a saldo cero. */
+    record GestionRadar(boolean basePendiente,Boolean saldoExigiblePendiente,LocalDate revisarEn,List<String> faltantes) {
+        public GestionRadar {faltantes=List.copyOf(faltantes);}
+    }
+    GestionRadar gestionParaRadar(ReferenciaPacto pacto,ReferenciaContextoEconomico contexto,Actor actor);
+    /** C7 consume importes por la puerta C5; no calcula dinero pendiente como ingreso. */
+    record ImportePorOperacion(String operacion,BigDecimal importe,String moneda) { }
+    record CoberturaExigibilidad(int exigibles,int noExigibles,int sinEvidencia) { }
+    record ResumenEconomico(LocalDate desde,LocalDate hasta,java.time.Instant corte,List<ImportePorOperacion> calculadoActual,
+                            List<ImportePorOperacion> devengadoActual,List<ImportePorOperacion> cobradoEnPeriodo,int casos,int sinCuantiaConfirmada,CoberturaExigibilidad exigibilidadActual) { }
+    record FiltroEconomico(java.util.Set<Long> encargos,String operacion) {public FiltroEconomico{encargos=encargos==null?null:java.util.Set.copyOf(encargos);}}
+    ResumenEconomico resumenDePeriodo(LocalDate desde,LocalDate hasta,java.time.Instant corte,FiltroEconomico filtro,Actor actor);
+    Optional<FichaComision> porContratoAlquiler(long idContrato, Actor actor);
+    Map<Long,FichaComision> porContratosAlquiler(Collection<Long> idsContrato, Actor actor);
+    /** Efecto técnico MANDATORY; causa nullable, clave explícita obligatoria. */
+    FichaComision evaluar(ReferenciaContextoEconomico contexto, ReferenciaHito causa, Actor actor,
+                         ContextoSesion sesion, String clave, Procedencia procedencia);
 
+    record DatosReparto(Long comision, Long versionEsperada, BigDecimal montoAgente, String observacion) { }
     /**
-     * Efecto 2 de la cascada del cierre (§6): la liquidacion nace PENDIENTE
-     * con la comision BRUTA = {@code comisionPactada} % de un mes de renta, en
-     * la moneda declarada de esa renta. El reparto agente/empresa queda para despues.
+     * PERSONA/ORGANIZACION usan id contextual. CAMPO_PACTO usa pacto+localizador
+     * cerrado parteObligada/beneficiario. CAMPO_DOCUMENTO usa documento+localizador
+     * de la fuente revisada. Una etiqueta no acredita identidad ni permiso.
      */
-    FichaComision crearPendiente(ContratoAlquiler contrato, BigDecimal comisionPactada,
-                                 BigDecimal renta, String moneda, Actor actor);
-
-    FichaComision crearPendienteNormalizada(ContratoAlquiler contrato,
-                                            CondicionEconomicaCaptacion condicion,
-                                            BigDecimal renta, String moneda, Actor actor);
-
-    Optional<FichaComision> porContrato(long idContrato, Actor actor);
-
-    /** Una sola lectura para toda una pagina de contratos (sin N+1). */
-    Map<Long, FichaComision> porContratos(Collection<Long> idsContrato, Actor actor);
-
-    /** El broker define el monto del agente; el de la empresa se calcula solo. */
-    FichaComision asignarMontoAgente(long idContrato, BigDecimal montoAgente, Actor actor);
-
-    /** Desenlace del cobro: COBRADA (con fecha y forma de pago) o ANULADA. */
-    FichaComision registrarCobro(long idContrato, String estado, LocalDate fechaCobro,
-                                 String formaPago, Actor actor);
-
-    /**
-     * Tipos que se aceptan como COMANDO. {@code A} (ajuste) <b>no esta</b>.
-     *
-     * <p>Nacio en V15 como una cuarta letra del CHECK y nunca tuvo regla: no
-     * hay decision aprobada que diga que saldo modifica, si suma o resta,
-     * contra que tope, como afecta a {@code P/R/C}, como se revierte, ni como
-     * entra en KPI y auditoria. Tampoco existe en la v1 —el backend legado no
-     * tiene {@code comision_movimiento}—, asi que no es una obligacion del
-     * contrato congelado. Mientras se acepto, se persistia como evidencia
-     * economica y no movia ningun saldo: un 200 que no cambiaba nada.
-     *
-     * <p>Se retira del comando y se responde 400. El CHECK de la base sigue
-     * admitiendo {@code 'A'} A PROPOSITO: si aparecieran filas historicas, se
-     * conservan. Volvera a aceptarse el dia que exista una definicion
-     * funcional inequivoca, no antes.
-     */
-    Set<String> TIPOS_ACEPTADOS = Set.of("C", "P", "R");
-
-    /**
-     * Movimiento real: C cobro, P pago al agente, R reversion.
-     *
-     * @param claveIdempotencia {@code Idempotency-Key} del comando, o
-     *     {@code null}. Con clave, reenviar el MISMO comando devuelve el
-     *     resultado original sin insertar otra fila, y reenviarla con un
-     *     comando distinto es un 409.
-     */
-    FichaComision registrarMovimiento(long idContrato, String tipo, BigDecimal monto,
-                                      String moneda, LocalDate fecha, String formaPago,
-                                      String observacion, String claveIdempotencia, Actor actor);
-
-    /**
-     * Cascada del contrato ANULADO. La liquidacion nace al FIRMAR y el contrato
-     * firmado todavia se puede anular, asi que sin esta cascada quedaba una
-     * comision viva —cobrable y sumando en los KPI de comision generada— de un
-     * contrato que ya no existe.
-     *
-     * <p>Si la comision ya se COBRO no anula nada: <b>rechaza la anulacion del
-     * contrato</b>. Es la misma razon por la que el grafo prohibe VIGENTE -&gt;
-     * ANULADO: anular es dejar sin efecto lo que nunca lo tuvo, y si hubo
-     * dinero de por medio lo que corresponde es rescindir.
-     *
-     * <p>Sin liquidacion (contrato aun EN_PROCESO) no hace nada.
-     */
-    void anularPorContratoAnulado(long idContrato, Actor actor);
+    record ReferenciaSujeto(String tipo, Long id, ReferenciaPacto pacto,
+                            ReferenciaDocumento documento, String localizador) { }
+    record SujetoDeclarado(ReferenciaSujeto referencia, String etiqueta) { }
+    record DestinoPago(String datoDestino, SujetoDeclarado titular) { }
+    record DatosCobro(Long comision, Long versionEsperada, Long tramo,
+                       BigDecimal monto, String moneda, LocalDate fecha, String formaPago,
+                       SujetoDeclarado parteObligada, SujetoDeclarado beneficiario,
+                       DestinoPago destino, String referenciaExterna,
+                       List<ReferenciaDocumento> evidencias, String observacion) {
+        public DatosCobro { evidencias=evidencias==null?List.of():List.copyOf(evidencias); }
+        @JsonAnySetter public void rechazarCampoDesconocido(String campo,JsonNode valor){campoNoAdmitido();}
+    }
+    record ResultadoReparto(long comision, long version, Reparto reparto) { }
+    record ResultadoCobro(long comision, long version, long movimiento,
+                         Dinero importe, LocalDate fecha, OffsetDateTime registradoEn, Long tramo) { }
+    record DatosReprogramacion(Long comision, Long versionEsperada, LocalDate proximaRevision, String motivo) {
+        @JsonAnySetter public void rechazarCampoDesconocido(String campo,JsonNode valor){campoNoAdmitido();}
+    }
+    record DatosConclusion(Long comision, Long versionEsperada, String motivo) {
+        @JsonAnySetter public void rechazarCampoDesconocido(String campo,JsonNode valor){campoNoAdmitido();}
+    }
+    record ResultadoGestion(long comision, long version, GestionCobro gestion) { }
+    DatosReparto validarReparto(DatosReparto datos, Actor actor);
+    void exigirLecturaReparto(DatosReparto original, Actor actor);
+    ResultadoReparto asignarReparto(DatosReparto datos, Actor actor,
+                                  ContextoSesion sesion, String clave, Procedencia procedencia);
+    Optional<ResultadoReparto> consultarResultadoReparto(String clave, Actor actor);
+    DatosCobro validarCobro(DatosCobro datos, Actor actor);
+    void exigirLecturaCobro(DatosCobro original, Actor actor);
+    ResultadoCobro registrarCobro(DatosCobro datos, Actor actor,
+                                ContextoSesion sesion, String clave, Procedencia procedencia);
+    Optional<ResultadoCobro> consultarResultadoCobro(String clave, Actor actor);
+    DatosReprogramacion validarReprogramacion(DatosReprogramacion datos, Actor actor);
+    DatosConclusion validarConclusion(DatosConclusion datos, Actor actor);
+    void exigirLecturaReprogramacion(DatosReprogramacion original, Actor actor);
+    void exigirLecturaConclusion(DatosConclusion original, Actor actor);
+    ResultadoGestion reprogramarGestion(DatosReprogramacion datos, Actor actor,
+                                       ContextoSesion sesion, String clave, Procedencia procedencia);
+    ResultadoGestion concluirGestion(DatosConclusion datos, Actor actor,
+                                     ContextoSesion sesion, String clave, Procedencia procedencia);
+    Optional<ResultadoGestion> consultarResultadoGestion(String capacidad, String clave, Actor actor);
+    /** Resumen exacto para el mismo protocolo humano; sólo lectura, nunca produce fondos o gestión. */
+    Map<String,Object> previsualizarActuacion(String capacidad, Map<String,Object> datos, Actor actor);
+    private static void campoNoAdmitido(){throw new com.controllocal.service.excepcion.ReglaNegocioException("La actuación de cobro contiene un campo no admitido.");}
 }

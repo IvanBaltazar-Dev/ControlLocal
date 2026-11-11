@@ -1,8 +1,7 @@
 package com.controllocal.web.seguridad;
 
-import com.controllocal.service.AutenticacionService;
 import com.controllocal.service.EstadoDeAcceso;
-import com.controllocal.service.OrganizacionService;
+import com.controllocal.service.excepcion.CredencialesInvalidasException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,18 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Autentica la peticion a partir del Bearer token (formato compartido con el
- * backend Jakarta). El rol de la sesion se publica como authority
- * ROLE_ADMIN / ROLE_BROKER / ROLE_AGENTE para @PreAuthorize (RC-001: la
- * matriz operacion->rol se aplica en el service/controlador, no aqui).
- *
- * <p>Aqui tambien se ATA el tenant al request (D-20, V6): validado el token,
- * el backend resuelve la organizacion y la publica en el principal. Es el
- * punto natural — el mismo donde manana se fijara la variable de sesion de
- * Postgres cuando se active RLS — y garantiza que ningun endpoint pueda
- * operar sin frontera organizacional ni el cliente elegir la suya.
- */
+/** Revalida la sesión Core y sus restricciones antes de publicar el actor contextual. */
 @Component
 public class FiltroAutenticacionJwt extends OncePerRequestFilter {
 
@@ -48,14 +36,11 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
             "Debes enrolar tu segundo factor antes de continuar.";
 
     private final TokenService tokens;
-    private final OrganizacionService organizaciones;
-    private final AutenticacionService autenticacion;
+    private final RevalidacionDeSesion sesiones;
 
-    public FiltroAutenticacionJwt(TokenService tokens, OrganizacionService organizaciones,
-                                  AutenticacionService autenticacion) {
+    public FiltroAutenticacionJwt(TokenService tokens, RevalidacionDeSesion sesiones) {
         this.tokens = tokens;
-        this.organizaciones = organizaciones;
-        this.autenticacion = autenticacion;
+        this.sesiones = sesiones;
     }
 
     @Override
@@ -66,11 +51,22 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
             var valida = tokens.validar(autorizacion.substring(7).trim());
             if (valida.isPresent()) {
                 var sesion = valida.get();
-                long idOrganizacion = organizaciones.idOrganizacionActual();
-                EstadoDeAcceso estado = estadoDe(idOrganizacion, sesion);
-                if (estado.sesionInvalidada(sesion.emitidoEn())) {
+                SesionDeRequest principal;
+                try {
+                    principal = sesiones.comprobar(sesion);
+                } catch (CredencialesInvalidasException invalida) {
                     request.setAttribute(ATRIBUTO_TOKEN_INVALIDO, Boolean.TRUE);
-                } else {
+                    chain.doFilter(request, response);
+                    return;
+                }
+                EstadoDeAcceso estado = principal.acceso().restricciones();
+                {
+                    if ("IDENTIDAD".equals(principal.rolEfectivo()) && !esGestionIdentidad(request)) {
+                        response.setStatus(409);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"error\":\"Selecciona un contexto autorizado antes de operar.\",\"codigo\":\"CONTEXTO_REQUERIDO\"}");
+                        return;
+                    }
                     if (estado.debeCambiarContrasena() && !esOperacionPermitidaConSesionCapada(request)) {
                         responderCapada(response, CODIGO_CAMBIO_OBLIGATORIO,
                                 MENSAJE_CAMBIO_OBLIGATORIO);
@@ -80,17 +76,13 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
                     // la contrasena. Enrolar un segundo factor con una clave
                     // temporal que todavia no es suya seria atarlo a una
                     // credencial prestada.
-                    if (estado.debeEnrolarMfa() && !esOperacionPermitidaSinSegundoFactor(request)) {
+                    if (!estado.debeCambiarContrasena() && estado.debeEnrolarMfa()
+                            && !esOperacionPermitidaSinSegundoFactor(request)) {
                         responderCapada(response, CODIGO_ENROLAMIENTO_MFA,
                                 MENSAJE_ENROLAMIENTO_MFA);
                         return;
                     }
-                    // La authority es la BANDA EFECTIVA, no el rol del token
-                    // (D-S0-8): el token solo admite AGENTE/BROKER/ADMIN
-                    // mientras GlassFish conviva (R1), y ese ADMIN heredado no
-                    // es el TENANT_ADMIN que gobierna. Aqui muere.
-                    String banda = estado.bandaEfectiva(sesion.rol());
-                    var principal = new SesionDeRequest(sesion, idOrganizacion, banda);
+                    String banda = principal.rolEfectivo();
                     var autenticado = new UsernamePasswordAuthenticationToken(
                             principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + banda)));
                     SecurityContextHolder.getContext().setAuthentication(autenticado);
@@ -115,11 +107,57 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
      * depende de quien seas.
      */
     private static boolean esOperacionPermitidaConSesionCapada(HttpServletRequest request) {
-        String ruta = request.getRequestURI();
+        String ruta = rutaLocal(request);
         String metodo = request.getMethod();
-        return (metodo.equals("POST") && ruta.endsWith("/perfil/contrasena"))
-                || (metodo.equals("GET") && ruta.endsWith("/perfil"))
-                || (metodo.equals("POST") && ruta.endsWith("/auth/logout"));
+        return (metodo.equals("POST") && ruta.equals("/cuenta/contrasena"))
+                || (metodo.equals("GET") && ruta.equals("/cuenta"))
+                || esSeleccionDeContexto(request)
+                || (metodo.equals("POST") && ruta.equals("/auth/logout"));
+    }
+
+    private static String rutaLocal(HttpServletRequest request){return request.getRequestURI().substring(request.getContextPath().length());}
+
+    private static boolean esSeleccionDeContexto(HttpServletRequest request) {
+        String ruta = rutaLocal(request);
+        return ("GET".equals(request.getMethod()) && (ruta.equals("/sesion") || ruta.equals("/sesion/contextos")))
+                || ("POST".equals(request.getMethod()) && ruta.equals("/sesion/contexto"));
+    }
+
+    private static boolean esGestionIdentidad(HttpServletRequest request) {
+        if (esSeleccionDeContexto(request)) return true;
+        String ruta = rutaLocal(request);
+        String local = ruta;
+        if (esCompraPlataforma(request.getMethod(),local)||esMetricasPlataforma(request.getMethod(),local)||esMercadoPlataforma(request.getMethod(),local)) return true;
+        if ("POST".equals(request.getMethod()) && local.matches(
+                "/membresias/invitaciones/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/aceptar")) return true;
+        if ("GET".equals(request.getMethod()) && (ruta.equals("/cuenta") || ruta.equals("/cuenta/mfa"))) return true;
+        if ("DELETE".equals(request.getMethod()) && ruta.equals("/cuenta/mfa")) return true;
+        return "POST".equals(request.getMethod()) && java.util.List.of(
+                "/cuenta/contrasena", "/cuenta/mfa", "/cuenta/mfa/confirmar", "/cuenta/mfa/codigos", "/cuenta/correo",
+                "/auth/alta", "/auth/alta/confirmar", "/auth/correo/confirmar",
+                "/auth/login", "/auth/mfa/desafio", "/auth/mfa/verificar", "/auth/logout", "/auth/renovar",
+                "/auth/recuperacion", "/auth/recuperacion/canje").contains(ruta);
+    }
+
+    /** Puerta exacta; la concesión R25 se revalida en Core para cada lectura y efecto. */
+    private static boolean esCompraPlataforma(String metodo,String ruta){
+        if("GET".equals(metodo)&&java.util.Set.of("/plataforma/atribuciones/compras","/plataforma/compras").contains(ruta))return true;
+        String uuid="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+        return "GET".equals(metodo)&&ruta.matches("/plataforma/compras/"+uuid)
+                ||"POST".equals(metodo)&&ruta.matches("/plataforma/compras/"+uuid+"/(verificacion|fondos|acreditacion|incidencia)");
+    }
+    private static boolean esMercadoPlataforma(String metodo,String ruta){
+        String raiz="/plataforma/mercado",uuid="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+        String politica=raiz+"/configuraciones/"+uuid+"/[^/]{1,80}",trabajo=raiz+"/trabajos/[1-9][0-9]{0,18}";
+        return "GET".equals(metodo)&&(ruta.equals(raiz+"/atribuciones")||ruta.matches(raiz+"/colas/(ejecucion|revision|finanzas)")||ruta.matches(politica)||ruta.matches(trabajo+"/(operador|revision|finanzas)"))
+            ||"POST".equals(metodo)&&(ruta.equals(raiz+"/configuraciones")||ruta.equals(raiz+"/mantenimiento")||ruta.matches(politica+"/retiro")||ruta.matches(trabajo+"/(tomar|entrega|revision|publicacion|liquidacion|liberacion-no-iniciada)"));
+    }
+    /** Lecturas y ajustes R25 exactos; la atribucion/accion/campos se comprueban en Core. */
+    private static boolean esMetricasPlataforma(String metodo,String ruta){
+        String uuid="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+        String financiera="/plataforma/metricas-ia/financieras/"+uuid+"/"+uuid;
+        return "GET".equals(metodo)&&("/plataforma/metricas-ia/tecnicas".equals(ruta)||ruta.matches(financiera))
+            ||"POST".equals(metodo)&&ruta.matches(financiera+"/(confirmaciones-costo|aplicacion-costo)");
     }
 
     /**
@@ -137,13 +175,14 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
      * de gobierno.
      */
     private static boolean esOperacionPermitidaSinSegundoFactor(HttpServletRequest request) {
-        String ruta = request.getRequestURI();
+        String ruta = rutaLocal(request);
         String metodo = request.getMethod();
-        return (metodo.equals("GET") && ruta.endsWith("/perfil"))
-                || (metodo.equals("GET") && ruta.endsWith("/perfil/mfa"))
-                || (metodo.equals("POST") && ruta.endsWith("/perfil/mfa"))
-                || (metodo.equals("POST") && ruta.endsWith("/perfil/mfa/confirmar"))
-                || (metodo.equals("POST") && ruta.endsWith("/auth/logout"));
+        return esSeleccionDeContexto(request)
+                || (metodo.equals("GET") && ruta.equals("/cuenta"))
+                || (metodo.equals("GET") && ruta.equals("/cuenta/mfa"))
+                || (metodo.equals("POST") && ruta.equals("/cuenta/mfa"))
+                || (metodo.equals("POST") && ruta.equals("/cuenta/mfa/confirmar"))
+                || (metodo.equals("POST") && ruta.equals("/auth/logout"));
     }
 
     /**
@@ -159,34 +198,4 @@ public class FiltroAutenticacionJwt extends OncePerRequestFilter {
                 "{\"error\":\"" + mensaje + "\",\"codigo\":\"" + codigo + "\"}");
     }
 
-    /**
-     * D-S0-12 — revocacion de SESIONES (nada que ver con la autorizacion de
-     * datos personales, que no tiene flujo de revocacion).
-     * <p>
-     * Un token firmado y no expirado puede estar muerto igualmente: si su
-     * {@code iat} es anterior a {@code sesiones_invalidas_desde} de la cuenta,
-     * alguien cerro sesion —o cambio su contrasena, o la cuenta se desactivo—
-     * y el token ya no vale. El 401 resultante es el mismo mensaje congelado
-     * que un token corrupto: no se le dice al cliente <b>por que</b> dejo de
-     * valer.
-     * <p>
-     * <b>Sin cache, a proposito.</b> El Plan S0 admitia una cache de 30-60 s
-     * para ahorrar una lectura por request; se descarta porque abriria una
-     * ventana en la que una sesion revocada sigue viva, y ese es justo el fallo
-     * que la pieza viene a cerrar. La consulta es una proyeccion estrecha sobre
-     * claves primarias; si algun dia la sonda de transporte la señala, la cache
-     * es la palanca, no el punto de partida.
-     * <p>
-     * Borde conocido y aceptado: {@code iat} tiene precision de segundo, asi
-     * que un login que ocurra <b>dentro del mismo segundo</b> que un logout
-     * nace invalidado. Falla del lado seguro (pide entrar otra vez) y con
-     * tokens de 30 minutos es una coincidencia sin consecuencia practica.
-     * <p>
-     * La misma lectura trae la <b>banda efectiva</b> (D-S0-8): es una columna
-     * mas de la misma consulta, asi que resolver el gobierno por peticion no
-     * anade ninguna ida a la base.
-     */
-    private EstadoDeAcceso estadoDe(long idOrganizacion, TokenService.Sesion sesion) {
-        return autenticacion.estadoDeAcceso(idOrganizacion, sesion.idUsuario());
-    }
 }

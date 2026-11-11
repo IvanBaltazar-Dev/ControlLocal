@@ -7,7 +7,7 @@ import java.util.Map;
 
 public record FichaClienteResponse(
         ClienteResponse cliente,
-        boolean requerimientoActivo,
+        Boolean requerimientoActivo,
         String ctaRuta,
         Map<String, FichaSectionResponse> sections) {
 

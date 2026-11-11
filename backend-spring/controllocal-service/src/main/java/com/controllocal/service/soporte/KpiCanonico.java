@@ -4,42 +4,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Los <b>cuatro</b> indicadores comerciales, con su nombre visible y el hecho
- * exacto que cuentan. Ni uno mas.
- *
- * <h2>El nombre nombra un hecho, no una categoria</h2>
- *
- * <p>D-E2-2 §1 los llamaba «Prospeccion efectiva», «Captaciones activadas» y
- * «Solicitudes generadas»; D-E2-1 §6.2 y la maqueta, «Propietarios
- * contactados», «Locales captados» y «Solicitudes ingresadas». Dos juegos
- * distintos en los dos documentos que gobiernan, y una comprobacion que exigia
- * los cuatro nombres «letra por letra». El gate no se podia escribir: pedia dos
- * verdades.
- *
- * <p><b>Se resolvio el 2026-08-19 a favor del hecho de negocio.</b> «Prospeccion
- * efectiva» obliga a preguntar que es efectivo; «Propietarios contactados» dice
- * lo que paso. El tablero se lee en segundos o no es un centro de decision.
- *
- * <p>Con un cambio sobre el juego heredado: <b>«Locales captados» pasa a
- * «Propiedades captadas»</b>. BROX dejo de ser un sistema de alquiler de locales
- * el 2026-08-17; llamar «local» a una casa o a un terreno seria arrastrar el
- * nombre viejo a un dominio que ya no lo es.
- *
- * <h2>El codigo es estable; el nombre, no</h2>
- *
- * <p>{@link #codigo()} es lo que viaja por el cable, lo que guarda la meta y lo
- * que persiste. El rotulo puede cambiar el dia que el negocio lo diga sin migrar
- * una fila. Es la misma separacion que el resto del sistema aplica a los estados:
- * codigo unitario dentro, palabra fuera.
- *
- * <h2>Y cada uno cuenta un evento, no algo parecido</h2>
- *
- * <p>{@link #hecho()} dice exactamente que fila suma. Una prospeccion creada
- * <b>no</b> es un propietario contactado: si el contacto no ocurrio, no cuenta.
- * Es la distincion que D-E2-2 §1.1 vino a fijar —31 registros creados no son 31
- * prospectos trabajados— y la unica forma de que el numero signifique algo.
- */
+/** Definiciones HISTÓRICAS C/P/S/F, conservadas para leer metas antiguas sin convertirlas.
+ * Las nuevas categorías pertenecen a IndicadorMetaComercial y catálogo20.10. */
 public enum KpiCanonico {
 
     /**

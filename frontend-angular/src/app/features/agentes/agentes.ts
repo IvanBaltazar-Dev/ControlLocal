@@ -26,7 +26,6 @@ import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { AuthService } from '../../core/auth/auth.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
-import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
@@ -65,39 +64,12 @@ type ResultadoCarga =
   | { pagina: PageResponse<Agente>; resumen: ResumenAgentes }
   | { error: string };
 
-/**
- * Equipo de agentes inmobiliarios.
- *
- * **El gate es de clase, BROKER y ADMIN**, y el alcance lo decide el backend:
- * el ADMIN ve el tenant y el BROKER **solo los agentes que supervisa**. Al
- * agente no se le ofrece este módulo.
- *
- * **La búsqueda y los filtros los resuelve el backend**, no el navegador:
- * `texto` (nombre, documento, código o zona), `estado` administrativo,
- * `estadoOperativo` y `zona` viajan como parámetros y la base decide. Filtrar
- * en memoria solo filtraría las diez filas cargadas, y «no hay resultados»
- * significaría «no hay en esta página».
- *
- * **Los dos estados son máquinas distintas y no se mezclan**: el administrativo
- * (activo/inactivo) vive en la credencial y el operativo
- * (disponible/ocupado/vacaciones/suspendido) en el agente. Un agente activo
- * puede estar de vacaciones, y eso cambia si se le pueden reasignar encargos.
- *
- * Dos rarezas del cable que la pantalla tiene que respetar:
- *
- * - **`captacionesActivas` y `operacionesActivas` solo son reales aquí**, en el
- *   GET de lista. POST y PUT los responden en `0`, así que tras guardar hay que
- *   releer la lista en vez de creerse la respuesta.
- * - **El ADMIN no puede dar de alta agentes** aunque el gate lo admita: el alta
- *   crea la supervisión inicial *por el broker en sesión*, y el administrador no
- *   supervisa a nadie. Se anticipa aquí en vez de dejar que lo explique un 400.
- */
+/** Directorio con filtros SQL y proyección mínima de gobierno o comercial según contexto. */
 @Component({
   selector: 'cl-agentes',
   imports: [
     BarraFiltros,
     BroxPageHeader,
-    DialogoConfirmacion,
     EstadoListado,
     FiltroSelect,
     Paginacion,
@@ -127,7 +99,6 @@ export class Agentes implements OnInit {
   });
   protected readonly porPagina = POR_PAGINA;
   protected readonly guardando = signal(false);
-  protected readonly aDarDeBaja = signal<Agente | null>(null);
 
   protected readonly opcionesOperativo: OpcionFiltro[] = [
     { valor: 'D', etiqueta: 'Disponible' },
@@ -156,12 +127,14 @@ export class Agentes implements OnInit {
   protected readonly puedeEditar = computed(() => this.gobierna());
 
   protected readonly filas = computed(() => this.datos().items ?? []);
+  protected readonly actividadComercialVisible = computed(() => this.filas().some(
+    a => a.captacionesActivas !== undefined || a.operacionesActivas !== undefined));
   protected readonly total = computed(() => this.datos().totalRecords ?? 0);
 
   protected readonly avisoAlcance = computed(() =>
     this.esBroker()
-      ? 'Ves y editas únicamente los agentes que supervisas.'
-      : 'Como administrador ves todo el tenant, pero el alta de un agente la hace su broker supervisor.',
+      ? 'Consultas únicamente los agentes que supervisas.'
+      : 'Administras los datos organizacionales y las pertenencias, sin consultar su cartera comercial.',
   );
 
   /**
@@ -296,51 +269,6 @@ export class Agentes implements OnInit {
 
   protected editar(agente: Agente): void {
     void this.router.navigate(['/agentes', agente.id, 'editar']);
-  }
-
-  protected pedirBaja(agente: Agente): void {
-    this.aDarDeBaja.set(agente);
-  }
-
-  protected cancelarBaja(): void {
-    this.aDarDeBaja.set(null);
-  }
-
-  /**
-   * **No hay DELETE en este recurso**: la baja es administrativa y se hace con
-   * el PUT poniendo el estado en `I`. La confirmación no promete un borrado.
-   */
-  protected async confirmarBaja(): Promise<void> {
-    const agente = this.aDarDeBaja();
-    if (!agente || this.guardando()) {
-      return;
-    }
-    this.guardando.set(true);
-    try {
-      await this.servicio.desactivar(agente.id, agente);
-      this.aDarDeBaja.set(null);
-      this.recargar$.next();
-    } catch (fallo) {
-      this.error.set((fallo as ApiError).message || 'No se pudo dar de baja al agente.');
-      this.aDarDeBaja.set(null);
-    } finally {
-      this.guardando.set(false);
-    }
-  }
-
-  protected async reactivar(agente: Agente): Promise<void> {
-    if (this.guardando()) {
-      return;
-    }
-    this.guardando.set(true);
-    try {
-      await this.servicio.reactivar(agente.id, agente);
-      this.recargar$.next();
-    } catch (fallo) {
-      this.error.set((fallo as ApiError).message || 'No se pudo reactivar al agente.');
-    } finally {
-      this.guardando.set(false);
-    }
   }
 
   // -- presentación --------------------------------------------------------

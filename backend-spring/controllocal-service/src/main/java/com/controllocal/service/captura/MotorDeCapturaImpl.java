@@ -1,6 +1,8 @@
 package com.controllocal.service.captura;
 
 import com.controllocal.domain.captura.BorradorCaptura;
+import com.controllocal.domain.auditoria.EventoDominio;
+import com.controllocal.persistence.repositorio.EventoDominioRepository;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.TipoDato;
 import com.controllocal.domain.inmueble.Distrito;
@@ -8,11 +10,9 @@ import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
 import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.GobiernoCatalogoCapturaService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
-import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
-import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
-import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
@@ -32,16 +32,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * El motor, para la intencion {@code REGISTRAR_PROPIEDAD}.
  *
  * <h2>Como decide que falta</h2>
- * Suma dos listas y resta lo que ya sabe:
+ * Despliega los bloqueadores sobre lo que ya sabe:
  * <ol>
- *   <li>lo <b>estructural</b> obligatorio, que declara {@link GuionRegistroPropiedad}
- *       y es igual para los siete tipos;</li>
+ *   <li>los datos minimos de la propiedad y, si se declaro una operacion, el
+ *       importe y la moneda propios de cada encargo, que declara
+ *       {@link GuionRegistroPropiedad};</li>
  *   <li>lo <b>obligatorio del catalogo</b> para ese tipo, que sale de
  *       {@code catalogo_atributo} — y por eso un terreno pide zonificacion y un
  *       departamento pide dormitorios sin que este fichero sepa nada de
@@ -49,8 +52,10 @@ import java.util.Map;
  * </ol>
  *
  * <p>La segunda lista <b>no se puede calcular hasta conocer el tipo</b>, y eso
- * explica el orden: mientras {@code tipoPropiedad} falte, lo unico que el motor
- * puede preguntar es el tipo.
+ * explica el orden: mientras {@code tipoPropiedad} falte, el motor no puede
+ * resolver los atributos del catalogo. Un borrador puede conservarse
+ * incompleto; al ejecutar se exigen los minimos identificables y los pares
+ * economicos solo de las operaciones declaradas.
  *
  * <h2>Validar al anotar, no al ejecutar</h2>
  * Cada valor se comprueba cuando entra: la operacion contra
@@ -68,30 +73,49 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     private final AtributosDeEncargo condiciones;
     private final Documentos documentos;
     private final DistritoRepository distritos;
+    private final SuficienciaInmueble suficiencia;
+    private final SuficienciaRegistrada registrada;
+    private final PreparacionDeCaptura preparacion;
+    private final EventoDominioRepository eventos;
+    private final GobiernoCatalogoCapturaService catalogos;
+    private final ValidadorRespuestaCaptura validadorRespuestas;
 
     public MotorDeCapturaImpl(BorradorCapturaRepository borradores,
                               PropiedadUniversalService propiedades,
                               AtributosGobernados gobierno, AtributosDeEncargo condiciones,
-                              Documentos documentos, DistritoRepository distritos) {
+                              Documentos documentos, DistritoRepository distritos,
+                              SuficienciaInmueble suficiencia, SuficienciaRegistrada registrada,
+                              PreparacionDeCaptura preparacion, EventoDominioRepository eventos,
+                              GobiernoCatalogoCapturaService catalogos, ValidadorRespuestaCaptura validadorRespuestas) {
         this.borradores = borradores;
         this.propiedades = propiedades;
         this.gobierno = gobierno;
         this.condiciones = condiciones;
         this.documentos = documentos;
         this.distritos = distritos;
+        this.suficiencia = suficiencia;
+        this.registrada = registrada;
+        this.preparacion = preparacion;
+        this.eventos = eventos;
+        this.catalogos = catalogos;
+        this.validadorRespuestas = validadorRespuestas;
     }
 
     // ==================================================================
 
     @Override
     @Transactional
-    public EstadoCaptura avanzar(String intencion, Long idBorrador, Map<String, String> datos,
-                                 Procedencia procedente, Actor actor) {
+    public EstadoCaptura avanzar(Avance comando, Procedencia procedente, Actor actor) {
+        exigirActor(actor);
+        if (comando == null) throw new ReglaNegocioException("El avance de captura es obligatorio.");
         Procedencia procedencia = Procedencia.oPantalla(procedente);
-        String intencionValidada = intencionValidada(intencion);
-        BorradorCaptura borrador = idBorrador == null
+        String intencionValidada = intencionValidada(comando.intencion());
+        if (comando.idBorrador() == null && comando.versionEsperada() != null)
+            throw new ReglaNegocioException("Una apertura no tiene una versión anterior.");
+        BorradorCaptura borrador = comando.idBorrador() == null
                 ? abrir(actor, intencionValidada, procedencia)
-                : cargar(idBorrador, actor);
+                : cargar(comando.idBorrador(), actor);
+        if (comando.idBorrador() != null) exigirVersion(borrador, comando.versionEsperada());
 
         if (!borrador.estaEnCurso()) {
             throw new ReglaNegocioException(
@@ -103,8 +127,6 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         }
         // El canal puede cambiar a mitad: empieza KAIROS, sigue la pantalla. Se
         // queda el ultimo que escribio, que es quien responde por el dato.
-        borrador.setCanal(procedencia.canal());
-        borrador.setAgente(procedencia.agente());
         // La conversacion, en cambio, se estampa UNA vez (V59): un borrador
         // nace de una conversacion o de ninguna, y si la ultima que lo tocara
         // pudiera sobrescribirla, el rastro diria que la propiedad salio de la
@@ -112,13 +134,46 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         borrador.nacioEn(procedencia.conversacionId());
 
         Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
-        incorporar(actor, conocido, datos);
+        Map<String, Object> anterior = new java.util.LinkedHashMap<>(conocido);
+        Map<String, MetadatoRespuesta> metadatos = registrada.metadatos(borrador.getMetadatosRespuestas());
+        Map<String, MetadatoRespuesta> metasAnteriores = new java.util.LinkedHashMap<>(metadatos);
+        String contextoAnterior = borrador.getContextoCaptura();
+        Map<String, String> entradas = new java.util.LinkedHashMap<>();
+        comando.respuestas().forEach((clave, respuesta) -> {
+            MetadatoRespuesta metadato = validadorRespuestas.validar(actor,clave,respuesta);
+            entradas.put(clave, respuesta.estado() == SuficienciaInmueble.EstadoDato.CONOCIDO
+                    ? respuesta.valor() : null);
+            metadatos.put(clave,metadato);
+        });
+        incorporarContexto(entradas, conocido, comando.contexto());
+        incorporar(actor, conocido, entradas);
+        SuficienciaInmueble.Contexto contexto = contextoDe(conocido,
+                comando.contexto() == null ? registrada.contexto(contextoAnterior) : comando.contexto(),
+                comando.contexto() != null);
+        contexto=validadorRespuestas.reconciliarContexto(registrada.contexto(contextoAnterior),contexto,
+                comando.contexto(),comando.respuestas(),metadatos);
+        validarZonificacion(actor, conocido, metadatos, contexto);
+        borrador.setContextoCaptura(registrada.contextoJson(contexto));
+        borrador.setMetadatosRespuestas(registrada.metadatosJson(metadatos));
+        borrador.setCanal(procedencia.canal());
+        borrador.setAgente(procedencia.agente());
 
-        List<String> faltante = loQueFalta(actor, conocido);
+        List<String> faltante = loQueFalta(actor, conocido, contexto, metadatos);
         borrador.anotar(documentos.objeto(conocido), documentos.lista(faltante));
-        borradores.save(borrador);
-
-        return estado(borrador, conocido, faltante, actor);
+        borradores.saveAndFlush(borrador);
+        List<String> cambios = clavesCambiadas(anterior, conocido, metasAnteriores, metadatos);
+        if (comando.idBorrador() == null || !cambios.isEmpty()
+                || !java.util.Objects.equals(registrada.contexto(contextoAnterior), contexto)) {
+            Map<String, Object> carga = new java.util.LinkedHashMap<>();
+            carga.put("anterior", anterior); carga.put("conocido", conocido);
+            carga.put("metadatosAnteriores", metasAnteriores); carga.put("metadatos", metadatos);
+            carga.put("contextoAnterior", registrada.contexto(contextoAnterior)); carga.put("contexto", contexto);
+            carga.put("version", borrador.getVersion());
+            eventos.save(procedencia.sellar(EventoDominio.de(actor.idOrganizacion(), "CAPTURA_AVANZADA",
+                    "BORRADOR_CAPTURA", borrador.getId(), actor.idRolOperativo(), procedencia.canal()))
+                    .con(documentos.objeto(carga)));
+        }
+        return estado(borrador, conocido, faltante, actor, cambios);
     }
 
     @Override
@@ -126,7 +181,44 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     public EstadoCaptura consultar(long idBorrador, Actor actor) {
         BorradorCaptura borrador = cargar(idBorrador, actor);
         Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
-        return estado(borrador, conocido, documentos.comoLista(borrador.getDatosFaltantes()), actor);
+        return estado(borrador, conocido, faltantesActuales(borrador, conocido, actor), actor);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CapacidadSobreCaptura capacidadSobre(long idBorrador, String operacion, String atributo, Actor actor) {
+        BorradorCaptura b = cargar(idBorrador, actor);
+        Map<String, Object> conocido = documentos.comoMapa(b.getDatosConocidos());
+        List<OperacionInmobiliaria> operaciones = operacionesConocidas(conocido);
+        String motivo = null;
+        if (atributo != null && !GuionRegistroPropiedad.TIPO_PROPIEDAD.equals(atributo)
+                && !GuionRegistroPropiedad.OPERACIONES.equals(atributo)) {
+            Object tipo = conocido.get(GuionRegistroPropiedad.TIPO_PROPIEDAD);
+            if (tipo == null) motivo = "TIPO_DE_PROPIEDAD_REQUERIDO";
+            else {
+                var contexto = registrada.contexto(b.getContextoCaptura());
+                var definicion = definicion(b.getIntencion(), tipo.toString(),
+                        operaciones.stream().map(Enum::name).collect(java.util.stream.Collectors.joining(",")),
+                        contexto == null ? null : contexto.jurisdiccion(), actor);
+                boolean fisico = java.util.stream.Stream.concat(definicion.comunes().stream(), definicion.delTipo().stream())
+                        .anyMatch(p -> atributo.equals(p.clave()));
+                if (!fisico) {
+                    boolean admitido = definicion.deLaOperacion().stream()
+                            .filter(bloque -> operacion == null || operacion.equals(bloque.operacion()))
+                            .anyMatch(bloque -> bloque.preguntas().stream().anyMatch(p -> atributo.equals(p.clave())
+                                    || GuionRegistroPropiedad.para(atributo, OperacionInmobiliaria.valueOf(bloque.operacion())).equals(p.clave())));
+                    if (!admitido) motivo = "ATRIBUTO_NO_APLICABLE";
+                    else if (operacion == null && operaciones.size() > 1 && GuionRegistroPropiedad.operacionDe(atributo) == null) {
+                        motivo = "OPERACION_REQUERIDA";
+                    }
+                }
+            }
+        }
+        return new CapacidadSobreCaptura(b.getEstado(), b.estaEnCurso(), BorradorCaptura.EJECUTADO.equals(b.getEstado()),
+                b.estaEnCurso() && loQueFalta(actor, conocido, contextoDe(conocido,
+                        registrada.contexto(b.getContextoCaptura()), false),
+                        registrada.metadatos(b.getMetadatosRespuestas())).isEmpty(),
+                operaciones.stream().map(Enum::name).toList(), motivo);
     }
 
     /**
@@ -142,12 +234,12 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     @Override
     @Transactional(readOnly = true)
     public DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operaciones,
-                                        Actor actor) {
+                                        String jurisdiccion, Actor actor) {
         String intencionValidada = intencionValidada(intencion);
         String codigoTipo = AtributosGobernados.codigoDelTipo(tipoPropiedad)
                 .orElseThrow(() -> new ReglaNegocioException(
-                        "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Son siete: LOCAL, "
-                                + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
+                        "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Tipos admitidos: "
+                                + AtributosGobernados.tiposAdmitidos() + "."));
         // La operación NO se infiere, y desde el Corte 0B tampoco se exige.
         //
         // Ausente significa «pregúntame por la COSA FÍSICA»: comunes y sección
@@ -184,8 +276,16 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
             }
         }
         for (CatalogoAtributo atributo : gobierno.aplicablesA(actor.idOrganizacion(), codigoTipo)) {
-            delTipo.add(delCatalogo(atributo, codigoTipo));
+            delTipo.add(preguntaGobernada(atributo, codigoTipo, actor.idOrganizacion(), jurisdiccion));
         }
+
+        // Las coordenadas necesarias proceden de la misma suficiencia por tipo;
+        // los clientes reciben preguntas y opciones, sin otra matriz de negocio.
+        var perfilContextual = suficiencia.evaluar(SuficienciaInmueble.Accion.CONFIRMAR_ENCARGO,
+                new SuficienciaInmueble.Contexto(codigoTipo,null,null,null,Map.of(),Set.of(),jurisdiccion),Map.of());
+        perfilContextual.aplicables().stream().map(SuficienciaInmueble.Campo::clave)
+                .filter(clave->clave.startsWith("contexto.")).distinct()
+                .forEach(clave->delTipo.add(preguntaContextual(clave).en(Pregunta.SECCION_TIPO,delTipo.size())));
 
         // Un bloque por encargo. Los dos tienen la misma forma y distinto
         // nombre: es lo que permite que «venta y alquiler» no sea una rama sino
@@ -288,9 +388,49 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 atributo.getTipoDato(), atributo.getUnidad(), null, false, null);
         return conRestricciones(base, atributo)
                 .conCatalogo(atributo.getFamilia(), atributo.getAyuda(),
-                        atributo.exigenciaPara(codigoTipo).codigo(),
+                        atributo.exigenciaPara(codigoTipo) == com.controllocal.domain.inmueble.Exigencia.ALT
+                                ? "OPC" : atributo.exigenciaPara(codigoTipo).codigo(),
                         opciones.isEmpty() ? null : opciones)
                 .en(Pregunta.SECCION_TIPO, atributo.getOrden());
+    }
+
+    private Pregunta preguntaGobernada(CatalogoAtributo atributo, String tipo, long organizacion, String jurisdiccion) {
+        Pregunta pregunta = delCatalogo(atributo, tipo).conDefinicion(
+                "CAT:D:"+atributo.getId()+":"+atributo.getVersionDefinicion(),Long.toString(atributo.getVersionDefinicion()));
+        if ("ascensores".equals(atributo.getClave())) {
+            var sugerencias = java.util.stream.IntStream.rangeClosed(0, 4)
+                    .mapToObj(n -> new Opcion(Integer.toString(n), n == 0 ? "Sin ascensor" : Integer.toString(n)))
+                    .toList();
+            return conControl(pregunta, "ENTERO_SUGERIDO", sugerencias);
+        }
+        if ("zonificacion".equals(atributo.getClave())) {
+            var opciones = catalogos.opcionesVigentes(organizacion, atributo.getClave(), jurisdiccion);
+            var lista = opciones.opciones().stream().map(o -> new Opcion(o.codigo(), o.rotulo())).toList();
+            return conControl(pregunta, opciones.motivo() == null && !lista.isEmpty()
+                    ? "CATALOGO_CERRADO" : "CATALOGO_PENDIENTE", lista)
+                    .conDefinicion(opciones.referenciaCatalogo(),opciones.versionDefinicion()==null?null:opciones.versionDefinicion().toString());
+        }
+        return pregunta;
+    }
+
+    private static Pregunta preguntaContextual(String clave) {
+        String coordenada=clave.substring("contexto.".length());
+        String rotulo=switch(coordenada) {
+            case SuficienciaInmueble.UNIDAD_DE_EDIFICIO -> "¿La unidad forma parte de un edificio?";
+            case SuficienciaInmueble.MANTENIMIENTO -> "¿Corresponde un pago de mantenimiento en la oferta?";
+            case SuficienciaInmueble.POTENCIAL_O_CAMBIO_USO -> "¿Se ofrece potencial de construcción o cambio de uso?";
+            case SuficienciaInmueble.EXPLOTACION_COMERCIAL -> "¿Se ofrece el predio para explotación comercial del estacionamiento?";
+            case SuficienciaInmueble.EDIFICIO_COMPLETO -> "¿Se ofrece el edificio completo?";
+            default -> throw new ReglaNegocioException("Coordenada de contexto no reconocida.");
+        };
+        return new Pregunta(clave,rotulo,"LISTA",null,List.of(new Opcion("APLICA","Sí"),
+                new Opcion("NO_APLICA","No")),false,
+                "Para el Encargo, conserva el sustento de lo declarado; no se exige para guardar el avance.");
+    }
+
+    private static Pregunta conControl(Pregunta p, String control, List<Opcion> opciones) {
+        return new Pregunta(p.clave(), p.rotulo(), p.seccion(), p.familia(), control, p.tipoDato(),
+                p.unidad(), opciones, p.exigencia(), p.obligatoria(), p.ayuda(), p.orden(), p.restricciones(),p.referenciaCatalogo(),p.versionDefinicion());
     }
 
     /**
@@ -312,6 +452,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // alquiler declarados a la vez, la respuesta tiene que decir a cual de
         // los dos encargos pertenece, y la clave desnuda no lo dice. El
         // separador `:` no colisiona porque ninguna clave del catalogo lo lleva.
+        // Si el tipo es IMPORTE, su compañera se forma como
+        // `moneda:precio_estacionamiento_adicional:ALQUILER` y no se publica
+        // como una segunda condición.
         String calificada = GuionRegistroPropiedad.para(atributo.getClave(),
                 OperacionInmobiliaria.desde(codigoOperacion));
         Pregunta base = new Pregunta(calificada, atributo.getRotulo(),
@@ -336,11 +479,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     }
 
     /**
-     * Las dos que ordenan el resto, en su orden. Salen de la misma lista de
-     * obligatorias que usa {@link #loQueFalta}, cortada donde el plan empieza a
-     * depender de ellas: {@code obligatorias(sin operaciones)} devuelve
-     * exactamente {@code [tipoPropiedad, operaciones, ...]} y las demás no se
-     * pueden preguntar todavía.
+     * Las preguntas de apertura orientan el plan, pero no convierten una
+     * operación ausente en un bloqueo: registrar una propiedad sin encargo es
+     * válido y el encargo se abre después, con sus guardas propias.
      */
     @Override
     public List<Pregunta> apertura(String intencion, Actor actor) {
@@ -359,16 +500,20 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     @Override
     @Transactional(readOnly = true)
     public List<EstadoCaptura> enCurso(Actor actor) {
-        return borradores.enCurso(actor.idOrganizacion()).stream()
-                .map(borrador -> estado(borrador, documentos.comoMapa(borrador.getDatosConocidos()),
-                        documentos.comoLista(borrador.getDatosFaltantes()), actor))
+        exigirActor(actor);
+        return borradores.enCursoDe(actor.idOrganizacion(), actor.idRolOperativo()).stream()
+                .map(borrador -> {
+                    var conocido = documentos.comoMapa(borrador.getDatosConocidos());
+                    return estado(borrador, conocido, faltantesActuales(borrador, conocido, actor), actor);
+                })
                 .toList();
     }
 
     @Override
     @Transactional
-    public Ejecucion ejecutar(long idBorrador, String claveIdempotencia, Procedencia procedente,
+    public Ejecucion ejecutar(long idBorrador, Integer versionEsperada, String claveIdempotencia, Procedencia procedente,
                               Actor actor) {
+        claveIdempotencia = com.controllocal.service.soporte.Idempotencia.exigirClave(claveIdempotencia);
         Procedencia procedencia = Procedencia.oPantalla(procedente);
         BorradorCaptura borrador = cargar(idBorrador, actor);
 
@@ -376,21 +521,24 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // Es la misma promesa que la idempotencia de comandos: reintentar y
         // acertar a la primera tienen que ser indistinguibles.
         //
-        // Y "lo mismo" es LO MISMO, no solo el id: la respuesta se reconstruye
-        // leyendo la propiedad. Devolver aqui `null` y una lista vacia —que es
-        // lo que hacia -- dejaba al reintento sin el codigo ni los encargos, y
-        // un canal conversacional que reintenta no puede recibir una respuesta
-        // mas pobre que la del intento que si llego.
+        // Se conserva el resultado del comando original, no una ficha posterior:
+        // nuevos encargos o ediciones no cambian lo que produjo aquella actuación.
         if (BorradorCaptura.EJECUTADO.equals(borrador.getEstado())) {
-            return reconstruir(borrador, actor);
+            var anterior = resultadoDel(borrador, claveIdempotencia, actor);
+            if (anterior.estado() == EstadoDelResultado.EXITO) return anterior.resultado();
+            throw new com.controllocal.service.excepcion.ConflictoException(
+                    "La clave no permite conciliar la ejecución original de esta captura.");
         }
         if (!borrador.estaEnCurso()) {
             throw new ReglaNegocioException(
                     "El borrador " + borrador.getCodigo() + " esta descartado.");
         }
+        exigirVersion(borrador, versionEsperada);
 
         Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
-        List<String> faltante = loQueFalta(actor, conocido);
+        List<String> faltante = loQueFalta(actor, conocido, contextoDe(conocido,
+                registrada.contexto(borrador.getContextoCaptura()), false),
+                registrada.metadatos(borrador.getMetadatosRespuestas()));
         if (!faltante.isEmpty()) {
             throw new ReglaNegocioException(
                     "Todavia falta: " + String.join(", ", faltante)
@@ -413,37 +561,72 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 resultado.idsEncargos(), resultado.reintento());
     }
 
-    /**
-     * La respuesta de un borrador que ya se ejecuto, leida de la propiedad que
-     * produjo.
-     *
-     * <p>Se reconstruye en vez de guardarse porque la propiedad es la fuente:
-     * si desde entonces se abrio un segundo encargo —el de alquiler junto al de
-     * venta, que es el caso que el modelo universal existe para admitir—, la
-     * respuesta lo refleja en vez de repetir una foto vieja.
-     */
-    private Ejecucion reconstruir(BorradorCaptura borrador, Actor actor) {
-        Long idPropiedad = borrador.getEntidadObjetivoId();
-        if (idPropiedad == null) {
-            // No deberia poder pasar: `ck_borrador_objetivo` (V56) exige la
-            // entidad cuando el estado es ejecutado. Si pasara, se dice.
-            return new Ejecucion(borrador.getId(), null, null, List.of(), true);
+    @Override
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public ResultadoConsultado consultarResultado(long idBorrador, String claveIdempotencia, Actor actor) {
+        if (!actor.esAgente()) throw new com.controllocal.service.excepcion.AccesoNoAutorizadoException();
+        String clave = com.controllocal.service.soporte.Idempotencia.exigirClave(claveIdempotencia);
+        BorradorCaptura b = cargar(idBorrador, actor);
+        return resultadoDel(b, clave, actor);
+    }
+
+    private ResultadoConsultado resultadoDel(BorradorCaptura b, String clave, Actor actor) {
+        var anterior = propiedades.consultarResultadoRegistro(clave, actor);
+        if (anterior.isEmpty()) return new ResultadoConsultado(EstadoDelResultado.NO_LOCALIZABLE, null);
+        var r = anterior.get();
+        if (!BorradorCaptura.EJECUTADO.equals(b.getEstado()) || !"PROPIEDAD".equals(b.getEntidadObjetivoTipo())
+                || !java.util.Objects.equals(b.getEntidadObjetivoId(), r.idPropiedad())) {
+            throw new com.controllocal.service.excepcion.ConflictoException(
+                    "La captura y la clave no identifican la misma actuación.");
         }
-        FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, actor);
-        return new Ejecucion(borrador.getId(), idPropiedad, ficha.codigo(),
-                ficha.encargos().stream().map(EncargoFicha::idEncargo).toList(), true);
+        return new ResultadoConsultado(EstadoDelResultado.EXITO,
+                new Ejecucion(b.getId(), r.idPropiedad(), r.codigo(), r.idsEncargos(), true));
     }
 
     @Override
     @Transactional
-    public EstadoCaptura descartar(long idBorrador, Actor actor) {
+    public EstadoCaptura descartar(long idBorrador, Integer versionEsperada, Procedencia procedente, Actor actor) {
+        Procedencia procedencia = Procedencia.oPantalla(procedente);
         BorradorCaptura borrador = cargar(idBorrador, actor);
+        exigirVersion(borrador, versionEsperada);
         if (borrador.estaEnCurso()) {
             borrador.descartar();
-            borradores.save(borrador);
+            borrador.setCanal(procedencia.canal());
+            borrador.setAgente(procedencia.agente());
+            borradores.saveAndFlush(borrador);
+            eventos.save(procedencia.sellar(EventoDominio.de(actor.idOrganizacion(), "CAPTURA_AVANZADA",
+                    "BORRADOR_CAPTURA", borrador.getId(), actor.idRolOperativo(), procedencia.canal()))
+                    .con(documentos.objeto(Map.of("accion", "DESCARTAR_CAPTURA", "version", borrador.getVersion()))));
         }
         return estado(borrador, documentos.comoMapa(borrador.getDatosConocidos()),
                 List.of(), actor);
+    }
+
+    @Override
+    @Transactional
+    public EstadoCaptura posponerRevision(long idBorrador, Integer versionEsperada,
+            java.time.LocalDate hasta, String motivo, Procedencia procedente, Actor actor) {
+        Procedencia procedencia = Procedencia.oPantalla(procedente);
+        BorradorCaptura borrador = cargar(idBorrador, actor);
+        exigirVersion(borrador, versionEsperada);
+        if (!borrador.estaEnCurso()) throw new ReglaNegocioException("La captura no está en curso.");
+        java.time.LocalDate hoy = preparacion.hoy();
+        if (hasta == null || !hasta.isAfter(hoy))
+            throw new ReglaNegocioException("La revisión debe posponerse a una fecha futura.");
+        if (motivo == null || motivo.isBlank() || motivo.trim().length() > 500)
+            throw new ReglaNegocioException("La posposición requiere un motivo de hasta 500 caracteres.");
+        Map<String, Object> anterior = new java.util.LinkedHashMap<>();
+        anterior.put("hasta", borrador.getRevisionPospuestaHasta()); anterior.put("motivo", borrador.getMotivoPosposicion());
+        borrador.posponerRevision(hasta, motivo.trim());
+        borrador.setCanal(procedencia.canal());
+        borrador.setAgente(procedencia.agente());
+        borradores.saveAndFlush(borrador);
+        eventos.save(procedencia.sellar(EventoDominio.de(actor.idOrganizacion(), "CAPTURA_AVANZADA", "BORRADOR_CAPTURA",
+                borrador.getId(), actor.idRolOperativo(), procedencia.canal())).con(documentos.objeto(Map.of(
+                "accion", "POSPONER_REVISION", "anterior", anterior, "hasta", hasta,
+                "motivo", motivo.trim(), "version", borrador.getVersion()))));
+        var conocido = documentos.comoMapa(borrador.getDatosConocidos());
+        return estado(borrador, conocido, faltantesActuales(borrador, conocido, actor), actor);
     }
 
     // ==================================================================
@@ -466,6 +649,22 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
             if (valor == null || valor.isBlank()) {
                 // Vaciar un dato es legitimo: el usuario se corrige.
                 conocido.remove(limpia);
+                // El importe y su moneda son un par. Al quitar el importe no
+                // se conserva una moneda huérfana que luego parezca un dato
+                // completo; al quitar la moneda se deja el importe para que
+                // loQueFalta lo declare FALTANTE.
+                if (GuionRegistroPropiedad.atributoDeMoneda(limpia) == null) {
+                    OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(limpia);
+                    if (operacion != null
+                            && GuionRegistroPropiedad.IMPORTE.equals(
+                                    GuionRegistroPropiedad.claveBase(limpia))) {
+                        conocido.remove(GuionRegistroPropiedad.para(
+                                GuionRegistroPropiedad.MONEDA, operacion));
+                    } else if (!GuionRegistroPropiedad.MONEDA.equals(
+                            GuionRegistroPropiedad.claveBase(limpia))) {
+                        conocido.remove(GuionRegistroPropiedad.claveMonedaDeAtributo(limpia));
+                    }
+                }
                 return;
             }
             conocido.put(limpia, validar(actor, conocido, limpia, valor.trim()));
@@ -473,6 +672,18 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     }
 
     private Object validar(Actor actor, Map<String, Object> conocido, String clave, String valor) {
+        if(clave.startsWith("contexto."))return ValidadorRespuestaCaptura.valorAplicabilidad(clave,valor).name();
+        // `moneda:<clave>` es una compañera. La forma anidada
+        // `moneda:<clave-calificada>` pertenece a una condición del encargo;
+        // la forma corta `moneda:VENTA|ALQUILER` sigue siendo estructural.
+        String condicionMoneda = GuionRegistroPropiedad.atributoDeMonedaDeEncargo(clave);
+        if (condicionMoneda != null) {
+            return validarMonedaDeCondicion(actor, conocido, condicionMoneda, valor);
+        }
+        String atributoMoneda = GuionRegistroPropiedad.atributoDeMonedaDePropiedad(clave);
+        if (atributoMoneda != null) {
+            return validarMonedaDeAtributo(actor, conocido, clave, valor);
+        }
         if (GuionRegistroPropiedad.esDeLaOperacion(clave)) {
             return validarDeLaOperacion(conocido, clave, valor);
         }
@@ -481,8 +692,8 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 return AtributosGobernados.codigoDelTipo(valor)
                         .map(AtributosGobernados::nombreDelTipo)
                         .orElseThrow(() -> new ReglaNegocioException(
-                                "Tipo de propiedad desconocido: \"" + valor + "\". Son siete: LOCAL, "
-                                        + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
+                                "Tipo de propiedad desconocido: \"" + valor + "\". Tipos admitidos: "
+                                        + AtributosGobernados.tiposAdmitidos() + "."));
             }
             case GuionRegistroPropiedad.OPERACIONES -> {
                 // Se normaliza a la forma canonica: "alquiler, venta" entra y
@@ -491,6 +702,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 return operacionesDeclaradas(valor).stream()
                         .map(OperacionInmobiliaria::name)
                         .collect(java.util.stream.Collectors.joining(","));
+            }
+            case GuionRegistroPropiedad.USO -> {
+                return usoDeclarado(valor);
             }
             case GuionRegistroPropiedad.TITULARES -> {
                 // Se valida la FORMA aqui; que las personas existan y que las
@@ -605,7 +819,59 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // rechazarlo entonces seria mentir sobre un dato correcto. Al guardar
         // se comprueba otra vez, ya con el tipo definitivo.
         ConversionDeValores.exigirCompatible(definicion, valor);
-        return valor;
+        return validarVocabulario(definicion, valor);
+    }
+
+    /** Valida la moneda compañera de un importe gobernado de la propiedad. */
+    private Object validarMonedaDeAtributo(Actor actor, Map<String, Object> conocido,
+                                           String clave, String valor) {
+        String atributo = GuionRegistroPropiedad.atributoDeMoneda(clave);
+        // La llamada solo llega aqui despues de reconocer el prefijo, pero la
+        // guarda mantiene el mensaje de negocio local si mañana cambia el
+        // helper de claves.
+        if (atributo == null) {
+            throw new ReglaNegocioException("La clave de moneda no identifica un atributo.");
+        }
+        CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), atributo);
+        if (!definicion.tipo().llevaMoneda()) {
+            throw new ReglaNegocioException(
+                    "La clave \"" + clave + "\" solo puede acompañar a un IMPORTE; \""
+                            + atributo + "\" es " + definicion.getTipoDato() + ".");
+        }
+        String tipo = codigoDelTipoConocido(conocido);
+        if (tipo != null && !definicion.aplicaA(tipo)) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + atributo + "\" no aplica a una propiedad de tipo "
+                            + AtributosGobernados.nombreDelTipo(tipo) + ".");
+        }
+        return ConversionDeValores.exigirMoneda(atributo, valor);
+    }
+
+    /** Valida la moneda compañera de un IMPORTE de condición del encargo. */
+    private Object validarMonedaDeCondicion(Actor actor, Map<String, Object> conocido,
+                                            String importeCalificado, String valor) {
+        OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(importeCalificado);
+        String atributo = GuionRegistroPropiedad.claveBase(importeCalificado);
+        if (operacion == null || atributo == null || atributo.isBlank()
+                || GuionRegistroPropiedad.IMPORTE.equals(atributo)) {
+            throw new ReglaNegocioException(
+                    "La clave de moneda \"" + GuionRegistroPropiedad.claveMonedaDeAtributo(
+                            importeCalificado) + "\" no identifica un IMPORTE de condicion.");
+        }
+        CatalogoAtributo definicion = condiciones.definicionDe(actor.idOrganizacion(), atributo);
+        if (!definicion.tipo().llevaMoneda()) {
+            throw new ReglaNegocioException(
+                    "La clave de moneda solo puede acompañar a un IMPORTE; \""
+                            + atributo + "\" es " + definicion.getTipoDato() + ".");
+        }
+        String tipo = codigoDelTipoConocido(conocido);
+        if (tipo != null && !definicion.aplicaA(tipo, operacion.codigo())) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + atributo + "\" no aplica a "
+                            + AtributosGobernados.nombreDelTipo(tipo) + " en "
+                            + operacion.name() + ".");
+        }
+        return ConversionDeValores.exigirMoneda(atributo, valor);
     }
 
     /**
@@ -616,7 +882,8 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
      * dicho todavia. Mientras no se sepa, se comprueba lo que si se puede -- que
      * la clave existe, que es del ENCARGO y que el valor encaja con su tipo --
      * y la aplicabilidad se mira al guardar, que es cuando el tipo ya es firme.
-     * Rechazar antes seria mentir sobre un dato correcto.
+     * Si el tipo es IMPORTE, su moneda se valida por la compañera calificada y
+     * el par incompleto queda FALTANTE en el borrador.
      */
     private Object validarCondicion(Actor actor, Map<String, Object> conocido, String clave,
                                     OperacionInmobiliaria operacion, String valor) {
@@ -629,46 +896,177 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                             + operacion.name() + ".");
         }
         ConversionDeValores.exigirCompatible(definicion, valor);
-        return valor;
+        return validarVocabulario(definicion, valor);
+    }
+
+    private Object validarVocabulario(CatalogoAtributo definicion, String valor) {
+        if (definicion.tipo() != TipoDato.LISTA_MULTIPLE)
+            return ConversionDeValores.exigirDelVocabulario(definicion, valor);
+        List<String> valores;
+        try { valores = documentos.comoLista(valor); }
+        catch (IllegalStateException error) {
+            throw new ReglaNegocioException("La respuesta múltiple requiere una lista JSON de códigos.");
+        }
+        valores.forEach(codigo -> ConversionDeValores.exigirDelVocabulario(definicion, codigo));
+        return List.copyOf(valores);
     }
 
     /**
-     * Lo estructural que falta, mas lo obligatorio del catalogo para el tipo.
+     * Lo estructural que falta, mas lo obligatorio del catalogo para el tipo y
+     * la mitad ausente de cualquier IMPORTE aplicable, incluida una condicion
+     * del encargo ya declarada.
      *
      * <p>Mientras no se sepa el tipo, la segunda lista no existe: el catalogo
      * no puede decir que se pregunta de algo que todavia no se sabe que es.
      */
-    private List<String> loQueFalta(Actor actor, Map<String, Object> conocido) {
+    private List<String> loQueFalta(Actor actor, Map<String, Object> conocido,
+                                    SuficienciaInmueble.Contexto contexto,
+                                    Map<String, MetadatoRespuesta> metadatos) {
         List<String> faltante = new ArrayList<>();
-        // La lista se despliega sobre las operaciones ya declaradas: con dos,
-        // faltan dos importes y dos monedas. Sin ninguna declarada llega hasta
-        // `operaciones` y para, porque no se puede pedir un importe sin saber
-        // de que es.
-        for (String clave : GuionRegistroPropiedad.obligatorias(operacionesConocidas(conocido))) {
-            if (!conocido.containsKey(clave)) {
-                faltante.add(clave);
-            }
-        }
+        var datos = registrada.validarDatos(actor.idOrganizacion(), contexto, registrada.datos(conocido, metadatos));
+        suficiencia.evaluar(SuficienciaInmueble.Accion.IDENTIFICAR, contexto, datos)
+                .faltantes().forEach(f -> faltante.add(f.clave()));
         String tipo = codigoDelTipoConocido(conocido);
         if (tipo != null) {
-            faltante.addAll(gobierno.faltantesEntre(actor.idOrganizacion(), tipo, conocido.keySet()));
+            faltantesDeMoneda(actor, tipo, conocido, faltante);
         }
-        return faltante;
+        return faltante.stream().distinct().toList();
+    }
+
+    /**
+     * Un IMPORTE conocido sin su compañera no es dinero completo. El borrador
+     * conserva el monto y pregunta la moneda; si llega la moneda primero,
+     * pregunta el monto. Los atributos OPC también pasan por esta guarda para
+     * no intentar guardar un par incompleto al ejecutar.
+     */
+    private void faltantesDeMoneda(Actor actor, String tipo, Map<String, Object> conocido,
+                                   List<String> faltante) {
+        for (CatalogoAtributo definicion : gobierno.aplicablesA(actor.idOrganizacion(), tipo)) {
+            if (!definicion.tipo().llevaMoneda()) {
+                continue;
+            }
+            String atributo = definicion.getClave();
+            anadirFaltanteDelParDeImporte(conocido, atributo, faltante);
+        }
+    }
+
+    /** Añade solo la mitad que falta del par, sin crear moneda para un opcional ausente. */
+    private static void anadirFaltanteDelParDeImporte(Map<String, Object> conocido,
+                                                      String importe, List<String> faltante) {
+        String moneda = GuionRegistroPropiedad.claveMonedaDeAtributo(importe);
+        boolean tieneImporte = tieneValor(conocido, importe);
+        boolean tieneMoneda = tieneValor(conocido, moneda);
+        if (tieneImporte && !tieneMoneda && !faltante.contains(moneda)) {
+            faltante.add(moneda);
+        } else if (!tieneImporte && tieneMoneda && !faltante.contains(importe)) {
+            faltante.add(importe);
+        }
+    }
+
+    private static boolean tieneValor(Map<String, Object> conocido, String clave) {
+        Object valor = conocido.get(clave);
+        return valor != null && !valor.toString().isBlank();
     }
 
     private EstadoCaptura estado(BorradorCaptura borrador, Map<String, Object> conocido,
                                  List<String> faltante, Actor actor) {
-        Pregunta siguiente = faltante.isEmpty()
-                ? null
-                : preguntaDe(actor, conocido, faltante.get(0));
+        return estado(borrador, conocido, faltante, actor, List.of());
+    }
+
+    private EstadoCaptura estado(BorradorCaptura borrador, Map<String, Object> conocido,
+                                 List<String> faltanteAnterior, Actor actor, List<String> cambios) {
+        var metadatos = registrada.metadatos(borrador.getMetadatosRespuestas());
+        var contexto = contextoDe(conocido, registrada.contexto(borrador.getContextoCaptura()), false);
+        List<String> faltante = borrador.estaEnCurso() ? faltanteAnterior : List.of();
+        var datosMateriales = registrada.validarDatos(actor.idOrganizacion(), contexto, registrada.datos(conocido, metadatos));
+        var identificacion = suficiencia.evaluar(SuficienciaInmueble.Accion.IDENTIFICAR, contexto, datosMateriales);
+        List<SuficienciaInmueble.Evaluacion> encargos = operacionesConocidas(conocido).stream()
+                .map(operacion -> suficiencia.evaluar(SuficienciaInmueble.Accion.CONFIRMAR_ENCARGO,
+                        new SuficienciaInmueble.Contexto(contexto.tipoPropiedad(), contexto.usoOfrecido(),
+                                contexto.objetoOfrecido(), operacion.name(), contexto.aplicabilidad(),
+                                contexto.prestacionesOfrecidas(), contexto.jurisdiccion()), datosMateriales)).toList();
+        Pregunta siguiente = faltante.stream()
+                .filter(clave -> !metadatos.containsKey(clave) || !metadatos.get(clave).noSabe())
+                .findFirst().map(clave -> preguntaDe(actor, conocido, clave, contexto.jurisdiccion())).orElse(null);
+        RetornoCaptura retorno;
+        try {
+            boolean pendienteIdentidad = !identificacion.suficiente();
+            retorno = preparacion.preparar(conocido, metadatos, contexto, cambios,
+                    borrador.getCreadoEn(), pendienteIdentidad && borrador.estaEnCurso());
+            if (retorno.revision() != null && borrador.getRevisionPospuestaHasta() != null
+                    && borrador.getRevisionPospuestaHasta().isAfter(preparacion.hoy())) {
+                retorno = new RetornoCaptura(retorno.estado(), retorno.grupos(), List.of(), cambios,
+                        new RetornoCaptura.Revision(retorno.revision().diasDesdeDeteccion(), "POSPUESTA", List.of(),
+                                borrador.getRevisionPospuestaHasta(), borrador.getMotivoPosposicion()), retorno.referenciaPrecio());
+            }
+            if (!borrador.estaEnCurso()) retorno = new RetornoCaptura(borrador.getEstado(),
+                    retorno.grupos().stream().map(g -> new RetornoCaptura.Grupo(g.codigo(), g.resultado(),
+                            g.datos(), List.of())).toList(), List.of(), cambios, null, retorno.referenciaPrecio());
+        } catch (RuntimeException falloDePreparacion) {
+            // El avance correcto ya es durable en esta TX. Se distingue el fallo
+            // de preparación de un resultado vacío; nunca se reemite el hecho.
+            retorno = new RetornoCaptura("FALLO_TECNICO", List.of(), List.of(), cambios, null,
+                    new RetornoCaptura.ReferenciaPrecio("NO_EVALUADA", List.of()));
+        }
         return new EstadoCaptura(borrador.getId(), borrador.getCodigo(), borrador.getIntencion(),
                 borrador.getEstado(), borrador.getCanal(), conocido, faltante, siguiente,
                 faltante.isEmpty() && borrador.estaEnCurso(), borrador.getEntidadObjetivoTipo(),
-                borrador.getEntidadObjetivoId(), Fechas.local(borrador.getActualizadoEn()));
+                borrador.getEntidadObjetivoId(), Fechas.local(borrador.getActualizadoEn()),
+                borrador.getVersion(), contexto, metadatos, retorno, identificacion, encargos);
     }
 
     /** La siguiente pregunta: del guion si es estructural, del catalogo si no. */
-    private Pregunta preguntaDe(Actor actor, Map<String, Object> conocido, String clave) {
+    private Pregunta preguntaDe(Actor actor, Map<String, Object> conocido, String clave, String jurisdiccion) {
+        if (clave.startsWith("contexto.") || "objetoOfrecido".equals(clave)
+                || "operacion".equals(clave)) {
+            if(clave.startsWith("contexto."))return preguntaContextual(clave);
+            return new Pregunta(clave,"objetoOfrecido".equals(clave)?"Objeto ofrecido":"Operación",
+                    "TEXTO",null,null,false,null);
+        }
+        String importeDeCondicion = GuionRegistroPropiedad.atributoDeMonedaDeEncargo(clave);
+        if (importeDeCondicion != null) {
+            OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(importeDeCondicion);
+            CatalogoAtributo definicion = condiciones.definicionDe(actor.idOrganizacion(),
+                    GuionRegistroPropiedad.claveBase(importeDeCondicion));
+            if (!definicion.tipo().llevaMoneda()) {
+                throw new ReglaNegocioException(
+                        "La clave \"" + clave + "\" no acompaña a un IMPORTE.");
+            }
+            Pregunta preguntaMoneda = GuionRegistroPropiedad.pregunta(GuionRegistroPropiedad.MONEDA);
+            return new Pregunta(clave, "Moneda de " + definicion.getRotulo(),
+                    preguntaMoneda.tipoDato(), preguntaMoneda.unidad(), preguntaMoneda.opciones(),
+                    true, "Moneda del importe de " + definicion.getRotulo() + ".")
+                    .en(Pregunta.SECCION_OPERACION, definicion.getOrden() + 1);
+        }
+        String atributoMonetario = GuionRegistroPropiedad.atributoDeMonedaDePropiedad(clave);
+        if (atributoMonetario != null) {
+            CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), atributoMonetario);
+            if (!definicion.tipo().llevaMoneda()) {
+                throw new ReglaNegocioException(
+                        "La clave \"" + clave + "\" no acompaña a un IMPORTE.");
+            }
+            Pregunta preguntaMoneda = GuionRegistroPropiedad.pregunta(GuionRegistroPropiedad.MONEDA);
+            return new Pregunta(clave, "Moneda de " + definicion.getRotulo(),
+                    preguntaMoneda.tipoDato(), preguntaMoneda.unidad(), preguntaMoneda.opciones(),
+                    true, "Moneda del importe de " + definicion.getRotulo() + ".")
+                    .en(Pregunta.SECCION_TIPO, definicion.getOrden() + 1);
+        }
+        // Una moneda de condición puede llegar primero. En ese caso loQueFalta
+        // devuelve el IMPORTE calificado y debe resolverlo contra el catálogo
+        // del encargo, no contra el catálogo físico de la propiedad.
+        OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(clave);
+        if (operacion != null && !GuionRegistroPropiedad.esDeLaOperacion(clave)) {
+            String tipo = codigoDelTipoConocido(conocido);
+            CatalogoAtributo definicion = condiciones.definicionDe(actor.idOrganizacion(),
+                    GuionRegistroPropiedad.claveBase(clave));
+            if (tipo != null && !definicion.aplicaA(tipo, operacion.codigo())) {
+                throw new ReglaNegocioException(
+                        "El atributo \"" + GuionRegistroPropiedad.claveBase(clave)
+                                + "\" no aplica a " + AtributosGobernados.nombreDelTipo(tipo)
+                                + " en " + operacion.name() + ".");
+            }
+            return delCatalogoDeEncargo(definicion, tipo, operacion.codigo());
+        }
         Pregunta estructural = GuionRegistroPropiedad.pregunta(clave);
         if (estructural != null) {
             // Por el mismo catalogo que la definicion: un canal conversacional
@@ -677,9 +1075,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         }
         CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
         String tipo = codigoDelTipoConocido(conocido);
-        return conRestricciones(new Pregunta(definicion.getClave(), definicion.getRotulo(),
-                definicion.getTipoDato(), definicion.getUnidad(), null,
-                tipo != null && definicion.esRequeridoPara(tipo), null), definicion);
+        return preguntaGobernada(definicion, tipo, actor.idOrganizacion(), jurisdiccion);
     }
 
     /**
@@ -770,27 +1166,6 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                                          Procedencia procedencia) {
         String tipo = texto(conocido, GuionRegistroPropiedad.TIPO_PROPIEDAD);
 
-        // Una propiedad, tantos encargos como operaciones declaradas. Cada uno
-        // lee SU importe, SU moneda y SU exclusividad de la clave calificada:
-        // es lo que hace que los dos no se pisen y que cada serie economica
-        // nazca en su sitio.
-        List<OperacionSolicitada> operaciones = new ArrayList<>();
-        for (OperacionInmobiliaria operacion : operacionesConocidas(conocido)) {
-            operaciones.add(new OperacionSolicitada(operacion.name(),
-                    numero(conocido, GuionRegistroPropiedad.para(
-                            GuionRegistroPropiedad.IMPORTE, operacion)),
-                    texto(conocido, GuionRegistroPropiedad.para(
-                            GuionRegistroPropiedad.MONEDA, operacion)),
-                    null, null, null, null,
-                    booleano(conocido, GuionRegistroPropiedad.para(
-                            GuionRegistroPropiedad.EXCLUSIVIDAD, operacion)), null, null,
-                    // Y las condiciones gobernadas que se dictaron para ESTA
-                    // operacion. Viajan dentro de ella porque en el alta el
-                    // encargo todavia no tiene id: la operacion declarada es lo
-                    // unico que puede decir a cual pertenece cada respuesta.
-                    condicionesDictadas(actor, conocido, operacion)));
-        }
-
         Ubicacion ubicacion = new Ubicacion(
                 texto(conocido, GuionRegistroPropiedad.DIRECCION),
                 texto(conocido, GuionRegistroPropiedad.DISTRITO),
@@ -814,9 +1189,20 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
             // dentro de su operacion. Meterla aqui la mandaria a
             // `atributo_propiedad` y el enrutador la rechazaria -- con razon,
             // porque una condicion negociada no es un hecho del inmueble.
-            if (!GuionRegistroPropiedad.esEstructural(clave) && valor != null
-                    && GuionRegistroPropiedad.operacionDe(clave) == null) {
-                atributos.add(new ValorAtributo(clave, valor.toString()));
+            if (!GuionRegistroPropiedad.esEstructural(clave) && !clave.startsWith("contexto.") && valor != null
+                    && GuionRegistroPropiedad.operacionDe(clave) == null
+                    && GuionRegistroPropiedad.atributoDeMoneda(clave) == null) {
+                CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
+                if (definicion.tipo() == TipoDato.LISTA_MULTIPLE) {
+                    if (!(valor instanceof List<?> lista))
+                        throw new ReglaNegocioException("La captura múltiple requiere sus valores estructurados.");
+                    atributos.add(ValorAtributo.multiple(clave, lista.stream().map(Object::toString).toList()));
+                } else if (definicion.tipo().llevaMoneda()) {
+                    atributos.add(ValorAtributo.importe(clave, valor.toString(),
+                            texto(conocido, GuionRegistroPropiedad.claveMonedaDeAtributo(clave))));
+                } else {
+                    atributos.add(new ValorAtributo(clave, valor.toString()));
+                }
             }
         });
 
@@ -825,35 +1211,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 texto(conocido, GuionRegistroPropiedad.USO),
                 texto(conocido, GuionRegistroPropiedad.DESCRIPCION), ubicacion,
                 titularesDe(texto(conocido, GuionRegistroPropiedad.TITULARES)), atributos,
-                List.copyOf(operaciones), borrador.getId());
-    }
-
-    /**
-     * Lo que se dicto para UNA operacion y es una condicion gobernada del
-     * encargo.
-     *
-     * <p>Se reconoce por dos cosas juntas: la clave viene calificada con esa
-     * operacion, y su base <b>no</b> es una clave del guion economico. Lo
-     * segundo importa: {@code importe:VENTA} tambien viene calificado y no es
-     * una condicion gobernada -- vive en {@code condicion_economica}, que es
-     * una columna del encargo y no un atributo suyo.
-     */
-    private List<ValorAtributo> condicionesDictadas(Actor actor, Map<String, Object> conocido,
-                                                    OperacionInmobiliaria operacion) {
-        List<ValorAtributo> pactadas = new ArrayList<>();
-        conocido.forEach((clave, valor) -> {
-            if (valor == null || !operacion.equals(GuionRegistroPropiedad.operacionDe(clave))) {
-                return;
-            }
-            if (GuionRegistroPropiedad.esEstructural(clave)) {
-                return;
-            }
-            String base = GuionRegistroPropiedad.claveBase(clave);
-            // Que exista y sea del ENCARGO ya lo comprobo `validarCondicion` al
-            // entrar; volver a preguntarlo aqui seria una consulta por respuesta.
-            pactadas.add(new ValorAtributo(base, valor.toString()));
-        });
-        return pactadas.isEmpty() ? null : List.copyOf(pactadas);
+                List.of(), borrador.getId());
     }
 
     /**
@@ -893,6 +1251,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     // ==================================================================
 
     private BorradorCaptura abrir(Actor actor, String intencion, Procedencia procedencia) {
+        borradores.bloquearSerie(actor.idOrganizacion());
         long correlativo = borradores.countByOrganizacionId(actor.idOrganizacion()) + 1;
         BorradorCaptura borrador = BorradorCaptura.abrir(actor.idOrganizacion(),
                 "CAP-%05d".formatted(correlativo), actor.idRolOperativo(), intencion,
@@ -902,8 +1261,120 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     }
 
     private BorradorCaptura cargar(long idBorrador, Actor actor) {
-        return borradores.findByOrganizacionIdAndId(actor.idOrganizacion(), idBorrador)
+        exigirActor(actor);
+        return borradores.findByOrganizacionIdAndIdAndIdPersonaRol(actor.idOrganizacion(), idBorrador,
+                        actor.idRolOperativo())
                 .orElseThrow(() -> new NoEncontradoException("Borrador de captura"));
+    }
+
+    private static void exigirActor(Actor actor) {
+        if (actor == null || !actor.esAgente())
+            throw new com.controllocal.service.excepcion.AccesoNoAutorizadoException();
+    }
+
+    private List<String> faltantesActuales(BorradorCaptura b, Map<String, Object> conocido, Actor actor) {
+        return b.estaEnCurso() ? loQueFalta(actor, conocido,
+                contextoDe(conocido, registrada.contexto(b.getContextoCaptura()), false),
+                registrada.metadatos(b.getMetadatosRespuestas())) : List.of();
+    }
+
+    private void validarZonificacion(Actor actor, Map<String, Object> conocido,
+                                     Map<String, MetadatoRespuesta> metadatos,
+                                     SuficienciaInmueble.Contexto contexto) {
+        Object valor = conocido.get("zonificacion");
+        if (valor == null) return;
+        var revisada=validadorRespuestas.validarZonificacion(actor.idOrganizacion(),valor.toString(),metadatos.get("zonificacion"),contexto);
+        if(revisada.valorConocido()==null) conocido.remove("zonificacion");
+        metadatos.put("zonificacion",revisada.metadato());
+    }
+    private static void exigirVersion(BorradorCaptura borrador, Integer versionEsperada) {
+        if (versionEsperada == null || versionEsperada < 0)
+            throw new ReglaNegocioException("La versión esperada de la captura es obligatoria.");
+        if (borrador.getVersion() != versionEsperada)
+            throw new com.controllocal.service.excepcion.ConflictoException("La captura cambió desde la versión revisada.");
+    }
+
+    private static List<String> clavesCambiadas(Map<String, Object> anterior, Map<String, Object> conocido,
+            Map<String, MetadatoRespuesta> previos, Map<String, MetadatoRespuesta> nuevos) {
+        Set<String> claves = new java.util.LinkedHashSet<>(anterior.keySet());
+        claves.addAll(conocido.keySet()); claves.addAll(previos.keySet()); claves.addAll(nuevos.keySet());
+        return claves.stream().filter(clave -> !java.util.Objects.equals(anterior.get(clave), conocido.get(clave))
+                || !java.util.Objects.equals(previos.get(clave), nuevos.get(clave))).toList();
+    }
+
+    private static SuficienciaInmueble.Contexto contextoDe(Map<String, Object> conocido,
+            SuficienciaInmueble.Contexto declarado, boolean comprobar) {
+        String tipo = texto(conocido, GuionRegistroPropiedad.TIPO_PROPIEDAD);
+        String uso = texto(conocido, GuionRegistroPropiedad.USO);
+        if (declarado != null) {
+            if (comprobar && declarado.tipoPropiedad() != null && tipo != null
+                    && !AtributosGobernados.codigoDelTipo(tipo).equals(
+                            AtributosGobernados.codigoDelTipo(declarado.tipoPropiedad())))
+                throw new ReglaNegocioException("El tipo del contexto y de la respuesta deben coincidir.");
+            if (comprobar && declarado.usoOfrecido() != null && uso != null
+                    && !usoDeclarado(declarado.usoOfrecido()).equals(uso))
+                throw new ReglaNegocioException("El uso del contexto y de la respuesta deben coincidir.");
+        }
+        var operaciones = operacionesConocidas(conocido);
+        String operacion = operaciones.size() == 1 ? operaciones.getFirst().name() : null;
+        if (declarado != null && declarado.operacion() != null && !declarado.operacion().isBlank()) {
+            var seleccionadas = operacionesDeclaradas(declarado.operacion());
+            if (seleccionadas.size() != 1)
+                throw new ReglaNegocioException("El contexto debe identificar una sola operación.");
+            if (comprobar && !operaciones.contains(seleccionadas.getFirst()))
+                throw new ReglaNegocioException("La operación del contexto debe estar entre las observadas.");
+            if (operaciones.contains(seleccionadas.getFirst())) operacion = seleccionadas.getFirst().name();
+        }
+        var aplicabilidad = new LinkedHashMap<String,SuficienciaInmueble.Aplicabilidad>(declarado==null?Map.of():declarado.aplicabilidad());
+        for(String clave:SuficienciaInmueble.COORDENADAS_APLICABILIDAD) {
+            String valor=texto(conocido,"contexto."+clave);
+            if(valor==null)continue;
+            SuficienciaInmueble.Aplicabilidad elegida;
+            try { elegida=SuficienciaInmueble.Aplicabilidad.valueOf(valor.trim().toUpperCase(java.util.Locale.ROOT)); }
+            catch(IllegalArgumentException error){throw new ReglaNegocioException("La aplicabilidad admite APLICA, NO_APLICA o dato faltante.");}
+            if(comprobar&&declarado.aplicabilidad().containsKey(clave)&&declarado.aplicabilidad().get(clave)!=elegida)
+                throw new ReglaNegocioException("La respuesta y el contexto deben coincidir: "+clave);
+            aplicabilidad.put(clave,elegida);
+        }
+        return new SuficienciaInmueble.Contexto(tipo, uso, declarado == null ? null : declarado.objetoOfrecido(),
+                operacion, aplicabilidad,
+                declarado == null ? Set.of() : declarado.prestacionesOfrecidas(),
+                declarado == null ? null : declarado.jurisdiccion());
+    }
+
+    /** Tipo/uso/operación declarados conservan una sola autoridad en conocido. */
+    private static void incorporarContexto(Map<String, String> entradas, Map<String, Object> conocido,
+                                          SuficienciaInmueble.Contexto contexto) {
+        if (contexto == null) return;
+        incorporarCoordenada(entradas, GuionRegistroPropiedad.TIPO_PROPIEDAD, contexto.tipoPropiedad());
+        incorporarCoordenada(entradas, GuionRegistroPropiedad.USO, contexto.usoOfrecido());
+        contexto.aplicabilidad().forEach((clave,valor)->{
+            if(!SuficienciaInmueble.COORDENADAS_APLICABILIDAD.contains(clave))
+                throw new ReglaNegocioException("Coordenada de aplicabilidad no reconocida: "+clave);
+            incorporarCoordenada(entradas,"contexto."+clave,valor.name());
+        });
+        if (contexto.operacion() != null && !contexto.operacion().isBlank()
+                && !entradas.containsKey(GuionRegistroPropiedad.OPERACIONES)
+                && !conocido.containsKey(GuionRegistroPropiedad.OPERACIONES)) {
+            entradas.put(GuionRegistroPropiedad.OPERACIONES, contexto.operacion());
+        }
+    }
+
+    private static void incorporarCoordenada(Map<String, String> entradas, String clave, String valor) {
+        if (valor == null || valor.isBlank()) return;
+        if (entradas.containsKey(clave) && (entradas.get(clave) == null || entradas.get(clave).isBlank()))
+            throw new ReglaNegocioException("No puede retirarse una respuesta y declararla conocida en el contexto.");
+        entradas.putIfAbsent(clave, valor);
+    }
+
+    private static String usoDeclarado(String valor) {
+        return switch (valor.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "C", "COMERCIAL" -> "COMERCIAL";
+            case "V", "VIVIENDA" -> "VIVIENDA";
+            case "I", "INDUSTRIAL" -> "INDUSTRIAL";
+            case "M", "MIXTO" -> "MIXTO";
+            default -> throw new ReglaNegocioException("Uso no reconocido: " + valor + ".");
+        };
     }
 
     private static String intencionValidada(String intencion) {
@@ -944,15 +1415,4 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         }
     }
 
-    private static Boolean booleano(Map<String, Object> conocido, String clave) {
-        Object valor = conocido.get(clave);
-        if (valor == null) {
-            return null;
-        }
-        if (valor instanceof Boolean booleano) {
-            return booleano;
-        }
-        String texto = valor.toString().toLowerCase(java.util.Locale.ROOT);
-        return "true".equals(texto) || "si".equals(texto) || "1".equals(texto);
-    }
 }

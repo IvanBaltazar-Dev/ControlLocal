@@ -15,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0; $fail = 0
 
 # Volumen del banco. 100.000 es el numero del requisito; se puede bajar para
@@ -36,12 +37,10 @@ function Api($metodo, $ruta, $token, $cuerpo) {
     if ($null -ne $cuerpo) {
         $p['Body'] = ($cuerpo | ConvertTo-Json -Depth 6); $p['ContentType'] = 'application/json'
     } elseif ($metodo -in @('POST', 'PUT', 'PATCH')) { $p['ContentType'] = 'application/json' }
-    Invoke-RestMethod @p
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @p) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
-}
+
 
 # p50/p95/peor de N llamadas reales.
 #
@@ -49,8 +48,8 @@ function Sql($consulta) {
 # columna `Frio`, pero NO entra en el percentil. No es maquillaje: en frio se
 # paga el JIT del camino de consulta, la cache de planes vacia y las paginas que
 # aun no estan en el buffer, y eso se ve igual con 30.000 filas que con 100.000
-# —de hecho salio peor con 30.000, que es la prueba de que no depende del
-# volumen—. Los umbrales vigilan el REGIMEN, que es lo que vive un usuario a
+# -de hecho salio peor con 30.000, que es la prueba de que no depende del
+# volumen-. Los umbrales vigilan el REGIMEN, que es lo que vive un usuario a
 # partir de la segunda busqueda; el frio queda a la vista para que nadie lo
 # descubra en produccion.
 function Medir($etiqueta, $ruta, $token, $repeticiones = 20) {
@@ -77,10 +76,12 @@ function Medir($etiqueta, $ruta, $token, $repeticiones = 20) {
 }
 
 Write-Host "`n== 1. Login ==" -ForegroundColor Cyan
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
-$token = $admin.token
-Check 'login del administrador' ($admin.rol -eq 'ADMIN') $admin.rol
+$operador = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$token = $operador.token
+Check 'login del operador de la cartera de TEST' ($operador.rol -eq 'AGENTE') $operador.rol
 
+$propietarioFixture = NuevoPropietarioC2DePrueba -Token $operador.token -Nombre 'Propietario TEST de rendimiento locales100000'
+$idPropietarioFixture = $propietarioFixture.id
 try {
 
 Write-Host "`n== 2. Banco de $VOLUMEN locales ==" -ForegroundColor Cyan
@@ -88,7 +89,7 @@ Write-Host "`n== 2. Banco de $VOLUMEN locales ==" -ForegroundColor Cyan
 # minoria, que es la forma de una corredora madura y el peor caso del filtro.
 # Un local de cada 5.000 lleva el testigo HITO en la direccion (texto de ~20
 # coincidencias) y uno de cada 1.000 un rubro propio.
-Sql @"
+Invoke-ControlLocalE2ESql @"
 insert into propiedad (codigo, direccion, distrito, metraje, precio_referencial,
                        moneda_referencial, estado_registro, disponibilidad_comercial,
                        id_rol_propietario, organizacion_id)
@@ -98,25 +99,33 @@ select 'PERF-' || lpad(g::text, 7, '0'),
        60 + (g % 400), 3000 + (g % 9000), 'PEN',
        case when g % 10 = 0 then 'I' else 'A' end,
        case when g % 10 = 0 then 'T' when g % 200 = 1 then 'D' else 'A' end,
-       (select min(id_persona_rol) from persona_rol where tipo_rol='PROPIETARIO' and organizacion_id=1),
-       1
+       $idPropietarioFixture,
+       $($fixtureE2E.organizacion)
 from generate_series(1, $VOLUMEN) g
 "@ | Out-Null
-Sql @"
+Invoke-ControlLocalE2ESql @"
 insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
-select 1, p.id_propiedad, 'rubro_permitido',
+select $($fixtureE2E.organizacion), p.id_propiedad, 'rubro_permitido',
        case when p.id_propiedad % 1000 = 0 then 'Boutique de autor' else 'Carga RC-003' end
   from propiedad p
- where p.organizacion_id = 1 and p.codigo like 'PERF-%';
+ where p.organizacion_id=$($fixtureE2E.organizacion) and p.codigo like 'PERF-%';
 insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_booleano)
-select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
+select $($fixtureE2E.organizacion), p.id_propiedad, 'apto_licencia_funcionamiento', true
   from propiedad p
- where p.organizacion_id = 1 and p.codigo like 'PERF-%'
+ where p.organizacion_id=$($fixtureE2E.organizacion) and p.codigo like 'PERF-%'
 "@ | Out-Null
-Sql 'analyze propiedad' | Out-Null
-Sql 'analyze atributo_propiedad' | Out-Null
-Sql 'analyze persona' | Out-Null
-$cargados = [int](Sql "select count(*) from propiedad where codigo like 'PERF-%'")
+# Relacion de lectura explicita C1; no basta insertar una fila del tenant.
+# Preparaciones TEST incompletas P: no se declara aprobacion ni habilitacion.
+Invoke-ControlLocalE2ESql @"
+insert into captacion(codigo_captacion,fecha_captacion,estado,motivo_operacion,id_propiedad,id_rol_agente,organizacion_id)
+select 'CTX-PERF-'||id_propiedad,current_date,'P','A',id_propiedad,$($operador.idDominio),organizacion_id
+from propiedad where organizacion_id=$($fixtureE2E.organizacion) and codigo like 'PERF-%';
+analyze captacion;
+"@ | Out-Null
+Invoke-ControlLocalE2ESql 'analyze propiedad' | Out-Null
+Invoke-ControlLocalE2ESql 'analyze atributo_propiedad' | Out-Null
+Invoke-ControlLocalE2ESql 'analyze persona' | Out-Null
+$cargados = [int](Invoke-ControlLocalE2ESql "select count(*) from propiedad where codigo like 'PERF-%'")
 Check "el banco tiene $VOLUMEN locales" ($cargados -eq $VOLUMEN) "cargados=$cargados"
 
 Write-Host "`n== 3. Semantica: el conjunto de candidatos devuelve lo que debe ==" -ForegroundColor Cyan
@@ -138,7 +147,7 @@ Check 'un texto sin coincidencias devuelve vacio y total 0' `
 
 # El local que casa por codigo, direccion, distrito, rubro y propietario a la
 # vez: el UNION lo tiene que dar UNA sola vez.
-Sql @"
+Invoke-ControlLocalE2ESql @"
 update propiedad set codigo='PERF-CRUCE-1', direccion='Avenida CRUCE', distrito='CRUCE'
  where id_propiedad = (select min(id_propiedad) from propiedad where codigo like 'PERF-%');
 update atributo_propiedad set valor_texto='Rubro CRUCE'
@@ -199,7 +208,7 @@ $frio = ($medidas | Measure-Object Frio -Maximum).Maximum
 #
 # LA PAGINA PROFUNDA SE JUZGABA ANTES CONTRA LA MISMA PAGINA SIN TEXTO, y ese
 # criterio se retiro el 2026-09-02 porque su premisa dejo de ser cierta. Decia:
-# "alli el coste lo pone el OFFSET —recorrer 99.990 entradas de indice—, no la
+# "alli el coste lo pone el OFFSET -recorrer 99.990 entradas de indice-, no la
 # busqueda". Eso era verdad mientras el listado sin texto arrastraba la
 # PROYECCION ENTERA por el OFFSET. Al normalizar la busqueda, por el OFFSET solo
 # pasan ids y la proyeccion se carga despues para las diez filas de la pagina.
@@ -209,19 +218,19 @@ $frio = ($medidas | Measure-Object Frio -Maximum).Maximum
 #   ahora (solo los ids):                     62,1 ms
 #
 # Es decir: el denominador se abarato 4,8 veces y el cociente se disparo
-# —+562%— sin que la busqueda empeorara ni un milisegundo. Un gate que se pone
+# -+562%- sin que la busqueda empeorara ni un milisegundo. Un gate que se pone
 # rojo porque el recurso mejoro no esta vigilando nada util.
 #
 # NO se pone otro gate relativo en su lugar, y tampoco un p95 propio para la
 # pagina profunda. Medida dos veces con la sonda en verde, esa pagina dio p95
-# 563 ms y 950 ms: es el escenario mas pesado de la suite —materializa 100.000
-# candidatos y salta 99.990— y su dispersion es real. Un umbral de 1.000 ms
+# 563 ms y 950 ms: es el escenario mas pesado de la suite -materializa 100.000
+# candidatos y salta 99.990- y su dispersion es real. Un umbral de 1.000 ms
 # encima de esas dos medidas seria un gate que parpadea, y un gate que parpadea
 # se termina ignorando.
 #
 # La pagina profunda NO queda sin vigilar: entra en `$medidas`, asi que la
-# cubren los dos limites ABSOLUTOS de siempre —peor observado < 2.000 ms y
-# RC-003 < 3.000 ms—, que son los que el contrato promete. Fijarle ademas un
+# cubren los dos limites ABSOLUTOS de siempre -peor observado < 2.000 ms y
+# RC-003 < 3.000 ms-, que son los que el contrato promete. Fijarle ademas un
 # objetivo de p95 propio es una decision de producto que necesita una linea
 # base, y la linea base son esas dos medidas: hoy existen, antes no.
 $paginaUno = $medidas | Where-Object { $_.Escenario -notlike '*profunda*' }
@@ -260,7 +269,7 @@ Write-Host ("  --   pagina profunda: sin texto {0} ms, con texto {1} ms (+{2}%).
     # antes de tirar la base entera era trabajo puro; ver la nota larga en
     # `e2e-demanda-busqueda.ps1`, donde se midio.
     Write-Host "`n== Limpieza: la base exclusiva de la corrida se elimina entera ==" -ForegroundColor Cyan
-    $baseActual = (Sql 'select current_database()').Trim()
+    $baseActual = (Invoke-ControlLocalE2ESql 'select current_database()').Trim()
     Check 'el banco vive en la base efimera de la corrida (se elimina entera)' `
         ($baseActual -eq $e2e.Database -and $baseActual -like 'controllocal_e2e_*') `
         "la suite apunta a '$baseActual', que no es la base efimera de la corrida"

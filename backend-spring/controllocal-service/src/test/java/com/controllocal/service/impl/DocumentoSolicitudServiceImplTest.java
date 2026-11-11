@@ -15,6 +15,10 @@ import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AccesoSolicitud;
 import com.controllocal.service.soporte.Transiciones;
+import com.controllocal.service.soporte.FuentesAsuntos;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -27,11 +31,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 
 /**
  * Blinda los mensajes del cable de la parte documental de SolicitudesRest, la
@@ -53,9 +60,19 @@ class DocumentoSolicitudServiceImplTest {
     private final TipoDocumentoRequeridoRepository tipos = mock(TipoDocumentoRequeridoRepository.class);
     private final AccesoSolicitud acceso = mock(AccesoSolicitud.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
+    private final FuentesAsuntos fuentes = mock(FuentesAsuntos.class);
+    private final EntityManager em = mock(EntityManager.class);
 
     private final DocumentoSolicitudServiceImpl service = new DocumentoSolicitudServiceImpl(
-            documentos, tipos, acceso, new Transiciones(historial), mock(AlertaService.class));
+            documentos, tipos, acceso, new Transiciones(historial), mock(AlertaService.class),fuentes,em);
+
+    @BeforeEach void referenciasDeRevisionDeclaradas(){
+        // IDs de evento TEST, sin acreditar persistencia, permiso ni lock PostgreSQL.
+        when(fuentes.registrarRevisionDocumento(any(DocumentoSolicitud.class),any(Actor.class))).thenAnswer(i->{
+            DocumentoSolicitud d=i.getArgument(0);
+            return FuentesAsuntos.Origen.de("REVISION_DOCUMENTO",900000L+d.getId());
+        });
+    }
 
     /** vmora: organizacion 1, persona 3, rol operativo 30. */
     private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
@@ -108,7 +125,7 @@ class DocumentoSolicitudServiceImplTest {
     void elDocumentoNaceRegistradoPendienteYConElTenantDeLaSolicitud() {
         when(acceso.conAcceso(SOLICITUD, agente)).thenReturn(solicitud());
         prepararCatalogo("I", 1L, "Documento de identidad");
-        when(documentos.save(any(DocumentoSolicitud.class))).thenAnswer(inv -> {
+        when(documentos.saveAndFlush(any(DocumentoSolicitud.class))).thenAnswer(inv -> {
             DocumentoSolicitud guardado = inv.getArgument(0);
             ReflectionTestUtils.setField(guardado, "id", 77L);
             return guardado;
@@ -127,8 +144,12 @@ class DocumentoSolicitudServiceImplTest {
         assertNotNull(ficha.fechaEntrega());
 
         ArgumentCaptor<DocumentoSolicitud> guardado = ArgumentCaptor.forClass(DocumentoSolicitud.class);
-        verify(documentos).save(guardado.capture());
+        verify(documentos).saveAndFlush(guardado.capture());
+        verify(documentos,never()).save(any(DocumentoSolicitud.class));
         assertEquals(ORG, guardado.getValue().getOrganizacionId());
+        assertEquals(guardado.getValue().getArchivoRef().toString(), ficha.rutaArchivo());
+        assertEquals("SOL-260715103000/dni.pdf", guardado.getValue().getRutaArchivo());
+        verify(acceso).exigirConsultaActual(SOLICITUD, agente);
         // Nacer no es transicionar: la v1 tampoco lo registraba.
         verifyNoInteractions(historial);
     }
@@ -204,6 +225,11 @@ class DocumentoSolicitudServiceImplTest {
         assertEquals(DocumentoSolicitud.REVISION_OBSERVADO, ficha.resultadoRevision());
         assertEquals("El DNI esta vencido", ficha.observaciones());
         assertEquals("Documento observado: El DNI esta vencido", eventoAuditado().getMotivo());
+        var orden=inOrder(em,historial,fuentes,documentos);
+        orden.verify(em).refresh(any(DocumentoSolicitud.class),eq(LockModeType.PESSIMISTIC_WRITE));
+        orden.verify(historial).save(any(HistorialEstado.class));
+        orden.verify(fuentes).registrarRevisionDocumento(any(DocumentoSolicitud.class),eq(broker));
+        orden.verify(documentos).save(any(DocumentoSolicitud.class));
     }
 
     @Test

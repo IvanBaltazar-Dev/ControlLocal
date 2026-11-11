@@ -12,7 +12,7 @@ import java.util.Optional;
 /**
  * <b>Ninguna operacion de esta tabla se resuelve sin fijar el TIPO</b>
  * (D-S0-23). Es la condicion que hace segura la reutilizacion de
- * {@code token_acceso} para el desafio de MFA y la elevacion: sin ella, un
+ * {@code token_acceso} para enlaces personales y desafio MFA: sin ella, un
  * desafio de segundo factor podria canjearse como una recuperacion de
  * contrasena, que es exactamente el fallo que la reutilizacion podria
  * introducir.
@@ -22,11 +22,39 @@ import java.util.Optional;
  */
 public interface TokenAccesoRepository extends JpaRepository<TokenAcceso, Long> {
 
+    @Query(value="select 1 from pg_advisory_xact_lock(hashtextextended('BROX:ALTA_CORREO:' || lower(trim(:correo)),0))",nativeQuery=true)
+    Integer bloquearAltasDeCorreo(@Param("correo") String correo);
+
+    @Modifying
+    @Query("""
+      update TokenAcceso t set t.invalidadoEn=:ahora,t.estado=com.controllocal.domain.seguridad.TokenAcceso.REVOCADO
+      where t.tipo=com.controllocal.domain.seguridad.TokenAcceso.TIPO_ALTA_CORREO
+        and lower(t.correoObjetivo)=lower(trim(:correo)) and t.usadoEn is null and t.invalidadoEn is null
+      """)
+    int invalidarAltasVivas(@Param("correo") String correo,@Param("ahora") OffsetDateTime ahora);
+
+    /** El reto se consume una sola vez incluso con dos códigos válidos distintos concurrentes. */
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+        update token_acceso set usado_en=clock_timestamp(),estado='C'
+        where id_token=:id and tipo='DESAFIO_MFA' and usado_en is null and invalidado_en is null
+          and estado='V' and expira_en>clock_timestamp()
+        """,nativeQuery=true)
+    int consumirDesafio(@Param("id") long id);
+
+    /** Propósitos cerrados y reloj PostgreSQL real, incluso tras esperar otro bloqueo. */
+    @Modifying(flushAutomatically=true)
+    @Query(value="""
+        update token_acceso set usado_en=clock_timestamp(),estado='C'
+        where id_token=:id and tipo=:tipo and tipo in ('ALTA_CORREO','RECUPERACION','CAMBIO_CORREO')
+          and usado_en is null and invalidado_en is null and estado='V' and expira_en>clock_timestamp()
+        """,nativeQuery=true)
+    int consumirEnlace(@Param("id") long id,@Param("tipo") String tipo);
+
     /**
      * Busca por HASH <b>y TIPO</b>, que es la unica forma: el token en claro no
-     * esta en ningun sitio. No filtra por organizacion a proposito — quien
-     * canjea todavia no tiene sesion, asi que no hay tenant que aplicar; el
-     * tenant sale de la fila encontrada.
+     * esta en ningun sitio. El enlace pertenece a la cuenta personal global;
+     * no depende de una organización ni concede un contexto comercial.
      */
     @Query("""
             select t from TokenAcceso t
@@ -37,26 +65,9 @@ public interface TokenAccesoRepository extends JpaRepository<TokenAcceso, Long> 
                                              @Param("tipo") String tipo);
 
     /**
-     * Variante para el unico caso en que un canje sirve a <b>dos</b> tipos: el
-     * de contrasena acepta {@code RECUPERACION} e {@code INVITACION}, porque el
-     * titular define su clave igual en los dos.
-     *
-     * <p>{@code tipos} es una lista <b>cerrada y explicita</b> del llamador, no
-     * un comodin: sigue sin existir una busqueda sin tipo, que es lo que
-     * impediria canjear un desafio de MFA como si fuera una recuperacion.
-     */
-    @Query("""
-            select t from TokenAcceso t
-             where t.hashToken = :hashToken
-               and t.tipo in :tipos
-            """)
-    Optional<TokenAcceso> buscarPorHashEntreTipos(@Param("hashToken") String hashToken,
-                                                  @Param("tipos") java.util.Collection<String> tipos);
-
-    /**
-     * Mata los tokens vivos <b>de ese tipo</b> para una credencial. Se llama
+     * Mata los tokens vivos <b>de ese tipo</b> para una cuenta. Se llama
      * ANTES de insertar el nuevo, dentro de la misma transaccion: el indice
-     * unico parcial {@code uq_token_acceso_activo (id_credencial, tipo)} no
+     * unico parcial sobre {@code (id_cuenta_acceso, tipo)} no
      * admite dos vivos del mismo tipo, y ese es el invariante que hace que un
      * token viejo filtrado deje de servir en cuanto se emite el bueno.
      *
@@ -68,12 +79,12 @@ public interface TokenAccesoRepository extends JpaRepository<TokenAcceso, Long> 
     @Query("""
             update TokenAcceso t
                set t.invalidadoEn = :ahora, t.estado = com.controllocal.domain.seguridad.TokenAcceso.REVOCADO
-             where t.idCredencial = :idCredencial
+             where t.idCuenta = :idCuenta
                and t.tipo = :tipo
                and t.usadoEn is null
                and t.invalidadoEn is null
             """)
-    int invalidarVivosDe(@Param("idCredencial") long idCredencial,
+    int invalidarVivosDe(@Param("idCuenta") long idCuenta,
                          @Param("tipo") String tipo,
                          @Param("ahora") OffsetDateTime ahora);
 
@@ -98,6 +109,7 @@ public interface TokenAccesoRepository extends JpaRepository<TokenAcceso, Long> 
                    t.invalidadoEn = case when t.intentos + 1 >= :maximo
                                          then :ahora else t.invalidadoEn end
              where t.id = :id
+               and t.tipo = com.controllocal.domain.seguridad.TokenAcceso.TIPO_DESAFIO_MFA
             """)
     int sumarIntentoFallido(@Param("id") long id,
                             @Param("maximo") short maximo,

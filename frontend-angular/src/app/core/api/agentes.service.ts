@@ -4,24 +4,12 @@ import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
 import { PageResponse } from './api.types';
 
-/**
- * Contrato CONGELADO: `AgenteResponse` de la v1 (E1 §2).
- *
- * `id` es el **`persona_rol.id` del rol AGENTE**, no el de la persona: igual
- * que cliente y propietario, el agente es un rol (Party-Role). Es el mismo id
- * que viaja como `idAgente` en las bandejas de todas las verticales.
- *
- * Los dos contadores comerciales **solo llegan con valor real en el GET de
- * lista**: POST y PUT los responden en `0` por paridad con el cable, así que la
- * pantalla no debe creerse el contador que devuelve un alta o una edición.
- */
+/** Directorio organizacional; el acceso personal y la pertenencia tienen contratos propios. */
 export interface Agente {
   id: number;
   codigoAgente?: string;
   nombre?: string;
-  /** N natural, J jurídica. */
   tipoPersona?: string;
-  /** D DNI, R RUC, C carnet, P pasaporte. */
   tipoDocumento?: string;
   numeroDocumento?: string;
   telefono?: string;
@@ -29,44 +17,26 @@ export interface Agente {
   usuario?: string;
   zona?: string;
   fechaIngreso?: string;
-  /** A activo, I inactivo. */
   estadoAdministrativo?: string;
-  /** D disponible, O ocupado, V vacaciones, S suspendido. */
   estadoOperativo?: string;
-  /** Captaciones en estados P, O, A. Solo real en el GET de lista. */
+  /** Ausentes en gobierno; nunca sustituir un dato reservado por cero. */
   captacionesActivas?: number;
-  /** Oportunidades en estados A, S. Solo real en el GET de lista. */
   operacionesActivas?: number;
 }
 
-/**
- * Espejo de `AgenteRequest`.
- *
- * En el **alta** `nombre`, `usuario` y `contrasena` son obligatorios. En la
- * **edición** el cable ignora documento, tipos, usuario, contraseña, código y
- * fecha: solo cambia nombre (si no viene vacío), teléfono, correo, estado
- * administrativo, estado operativo y zona cuando llegan.
- */
+/** Edición laboral autorizada; sin credenciales ni alta/baja de pertenencia. */
 export interface DatosAgente {
   nombre?: string;
-  tipoPersona?: string;
-  tipoDocumento?: string;
-  numeroDocumento?: string;
   telefono?: string;
-  correo?: string;
-  usuario?: string;
-  contrasena?: string;
+  correoLaboral?: string;
   zona?: string;
-  codigoAgente?: string;
-  /** Estado administrativo: A activo, I inactivo. */
-  estado?: string;
   estadoOperativo?: string;
 }
 
 /**
  * Filtros del catálogo. Los cuatro son **aditivos y opcionales**: omitidos, el
  * endpoint responde exactamente lo que respondía antes de que existieran.
- * `estado` es el administrativo (vive en la credencial) y `estadoOperativo` el
+ * `estado` es el administrativo de la pertenencia y `estadoOperativo` el
  * del agente: son dos máquinas distintas y un agente activo puede estar de
  * vacaciones.
  */
@@ -160,15 +130,7 @@ export interface FichaAgente {
 
 const RECURSO = 'agentes';
 
-/**
- * `GET /agentes` es de BROKER y ADMIN, con el gate declarado a nivel de clase.
- * El alcance lo decide el backend: el ADMIN ve el tenant y el BROKER solo los
- * agentes que supervisa. La pantalla no replica esa regla, la explica.
- *
- * **No hay GET individual ni DELETE** en este recurso (E1 §2): la ficha de un
- * agente se arma desde la fila del listado, y la baja es un PUT con
- * `estado = 'I'`.
- */
+/** Consultas y edición local; Core aplica autoridad y aislamiento. */
 @Injectable({ providedIn: 'root' })
 export class AgentesService {
   private readonly api = inject(ApiClient);
@@ -202,44 +164,10 @@ export class AgentesService {
     return this.api.get<FichaAgente>(`${RECURSO}/${id}`);
   }
 
-  /**
-   * El alta crea en una transacción persona, roles `USUARIO_INTERNO` y
-   * `AGENTE`, credencial, detalle y la supervisión inicial **por el broker en
-   * sesión**. Por eso el ADMIN no puede darlos de alta aunque el gate lo
-   * admita: no es supervisor de nadie y el backend responde 400.
-   */
-  registrar(datos: DatosAgente): Promise<Agente> {
-    return this.api.post<Agente>(RECURSO, datos);
-  }
-
   actualizar(id: number, datos: DatosAgente): Promise<Agente> {
     return this.api.put<Agente>(`${RECURSO}/${id}`, datos);
   }
-
-  /**
-   * No hay DELETE: la baja es administrativa y se hace con el PUT. Se expone
-   * con nombre propio para que la pantalla no tenga que saberlo.
-   */
-  desactivar(id: number, agente: Agente): Promise<Agente> {
-    return this.actualizar(id, this.editables(agente, 'I'));
-  }
-
-  reactivar(id: number, agente: Agente): Promise<Agente> {
-    return this.actualizar(id, this.editables(agente, 'A'));
-  }
-
-  /**
-   * Solo los campos que el PUT mira. Mandar el resto no rompe nada —el cable
-   * los ignora— pero enviarlos invita a creer que se pueden cambiar.
-   */
-  private editables(agente: Agente, estado: string): DatosAgente {
-    return {
-      nombre: agente.nombre,
-      telefono: agente.telefono,
-      correo: agente.correo,
-      zona: agente.zona,
-      estadoOperativo: agente.estadoOperativo,
-      estado,
-    };
+  perfilParaGobierno(id: number): Promise<Agente> {
+    return this.api.get<Agente>(`${RECURSO}/${id}/perfil`);
   }
 }

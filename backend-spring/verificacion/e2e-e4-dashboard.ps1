@@ -6,7 +6,9 @@
 # DELTAS mas los invariantes de forma (donut exclusivo, embudo, series, techo de
 # paginacion, alcance por rol y aislamiento de tenant).
 #
-# Contrato: docs/ai/contrato-congelado-e4-dashboard-indicadores-seguimiento.md
+# Autoridad: docs/1INF50/BROX-KAIROS-catalogo-operativo.md (CAT-E29/E31)
+# y docs/1INF50/BROX_KAIROS_directriz_clientes_independientes.md, seccion5.3.
+# C4: work/c4-c5-20261030/BROX-ESPECIFICACION-IMPLEMENTACION-C4-C5-2026-10-30.md, secciones4/10.
 # Uso: powershell -File backend-spring/verificacion/Invoke-E2E.ps1 -Suite e4-dashboard
 #             (compatible con Windows PowerShell 5.1 y con pwsh 7)
 # =====================================================================
@@ -14,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0; $fail = 0
 
 function Check($nombre, $condicion, $detalle) {
@@ -41,7 +44,7 @@ function ParametrosApi($metodo, $ruta, $token, $cuerpo) {
 
 function Api($metodo, $ruta, $token, $cuerpo) {
     $parametros = ParametrosApi $metodo $ruta $token $cuerpo
-    Invoke-RestMethod @parametros
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @parametros) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
 function ApiError($metodo, $ruta, $token, $cuerpo) {
@@ -53,10 +56,6 @@ function ApiError($metodo, $ruta, $token, $cuerpo) {
         if ($null -eq $respuesta) { return @{ codigo = -1; error = $PSItem.Exception.Message } }
         return @{ codigo = [int]$respuesta.StatusCode; error = '' }
     }
-}
-
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
 }
 
 function Etapa($resumen, $nombre) {
@@ -78,43 +77,43 @@ $finEncargo = $hoyFecha.AddDays(90).ToString('yyyy-MM-dd')
 $vigenciaOferta = $hoyFecha.AddDays(15).ToString('yyyy-MM-dd')
 
 Write-Host "`n== 1. Login y actores ==" -ForegroundColor Cyan
-$agente = Api POST '/auth/login' $null @{ usuario = 'vmora'; contrasena = 'Agente2026' }
-$otroAgente = Api POST '/auth/login' $null @{ usuario = 'ltorres'; contrasena = 'Agente2026' }
-$broker = Api POST '/auth/login' $null @{ usuario = 'rsalas'; contrasena = 'Broker2026' }
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
+$agente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$otroAgente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.ltorres.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$broker = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$admin = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $fixtureE2E.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
 Check 'login del agente' ($agente.rol -eq 'AGENTE') $agente.rol
 Check 'login del agente de otro equipo' ($otroAgente.rol -eq 'AGENTE') $otroAgente.rol
 Check 'login del broker supervisor' ($broker.rol -eq 'BROKER') $broker.rol
-Check 'login del administrador' ($admin.rol -eq 'ADMIN') $admin.rol
+Check 'login del administrador' ($admin.rol -eq 'TENANT_ADMIN') $admin.rol
 
-Write-Host "`n== 2. Los tres recursos abren para los tres roles ==" -ForegroundColor Cyan
+Write-Host "`n== 2. Operacion comercial y gobierno separados ==" -ForegroundColor Cyan
 $antesAgente = Api GET '/indicadores/resumen?periodo=7d' $agente.token $null
 $antesBroker = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
-$antesAdmin = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
-Check 'el ambito del ADMIN es global' ($antesAdmin.ambito -eq 'Reportes globales') $antesAdmin.ambito
-# El rotulo cambio a proposito: «Reportes de equipo» se leia como el titulo de
+$antesAdmin = ApiError GET '/indicadores/resumen?periodo=7d' $admin.token $null
+Check 'gobierno no obtiene indicadores comerciales' ($antesAdmin.codigo -eq 403) "codigo=$($antesAdmin.codigo)"
+# El rotulo cambio a proposito: "Reportes de equipo" se leia como el titulo de
 # una seccion, no como el alcance de lo que se esta mirando
 # (`IndicadorServiceImpl:805`, con su prueba unitaria). Este guion llevaba el
 # texto viejo y nadie lo noto porque la suite no arrancaba.
 Check 'el ambito del BROKER es de equipo' ($antesBroker.ambito -eq 'Mi equipo') $antesBroker.ambito
 Check 'el ambito del AGENTE es personal' ($antesAgente.ambito -eq 'Mi actividad') $antesAgente.ambito
-Check 'ningun rol recibe 403 en /indicadores/resumen (el cable no lleva gate)' `
+Check 'agente y broker reciben su propio alcance comercial' `
     ($null -ne $antesAgente.ambito -and $null -ne $antesBroker.ambito) 'sin gate de rol'
 
 $avanceAntes = Api GET '/indicadores/avance' $agente.token $null
 Check 'el ambito del avance del AGENTE es personal' `
     ($avanceAntes.ambito -eq 'Mi avance comercial') $avanceAntes.ambito
-Check 'el ambito del avance del ADMIN es global' `
-    ((Api GET '/indicadores/avance' $admin.token $null).ambito -eq 'Avance comercial global') 'ambito'
+Check 'gobierno no obtiene avance comercial' `
+    ((ApiError GET '/indicadores/avance' $admin.token $null).codigo -eq 403) 'gobierno'
 Check 'el ambito del avance del BROKER es de equipo' `
     ((Api GET '/indicadores/avance' $broker.token $null).ambito -eq 'Avance comercial del equipo') 'ambito'
 
 Write-Host "`n== 3. Periodo: ventanas, etiquetas y sinonimos ==" -ForegroundColor Cyan
-$siete = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
-$quince = Api GET '/indicadores/resumen?periodo=15' $admin.token $null
-$mes = Api GET '/indicadores/resumen?periodo=mes' $admin.token $null
-$seisMeses = Api GET '/indicadores/resumen' $admin.token $null
-$basura = Api GET '/indicadores/resumen?periodo=no-existe' $admin.token $null
+$siete = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
+$quince = Api GET '/indicadores/resumen?periodo=15' $broker.token $null
+$mes = Api GET '/indicadores/resumen?periodo=mes' $broker.token $null
+$seisMeses = Api GET '/indicadores/resumen' $broker.token $null
+$basura = Api GET '/indicadores/resumen?periodo=no-existe' $broker.token $null
 Check 'periodo 7d da 7 cubos diarios' ($siete.mesesEtiquetas.Count -eq 7) $siete.mesesEtiquetas.Count
 Check 'periodo 15 (sinonimo) da 15 cubos' ($quince.mesesEtiquetas.Count -eq 15) $quince.mesesEtiquetas.Count
 Check 'periodo mes (sinonimo de 1m) da 30 cubos' ($mes.mesesEtiquetas.Count -eq 30) $mes.mesesEtiquetas.Count
@@ -174,7 +173,7 @@ Check 'captacionesPendientes ya no viaja en la respuesta' `
     "$($siete.captacionesPendientes)"
 Check 'el operativo trae sus 6 campos' `
     ($null -ne $siete.operativo.recontactosVencidos -and $null -ne $siete.operativo.recontactosAlDia `
-        -and $null -ne $siete.operativo.diasPromedioSinSeguimiento `
+        -and $null -eq $siete.operativo.diasPromedioSinSeguimiento `
         -and $null -ne $siete.operativo.visitasPendientes `
         -and $null -ne $siete.operativo.solicitudesSinCierre `
         -and $null -ne $siete.operativo.conversionProspeccionCaptacion) 'operativo'
@@ -213,7 +212,7 @@ Check 'la senal de recontacto repite el numero del operativo, ya clasificado' `
 
 # E2.1: la cabecera del tablero abre con "N cosas necesitan tu atencion". Ese N
 # lo suma el dominio y NO se puede derivar sumando las senales en el cliente:
-# DEMORA_DE_SEGUIMIENTO vale dias, no cosas.
+# La demora no evaluable no es cero ni una cantidad de tareas.
 $cosasPendientes = 0
 foreach ($s in $senales) {
     if ($s.requiereAtencion -and $s.concepto -ne 'DEMORA_DE_SEGUIMIENTO') {
@@ -224,13 +223,13 @@ Check 'pendientesDeAtencion suma las senales que cuentan cosas' `
     ($siete.pendientesDeAtencion -eq $cosasPendientes) `
     "backend=$($siete.pendientesDeAtencion) recalculado=$cosasPendientes"
 $demora = $senales | Where-Object { $_.concepto -eq 'DEMORA_DE_SEGUIMIENTO' }
-Check 'los dias de atraso no se cuelan entre las cosas pendientes' `
-    ($demora.valor -eq 0 -or $siete.pendientesDeAtencion -lt ($cosasPendientes + $demora.valor)) `
-    "atraso=$($demora.valor) pendientes=$($siete.pendientesDeAtencion)"
+Check 'la demora no evaluable se conserva explicita y no suma pendientes' `
+    ($null -eq $demora.valor -and $demora.estadoCalculo -eq 'NO_EVALUABLE' `
+        -and $demora.causa -and -not $demora.requiereAtencion) 'demora no evaluable'
 
 Check 'el desempeno corta en 8 filas' ($siete.desempeno.Count -le 8) $siete.desempeno.Count
-Check 'el desempeno del ADMIN compara brokers, no agentes' `
-    ($antesAdmin.brokersActivos -ge 1) "brokersActivos=$($antesAdmin.brokersActivos)"
+Check 'la denegacion de gobierno no entrega desempeno comercial' `
+    ($antesAdmin.codigo -eq 403 -and $null -eq $antesAdmin.desempeno) 'gobierno'
 Check 'el AGENTE cuenta 1 agente activo y 0 brokers' `
     ($antesAgente.agentesActivos -eq 1 -and $antesAgente.brokersActivos -eq 0) `
     "agentes=$($antesAgente.agentesActivos) brokers=$($antesAgente.brokersActivos)"
@@ -251,95 +250,67 @@ $cliente = Api POST '/clientes' $agente.token @{
     correo = "cliente.e4.$sufijo@test.local"; rubroComercial = 'Retail E4'
     consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
 }
-# Este fixture NECESITA elegir el codigo del encargo: media docena de
-# comprobaciones de abajo buscan las cinco etapas por `CAP-…-E4-$sufijo`. El
-# alta universal numera ella el encargo, asi que aqui la propiedad nace SIN
-# encargo -registrar no es encargar, V75- y el encargo se abre con
-# `POST /captaciones`, que si acepta el codigo.
-$local = NuevoInmuebleSinEncargo -Token $agente.token `
-    -Direccion "Av. Indicadores E4 $sufijo" -IdPropietario $propietario.id `
-    -Codigo "LOC-E4-$sufijo" -Distrito 'Barranco' -Metraje 150 -Rubro 'Retail E4' `
-    -Descripcion "Fixture pendiente E4 $sufijo"
-$captacionPendiente = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-P-E4-$sufijo"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
-    fechaFinVigencia = $finEncargo
-    comisionPactada = 100; observaciones = "Fixture pendiente E4 $sufijo"
-    idLocal = $local.id; motivoOperacion = 'A'; urgencia = 1; exclusividad = $false
-    tipoOperacion = 'A'; importeReferencia = 8100; monedaReferencia = 'PEN'
-}
+# Dos preparaciones reales C2. Los codigos son los que devuelve Core; el
+# marcador de busqueda se declara en el codigo/direccion de los inmuebles TEST.
+$local = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agente.token `
+    -Direccion "Av. Indicadores E4-$sufijo" -IdPropietario $propietario.id -Codigo "LOC-E4-$sufijo" `
+    -Distrito 'Barranco' -Metraje 150 -Rubro 'Retail E4' -Importe 8100 -Moneda 'PEN' `
+    -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1 -TratamientoIgv 'N' -Exclusividad $false `
+    -InicioEncargo $hoy -FinEncargo $finEncargo -Descripcion "Preparacion TEST E4-$sufijo"
+$captacionPendiente = Api GET "/captaciones/$($local.idEncargo)" $agente.token $null
 $codigoPendiente = $captacionPendiente.codigoCaptacion
 $idLocal = [long]$local.id
 $idCliente = [long]$cliente.id
 $idAgente = [long]$agente.idDominio
-$idCaptacionPendiente = [long]$captacionPendiente.id
-Check 'se crea el propietario E4' ($propietario.id -gt 0) "id=$($propietario.id)"
-Check 'se crea el local E4 en Barranco' ($idLocal -gt 0) "id=$idLocal"
-Check 'la captacion nace PENDIENTE de revision' ($captacionPendiente.estado -eq 'P') `
-    $captacionPendiente.estado
-
-# Segundo local + captacion ACTIVA: la que llevara oportunidad, visita y solicitud.
-$local2 = NuevoInmuebleSinEncargo -Token $agente.token `
-    -Direccion "Av. Avance E4 $sufijo" -IdPropietario $propietario.id `
-    -Codigo "LOC-E4B-$sufijo" -Distrito 'Barranco' -Metraje 210 -Rubro 'Retail E4' `
-    -Descripcion "Fixture activo E4 $sufijo"
-$captacion = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-A-E4-$sufijo"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
-    fechaFinVigencia = $finEncargo
-    comisionPactada = 100; observaciones = "Fixture activo E4 $sufijo"
-    idLocal = $local2.id; motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
-    tipoOperacion = 'A'; importeReferencia = 9900; monedaReferencia = 'PEN'
-}
-$captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
-    accion = 'A'; observacion = 'Aprobada para verificar E4.'
-}
+$idCaptacionPendiente = [long]$local.idEncargo
+Check 'propiedad y preparacion C2 conservan sus identidades' ($idLocal -gt 0 -and $idCaptacionPendiente -gt 0) 'preparacion'
+Check 'abrir preparacion no acredita revision aprobatoria' ($captacionPendiente.estado -eq 'P') $captacionPendiente.estado
+$local2 = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agente.token `
+    -Direccion "Av. Avance E4-$sufijo" -IdPropietario $propietario.id -Codigo "LOC-E4B-$sufijo" `
+    -Distrito 'Barranco' -Metraje 210 -Rubro 'Retail E4' -Importe 9900 -Moneda 'PEN' `
+    -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1 -TratamientoIgv 'N' -Exclusividad $true `
+    -InicioEncargo $hoy -FinEncargo $finEncargo -Descripcion "Encargo habilitado TEST E4-$sufijo"
+$idCaptacion = [long]$local2.idEncargo
+$null = HabilitarEncargoC2DePrueba -IdEncargo $idCaptacion -TokenResponsable $agente.token -TokenDecisor $broker.token -FechaFirma $hoy `
+    -MonedaComision 'PEN' -Exclusividad $true -HitoDevengo 'Firma del contrato' `
+    -ParteObligada 'Propietario TEST' -Beneficiario 'Agencia TEST' -Exigibilidad 'A la firma del contrato' -EjecucionComision @{devengo=@{hito='CONTRATO_ALQUILER'};exigibilidad=@{hito='CONTRATO_ALQUILER'}}
+$captacion = Api GET "/captaciones/$idCaptacion" $agente.token $null
 $codigoActiva = $captacion.codigoCaptacion
-$idCaptacion = [long]$captacion.id
 $idLocal2 = [long]$local2.id
-Check 'se activa la captacion del avance' ($captacion.estado -eq 'A') $captacion.estado
+Check 'la revision competente C2 habilita el Encargo' ($captacion.estado -eq 'A') $captacion.estado
 
-Sql @"
-insert into prospeccion (
-    organizacion_id, codigo_prospeccion, fecha_registro, estado,
-    fecha_contacto, fecha_recontacto, observaciones, id_propiedad, id_rol_agente
-)
-select id_organizacion, 'PRO-E4-$sufijo', now(), 'S',
-       date '$hoy', date '$hoy' - 11, 'Prospeccion vencida E4 $sufijo',
-       $idLocal, $idAgente
-from organizacion where codigo='BROX_LEGACY';
+# R27 requiere una Prospeccion SIN Encargo propio. Se crea por su productor,
+# no sembrando fechas legacy ni un contador equivalente por SQL.
+$localProspeccion = NuevoInmuebleSinEncargo -LocalIndependienteTest -Token $agente.token `
+    -Direccion "Prospeccion TEST E4-$sufijo" -IdPropietario $propietario.id -Codigo "LOC-E4P-$sufijo" `
+    -Distrito 'Barranco' -Metraje 80 -Rubro 'Retail E4'
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $localProspeccion.id -Observaciones "Seguimiento TEST E4-$sufijo"
+$revisiones = @(Api GET "/prospecciones/$idProspeccion/seguimientos" $agente.token $null)
+if ($revisiones.Count -ne 1) { throw 'El fixture R27 necesita su revision contextual real, no una fila fabricada.' }
+$fechaDeclarada = $hoyFecha.AddDays(-11).ToString('yyyy-MM-dd')
+$planR27 = Invoke-ComandoC2DePrueba POST "/prospecciones/$idProspeccion/seguimientos/$($revisiones[0].id)/planificacion" $agente.token @{
+    versionEsperada = $revisiones[0].version; origen = 'INTENCION_PROFESIONAL'; fecha = $fechaDeclarada
+    detalle = 'Fecha explicita vencida de planificacion TEST; no prueba una llamada.'
+} "e4-plan-r27-$sufijo"
+$oportunidadDeAvance = NuevaOportunidadC4DePrueba -IdEncargo $idCaptacion -IdCliente $idCliente -Token $agente.token `
+    -Codigo "OP-E4-$sufijo" -Observaciones "Oportunidad TEST E4-$sufijo" `
+    -EvidenciaInteres 'Manifestacion FICTICIA explicita de interes del cliente TEST del avance.'
+$idOportunidad = [long]$oportunidadDeAvance.id
 
--- La oportunidad nace ABIERTA (A), no en S: la solicitud se registra por el
--- API (POST /solicitudes) y es ESE alta el que la mueve a S. Sembrarla ya en
--- S dejaba la puerta cerrada para la cascada contractual real.
-insert into oportunidad_comercial (
-    organizacion_id, codigo_oportunidad, estado, id_rol_cliente,
-    id_captacion, id_rol_agente, observaciones, fecha_registro,
-    fecha_actualizacion_estado
-)
-select id_organizacion, 'OP-E4-$sufijo', 'A', $idCliente,
-       $idCaptacion, $idAgente, 'Oportunidad E4 $sufijo', now(), now()
-from organizacion where codigo='BROX_LEGACY';
-"@ | Out-Null
+$visitaDeAvance = NuevaVisitaC4DePrueba -IdOportunidad $idOportunidad -Fecha $hoy -Hora '11:00' -Token $agente.token -Observaciones "Visita TEST E4 $sufijo"
+$null = ResultadoVisitaC4DePrueba -IdVisita $visitaDeAvance.id -Token $agente.token -Ocurrencia 'REALIZADA' -FechaHecho $hoy `
+    -Desenlace @{ resultado = 'INTERESADO'; nivelInteres = 5 }
 
-$idOportunidad = [long](Sql "select id_oportunidad from oportunidad_comercial where codigo_oportunidad='OP-E4-$sufijo'")
-$idProspeccion = [long](Sql "select id_prospeccion from prospeccion where codigo_prospeccion='PRO-E4-$sufijo'")
-
-Sql @"
-insert into interaccion_comercial (
-    organizacion_id, contexto, id_oportunidad, id_rol_agente,
-    canal_contacto, resultado, observaciones, fecha_hora
-)
-select id_organizacion, 'OPORTUNIDAD', $idOportunidad, $idAgente,
-       'W', 'INTERESADO', 'Interaccion E4 $sufijo', now()
-from organizacion where codigo='BROX_LEGACY';
-
-insert into visita (
-    organizacion_id, id_oportunidad, id_rol_agente, fecha_visita,
-    hora_visita, estado, observaciones, resultado, nivel_interes
-)
-select id_organizacion, $idOportunidad, $idAgente, date '$hoy',
-       time '11:00', 'R', 'Visita E4 $sufijo', 'INTERESADO', 5
-from organizacion where codigo='BROX_LEGACY';
-"@ | Out-Null
+# Comunicacion real de TEST con fecha efectiva declarada, no fecha de registro
+# convertida a contacto ni resultado comercial INTERESADO.
+$datosComunicacion = NuevaInteraccionC4DePrueba `
+    -Vinculos @(@{ tipo = 'OPORTUNIDAD'; referencia = $idOportunidad }) `
+    -Resumen "Comunicacion E4 $sufijo" -Fuente "Fixture TEST E4 $sufijo" -Fecha $hoy
+$comunicacion = Invoke-InteraccionC4DePrueba -BaseUrl $base -Token $agente.token `
+    -Datos $datosComunicacion -Clave "e4-comunicacion-$sufijo"
+Check 'el hecho comunicativo conserva fecha efectiva y no inventa resultado' `
+    ($comunicacion.resultado.fechaHecho -eq $hoy -and $null -eq $comunicacion.resultado.datos.resultado) `
+    "id=$($comunicacion.resultado.id)"
 
 # La solicitud YA NO se siembra por SQL: entra por el API con su propio codigo.
 # El alta la deja REGISTRADA (G) y mueve la oportunidad a S; el reenvio la pone
@@ -405,16 +376,10 @@ Check 'el embudo sube su base y su tramo con visita' `
     "base=$($despues.embudo[0].valor) conVisita=$($despues.embudo[1].valor)"
 Check 'el embudo cuenta la oportunidad S como "con solicitud creada"' `
     ($despues.embudo[2].valor -ge 1) $despues.embudo[2].valor
-# Aqui el DELTA no sirve, y es del cable: la fuente del operativo cae a TODAS
-# las prospecciones del alcance cuando la ventana no tuvo ninguna. La foto
-# previa venia de ese fallback (la prospeccion sembrada, 31 dias de atraso) y
-# la posterior ya viene de la ventana (solo la del fixture), asi que las dos
-# valen 1 y restarlas no mide nada. Se comprueba el valor resultante: con la
-# ventana ocupada por el fixture, el promedio de atraso ES el suyo.
-Check 'el recontacto atrasado 11 dias cuenta como vencido' `
-    ($despues.operativo.recontactosVencidos -ge 1 `
-        -and $despues.operativo.diasPromedioSinSeguimiento -eq 11) `
-    "vencidos=$($despues.operativo.recontactosVencidos) atraso=$($despues.operativo.diasPromedioSinSeguimiento)"
+# La fecha del plan se consulta al productor R27. No hay reloj de siete dias
+# ni promedio de demora inventado a partir de fecha_contacto/fecha_registro.
+Check 'el plan R27 vencido cuenta sin inventar una demora media' `
+    ($despues.operativo.recontactosVencidos -ge 1 -and $null -eq $despues.operativo.diasPromedioSinSeguimiento) 'R27 y demora no evaluable'
 Check 'la solicitud en E no cuenta como "sin cierre" (solo la aprobada)' `
     ($despues.operativo.solicitudesSinCierre -eq $antesAgente.operativo.solicitudesSinCierre) `
     "$($antesAgente.operativo.solicitudesSinCierre) -> $($despues.operativo.solicitudesSinCierre)"
@@ -431,10 +396,8 @@ $brokerDespues = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
 Check 'el broker supervisor ve las captaciones de su agente' `
     ($brokerDespues.captacionesTotales - $antesBroker.captacionesTotales -eq 2) `
     "$($antesBroker.captacionesTotales) -> $($brokerDespues.captacionesTotales)"
-$adminDespues = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
-Check 'el admin ve el tenant completo' `
-    ($adminDespues.captacionesTotales -ge $brokerDespues.captacionesTotales) `
-    "admin=$($adminDespues.captacionesTotales) broker=$($brokerDespues.captacionesTotales)"
+$adminDespues = ApiError GET '/indicadores/resumen?periodo=7d' $admin.token $null
+Check 'el fixture no confiere cartera por gobernar' ($adminDespues.codigo -eq 403) 'gobierno'
 
 Write-Host "`n== 8. Avance comercial (RF-017) ==" -ForegroundColor Cyan
 $avance = Api GET '/indicadores/avance' $agente.token $null
@@ -444,7 +407,7 @@ Check 'la captacion PENDIENTE no aparece en el avance' `
     (($avance.detalle | Where-Object { $_.codigoCaptacion -eq $codigoPendiente }).Count -eq 0) `
     $codigoPendiente
 Check 'la fila del avance trae direccion, distrito y estado comercial' `
-    ($filaAvance.direccion -eq "Av. Avance E4 $sufijo" -and $filaAvance.distrito -eq 'Barranco' `
+    ($filaAvance.direccion -eq "Av. Avance E4-$sufijo" -and $filaAvance.distrito -eq 'Barranco' `
         -and $filaAvance.estadoComercial -eq 'Activa') `
     "$($filaAvance.direccion) / $($filaAvance.distrito) / $($filaAvance.estadoComercial)"
 Check 'la fila cuenta 1 oportunidad, con visita y con solicitud' `
@@ -473,7 +436,7 @@ Check 'el agregado del avance cuadra con el detalle' `
 Write-Host "`n== 9. Dashboard ==" -ForegroundColor Cyan
 $dashAgente = Api GET '/dashboard' $agente.token $null
 $dashBroker = Api GET '/dashboard' $broker.token $null
-$dashAdmin = Api GET '/dashboard?tamano=3' $admin.token $null
+$dashAdmin = ApiError GET '/dashboard?tamano=3' $admin.token $null
 Check 'el dashboard reusa el mismo resumen de indicadores' `
     ($dashAgente.indicadores.ambito -eq 'Mi actividad') $dashAgente.indicadores.ambito
 Check 'el tamano por defecto de la bandeja es 5' ($dashAgente.bandeja.pageSize -eq 5) `
@@ -486,11 +449,10 @@ Check 'la bandeja del agente lleva a lo sumo 5 items y no mas que su total' `
 Check 'el BROKER recibe bandeja VACIA, no 403' `
     ($dashBroker.bandeja.items.Count -eq 0 -and $dashBroker.bandeja.totalRecords -eq 0) `
     "items=$($dashBroker.bandeja.items.Count) total=$($dashBroker.bandeja.totalRecords)"
-Check 'el ADMIN recibe bandeja vacia con el pageSize que pidio' `
-    ($dashAdmin.bandeja.items.Count -eq 0 -and $dashAdmin.bandeja.pageSize -eq 3) `
-    "items=$($dashAdmin.bandeja.items.Count) pageSize=$($dashAdmin.bandeja.pageSize)"
+Check 'gobierno no recibe dashboard comercial como bandeja vacia' `
+    ($dashAdmin.codigo -eq 403) 'gobierno'
 Check 'el dashboard respeta el periodo' `
-    ((Api GET '/dashboard?periodo=7d' $admin.token $null).indicadores.mesesEtiquetas.Count -eq 7) `
+    ((Api GET '/dashboard?periodo=7d' $agente.token $null).indicadores.mesesEtiquetas.Count -eq 7) `
     'periodo'
 
 Write-Host "`n== 10. Seguimiento comercial: las cinco etapas ==" -ForegroundColor Cyan
@@ -580,21 +542,20 @@ Check 'el total del seguimiento crece con el fixture' `
 Write-Host "`n== 12. Seguimiento: alcance por rol ==" -ForegroundColor Cyan
 $segOtro = Api GET "/seguimiento-comercial?q=E4-$sufijo" $otroAgente.token $null
 $segBroker = Api GET "/seguimiento-comercial?q=E4-$sufijo" $broker.token $null
-$segAdmin = Api GET "/seguimiento-comercial?q=E4-$sufijo" $admin.token $null
+$segAdmin = ApiError GET "/seguimiento-comercial?q=E4-$sufijo" $admin.token $null
 Check 'el agente de otro equipo no ve ninguna fila del fixture' `
     ($segOtro.counts.todos -eq 0) "total=$($segOtro.counts.todos)"
 Check 'el broker supervisor ve las filas de su agente' `
     ($segBroker.counts.todos -eq $seg.counts.todos) `
     "broker=$($segBroker.counts.todos) agente=$($seg.counts.todos)"
-Check 'el admin ve al menos lo que ve el broker' `
-    ($segAdmin.counts.todos -ge $segBroker.counts.todos) `
-    "admin=$($segAdmin.counts.todos) broker=$($segBroker.counts.todos)"
+Check 'gobierno no obtiene seguimiento ni contadores de cartera' `
+    ($segAdmin.codigo -eq 403 -and $null -eq $segAdmin.counts) 'gobierno'
 
 Write-Host "`n== 13. El cierre entra al donut y a los cierres ==" -ForegroundColor Cyan
 # El cierre pasa por la CASCADA CONTRACTUAL REAL (F4 section 6), no por SQL: el
 # broker aprueba la solicitud y el agente registra el alquiler. Insertar el
-# contrato a mano ya no es legal —ck_contrato_formalizado_completo exige el
-# snapshot (inicio, fin, renta y moneda) para D/V— y ademas mentia: dejaba la
+# contrato a mano ya no es legal - ck_contrato_formalizado_completo exige el
+# snapshot (inicio, fin, renta y moneda) para D/V - y ademas mentia: dejaba la
 # captacion ABIERTA y el local publicado, que no es el mundo que produce el
 # cierre. Los siete efectos se comprueban en e2e-f4-solicitud; aqui solo se
 # verifica que E4 lee lo que la cascada dejo.
@@ -603,16 +564,16 @@ $aprobacion = Api POST '/evaluaciones' $broker.token @{
     idSolicitud = $idSolicitud
 }
 Check 'el broker aprueba la solicitud del fixture' ($aprobacion.resultado -eq 'A') $aprobacion.resultado
-$contrato = Api POST '/contratos' $agente.token @{
-    idSolicitud = $idSolicitud; fechaCierre = $hoy; estadoContrato = 'V'
-    incidencias = "Contrato E4 $sufijo"
-}
-Check 'POST /contratos formaliza el cierre VIGENTE con su snapshot' `
-    ($contrato.estadoContrato -eq 'V' -and $contrato.rentaMensual -eq 9500 `
+$preparado=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$idSolicitud;incidencias="Preparación E4 TEST $sufijo"} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
+Check 'preparar conserva la ausencia de firma/cierre' ($preparado.estadoContrato -eq 'P' -and $null -eq $preparado.fechaCierre) 'preparación'
+$formalizado=FormalizarAlquilerC5DePrueba -IdEncargo $idCaptacion -IdOportunidad $idOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta 9500 -Moneda 'PEN' -Inicio $preparado.fechaInicioContrato -Fin $preparado.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $preparado.id
+$contrato=$formalizado.contrato
+Check 'el hito contractual real produce su contrato firmado' `
+    ($contrato.estadoContrato -eq 'D' -and $contrato.rentaMensual -eq 9500 `
         -and $contrato.plazoContratoMeses -eq 18 -and $contrato.fechaInicioContrato -eq $hoy) `
     "$($contrato.estadoContrato)/$($contrato.rentaMensual)/$($contrato.plazoContratoMeses)"
 Check 'la cascada cerro solicitud (C), oportunidad (F) y captacion (C)' `
-    ((Sql "select s.estado||'|'||o.estado||'|'||c.estado
+    ((Invoke-ControlLocalE2ESql "select s.estado||'|'||o.estado||'|'||c.estado
              from solicitud_alquiler s
              join oportunidad_comercial o on o.id_oportunidad=s.id_oportunidad
              join captacion c on c.id_captacion=o.id_captacion
@@ -642,7 +603,7 @@ Check 'el cierre se arma desde su solicitud: codigo de oportunidad, monto y ruta
     ($filaCierre.codigo -eq "OP-E4-$sufijo" -and $filaCierre.monto -eq '9500.00' `
         -and $filaCierre.ruta -eq "solicitud-detail/SOL-E4-$sufijo") `
     "$($filaCierre.codigo)/$($filaCierre.monto)/$($filaCierre.ruta)"
-Check 'el estado del cierre es la descripcion del contrato' ($filaCierre.estado -eq 'Vigente') `
+Check 'el estado del cierre es la descripcion del contrato' ($filaCierre.estado -eq 'Firmado') `
     $filaCierre.estado
 Check 'el cierre trae la fecha de cierre como ultimo hito' ($filaCierre.ultimoHito -eq $hoy) `
     $filaCierre.ultimoHito
@@ -651,128 +612,33 @@ Check 'el agente de otro equipo no ve el cierre' `
     'aislado'
 
 Write-Host "`n== 14. Aislamiento de tenant ==" -ForegroundColor Cyan
-$codigoOrg2 = "E4_$sufijo"
-$org2Creada = $false
-# La linea base del ADMIN se re-toma AQUI, ya con el cierre aplicado: la
-# cascada real cerro la captacion del fixture, asi que la foto de la seccion 7
-# ($adminDespues) dejo de servir para "otro tenant no me mueve los numeros".
-$adminAntesOrg2 = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
-try {
-    $idCaptacionOrg2 = [long](Sql @"
-with nueva_org as (
-    insert into organizacion (codigo, nombre)
-    values ('$codigoOrg2', 'Organizacion temporal E4')
-    returning id_organizacion
-), persona_propietario as (
-    insert into persona (
-        tipo_persona, tipo_documento, numero_documento,
-        nombres_o_razon_social, estado, organizacion_id
-    )
-    select 'N', 'D', '87$sufijo', 'Propietario temporal E4', 'A', id_organizacion
-    from nueva_org
-    returning id_persona, organizacion_id
-), rol_propietario as (
-    insert into persona_rol (id_persona, tipo_rol, vigencia_desde, organizacion_id)
-    select id_persona, 'PROPIETARIO', current_date, organizacion_id
-    from persona_propietario
-    returning id_persona_rol, organizacion_id
-), propiedad_org2 as (
-    insert into propiedad (
-        codigo, direccion, distrito, metraje, precio_referencial, moneda_referencial,
-        estado_registro, disponibilidad_comercial, tipo_inmueble, uso, id_rol_propietario,
-        tipo_rol_propietario, organizacion_id
-    )
-    select 'LOC-E4-ORG2', 'Direccion temporal E4', 'Ate',
-           100, 5000, 'PEN', 'A', 'D', 'L', 'C', id_persona_rol, 'PROPIETARIO', organizacion_id
-    from rol_propietario
-    returning id_propiedad, organizacion_id
-), atributo_local as (
-    insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
-    select organizacion_id, id_propiedad, 'rubro_permitido', 'Temporal E4' from propiedad_org2
-), persona_agente as (
-    insert into persona (
-        tipo_persona, tipo_documento, numero_documento,
-        nombres_o_razon_social, estado, organizacion_id
-    )
-    select 'N', 'D', '88$sufijo', 'Agente temporal E4', 'A', id_organizacion
-    from nueva_org
-    returning id_persona, organizacion_id
-), rol_agente as (
-    insert into persona_rol (id_persona, tipo_rol, vigencia_desde, organizacion_id)
-    select id_persona, 'AGENTE', current_date, organizacion_id
-    from persona_agente
-    returning id_persona_rol, organizacion_id
-), detalle_agente_org2 as (
-    insert into detalle_agente (
-        id_persona_rol, tipo_rol, codigo_agente, zona_asignada,
-        fecha_ingreso, estado_operativo, organizacion_id
-    )
-    select id_persona_rol, 'AGENTE', 'AGE-E4-ORG2', 'Org2',
-           current_date, 'D', organizacion_id
-    from rol_agente
-    returning id_persona_rol, organizacion_id
-), captacion_org2 as (
-    insert into captacion (
-        codigo_captacion, fecha_captacion,
-        fecha_inicio_encargo, fecha_fin_encargo,
-        observaciones, estado, id_propiedad, id_rol_agente,
-        motivo_operacion, organizacion_id
-    )
-    select 'CAP-E4-ORG2', current_date,
-           current_date, current_date + 180,
-           'Captacion temporal E4', 'P', p.id_propiedad, a.id_persona_rol,
-           'A', p.organizacion_id
-    from propiedad_org2 p, detalle_agente_org2 a
-    returning id_captacion
-)
-select id_captacion from captacion_org2
-"@)
-    $org2Creada = $true
-    Check 'se crea el fixture E4 de una segunda organizacion' ($idCaptacionOrg2 -gt 0) `
-        "captacion=$idCaptacionOrg2"
-    $adminConOrg2 = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
-    Check 'la captacion de otro tenant no altera los indicadores del ADMIN legado' `
-        ($adminConOrg2.captacionesActivas -eq $adminAntesOrg2.captacionesActivas) `
-        "$($adminAntesOrg2.captacionesActivas) -> $($adminConOrg2.captacionesActivas)"
-    $segOrg2 = Api GET '/seguimiento-comercial?q=E4-ORG2' $admin.token $null
-    Check 'el seguimiento del ADMIN legado no ve filas de otro tenant' `
-        ($segOrg2.counts.todos -eq 0) "total=$($segOrg2.counts.todos)"
-    $avanceOrg2 = Api GET '/indicadores/avance' $admin.token $null
-    Check 'el avance del ADMIN legado no ve propiedades de otro tenant' `
-        (($avanceOrg2.detalle | Where-Object { $_.codigoCaptacion -eq 'CAP-E4-ORG2' }).Count -eq 0) `
-        'CAP-E4-ORG2'
-    Check 'el distrito exclusivo del otro tenant no aparece en las options' `
-        (-not ((Api GET '/seguimiento-comercial' $admin.token $null).options.distritos -contains 'Ate')) `
-        'Ate'
-} finally {
-    if ($org2Creada) {
-        Sql @"
-delete from captacion
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from atributo_propiedad
-where id_propiedad in (
-    select id_propiedad from propiedad
-    where organizacion_id=(
-        select id_organizacion from organizacion where codigo='$codigoOrg2'));
--- V88: toda alta por la API deja su fila de responsable, y la FK compuesta
--- bloquea el borrado de la propiedad. Es idempotente si no hay ninguna.
-delete from asignacion_responsable_propiedad
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from propiedad
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from detalle_agente
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from persona_rol
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from persona
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from organizacion where codigo='$codigoOrg2';
-"@ | Out-Null
-    }
-}
-Check 'el fixture de segunda organizacion se retira al terminar' `
-    ((Sql "select count(*) from organizacion where codigo='$codigoOrg2'") -eq '0') 'cleanup'
-
+$brokerAntesOrg2 = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
+$otroTenant = Initialize-ControlLocalE2EActors -Etiqueta 'contrario'
+$gobiernoOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $otroTenant.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
+$agenteOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $otroTenant.organizacion -Rol 'AGENTE'
+$brokerOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $otroTenant.organizacion -Rol 'BROKER' -EnrolarSiempre
+$propietarioOtroTenant = NuevoPropietarioC2DePrueba -Token $agenteOtroTenant.token -Nombre 'Propietario ficticio del otro tenant E4'
+$localOtroTenant = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agenteOtroTenant.token -IdPropietario $propietarioOtroTenant.id `
+    -Direccion 'Predio ficticio E4-ORG2' -Distrito 'Ate' -Codigo "LOC-E4-ORG2-$sufijo" -Metraje 100 -Rubro 'Retail TEST' `
+    -Importe 1000 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1 -TratamientoIgv 'N' `
+    -InicioEncargo $hoy -FinEncargo $finEncargo -Exclusividad $true
+$habilitadoOtro = HabilitarEncargoC2DePrueba -IdEncargo $localOtroTenant.idEncargo -TokenResponsable $agenteOtroTenant.token -TokenDecisor $brokerOtroTenant.token -FechaFirma $hoy `
+    -MonedaComision 'PEN' -Exclusividad $true -HitoDevengo 'Firma del contrato' `
+    -ParteObligada 'Propietario TEST extranjero' -Beneficiario 'Agencia TEST extranjera' -Exigibilidad 'A la firma del contrato'
+$positivoOtro = Api GET '/indicadores/resumen?periodo=7d' $agenteOtroTenant.token $null
+Check 'el positivo extranjero existe y esta realmente habilitado por Core' `
+    ($habilitadoOtro.vigencia.habilitado -and $positivoOtro.captacionesActivas -eq 1) 'positivo extranjero'
+$brokerConOrg2 = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
+Check 'otro tenant no cambia los indicadores del broker propio' `
+    ($brokerConOrg2.captacionesActivas -eq $brokerAntesOrg2.captacionesActivas) 'aislamiento'
+$segOrg2 = Api GET '/seguimiento-comercial?q=E4-ORG2' $broker.token $null
+Check 'el broker no obtiene filas comerciales del otro tenant' ($segOrg2.counts.todos -eq 0) 'aislamiento'
+$avanceOrg2 = Api GET '/indicadores/avance' $broker.token $null
+Check 'el avance no incluye el Encargo extranjero' `
+    (@($avanceOrg2.detalle | Where-Object { $_.idCaptacion -eq $localOtroTenant.idEncargo }).Count -eq 0) 'aislamiento'
+Check 'las opciones no divulgan el distrito exclusivo del otro tenant' `
+    (-not ((Api GET '/seguimiento-comercial' $broker.token $null).options.distritos -contains 'Ate')) 'aislamiento'
+# El historial extranjero permanece intacto hasta el teardown del runner.
 Write-Host "`n== 15. Sin token no hay indicadores ==" -ForegroundColor Cyan
 Check 'GET /indicadores/resumen sin token responde 401' `
     ((ApiError GET '/indicadores/resumen' $null).codigo -eq 401) 'sin token'
@@ -782,103 +648,13 @@ Check 'GET /seguimiento-comercial sin token responde 401' `
     ((ApiError GET '/seguimiento-comercial' $null).codigo -eq 401) 'sin token'
 
 } finally {
-    Write-Host "`n== Limpieza del fixture E4 ==" -ForegroundColor Cyan
-    Sql @"
--- El cierre real cuelga liquidacion de comision del contrato y evaluacion de
--- la solicitud: ninguna de las dos cae por cascada, asi que se retiran antes
--- que su padre. Se localizan por subconsulta (no por el id del contrato) para
--- que la limpieza siga funcionando si el script murio antes del cierre.
-delete from comision_movimiento where id_comision_liquidacion in (
-    select id_comision_liquidacion from comision_liquidacion
-     where id_contrato_alquiler in (
-        select id_contrato_alquiler from contrato_alquiler
-         where incidencias like '%E4 $sufijo%'));
-delete from comision_liquidacion where id_contrato_alquiler in (
-    select id_contrato_alquiler from contrato_alquiler
-     where incidencias like '%E4 $sufijo%');
-delete from historial_estado where entidad_tipo='CONTRATO_ALQUILER' and id_entidad in (
-    select id_contrato_alquiler from contrato_alquiler where incidencias like '%E4 $sufijo%');
-delete from contrato_alquiler where incidencias like '%E4 $sufijo%';
-delete from evaluacion_solicitud where id_solicitud=$idSolicitud;
-delete from historial_estado where entidad_tipo='SOLICITUD_ALQUILER' and id_entidad=$idSolicitud;
-delete from solicitud_alquiler where codigo_solicitud='SOL-E4-$sufijo';
-delete from visita where observaciones like '%E4 $sufijo%';
-delete from interaccion_comercial where observaciones like '%E4 $sufijo%';
-delete from motivo_no_continuidad where id_oportunidad=$idOportunidad;
-delete from historial_estado where entidad_tipo='OPORTUNIDAD' and id_entidad=$idOportunidad;
-delete from oportunidad_comercial where id_oportunidad=$idOportunidad;
--- La bandeja y la campana se reconcilian al leer /dashboard, asi que el fixture
--- deja tareas y alertas derivadas: se retiran por entidad, no por texto.
-delete from tarea where
-    (entidad_tipo='CAPTACION' and entidad_id in ($idCaptacion, $idCaptacionPendiente))
- or (entidad_tipo='PROSPECCION' and entidad_id=$idProspeccion)
- or (entidad_tipo='OPORTUNIDAD' and entidad_id=$idOportunidad)
- or (entidad_tipo in ('SOLICITUD', 'SOLICITUD_ALQUILER') and entidad_id=$idSolicitud)
- or (entidad_tipo in ('PROPIEDAD', 'INMUEBLE') and entidad_id in ($idLocal, $idLocal2));
-delete from alerta where
-    (entidad_tipo='CAPTACION' and entidad_id in ($idCaptacion, $idCaptacionPendiente))
- or (entidad_tipo='PROSPECCION' and entidad_id=$idProspeccion)
- or (entidad_tipo='OPORTUNIDAD' and entidad_id=$idOportunidad)
- or (entidad_tipo in ('SOLICITUD', 'SOLICITUD_ALQUILER') and entidad_id=$idSolicitud)
- or (entidad_tipo in ('PROPIEDAD', 'INMUEBLE') and entidad_id in ($idLocal, $idLocal2));
-delete from prospeccion where codigo_prospeccion='PRO-E4-$sufijo'
-   or id_propiedad in ($idLocal, $idLocal2);
-delete from reasignacion_captacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
-delete from historial_estado where entidad_tipo='CAPTACION'
-  and id_entidad in ($idCaptacion, $idCaptacionPendiente);
--- El hito 'U' del alta cuelga del ENCARGO desde V49, asi que hay que soltarlo
--- antes de borrarlo: la serie economica se borra mas abajo con la propiedad,
--- pero la FK a captacion muerde aqui.
--- El hito 'U' y el anuncio cuelgan del ENCARGO (V49, V70), asi que hay que
--- soltarlos antes de borrarlo o su FK muerde aqui, la transaccion aborta entera
--- y la limpieza no borra NADA -- el residuo sale 2|2|1 y el fallo aparece lejos
--- de su causa.
-delete from precio_propiedad where id_captacion in ($idCaptacion, $idCaptacionPendiente);
-delete from publicacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
-delete from captacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
--- DISPONIBILIDAD_PROPIEDAD la escribe el cierre al sacar el local del mercado:
--- es la cuarta fila auditada de la cascada (MEJ-01), y no la dejaba el SQL.
-delete from historial_estado
- where entidad_tipo in ('PROPIEDAD', 'INMUEBLE', 'DISPONIBILIDAD_PROPIEDAD')
-   and id_entidad in ($idLocal, $idLocal2);
--- Esas tres colecciones hijas cuelgan del local: sin borrarlas la FK bloquea el
--- propiedad. La publicacion ademas cuelga del ENCARGO desde V70, asi que va
--- ANTES que la captacion o su FK muerde.
-delete from publicacion where id_propiedad in ($idLocal, $idLocal2);
-delete from foto_propiedad where id_propiedad in ($idLocal, $idLocal2);
-delete from precio_propiedad where id_propiedad in ($idLocal, $idLocal2);
-delete from atributo_propiedad where id_propiedad in ($idLocal, $idLocal2);
--- La titularidad es la coleccion hija que el alta universal escribe y el alta
--- de local no tenia: `POST /locales` guardaba el propietario en una columna,
--- `POST /propiedades` abre una titularidad con su vigencia. Sin borrarla, la FK
--- bloquea la propiedad y aborta la limpieza entera.
-delete from titularidad_propiedad where id_propiedad in ($idLocal, $idLocal2);
--- V88: toda alta por la API deja su fila de responsable, y la FK compuesta
--- bloquea el borrado de la propiedad. Es idempotente si no hay ninguna.
-delete from asignacion_responsable_propiedad where id_propiedad in ($idLocal, $idLocal2);
-delete from propiedad where id_propiedad in ($idLocal, $idLocal2);
-delete from detalle_cliente where id_persona_rol=$idCliente;
-delete from persona_rol where id_persona_rol in ($idCliente, $($propietario.id));
--- Desde D-27 (V28) el alta de cliente y de propietario es transaccional y deja
--- ademas su constancia de autorizacion. Sin retirarla, el `delete from persona`
--- choca contra fk_autorizacion_persona_org, aborta la transaccion entera y la
--- limpieza no borra NADA: el residuo sale 2|2|1 y el fallo aparece lejos de su
--- causa. Va antes que la persona, como cualquier otra hija.
-delete from autorizacion_tratamiento_evento where id_persona in (
-    select id_persona from persona
-     where nombres_o_razon_social in ('Propietario E4 $sufijo', 'Cliente E4 $sufijo'));
-delete from persona where nombres_o_razon_social in (
-    'Propietario E4 $sufijo', 'Cliente E4 $sufijo');
-"@ | Out-Null
-    $residuo = Sql @"
-select
-  (select count(*) from captacion where codigo_captacion like 'CAP-%-E4-$sufijo') || '|' ||
-  (select count(*) from propiedad where codigo like 'LOC-E4%-$sufijo') || '|' ||
-  (select count(*) from oportunidad_comercial where codigo_oportunidad='OP-E4-$sufijo')
-"@
-    Check 'el fixture E4 se retira por completo' ($residuo -eq '0|0|0') $residuo
+    # La historia, recibos y documentos canonicos no se borran por SQL para
+    # limpiar el fixture. Invoke-E2E elimina su base/contenedor EXCLUSIVOS.
+    $ctxFinal = Assert-ControlLocalE2EContext
+    Check 'el teardown pertenece a la base exclusiva de esta corrida' `
+        ($ctxFinal.Database -eq $e2e.Database -and $ctxFinal.RunId -eq $e2e.RunId) 'contexto E2E'
+    Write-Host 'E2E_CONSERVACION historia y recibos preservados hasta el teardown unitario del runner.'
 }
-
 Write-Host "`n===== $ok OK / $fail FALLAS =====" `
     -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 if ($fail -gt 0) { exit 1 }

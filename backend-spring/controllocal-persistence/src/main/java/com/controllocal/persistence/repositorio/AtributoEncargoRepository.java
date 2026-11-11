@@ -66,28 +66,5 @@ public interface AtributoEncargoRepository extends JpaRepository<AtributoEncargo
                                           @Param("tipoPropiedad") String tipoPropiedad,
                                           @Param("tipoOperacion") String tipoOperacion);
 
-    /**
-     * Lo que le falta para cerrar el alta del encargo. Solo ALT, y por el mismo
-     * motivo que en la propiedad: basta que un consumidor lea «lo que no sea
-     * OPC» para que registrar un encargo empiece a exigir de golpe todo lo que
-     * solo debia exigir el anuncio.
-     */
-    @Query("""
-            select c.clave from CatalogoAtributo c join c.aplicacionesOperacion o
-            where c.activo = true
-              and c.sujeto = 'ENCARGO'
-              and o.exigencia = 'ALT'
-              and o.tipoPropiedad = :tipoPropiedad
-              and o.tipoOperacion = :tipoOperacion
-              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
-              and not exists (select 1 from AtributoEncargo ae
-                               where ae.idCaptacion = :idCaptacion and ae.clave = c.clave)
-            order by c.orden asc
-            """)
-    List<String> clavesObligatoriasQueFaltan(@Param("idOrganizacion") long idOrganizacion,
-                                             @Param("idCaptacion") long idCaptacion,
-                                             @Param("tipoPropiedad") String tipoPropiedad,
-                                             @Param("tipoOperacion") String tipoOperacion);
-
     void deleteByIdCaptacionAndClave(long idCaptacion, String clave);
 }

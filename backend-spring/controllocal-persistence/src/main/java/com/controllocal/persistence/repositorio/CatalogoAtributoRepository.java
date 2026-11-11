@@ -23,6 +23,54 @@ import java.util.Optional;
  */
 public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtributo, Long> {
 
+    interface DefinicionActual {
+        Long getId();
+        Long getOrganizacion();
+        String getClave();
+        String getSujeto();
+        String getTipoDato();
+        long getVersion();
+    }
+    interface OpcionActual { String getCodigo(); String getRotulo(); }
+
+    String DEFINICION_FISICA_ACTUAL = """
+            select c.id_catalogo_atributo as id, c.organizacion_id as organizacion,
+                c.clave as clave, c.sujeto as sujeto, c.tipo_dato as "tipoDato", c.version_definicion as version
+              from catalogo_atributo c
+             where c.clave=:clave and c.sujeto='PROPIEDAD' and c.activo
+               and (c.organizacion_id is null or c.organizacion_id=:idOrganizacion)
+             order by c.organizacion_id desc nulls last limit 1
+            """;
+
+    @Query(value = DEFINICION_FISICA_ACTUAL, nativeQuery = true)
+    Optional<DefinicionActual> actualParaCaptura(@Param("idOrganizacion") long organizacion, @Param("clave") String clave);
+
+    @Query(value = DEFINICION_FISICA_ACTUAL + " for share", nativeQuery = true)
+    Optional<DefinicionActual> bloquearActualParaCaptura(@Param("idOrganizacion") long organizacion, @Param("clave") String clave);
+
+    /** Definición efectiva comercial congelada durante el efecto, sin hidratar una entidad ya gestionada. */
+    @Query(value="""
+        select c.id_catalogo_atributo as id,c.organizacion_id as organizacion,c.clave,c.sujeto,
+               c.tipo_dato as "tipoDato",c.version_definicion as version
+          from catalogo_atributo c
+         where c.clave=:clave and c.sujeto='ENCARGO' and c.activo
+           and (c.organizacion_id is null or c.organizacion_id=:org)
+         order by c.organizacion_id desc nulls last limit 1 for share
+        """,nativeQuery=true)
+    Optional<DefinicionActual> bloquearVersionDeEncargo(@Param("org") long org,@Param("clave") String clave);
+
+    @Query(value = """
+            select valor as codigo, rotulo from catalogo_atributo_opcion
+             where id_catalogo_atributo=:id and activo order by orden,valor
+            """, nativeQuery = true)
+    List<OpcionActual> opcionesActuales(@Param("id") long id);
+
+    @Query("select c from CatalogoAtributo c where c.organizacionId is null or c.organizacionId=:idOrganizacion order by c.clave,c.id")
+    List<CatalogoAtributo> visiblesParaGobierno(@Param("idOrganizacion") long organizacion);
+
+    @Query("select c from CatalogoAtributo c where c.id=:id and (c.organizacionId is null or c.organizacionId=:idOrganizacion)")
+    Optional<CatalogoAtributo> visiblePorId(@Param("idOrganizacion") long organizacion, @Param("id") long id);
+
     /** Todo lo que esta organizacion puede usar, en el orden de presentacion. */
     @Query("""
             select distinct c from CatalogoAtributo c
@@ -94,9 +142,18 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
                                               @Param("tipoOperacion") String tipoOperacion);
 
     /**
-     * Una clave concreta. La del sistema y la de la organizacion pueden coexistir
-     * con el mismo nombre; gana la de la organizacion, que es la que la
-     * particulariza — y por eso el orden es {@code organizacionId desc}.
+     * Una clave concreta, <b>sin decir de que sujeto</b>. La del sistema y la de
+     * la organizacion pueden coexistir con el mismo nombre; gana la de la
+     * organizacion, que es la que la particulariza — y por eso el orden es
+     * {@code organizacionId desc}.
+     *
+     * <p><b>Sirve para EXPLICAR, no para enrutar</b> (`N7`). Es la consulta con
+     * la que un enrutador que no encontro su clave averigua si existe en el
+     * <i>otro</i> sujeto, para poder decir «es una condicion del ENCARGO» en vez
+     * de «no esta en el catalogo». Quien vaya a leer o escribir un valor usa
+     * {@link #porClaveYSujeto}: preguntar sin sujeto y quedarse con lo que
+     * salga es exactamente como una clave del encargo podria completar la
+     * definicion de un hecho de la propiedad.
      */
     @Query("""
             select c from CatalogoAtributo c
@@ -108,6 +165,33 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
             """)
     Optional<CatalogoAtributo> porClave(@Param("idOrganizacion") long idOrganizacion,
                                         @Param("clave") String clave);
+
+    /**
+     * <b>Una clave concreta DEL SUJETO que la pide</b> (`N7`).
+     *
+     * <p>Gemela de {@link #porClave} con la mitad del enrutamiento que le
+     * faltaba. Sin {@code sujeto}, una clave que existiera con el mismo nombre
+     * en los dos sujetos —hoy no hay ninguna: <b>0 medido el 2026-09-05 en las
+     * dos bases</b>— se resolveria por precedencia de organizacion, que no dice
+     * nada sobre si el valor es un hecho del inmueble o una condicion pactada.
+     * El {@code exigirQueSeaDe...} de cada enrutador es el mensaje; esto es el
+     * enrutamiento.
+     *
+     * <p>Sigue acotada a <b>una fila</b> por la misma precedencia de siempre: la
+     * de la organizacion particulariza la del sistema.
+     */
+    @Query("""
+            select c from CatalogoAtributo c
+            where c.clave = :clave
+              and c.sujeto = :sujeto
+              and c.activo = true
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+            order by c.organizacionId desc nulls last
+            limit 1
+            """)
+    Optional<CatalogoAtributo> porClaveYSujeto(@Param("idOrganizacion") long idOrganizacion,
+                                               @Param("clave") String clave,
+                                               @Param("sujeto") String sujeto);
 
 
     /**
@@ -143,15 +227,57 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
      * <p>Sin {@code join fetch}: la ficha usa el rotulo, el tipo, la unidad y el
      * orden, todos columnas de la propia fila. Traerse la aplicabilidad seria
      * multiplicar filas por tipo para no mirarlas.
+     *
+     * <h2>Y filtra por SUJETO, como todas las demas</h2>
+     * (`N7`) Es una consulta de <b>lectura</b>, y una lectura que resuelve la
+     * definicion del sujeto equivocado degrada exactamente igual que un
+     * escritor mal enrutado: la ficha del inmueble mostraria el rotulo, el
+     * tipo y la unidad de una condicion pactada. Hoy es inocuo —<b>0 claves
+     * compartidas entre sujetos, medido el 2026-09-05 en las dos bases</b>— y
+     * se corrige con {@link #porClave}, no despues.
+     *
+     * <p><b>Una fila por clave.</b> Filtrado el sujeto, el unico duplicado
+     * posible es la pareja sistema/organizacion, y el orden la resuelve con la
+     * misma precedencia que {@link #porClaveYSujeto}: quien consume se queda
+     * con la primera de cada clave ({@code putIfAbsent}).
      */
     @Query("""
             select c from CatalogoAtributo c
             where c.clave in :claves
+              and c.sujeto = :sujeto
               and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
             order by c.clave asc, c.organizacionId desc nulls last
             """)
     List<CatalogoAtributo> paraLeer(@Param("idOrganizacion") long idOrganizacion,
-                                    @Param("claves") Collection<String> claves);
+                                    @Param("claves") Collection<String> claves,
+                                    @Param("sujeto") String sujeto);
+
+    /**
+     * <b>Las claves ESTRUCTURALES de este sujeto, incluidas las retiradas</b>
+     * (`N3`).
+     *
+     * <p>Una clave ESTRUCTURAL no deja fila en {@code atributo_propiedad}: su
+     * valor vive en una columna canonica de {@code propiedad}. Por eso
+     * {@link #paraLeer} —que completa a partir de <b>las claves escritas</b>— no
+     * puede recuperarla: el lector nunca la produjo, porque para producirla
+     * necesitaba ya su definicion. Es la pescadilla que dejaba la quinta
+     * superficie de la retirada abierta.
+     *
+     * <p>Se rompe preguntando por el <b>concepto</b> y no por la clave: son las
+     * claves con {@code campoEstructural} no nulo, que hoy son <b>cuatro</b> en
+     * las dos bases —{@code METRAJE}, {@code PISO}, {@code PARTIDA_REGISTRAL},
+     * {@code OFICINA_REGISTRAL}— y ninguna retirada. La consulta es una por
+     * lote, no una por propiedad.
+     */
+    @Query("""
+            select c from CatalogoAtributo c
+            where c.campoEstructural is not null
+              and c.sujeto = :sujeto
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+            order by c.clave asc, c.organizacionId desc nulls last
+            """)
+    List<CatalogoAtributo> estructuralesParaLeer(@Param("idOrganizacion") long idOrganizacion,
+                                                 @Param("sujeto") String sujeto);
 
     /**
      * <b>La clave logica cuya autoridad es este campo canonico</b> (4.P).

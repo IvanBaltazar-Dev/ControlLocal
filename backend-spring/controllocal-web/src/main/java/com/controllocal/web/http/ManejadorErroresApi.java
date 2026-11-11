@@ -1,6 +1,7 @@
 package com.controllocal.web.http;
 
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.CapacidadDeshabilitadaException;
 import com.controllocal.service.excepcion.ConflictoException;
 import com.controllocal.service.excepcion.CredencialesInvalidasException;
 import com.controllocal.service.excepcion.ErrorMfaException;
@@ -14,14 +15,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
- * Equivalente Spring del ApiExceptionMapper Jakarta: todos los errores salen
- * como {"error": mensaje} con los mismos textos del contrato congelado.
+ * Respuestas del contrato HTTP: estado, mensaje público y código estable.
+ * Las causas técnicas se conservan en el servidor, fuera del cuerpo público.
  */
 @RestControllerAdvice
 public class ManejadorErroresApi {
@@ -80,7 +83,14 @@ public class ManejadorErroresApi {
 
     @ExceptionHandler(ErrorAlmacenException.class)
     public ResponseEntity<ErrorResponse> errorAlmacen(ErrorAlmacenException error) {
-        return respuesta(HttpStatus.BAD_GATEWAY, error.getMessage());
+        LOG.error("[ControlLocal API v2] Error de almacén", error);
+        return respuesta(HttpStatus.BAD_GATEWAY, "No se pudo completar la operación de archivos.");
+    }
+
+    @ExceptionHandler(CapacidadDeshabilitadaException.class)
+    public ResponseEntity<ErrorResponse> capacidadDeshabilitada(CapacidadDeshabilitadaException error) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(error.getMessage(), ErrorResponse.CAPACIDAD_DESHABILITADA));
     }
 
     /**
@@ -124,7 +134,8 @@ public class ManejadorErroresApi {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> recursoInexistente(NoResourceFoundException error) {
-        return respuesta(HttpStatus.NOT_FOUND, "Recurso no encontrado.");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("Recurso no encontrado.", "RUTA_NO_DISPONIBLE"));
     }
 
     /**
@@ -173,11 +184,23 @@ public class ManejadorErroresApi {
                 "El parametro \"" + error.getName() + "\" espera " + tipo + ".");
     }
 
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> parametroObligatorioAusente(
+            MissingServletRequestParameterException error) {
+        return respuesta(HttpStatus.BAD_REQUEST,
+                "El parametro \"" + error.getParameterName() + "\" es obligatorio.");
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponse> encabezadoObligatorioAusente(MissingRequestHeaderException error) {
+        return respuesta(HttpStatus.BAD_REQUEST,
+                "El encabezado \"" + error.getHeaderName() + "\" es obligatorio.");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> errorNoControlado(Exception error) {
         LOG.error("[ControlLocal API v2] Error no controlado", error);
-        return respuesta(HttpStatus.INTERNAL_SERVER_ERROR,
-                "No se pudo completar la operacion." + detalleCausaRaiz(error));
+        return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo completar la operacion.");
     }
 
     private static String mensajeDuplicado(String mensajeSql) {
@@ -194,16 +217,7 @@ public class ManejadorErroresApi {
         return "Ya existe un registro con esos datos: un dato único está duplicado.";
     }
 
-    private static String detalleCausaRaiz(Throwable error) {
-        Throwable raiz = error;
-        for (int i = 0; raiz.getCause() != null && raiz.getCause() != raiz && i < 20; i++) {
-            raiz = raiz.getCause();
-        }
-        String mensaje = raiz.getMessage();
-        return mensaje == null || mensaje.isBlank() ? "" : " Detalle: " + mensaje;
-    }
-
     private ResponseEntity<ErrorResponse> respuesta(HttpStatus estado, String mensaje) {
-        return ResponseEntity.status(estado).body(new ErrorResponse(mensaje));
+        return ResponseEntity.status(estado).body(ErrorResponse.deEstado(estado.value(), mensaje));
     }
 }

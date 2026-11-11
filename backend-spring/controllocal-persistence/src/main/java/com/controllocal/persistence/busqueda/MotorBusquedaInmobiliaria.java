@@ -203,7 +203,7 @@ public class MotorBusquedaInmobiliaria {
                   + " group by 1"
                 : "select " + ESTADO_DERIVADO + " as estado, count(*) as total"
                   + " from propiedad p where p.organizacion_id = :idOrganizacion"
-                  + filtroDeEstado(criterio) + filtrosDeInmueble(criterio)
+                  + LecturaDePropiedadSql.PREDICADO + filtroDeEstado(criterio) + filtrosDeInmueble(criterio)
                   + " group by 1";
         Query consulta = em.createNativeQuery(sql);
         aplicarParametros(consulta, criterio);
@@ -231,12 +231,11 @@ public class MotorBusquedaInmobiliaria {
             // indice del listado lo sirve directo.
             return "select p.id_propiedad as id from propiedad p"
                     + " where p.organizacion_id = :idOrganizacion"
-                    + filtroDeEstado(criterio) + filtrosDeInmueble(criterio);
+                    + LecturaDePropiedadSql.PREDICADO + filtroDeEstado(criterio) + filtrosDeInmueble(criterio);
         }
         if (!criterio.tieneFiltrosDeInmueble()) {
-            // La forma que `/locales` lleva midiendo desde RC-003, intacta: sin
-            // volver a unir contra `propiedad` cuando no hay nada mas que
-            // preguntarle.
+            // Se conserva la unión de candidatos sin otro join a propiedad;
+            // C1 exige el mismo predicado de lectura dentro de cada rama.
             return "select c.id as id from (" + ramas(criterio) + ") c";
         }
         // El universal si tiene mas que preguntar. Las ramas ya cerraron tenant
@@ -260,7 +259,7 @@ public class MotorBusquedaInmobiliaria {
      * cerrado antes de unirse, no despues, o el conteo y la pagina discreparian.
      */
     private String ramas(CriterioBusquedaInmobiliaria criterio) {
-        String estado = filtroDeEstado(criterio);
+        String estado = LecturaDePropiedadSql.PREDICADO + filtroDeEstado(criterio);
         List<String> ramas = new ArrayList<>();
         ramas.add(RAMA_INMUEBLE + estado
                 + " and (lower(p.codigo)" + PATRON_TEXTO
@@ -337,6 +336,7 @@ public class MotorBusquedaInmobiliaria {
         return " and exists (select 1 from captacion " + alias
                 + " where " + alias + ".id_propiedad = p.id_propiedad"
                 + " and " + alias + ".organizacion_id = p.organizacion_id"
+                + " and " + alias + ".id_rol_agente = any(cast(:rolesLectura as bigint[]))"
                 + " and " + alias + ".motivo_operacion = '" + motivoOperacion + "'"
                 + " and " + alias + ".estado in ('P', 'O', 'A'))";
     }
@@ -348,6 +348,7 @@ public class MotorBusquedaInmobiliaria {
      */
     private void aplicarParametros(Query consulta, CriterioBusquedaInmobiliaria criterio) {
         consulta.setParameter("idOrganizacion", criterio.idOrganizacion());
+        consulta.setParameter("rolesLectura", criterio.rolesLecturaArray());
         if (criterio.tieneTexto()) {
             consulta.setParameter("texto", criterio.texto());
         }

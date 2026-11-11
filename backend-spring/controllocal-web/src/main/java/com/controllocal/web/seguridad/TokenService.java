@@ -1,5 +1,6 @@
 package com.controllocal.web.seguridad;
 
+import com.controllocal.service.ContextosService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -11,35 +12,21 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * JWT HS256 con el MISMO formato, claims y secreto de fallback que el
- * TokenService del backend Jakarta: durante la convivencia del Strangler un
- * token emitido por cualquiera de los dos backends valida en el otro
- * (SSO compartido, Doc 5 §10). No cambiar el formato hasta el corte final.
- */
+/** JWT V2 HS256 ligado a una sesión durable y revisión contextual de Core. */
 @Component
 public final class TokenService {
 
-    /**
-     * @param emitidoEn el claim {@code iat}, con precision de SEGUNDO porque es
-     *                  como viaja en el token. Se expone —cambio interno, el
-     *                  cable no cambia— para poder invalidar sesiones
-     *                  comparandolo contra {@code sesiones_invalidas_desde}
-     *                  (D-S0-12). Un token sin {@code iat} se lee como
-     *                  {@link Instant#EPOCH}: falla del lado seguro, porque
-     *                  cualquier invalidacion posterior lo mata.
-     */
+    /** La emisión y expiración tienen precisión de segundo, como la sesión Core. */
     public record Sesion(String usuario, String rol, long idUsuario, long idDominio,
-                         Instant emitidoEn, Instant expiraEn) {
+                         Instant emitidoEn, Instant expiraEn, String referenciaSesion, long revisionContexto) {
     }
 
-    public static final long DURACION_SEGUNDOS = 30 * 60;
-    private static final Set<String> ROLES = Set.of("AGENTE", "BROKER", "ADMIN");
+    public static final long DURACION_SEGUNDOS = ContextosService.DURACION_SEGUNDOS;
+    private static final Set<String> ROLES = Set.of("AGENTE", "BROKER", "TENANT_ADMIN", "IDENTIDAD");
     private static final String CABECERA = codificar("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
 
     // Secreto fijo de desarrollo, IDENTICO al del backend Jakarta para que los
@@ -82,29 +69,26 @@ public final class TokenService {
                 SECRETO_DEV.getBytes(StandardCharsets.UTF_8));
     }
 
-    public Sesion emitir(String usuario, String rol, long idUsuario, long idDominio) {
-        if (usuario == null || usuario.isBlank() || !ROLES.contains(rol)
-                || idUsuario <= 0 || idDominio <= 0) {
-            throw new IllegalArgumentException("No se puede emitir un token con datos de sesion invalidos.");
-        }
-        // Truncado a segundo: es la precision con la que `iat` viaja en el
-        // token, y guardarlo aqui con mas resolucion haria que el objeto y el
-        // JWT firmado dijeran cosas distintas.
-        Instant emitido = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        return new Sesion(usuario, rol, idUsuario, idDominio,
-                emitido, emitido.plusSeconds(DURACION_SEGUNDOS));
+    /** Firma la sesión durable creada por Core; el JWT no elige pertenencia ni rol. */
+    public Sesion de(ContextosService.SesionAccesoDTO sesion) {
+        var c = sesion.activo();
+        return new Sesion(sesion.identidad().nombreUsuario(), c == null ? "IDENTIDAD" : c.rol(),
+                c == null ? 0 : c.idPersona(),
+                c == null ? 0 : c.idRolOperativo(), sesion.emitidaEn(), sesion.venceEn(),
+                sesion.referencia(), sesion.revision());
     }
 
     public String firmar(Sesion sesion) {
+        if (sesion.referenciaSesion() == null || sesion.referenciaSesion().isBlank()
+                || sesion.revisionContexto() < 0) throw new IllegalArgumentException("Se requiere la sesión Core.");
         ObjectNode carga = json.createObjectNode();
+        carga.put("v", 2);
+        carga.put("sid", sesion.referenciaSesion());
+        carga.put("ctx", sesion.revisionContexto());
         carga.put("sub", sesion.usuario());
         carga.put("rol", sesion.rol());
         carga.put("idUsuario", sesion.idUsuario());
         carga.put("idDominio", sesion.idDominio());
-        // El `iat` sale de la sesion y NO de un Instant.now() nuevo: firmar un
-        // instante distinto del que lleva el objeto abriria una ventana en la
-        // que el token no coincide consigo mismo. El valor emitido es el mismo
-        // de siempre, asi que el cable no cambia.
         carga.put("iat", sesion.emitidoEn().getEpochSecond());
         carga.put("exp", sesion.expiraEn().getEpochSecond());
 
@@ -138,7 +122,8 @@ public final class TokenService {
             }
 
             JsonNode carga = json.readTree(decodificar(partes[1]));
-            if (!carga.hasNonNull("exp") || !carga.hasNonNull("rol")
+            if (carga.path("v").asInt() != 2 || !carga.hasNonNull("sid") || !carga.hasNonNull("ctx")
+                    || !carga.hasNonNull("iat") || !carga.hasNonNull("exp") || !carga.hasNonNull("rol")
                     || !carga.hasNonNull("idUsuario") || !carga.hasNonNull("idDominio")) {
                 return Optional.empty();
             }
@@ -147,19 +132,18 @@ public final class TokenService {
             String rol = carga.path("rol").asText();
             long idUsuario = carga.path("idUsuario").asLong();
             long idDominio = carga.path("idDominio").asLong();
+            String referenciaSesion = carga.path("sid").asText();
+            long revision = carga.path("ctx").asLong(-1);
             Instant expira = Instant.ofEpochSecond(carga.path("exp").asLong());
-            // `iat` no se exige presente para no romper el SSO si el otro
-            // backend lo omitiera alguna vez. Ausente = EPOCH, que es lo mismo
-            // que "emitido hace siempre": cualquier invalidacion lo mata.
-            Instant emitido = carga.hasNonNull("iat")
-                    ? Instant.ofEpochSecond(carga.path("iat").asLong())
-                    : Instant.EPOCH;
+            Instant emitido = Instant.ofEpochSecond(carga.path("iat").asLong());
 
-            if (usuario.isBlank() || !ROLES.contains(rol) || idUsuario <= 0 || idDominio <= 0
-                    || !Instant.now().isBefore(expira)) {
+            if (usuario.isBlank() || !ROLES.contains(rol)
+                    || ("IDENTIDAD".equals(rol) ? (idUsuario != 0 || idDominio != 0) : (idUsuario <= 0 || idDominio <= 0))
+                    || !referenciaSesion.matches("[A-Za-z0-9_-]{43}") || revision < 0
+                    || !Instant.now().isBefore(expira) || !emitido.isBefore(expira)) {
                 return Optional.empty();
             }
-            return Optional.of(new Sesion(usuario, rol, idUsuario, idDominio, emitido, expira));
+            return Optional.of(new Sesion(usuario, rol, idUsuario, idDominio, emitido, expira, referenciaSesion, revision));
         } catch (Exception error) {
             return Optional.empty();
         }

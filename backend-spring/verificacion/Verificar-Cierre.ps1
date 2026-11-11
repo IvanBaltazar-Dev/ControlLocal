@@ -1,7 +1,7 @@
 # Corrida de CIERRE: reactor completo contra PostgreSQL real y despues las
 # suites E2E, en el orden acordado.
 #
-# POR QUE EXISTE. `mvn clean install` a secas NO es un gate de cierre: los seis
+# POR QUE EXISTE. `mvn clean install` a secas NO es un gate de cierre: los
 # tests de integracion llevan `@EnabledIfEnvironmentVariable(TEST_DB_URL)` y sin
 # esa variable JUnit los salta EN SILENCIO, con el build en verde. Asi entraron
 # V31, V37 y V38 con tres columnas `estado` en palabra completa rompiendo el
@@ -11,7 +11,7 @@
 #   1. exige TEST_DB_URL antes de compilar nada;
 #   2. exporta CONTROLLOCAL_CIERRE=1, que activa GateDeCierreTest dentro del
 #      propio reactor -por si alguien lanza mvn a mano-;
-#   3. comprueba en la salida que los seis tests de integracion se EJECUTARON,
+#   3. comprueba en la salida que TODOS los tests inventariados se EJECUTARON,
 #      no que "no fallaron";
 #   4. corre `gate-modelo-universal.sql` contra la base real (Corte 3.a). Ese
 #      fichero comprueba invariantes que ningun test de Java puede ver -- las que
@@ -25,11 +25,15 @@ param(
     [string] $UrlBaseDatos = $env:TEST_DB_URL,
     [string] $Usuario = 'controllocal',
     [string] $Clave = 'controllocal',
-    # El gate .sql se corre contra la base de desarrollo, que es el corpus real y
-    # es para la que esta escrito (elige propiedad, titular y encargo vivos). No
-    # la ensucia: todo ocurre dentro de una transaccion que termina en ROLLBACK.
-    [string] $ContenedorPostgres = 'controllocal-postgres-v2',
-    [string] $BaseDelGate = 'controllocal_dev',
+    # Gate universal C2: DB efimera propia y snapshot autentico previo V71.
+    # No se elige dev/5433 ni un corpus compartido por omitir parametros.
+    [Parameter(Mandatory)][string] $ContenedorPostgres,
+    [Parameter(Mandatory)][string] $IdContenedorGate,
+    [Parameter(Mandatory)][int] $PuertoDelGate,
+    [Parameter(Mandatory)][string] $BaseDelGate,
+    [Parameter(Mandatory)][int] $VersionDelGate,
+    [Parameter(Mandatory)][string] $SnapshotV71,
+    [Parameter(Mandatory)][string] $EvidenciaDelGate,
     # Suites E2E del cierre, en orden. Las economicas van despues de la de
     # movimientos porque comparten el ciclo de comision.
     # `editor-universal` entra en el cierre por defecto desde el bloque 3f: es
@@ -45,6 +49,63 @@ $raiz = Join-Path $PSScriptRoot '..'
 # build si aparece una prueba de integracion nueva y no se declara, y esta lista
 # es la que comprueba que ademas se EJECUTO.
 $integracion = @(
+    # B0/C6: PG real; inventariar no acredita IA/calibracion ni fondos externos.
+    'B0AlmacenamientoIntegrationTest',
+    'B0CiclosPagadosIntegrationTest',
+    'B0NoProcesamientoIntegrationTest',
+    'B0PresupuestoIntegrationTest',
+    'TrabajoManualB0IntegrationTest',
+    'InvestigacionesMercadoIntegrationTest',
+    'ConfirmacionesCostoIaB0IntegrationTest',
+    'AsuntosGrupoAIntegrationTest',
+    'AcreditacionArchivoR25IntegrationTest',
+    'ComprasManualesB0IntegrationTest',
+    'CustodiaEvaluacionIaCarrilTecnicoIntegrationTest',
+    'CustodiaEvaluacionIaPoolSaturadoIntegrationTest',
+    'EvaluacionIaB0IntegrationTest',
+    'EvaluacionMaterialIaIntegrationTest',
+    'FenceSalidaEvaluacionIntegrationTest',
+    'MetricasIaAccesoHttpIntegrationTest',
+    'MetricasIaB0IntegrationTest',
+    'ObservacionMetricasIaB0IntegrationTest',
+    'B0PrevisionAlmacenamientoIaIntegrationTest',
+    'AvisosTemporalesMaterialIaC6IntegrationTest',
+    'CuotaGaleriaC6IntegrationTest',
+    'DocumentosAlmacenamientoC6IntegrationTest',
+    'FuentesMaterialIaCoreIntegrationTest',
+    'IntentosBinariosC6IntegrationTest',
+    'MaterialIaC6IntegrationTest',
+    'MaterialIaDiscoC6IntegrationTest',
+    'LecturaContextualC6IntegrationTest',
+    'PiezasComercialesC6IntegrationTest',
+    'PiezasDerivadasConcurrenciaC6IntegrationTest',
+    'PlanesFinanciadosDePruebaIntegrationTest',
+    'PublicacionesC6IntegrationTest',
+    'RecuperacionMaterialIaEntreProcesosC6IntegrationTest',
+    'TratamientoMaterialIaE44IntegrationTest',
+    'VocabularioActuacionesC6IntegrationTest',
+    # C3/K2: deben existir reportes ejecutados, sin omisiones, en un cierre declarado.
+    'ColaboracionC3IntegrationTest',
+    'ConservacionHistoriasC3IntegrationTest',
+    'DemandaC3HttpIntegrationTest',
+    'DemandaC3IntegrationTest',
+    'DemandaPrecisionTemporalC3IntegrationTest',
+    'DemandaConOportunidadC3IntegrationTest',
+    'DisponibilidadC3IntegrationTest',
+                        'ReconfirmacionesD2IntegrationTest',
+                        'AvisosBrokerC7IntegrationTest',
+                        'RadarFuentesC7IntegrationTest',
+    'MatchingC3ContextoIntegrationTest',
+    'MatchingC3MetadataIntegrationTest',
+    'NetworkC3IntegrationTest',
+    'RecomendacionesInternasC3IntegrationTest',
+    'CuentaPersonalIntegrationTest',
+    'InvitacionesMembresiaIntegrationTest',
+    'ComprobacionArranqueConsultasIntegrationTest',
+    'AccesoArchivosIntegrationTest',
+    'ContextosSesionIntegrationTest',
+    'ContextoHttpIntegrationTest',
+    'LecturaContextualPropiedadIntegrationTest',
     # D-E4-3: una sola autoridad persistente por clave publicada. FALTABA en
     # esta lista hasta el 2026-08-19 -GateDeCierreTest si la inventariaba, pero
     # el script no comprobaba que se hubiera ejecutado-, y era justo la prueba
@@ -59,6 +120,18 @@ $integracion = @(
     'AutoridadDeEdicionIntegrationTest',
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
+    # C0/K0: no certificar capacidades si se omitio su integracion contextual.
+    'CapacidadesContextualesIntegrationTest',
+    # C2: captura durable, metadatos, CAS fisico y ciclo/catalogo gobernados.
+    'CapturaC2ConcurrenciaIntegrationTest',
+    'CapturaC2ContratosIntegrationTest',
+    'CapturaMetadataEdicionIntegrationTest',
+    'CasFisicoDePropiedadIntegrationTest',
+    'EncargoC2IntegrationTest',
+    'GobiernoCatalogoCapturaIntegrationTest',
+    # RF014: origen persistido/tenant/CAS/T4 y puerta HTTP de revision exacta.
+    'OrigenFisicoIntegrationTest',
+    'OrigenFisicoHttpIntegrationTest',
     # Corte 0B: los tres tipos nuevos, el vocabulario y la exigencia PUB.
     'CatalogoQueHablaIntegrationTest',
     # D-P0-9 / D-P0-10 / D-P0-7 sobre la SEGUNDA autoridad mutable de P0: el
@@ -77,6 +150,11 @@ $integracion = @(
     # valor historico llega marcado por el cable en vez de indistinguible del
     # que si se puede corregir.
     'ClaveRetiradaEnLaFichaIntegrationTest',
+    'ConciliacionDeRegistroIntegrationTest',
+            'ActuacionesIntegrationTest',
+            'AutomaticosHttpIntegrationTest',
+            'ComandosAutomaticosIntegrationTest',
+            'InicioSeguroIntegrationTest',
     # Corte 0A: la ida y vuelta de la edicion por los siete tipos.
     'ConservacionDeLaEdicionIntegrationTest',
     'ConvergenciaCampanaColaIntegrationTest',
@@ -100,6 +178,27 @@ $integracion = @(
     # y los tres triggers de V90 solo corren contra PostgreSQL: sin esta linea una
     # corrida de cierre los daria por buenos sin haberlos tocado.
     'NegociacionYCierreDeVentaIntegrationTest',
+    # C4: conservar ejecucion real de comunicacion contextual y negociacion T4.
+    'ActividadNegociacionIntegrationTest',
+    'InteraccionContextualIntegrationTest',
+    'LecturaInteraccionConcurrenteIntegrationTest',
+    'LecturaInteraccionIndexadaIntegrationTest',
+    'PerfilLecturaInteraccionC4IntegrationTest',
+    'ComisionC5IntegrationTest',
+    'DesenlacesC7IntegrationTest',
+    'OrigenConversionC7IntegrationTest',
+    'CompromisosC7IntegrationTest',
+    'ProgramasPersonalesC7IntegrationTest',
+    'ReportesVersionadosC7IntegrationTest',
+    'MetasVersionadasC7IntegrationTest',
+            'InformesFiltradosC7IntegrationTest',
+    'EncargosPrivadosC7IntegrationTest',
+    'InvitacionEncargoC7IntegrationTest',
+    'EncargosClonadosC7IntegrationTest',
+    'ReasignacionProspeccionC7IntegrationTest',
+    'InicioFuturoC7IntegrationTest',
+    'FormalizacionC5ConcurrenciaIntegrationTest',
+    'LecturasFinancierasC5IntegrationTest',
     # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
     'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',
@@ -142,7 +241,7 @@ if ([string]::IsNullOrWhiteSpace($UrlBaseDatos)) {
     Abortar @'
 falta TEST_DB_URL.
 
-Sin ella los seis tests de integracion se saltan en silencio y el verde no
+Sin ella los tests de integracion inventariados se saltan en silencio y el verde no
 significa nada: es exactamente asi como se colaron las tres columnas de estado
 que rompieron el invariante unitario.
 
@@ -169,27 +268,12 @@ Write-Host "`n== 2. Gate del modelo universal contra la base real ==" -Foregroun
 # Va ANTES del reactor a proposito: es la comprobacion mas barata de la corrida
 # -- segundos contra los minutos de `mvn clean install` -- y la que mas veces ha
 # tenido razon. Si el esquema o la siembra estan mal, saberlo antes de compilar.
-$gate = Join-Path $PSScriptRoot 'gate-modelo-universal.sql'
-if (-not (Test-Path $gate)) {
-    Abortar "no se encuentra el gate del modelo universal en $gate"
-}
-# psql necesita el fichero DENTRO del contenedor: se copia y se ejecuta con -f.
-# Pasarlo por stdin no sirve -- el gate usa \gset y \o, que son del cliente.
-& docker cp $gate "${ContenedorPostgres}:/tmp/gate-modelo-universal.sql"
-if ($LASTEXITCODE -ne 0) {
-    Abortar @"
-no se pudo copiar el gate al contenedor '$ContenedorPostgres'.
-
-El gate del modelo universal es parte del cierre, asi que no correrlo NO es una
-opcion: levanta la base y repite.
-
-  docker compose -f backend-spring/docker-compose.yml up -d
-"@
-}
-& docker exec $ContenedorPostgres psql -U $Usuario -d $BaseDelGate -v ON_ERROR_STOP=1 -f /tmp/gate-modelo-universal.sql
-if ($LASTEXITCODE -ne 0) {
-    Abortar "el gate del modelo universal salio en rojo (codigo $LASTEXITCODE). El detalle esta arriba: cada comprobacion dice OK o FALLO."
-}
+$harness = Join-Path $PSScriptRoot 'Invoke-GateModeloUniversal.ps1'
+try {
+    & $harness -Fase Gate -Contenedor $ContenedorPostgres -IdContenedorEsperado $IdContenedorGate `
+        -PuertoPublicado $PuertoDelGate -Base $BaseDelGate -Usuario $Usuario -VersionEsperada $VersionDelGate `
+        -RutaSnapshot $SnapshotV71 -DirectorioEvidencia $EvidenciaDelGate
+} catch { Abortar "El gate universal no paso: $($_.Exception.Message)" }
 Write-Host "  OK   gate del modelo universal en verde sobre $BaseDelGate"
 
 Write-Host "`n== 2 bis. Contrato-dato: lo que el modelo declara lo dice el Core ==" -ForegroundColor Cyan
@@ -258,3 +342,4 @@ Write-Host "`n== CIERRE VERDE ==" -ForegroundColor Green
 Write-Host "Gate del modelo universal + reactor con PostgreSQL real + $($Suites.Count) suites E2E." -ForegroundColor Green
 Write-Host "Log del reactor: $salida"
 exit 0
+

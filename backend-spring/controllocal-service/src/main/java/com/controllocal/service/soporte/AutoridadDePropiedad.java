@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * <b>Quien puede escribir los hechos de una propiedad, y quien los de un
@@ -116,15 +117,7 @@ public class AutoridadDePropiedad {
     /** Y si el DESTINO puede recibir una propiedad hoy (D-P0-7). */
     private final ElegibilidadDeResponsable elegibilidad;
 
-    /**
-     * <b>Solo para el compare-and-set del responsable</b> (D-P0-9).
-     *
-     * <p>Esta clase no carga propiedades ni las guarda —eso es de los casos de
-     * uso—; usa este repositorio para <b>una sola</b> sentencia:
-     * {@link PropiedadRepository#cambiarResponsableSi}, que es la escritura
-     * condicional donde se resuelve la carrera. Que sea la unica que la llama
-     * lo comprueba {@code AutoridadDeLaPropiedadTest}.
-     */
+    /** Lectura contextual fresca y compare-and-set de la actuación de gobierno. */
     private final PropiedadRepository propiedades;
 
     public AutoridadDePropiedad(DetalleAgenteRepository agentes,
@@ -347,7 +340,7 @@ public class AutoridadDePropiedad {
      *                      restriccion de EQUIPO, nunca de la de TENANT
      *     AGENTE        -&gt; nunca
      * </pre>
-     * Es el mismo {@link Alcances#alcanza} que usa {@code reasignar} para el
+     * Es el mismo {@link Alcances#alcanzaParaGobiernoDeReasignacion} que usa {@code reasignar} para el
      * encargo, y a proposito: dos implementaciones del mismo alcance divergen,
      * y divergen hacia el lado que concede de mas.
      *
@@ -472,7 +465,7 @@ public class AutoridadDePropiedad {
         // de otros brokers— y para el BROKER solo si supervisa a ese agente.
         // La frontera de tenant ya quedo cerrada arriba, asi que este `true`
         // del gobierno nunca sale de su organizacion.
-        if (!alcances.alcanza(actor, nuevo.getId())) {
+        if (!alcances.alcanzaParaGobiernoDeReasignacion(actor, nuevo.getId())) {
             throw new AccesoNoAutorizadoException(
                     "No supervisas a ese agente, asi que no puedes ponerlo a responder por esta "
                             + "propiedad. Un broker asigna dentro de su equipo; entre equipos lo "
@@ -487,7 +480,7 @@ public class AutoridadDePropiedad {
         // suyo, que es un traspaso ENTRE equipos disfrazado de movimiento
         // interno.
         //
-        // Se pregunta `alcanzaIncluidoSinDueno` y no `alcanza` porque las dos
+        // Se pregunta `alcanzaParaGobiernoDeTraspasoFisico` y no `alcanza` porque las dos
         // reglas congeladas se encuentran justo en esta linea:
         //
         //   CON responsable  -> se comporta como `alcanza`: el BROKER tiene que
@@ -503,7 +496,7 @@ public class AutoridadDePropiedad {
         // Las dos salen del MISMO metodo que ya decide el alcance en la lectura
         // del expediente. Una tercera forma de preguntar por la supervision es
         // una tercera forma de que la respuesta diverja.
-        if (!alcances.alcanzaIncluidoSinDueno(actor, anterior)) {
+        if (!alcances.alcanzaParaGobiernoDeTraspasoFisico(actor, anterior)) {
             throw new AccesoNoAutorizadoException(
                     "De esta propiedad responde hoy un agente al que no supervisas. Sacarla de "
                             + "su equipo es un traspaso entre equipos, y eso lo decide el "
@@ -602,7 +595,7 @@ public class AutoridadDePropiedad {
      * esa regla no tiene sobre que aplicarse, y el limite efectivo vuelve a ser
      * el que va siempre delante: <b>el tenant</b>.
      *
-     * <p>Lo decide {@link Alcances#alcanzaIncluidoSinDueno}, no una rama aqui.
+     * <p>Lo decide {@link Alcances#alcanzaParaGobiernoDeTraspasoFisico}, no una rama aqui.
      * La version anterior de este corte denegaba —heredando el {@code false}
      * que {@link Alcances#alcanza} devuelve ante un dueno nulo <b>antes</b> de
      * mirar la banda—, y con las 26 propiedades de {@code dev} en FALTANTE eso
@@ -623,7 +616,7 @@ public class AutoridadDePropiedad {
                             + "quien supervisa.");
         }
         // Y el alcance lo decide `Alcances`, que es quien decide alcances. Se
-        // pregunta `alcanzaIncluidoSinDueno` y no `alcanza` porque son dos
+        // pregunta `alcanzaParaGobiernoDeTraspasoFisico` y no `alcanza` porque son dos
         // preguntas distintas: aquella niega cuando no hay dueno -y cinco
         // llamadores dependen de eso-, y aqui una propiedad FALTANTE es
         // justamente la que el broker tiene que poder mirar para decidir a
@@ -631,7 +624,7 @@ public class AutoridadDePropiedad {
         //
         // La frontera de tenant ya se comprobo ANTES de llegar aqui: la fila se
         // cargo por (organizacion, id) y un id de otra corredora respondio 404.
-        if (!alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable())) {
+        if (!alcances.alcanzaParaGobiernoDeTraspasoFisico(actor, propiedad.getIdRolResponsable())) {
             throw new AccesoNoAutorizadoException(
                     "Esta propiedad responde ante un agente que no supervisas, asi que su "
                             + "expediente de traspasos no esta en tu alcance.");
@@ -683,7 +676,7 @@ public class AutoridadDePropiedad {
                 //
                 //   - la BANDA: no ser AGENTE (C7-A). Un agente nunca gobierna
                 //     quien responde, ni siquiera siendo el responsable.
-                //   - el SALIENTE: `alcanzaIncluidoSinDueno` sobre el responsable
+                //   - el SALIENTE: `alcanzaParaGobiernoDeTraspasoFisico` sobre el responsable
                 //     actual -- el MISMO metodo que el POST pregunta por el
                 //     saliente, y por eso la ficha no puede prometer lo que el
                 //     POST va a negar. Sin reglas nuevas resuelve C7-B (FALTANTE:
@@ -708,7 +701,7 @@ public class AutoridadDePropiedad {
      *
      * <p>Es exactamente el par de guardas de {@link #asignar} que se pueden
      * responder <b>sin destino</b>: la <b>banda</b> —no ser AGENTE— y el alcance
-     * sobre el <b>saliente</b>, con {@link Alcances#alcanzaIncluidoSinDueno},
+     * sobre el <b>saliente</b>, con {@link Alcances#alcanzaParaGobiernoDeTraspasoFisico},
      * que es el mismo metodo que el POST pregunta.
      *
      * <p>Existe como metodo publico —y no repetido en dos sitios— porque tiene
@@ -723,7 +716,7 @@ public class AutoridadDePropiedad {
      */
     public boolean puedeIniciarTraspaso(Actor actor, Propiedad propiedad) {
         return propiedad != null && !actor.esAgente()
-                && alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable());
+                && alcances.alcanzaParaGobiernoDeTraspasoFisico(actor, propiedad.getIdRolResponsable());
     }
 
     // ==================================================================
@@ -733,15 +726,9 @@ public class AutoridadDePropiedad {
     /**
      * <b>Quien lee la HISTORIA COMERCIAL de la propiedad</b> (D-P0-6, N39).
      *
-     * <pre>
-     *   AGENTE responsable      -&gt; SI
-     *   AGENTE no responsable   -&gt; no
-     *   BROKER                  -&gt; si alcanza al responsable (alcanzaIncluidoSinDueno,
-     *                              el MISMO predicado que C5 usa para el inventario
-     *                              sin dueno)
-     *   TENANT_ADMIN            -&gt; NO por ser admin
-     *   otro tenant             -&gt; nunca (404 antes, al cargar la fila)
-     * </pre>
+     * <p>C1/RF007 exige primero lectura física vigente. Esa lectura no sustituye
+     * D-P0-6: la historia completa corresponde al responsable y al broker en
+     * su ámbito; un Encargo propio sólo abre la historia de ese Encargo.
      *
      * <h2>Por que el gobierno del tenant NO la lee</h2>
      * <b>Gobernar no es operar.</b> Poder decidir quien responde por una
@@ -761,17 +748,12 @@ public class AutoridadDePropiedad {
      * {@code puedeEditar}.
      */
     public boolean puedeLeerHistoriaDeLaPropiedad(Actor actor, Propiedad propiedad) {
-        if (propiedad == null) {
-            return false;
-        }
+        if (propiedad == null || !puedeLeer(actor, propiedad.getId())) return false;
         if (actor.esAgente()) {
             return Objects.equals(propiedad.getIdRolResponsable(), actor.idRolOperativo());
         }
-        if (actor.esBroker()) {
-            return alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable());
-        }
-        // TENANT_ADMIN y cualquier banda futura: no por ser gobierno.
-        return false;
+        return actor.esBroker() && (!propiedad.tieneResponsable()
+                || alcances.alcanza(actor, propiedad.getIdRolResponsable()));
     }
 
     /**
@@ -784,7 +766,7 @@ public class AutoridadDePropiedad {
      *   TENANT_ADMIN         -&gt; NO por ser admin
      * </pre>
      *
-     * <p>Se pregunta {@link Alcances#alcanza} y no {@code alcanzaIncluidoSinDueno}
+     * <p>Se pregunta {@link Alcances#alcanza} y no {@code alcanzaParaGobiernoDeTraspasoFisico}
      * porque un encargo <b>siempre</b> tiene agente: si llegara sin el, no habria
      * a quien atribuirlo y el lado seguro es negar — que es justo lo que ese
      * metodo hace ante un dueno nulo.
@@ -849,4 +831,30 @@ public class AutoridadDePropiedad {
                 + " Vuelve a cargar la ficha y decide sobre el estado actual. Este traspaso NO "
                 + "se reinterpreta sobre un responsable que no es el que viste.";
     }
+    /** RF007/LECTURA: gobierno y edición física no amplían el ámbito comercial. */
+    public Alcances.Alcance alcanceDeLectura(Actor actor) {
+        return alcances.de(actor);
+    }
+
+    /** La relación se comprueba en la base, sin cargar galería ni Encargos ajenos. */
+    public Optional<Propiedad> buscarParaLectura(Actor actor, long idPropiedad) {
+        Alcances.Alcance alcance = alcanceDeLectura(actor);
+        return propiedades.buscarParaLectura(actor.idOrganizacion(), idPropiedad, alcance.paramRolesArray());
+    }
+
+    /** Predicado escalar: una segunda autorización no reutiliza entidades JPA antiguas. */
+    public boolean puedeLeer(Actor actor, long idPropiedad) {
+        if (!actor.esAgente() && !actor.esBroker()) return false;
+        Alcances.Alcance alcance = alcanceDeLectura(actor);
+        return propiedades.permiteLectura(actor.idOrganizacion(), idPropiedad, alcance.paramRolesArray());
+    }
+
+    /** Misma autoridad SQL de la lectura individual, en un lote sin cargar asociaciones privadas. */
+    public java.util.Set<Long> legibles(Actor actor,java.util.Collection<Long> ids) {
+        if(ids==null||ids.isEmpty()||!actor.esAgente()&&!actor.esBroker())return java.util.Set.of();
+        Alcances.Alcance alcance=alcanceDeLectura(actor);
+        return propiedades.buscarVariasParaLectura(actor.idOrganizacion(),java.util.Set.copyOf(ids),alcance.paramRolesArray())
+                .stream().map(Propiedad::getId).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
 }
+

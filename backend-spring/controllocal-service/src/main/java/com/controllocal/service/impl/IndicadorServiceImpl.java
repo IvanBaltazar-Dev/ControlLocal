@@ -2,31 +2,29 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comun.EstadosDominio.EstadoVisita;
 import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.query.IndicadorCaptacion;
 import com.controllocal.persistence.query.IndicadorContrato;
-import com.controllocal.persistence.query.IndicadorInteraccion;
 import com.controllocal.persistence.query.IndicadorOportunidad;
 import com.controllocal.persistence.query.IndicadorProspeccion;
 import com.controllocal.persistence.query.IndicadorSolicitud;
 import com.controllocal.persistence.query.IndicadorVisita;
 import com.controllocal.persistence.query.MotivoPorCaptacion;
-import com.controllocal.persistence.query.SupervisionVigente;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
-import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.InteraccionService.MedicionInteraccion;
 import com.controllocal.service.IndicadorService;
+import com.controllocal.service.actividad.SeguimientoDeProspeccion;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Descripciones;
 import com.controllocal.service.soporte.Fechas;
@@ -37,9 +35,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.YearMonth;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -71,14 +70,16 @@ import java.util.stream.Collectors;
  *   <li>{@code conversionPorPeriodo} se calcula por COHORTE (captaciones del
  *       periodo que cerraron, agrupadas por fecha de captacion), por eso nunca
  *       supera 100;</li>
- *   <li>si no hubo prospecciones en la ventana, el indicador operativo cae a
- *       TODAS las del alcance;</li>
+ *   <li>la cohorte de prospecciones se limita al período; sus vencimientos se
+ *       obtienen del seguimiento canónico CAT-R27, sin otro reloj local;</li>
  *   <li>el contrato no tiene agente propio: lo hereda de su solicitud y, en su
  *       defecto, de su oportunidad (§2 del contrato E4).</li>
  * </ul>
  */
 @Service
 public class IndicadorServiceImpl implements IndicadorService {
+
+    private final com.controllocal.service.actividad.MedicionesC7 mediciones;
 
     private static final String[] MESES = {
             "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
@@ -91,26 +92,25 @@ public class IndicadorServiceImpl implements IndicadorService {
     private final SolicitudAlquilerRepository solicitudes;
     private final ContratoAlquilerRepository contratos;
     private final VisitaRepository visitas;
-    private final InteraccionComercialRepository interacciones;
+    private final InteraccionService interacciones;
     private final ProspeccionRepository prospecciones;
     private final MotivoNoContinuidadRepository motivos;
     private final DetalleAgenteRepository agentes;
-    private final DetalleBrokerRepository brokers;
-    private final SupervisionAgenteRepository supervisiones;
     private final Alcances alcances;
+    private final SeguimientoDeProspeccion seguimiento;
 
     public IndicadorServiceImpl(CaptacionRepository captaciones,
                                 OportunidadComercialRepository oportunidades,
                                 SolicitudAlquilerRepository solicitudes,
                                 ContratoAlquilerRepository contratos,
                                 VisitaRepository visitas,
-                                InteraccionComercialRepository interacciones,
+                                InteraccionService interacciones,
                                 ProspeccionRepository prospecciones,
                                 MotivoNoContinuidadRepository motivos,
                                 DetalleAgenteRepository agentes,
-                                DetalleBrokerRepository brokers,
-                                SupervisionAgenteRepository supervisiones,
-                                Alcances alcances) {
+                                Alcances alcances,
+                                SeguimientoDeProspeccion seguimiento,
+                                com.controllocal.service.actividad.MedicionesC7 mediciones) {
         this.captaciones = captaciones;
         this.oportunidades = oportunidades;
         this.solicitudes = solicitudes;
@@ -120,18 +120,19 @@ public class IndicadorServiceImpl implements IndicadorService {
         this.prospecciones = prospecciones;
         this.motivos = motivos;
         this.agentes = agentes;
-        this.brokers = brokers;
-        this.supervisiones = supervisiones;
         this.alcances = alcances;
+        this.seguimiento = seguimiento;
+        this.mediciones=mediciones;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Resumen resumen(String periodoParam, Actor actor) {
+        exigirOperador(actor);
         Alcances.Alcance alcance = alcances.de(actor);
         long organizacion = alcance.idOrganizacion();
         Periodo periodo = Periodo.desde(periodoParam);
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Lima"));
         LocalDate inicio = hoy.minusDays(periodo.dias() - 1L);
 
         List<IndicadorCaptacion> caps = captaciones.indicadores(
@@ -142,11 +143,14 @@ public class IndicadorServiceImpl implements IndicadorService {
                 organizacion, alcance.global(), alcance.paramRoles());
         List<IndicadorVisita> vis = visitas.indicadores(
                 organizacion, alcance.global(), alcance.paramRoles());
-        List<IndicadorInteraccion> ints = interacciones.indicadores(
-                organizacion, alcance.global(), alcance.paramRoles());
+        var lecturaActividad=interacciones.indicadores(actor);
+        List<MedicionInteraccion> ints = lecturaActividad.registros();
         List<IndicadorProspeccion> pros = prospecciones.indicadores(
                 organizacion, alcance.global(), alcance.paramRoles());
         List<Cierre> conts = cierresEnAlcance(contratos.indicadores(organizacion), alcance);
+        Instant corte=Instant.now();
+        if(!corte.atZone(ZoneId.of("America/Lima")).toLocalDate().equals(hoy))
+            throw new com.controllocal.service.excepcion.ConflictoException("Cambió la fecha Core durante la lectura; actualiza el período.");
 
         List<IndicadorCaptacion> capsPeriodo = caps.stream()
                 .filter(c -> enPeriodo(c.getFechaCaptacion(), inicio, hoy)).toList();
@@ -154,8 +158,8 @@ public class IndicadorServiceImpl implements IndicadorService {
                 .filter(o -> enPeriodo(dia(o.getFechaRegistro()), inicio, hoy)).toList();
         List<IndicadorVisita> visPeriodo = vis.stream()
                 .filter(v -> enPeriodo(v.getFechaVisita(), inicio, hoy)).toList();
-        List<IndicadorInteraccion> intsPeriodo = ints.stream()
-                .filter(i -> enPeriodo(dia(i.getFechaHora()), inicio, hoy)).toList();
+        List<MedicionInteraccion> intsPeriodo = ints.stream()
+                .filter(i -> enPeriodo(i.fechaHecho(), inicio, hoy)).toList();
         List<Cierre> contsPeriodo = conts.stream()
                 .filter(c -> enPeriodo(c.fecha(), inicio, hoy)).toList();
         List<IndicadorProspeccion> prosPeriodo = pros.stream()
@@ -203,19 +207,12 @@ public class IndicadorServiceImpl implements IndicadorService {
         List<Integer> conversionSerie = conversionSerie(
                 cierresCohorteSerie.valores(), captacionesSerie.valores());
 
-        List<Desempeno> desempeno = actor.esTenantAdmin()
-                ? desempenoPorBroker(organizacion, capsPeriodo, contsPeriodo)
-                : desempenoPorAgente(organizacion, alcance, capsPeriodo, contsPeriodo);
+        List<Desempeno> desempeno = desempenoPorAgente(organizacion, alcance, capsPeriodo, contsPeriodo);
 
         int agentesActivos = alcance.global()
                 ? (int) agentes.countByOrganizacionId(organizacion)
                 : alcance.rolesAgente().size();
-        // El ADMIN es un broker con es_administrador: supervisa, no produce, y no se
-        // cuenta a si mismo entre los brokers activos.
-        int brokersActivos = actor.esTenantAdmin()
-                ? (int) brokers.listarFichas(organizacion).stream()
-                        .filter(b -> !b.isEsAdministrador()).count()
-                : (actor.esAgente() ? 0 : 1);
+        int brokersActivos = actor.esAgente() ? 0 : 1;
 
         // Descongelado 2026-08-08: antes decia `prosPeriodo.isEmpty() ? pros : prosPeriodo`.
         // Si la ventana no tenia ni una prospeccion, el operativo caia a TODO el
@@ -223,10 +220,16 @@ public class IndicadorServiceImpl implements IndicadorService {
         // "desde siempre" sin avisar — y los recontactos vencidos de hace un ano
         // aparecian como si fueran de esta semana. Un periodo vacio ahora se
         // informa vacio, que es lo que es.
-        Operativo operativo = operativo(prosPeriodo, vis, sols, hoy);
+        Operativo operativo = operativo(prosPeriodo, vis, sols, hoy, actor);
 
         Map<Concepto, Integer> valores = valoresPorConcepto(captacionesPorRevisar,
                 solicitudesPorEvaluar, contsPeriodo.size(), agentesActivos, operativo);
+        var ventana=new com.controllocal.service.actividad.IndicadoresIndividuales.Ventana(inicio,hoy,corte);
+        var medicion=mediciones.medir(ventana,actor,lecturaActividad);
+        var alcanceFinal=alcances.de(actor);
+        if(alcance.idOrganizacion()!=alcanceFinal.idOrganizacion()||alcance.global()!=alcanceFinal.global()
+            ||!new HashSet<>(alcance.rolesAgente()).equals(new HashSet<>(alcanceFinal.rolesAgente())))
+            throw new com.controllocal.service.excepcion.ConflictoException("Cambió el ámbito durante la medición; actualiza los indicadores.");
 
         return new Resumen(
                 ambito(actor),
@@ -236,7 +239,7 @@ public class IndicadorServiceImpl implements IndicadorService {
                 captacionesActivas,
                 captacionesObservadas,
                 oportunidadesActivas,
-                intsPeriodo.size(),
+                Math.toIntExact(intsPeriodo.stream().map(MedicionInteraccion::id).distinct().count()),
                 visPeriodo.size(),
                 contsPeriodo.size(),
                 capsPeriodoCerradas.size(),
@@ -254,7 +257,9 @@ public class IndicadorServiceImpl implements IndicadorService {
                 desempeno,
                 operativo,
                 senales(valores),
-                pendientesDeAtencion(valores));
+                pendientesDeAtencion(valores),
+                com.controllocal.service.actividad.ContactoEfectivoProspeccion.medir(ints,inicio,hoy,corte),
+                medicion.primeraRespuesta(),medicion.cierre(),medicion.conversion(),medicion.seguimiento());
     }
 
     /** El valor que le toca a cada concepto del tablero, en un solo sitio. */
@@ -268,26 +273,19 @@ public class IndicadorServiceImpl implements IndicadorService {
         valores.put(Concepto.RECONTACTO_VENCIDO, op.recontactosVencidos());
         valores.put(Concepto.CAPTACION_POR_REVISAR, captacionesPorRevisar);
         valores.put(Concepto.SOLICITUD_APROBADA_SIN_CIERRE, op.solicitudesSinCierre());
-        valores.put(Concepto.DEMORA_DE_SEGUIMIENTO, op.diasPromedioSinSeguimiento());
         valores.put(Concepto.VISITA_PENDIENTE, op.visitasPendientes());
         valores.put(Concepto.CIERRE_REGISTRADO, cierres);
         valores.put(Concepto.COBERTURA_DE_AGENTES, agentesActivos);
         return valores;
     }
 
-    /**
-     * Cuantas <b>cosas</b> reclaman atencion ahora mismo (E2.1). Es el numero
-     * con el que abre el tablero, y por eso no puede salir de sumar lo que haya:
-     * solo entran los conceptos que cuentan unidades —{@code
-     * DEMORA_DE_SEGUIMIENTO} vale dias— y solo los que el dominio clasifico como
-     * pendientes.
-     */
+    /** Conteo de asuntos que requieren atención según su política vigente. */
     private static int pendientesDeAtencion(Map<Concepto, Integer> valores) {
         int total = 0;
         for (Map.Entry<Concepto, Integer> entrada : valores.entrySet()) {
             Concepto concepto = entrada.getKey();
-            int valor = entrada.getValue();
-            if (concepto.cuentaCosas()
+            Integer valor = entrada.getValue();
+            if (valor != null
                     && PoliticaComercial.requiereAtencion(
                             PoliticaComercial.clasificar(concepto, valor))) {
                 total += valor;
@@ -305,14 +303,21 @@ public class IndicadorServiceImpl implements IndicadorService {
      * clasificado como {@code SIN_PENDIENTES} es informacion ("no hay nada
      * atrasado"), y omitirlo obligaria al cliente a distinguir "no vino" de "no
      * hay", que es justo la ambiguedad que este bloque viene a quitar.
+     * La magnitud sin definición vigente conserva valor/nivel nulos y explica
+     * NO_EVALUABLE; no se clasifica como cero ni como ausencia de pendientes.
      */
     private static List<IndicadorService.Senal> senales(Map<Concepto, Integer> valores) {
         return Arrays.stream(Concepto.values())
                 .map(concepto -> {
-                    int valor = valores.getOrDefault(concepto, 0);
+                    Integer valor = valores.get(concepto);
+                    if (valor == null) {
+                        return new IndicadorService.Senal(concepto.name(), null, null, false,
+                                concepto.prioridad(), "NO_EVALUABLE",
+                                "No se ha definido un cálculo de días sin seguimiento compatible con CAT-R27.");
+                    }
                     NivelAtencion nivel = PoliticaComercial.clasificar(concepto, valor);
                     return new IndicadorService.Senal(concepto.name(), valor, nivel.name(),
-                            PoliticaComercial.requiereAtencion(nivel), concepto.prioridad());
+                            PoliticaComercial.requiereAtencion(nivel), concepto.prioridad(), null, null);
                 })
                 // A igual prioridad, primero lo que tiene mas casos detras.
                 //
@@ -323,13 +328,15 @@ public class IndicadorServiceImpl implements IndicadorService {
                 // avisos igual de urgentes el que afecta a mas casos es el que
                 // merece mirarse primero.
                 .sorted(Comparator.comparingInt(IndicadorService.Senal::prioridad)
-                        .thenComparing(IndicadorService.Senal::valor, Comparator.reverseOrder()))
+                        .thenComparing(IndicadorService.Senal::valor,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public AvanceComercial avance(Actor actor) {
+        exigirOperador(actor);
         Alcances.Alcance alcance = alcances.de(actor);
         long organizacion = alcance.idOrganizacion();
 
@@ -343,8 +350,7 @@ public class IndicadorServiceImpl implements IndicadorService {
                 organizacion, alcance.global(), alcance.paramRoles());
         List<IndicadorVisita> vis = visitas.indicadores(
                 organizacion, alcance.global(), alcance.paramRoles());
-        List<IndicadorInteraccion> ints = interacciones.indicadores(
-                organizacion, alcance.global(), alcance.paramRoles());
+        List<MedicionInteraccion> ints = interacciones.indicadores(actor).registros();
         Map<Long, String> motivoPrincipal = motivosPrincipales(organizacion, alcance);
 
         Map<Long, List<IndicadorOportunidad>> opsPorCaptacion = agrupar(
@@ -355,13 +361,12 @@ public class IndicadorServiceImpl implements IndicadorService {
                 sols, IndicadorSolicitud::getIdCaptacion);
         Map<Long, List<IndicadorSolicitud>> solsPorOportunidad = agrupar(
                 sols, IndicadorSolicitud::getIdOportunidad);
-        Map<Long, List<IndicadorInteraccion>> intsPorCaptacion = agrupar(
-                ints, IndicadorInteraccion::getIdCaptacion);
-        Map<Long, List<IndicadorInteraccion>> intsPorOportunidad = agrupar(
-                ints, IndicadorInteraccion::getIdOportunidad);
+        Map<Long, List<MedicionInteraccion>> intsPorCaptacion = agruparInteracciones(ints, "ENCARGO");
+        Map<Long, List<MedicionInteraccion>> intsPorOportunidad = agruparInteracciones(ints, "OPORTUNIDAD");
 
         List<AvancePropiedad> detalle = new ArrayList<>();
         Set<Long> interesadosGlobal = new HashSet<>();
+        Set<Long> interaccionesGlobales = new HashSet<>();
         int totalOpsGlobal = 0;
 
         for (IndicadorCaptacion c : caps) {
@@ -414,9 +419,10 @@ public class IndicadorServiceImpl implements IndicadorService {
 
             Set<Long> idsInts = new HashSet<>();
             intsPorCaptacion.getOrDefault(idCap, List.of())
-                    .forEach(i -> agregar(idsInts, i.getId()));
-            idsOpsCap.forEach(idOp -> intsPorOportunidad.getOrDefault(idOp, List.<IndicadorInteraccion>of())
-                    .forEach(i -> agregar(idsInts, i.getId())));
+                    .forEach(i -> idsInts.add(i.id()));
+            idsOpsCap.forEach(idOp -> intsPorOportunidad.getOrDefault(idOp, List.<MedicionInteraccion>of())
+                    .forEach(i -> idsInts.add(i.id())));
+            interaccionesGlobales.addAll(idsInts);
 
             int totalOps = opsCap.size();
             totalOpsGlobal += totalOps;
@@ -450,8 +456,7 @@ public class IndicadorServiceImpl implements IndicadorService {
         int aConVisita = suma(detalle, AvancePropiedad::oportunidadesConVisita);
         int aConSolicitud = suma(detalle, AvancePropiedad::oportunidadesConSolicitud);
         return new AvanceComercial(
-                actor.esTenantAdmin() ? "Avance comercial global"
-                        : actor.esAgente() ? "Mi avance comercial" : "Avance comercial del equipo",
+                actor.esAgente() ? "Mi avance comercial" : "Avance comercial del equipo",
                 detalle.size(),
                 totalOpsGlobal,
                 suma(detalle, AvancePropiedad::oportunidadesAbiertas),
@@ -461,7 +466,7 @@ public class IndicadorServiceImpl implements IndicadorService {
                 suma(detalle, AvancePropiedad::cerradasNoFavorables),
                 suma(detalle, AvancePropiedad::cerradasNoContinuidad),
                 interesadosGlobal.size(),
-                suma(detalle, AvancePropiedad::interacciones),
+                interaccionesGlobales.size(),
                 suma(detalle, AvancePropiedad::visitasProgramadas),
                 suma(detalle, AvancePropiedad::visitasConcretadas),
                 suma(detalle, AvancePropiedad::solicitudesRecibidas),
@@ -569,26 +574,6 @@ public class IndicadorServiceImpl implements IndicadorService {
 
     // ---------- desempeno ----------
 
-    private List<Desempeno> desempenoPorBroker(long organizacion,
-                                               List<IndicadorCaptacion> capsPeriodo,
-                                               List<Cierre> contsPeriodo) {
-        Map<Long, Set<Long>> equipos = supervisiones.equiposVigentes(organizacion).stream()
-                .filter(s -> s.getIdBroker() != null && s.getIdAgente() != null)
-                .collect(Collectors.groupingBy(SupervisionVigente::getIdBroker,
-                        Collectors.mapping(SupervisionVigente::getIdAgente, Collectors.toSet())));
-        List<Desempeno> filas = new ArrayList<>();
-        for (DetalleBroker broker : brokers.listarFichas(organizacion)) {
-            if (broker.getId() == null || broker.isEsAdministrador()) {
-                continue;
-            }
-            Set<Long> equipo = equipos.getOrDefault(broker.getId(), Set.of());
-            if (equipo.isEmpty()) {
-                continue;
-            }
-            agregarFila(filas, nombre(broker.getRol()), capsPeriodo, contsPeriodo, equipo::contains);
-        }
-        return recortar(filas);
-    }
 
     private List<Desempeno> desempenoPorAgente(long organizacion,
                                                Alcances.Alcance alcance,
@@ -650,37 +635,25 @@ public class IndicadorServiceImpl implements IndicadorService {
     private Operativo operativo(List<IndicadorProspeccion> pros,
                                 List<IndicadorVisita> vis,
                                 List<IndicadorSolicitud> sols,
-                                LocalDate hoy) {
-        LocalDate limiteVencido = PoliticaComercial.limiteDeRecontacto(hoy);
-        int vencidos = 0;
-        int alDia = 0;
-        long sumaAtraso = 0;
-        for (IndicadorProspeccion p : pros) {
-            if ("T".equals(p.getEstado()) || "D".equals(p.getEstado())) {
-                continue; // solo prospecciones en seguimiento activo
-            }
-            LocalDate recontacto = p.getFechaRecontacto();
-            if (recontacto == null) {
-                continue;
-            }
-            // Vencido = pasado el plazo de la politica, igual que la bandeja. Un
-            // recontacto recien cumplido todavia no escala: cuenta como al dia.
-            if (recontacto.isAfter(limiteVencido)) {
-                alDia++;
-            } else {
-                vencidos++;
-                sumaAtraso += ChronoUnit.DAYS.between(recontacto, hoy);
-            }
-        }
-        int captadas = (int) pros.stream().filter(p -> "T".equals(p.getEstado())).count();
+                                LocalDate hoy, Actor actor) {
+        Set<Long> cohorte = pros.stream().map(IndicadorProspeccion::getId).collect(Collectors.toSet());
+        var revisiones = seguimiento.enAlcance(actor);
+        Set<Long> vencidas = seguimiento.vencidas(actor).stream()
+                .filter(r -> cohorte.contains(r.idProspeccion()))
+                .map(r -> r.id()).collect(Collectors.toSet());
+        int alDia = (int) revisiones.stream()
+                .filter(r -> cohorte.contains(r.idProspeccion()))
+                .filter(r -> !r.restringido() && !r.alcancePorPrecisar())
+                .filter(r -> r.proximaFecha() != null && !vencidas.contains(r.id()))
+                .filter(r -> r.proximaFecha().isAfter(hoy)
+                        || r.pospuestaHasta() != null && r.pospuestaHasta().isAfter(hoy))
+                .map(r -> r.id()).distinct().count();
         return new Operativo(
-                vencidos,
+                vencidas.size(),
                 alDia,
-                vencidos > 0 ? (int) Math.round((double) sumaAtraso / vencidos) : 0,
                 (int) vis.stream()
                         .filter(v -> "P".equals(v.getEstado()) || "G".equals(v.getEstado())).count(),
-                (int) sols.stream().filter(s -> "A".equals(s.getEstado())).count(),
-                porcentaje(captadas, pros.size()));
+                (int) sols.stream().filter(s -> "A".equals(s.getEstado())).count());
     }
 
     // ---------- contratos ----------
@@ -774,6 +747,17 @@ public class IndicadorServiceImpl implements IndicadorService {
         return principal;
     }
 
+    private static Map<Long, List<MedicionInteraccion>> agruparInteracciones(
+            List<MedicionInteraccion> filas, String tipoVinculo) {
+        Map<Long, List<MedicionInteraccion>> agrupado = new HashMap<>();
+        for (MedicionInteraccion fila : filas) {
+            fila.vinculos().stream().filter(v -> tipoVinculo.equals(v.tipo()))
+                    .map(InteraccionService.VinculoFicha::referencia).distinct()
+                    .forEach(id -> agrupado.computeIfAbsent(id, k -> new ArrayList<>()).add(fila));
+        }
+        return agrupado;
+    }
+
     private static <T> Map<Long, List<T>> agrupar(List<T> filas, Function<T, Long> clave) {
         Map<Long, List<T>> agrupado = new HashMap<>();
         for (T fila : filas) {
@@ -808,12 +792,14 @@ public class IndicadorServiceImpl implements IndicadorService {
      * equipo como si fueran su produccion personal -- el malentendido que
      * D-E2-2 seccion 4 cerro al prohibir pedirsela.
      *
-     * <p>El TENANT_ADMIN conserva «Reportes globales»: el diseno solo nombra los
-     * dos alcances operativos, y el suyo no es ninguno de los dos.
+     * <p>TENANT_ADMIN conserva su proyección de gobierno, sin estos indicadores comerciales.
      */
     private static String ambito(Actor actor) {
-        return actor.esTenantAdmin() ? "Reportes globales"
-                : actor.esAgente() ? "Mi actividad" : "Mi equipo";
+        return actor.esAgente() ? "Mi actividad" : "Mi equipo";
+    }
+
+    private static void exigirOperador(Actor actor) {
+        if(actor==null || (!actor.esAgente() && !actor.esBroker())) throw new AccesoNoAutorizadoException();
     }
 
     private static boolean enAlcance(Alcances.Alcance alcance, Long idAgente) {

@@ -157,6 +157,11 @@ export class PropiedadDetail implements OnInit {
     );
   });
 
+  /** Relaciones físicas que el Core asocia a esta propiedad. */
+  protected readonly unidadesRelacionadas = computed(
+    () => this.ficha()?.unidadesRelacionadas ?? [],
+  );
+
   /**
    * Los cinco procesos, con la actividad ya acotada al encargo elegido.
    *

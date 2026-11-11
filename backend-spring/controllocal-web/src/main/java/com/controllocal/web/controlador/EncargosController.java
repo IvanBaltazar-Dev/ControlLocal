@@ -1,109 +1,72 @@
 package com.controllocal.web.controlador;
 
 import com.controllocal.service.PublicacionService;
+import com.controllocal.service.actuacion.ActuacionesService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.web.dto.EstadoPublicacionRequest;
-import com.controllocal.web.dto.PublicacionDtos.PublicacionRequest;
+import com.controllocal.web.capacidades.CapacidadReconocida;
 import com.controllocal.web.dto.PublicacionDtos.PublicacionResponse;
+import com.controllocal.web.seguridad.ContextoDeActuacion;
+import com.controllocal.web.seguridad.ProcedenciaDeCabeceras;
 import com.controllocal.web.seguridad.SesionActual;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import static com.controllocal.service.PublicacionService.*;
 
-/**
- * <b>El encargo por el cable</b>, y de momento lo único que cuelga de él: sus
- * publicaciones (V70).
- *
- * <h2>Por qué la publicación vive aquí y no en {@code /locales/{id}}</h2>
- * Un anuncio no anuncia «una propiedad»: anuncia que esta propiedad se ofrece
- * en ESTA operación a ESTE precio. Con venta y alquiler simultáneos,
- * {@code /locales/{id}/publicaciones} devolvía las dos series juntas sin poder
- * decir cuál publica qué — y el cliente no tenía forma de separarlas, porque la
- * publicación no llevaba la operación.
- *
- * <p>La URL no es cosmética: es la relación real del modelo.
- *
- * <pre>
- *   Propiedad → Encargo → Publicación
- * </pre>
- *
- * <h2>Un recurso nuevo, no lógica nueva</h2>
- * Los casos de uso son los mismos de {@link PublicacionService}: se reutilizan.
- * Lo que cambia es <b>por dónde se entra</b> y qué se comprueba al entrar — que
- * el encargo sea del tenant, y que esté vigente para poder publicar.
- */
+/** Un Encargo y su anuncio en cada URL. Los efectos sensibles usan la revisión canónica. */
 @RestController
-@RequestMapping("encargos")
+@RequestMapping("encargos/{idEncargo}/publicaciones")
 public class EncargosController {
-
     private final PublicacionService publicaciones;
-
-    public EncargosController(PublicacionService publicaciones) {
-        this.publicaciones = publicaciones;
+    private final ActuacionesService actuaciones;
+    private final ProcedenciaDeCabeceras procedencias;
+    public EncargosController(PublicacionService publicaciones,ActuacionesService actuaciones,ProcedenciaDeCabeceras procedencias){
+        this.publicaciones=publicaciones;this.actuaciones=actuaciones;this.procedencias=procedencias;
     }
-
-    /**
-     * Los anuncios de este encargo, del más reciente al más antiguo. Un encargo
-     * de otro tenant responde <b>404</b>.
-     */
-    @GetMapping("{idEncargo}/publicaciones")
-    public List<PublicacionResponse> listar(@PathVariable long idEncargo) {
-        return publicaciones.listarDeEncargo(idEncargo, SesionActual.actor()).stream()
-                .map(PublicacionResponse::desde)
-                .toList();
+    @GetMapping @CapacidadReconocida("consultar_publicaciones")
+    public List<PublicacionResponse> listar(@PathVariable long idEncargo){return publicaciones.listarDeEncargo(idEncargo,SesionActual.actor())
+            .stream().map(PublicacionResponse::desde).toList();}
+    @GetMapping("publicabilidad") @CapacidadReconocida("evaluar_publicabilidad")
+    public EvaluacionPublicabilidad evaluar(@PathVariable long idEncargo,@RequestParam(required=false)String canal){
+        return publicaciones.evaluarPublicabilidad(idEncargo,canal,SesionActual.actor());
     }
+    @GetMapping("{idPublicacion}") @CapacidadReconocida("consultar_publicacion")
+    public PublicacionResponse obtener(@PathVariable long idEncargo,@PathVariable long idPublicacion){return PublicacionResponse.desde(publicaciones.obtener(idEncargo,idPublicacion,SesionActual.actor()));}
+    @GetMapping("{idPublicacion}/historia") @CapacidadReconocida("consultar_historia_publicacion")
+    public List<VersionPublicada> historia(@PathVariable long idEncargo,@PathVariable long idPublicacion){return publicaciones.consultarHistoria(idEncargo,idPublicacion,SesionActual.actor());}
 
-    /**
-     * Publica este encargo en un canal.
-     *
-     * <p>Rechaza el encargo no vigente: publicar uno cerrado pondría en el
-     * mercado algo que ya no se ofrece. La regla la impone el servicio, no la
-     * pantalla que dibuja el botón.
-     */
-    @PostMapping("{idEncargo}/publicaciones")
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<PublicacionResponse> crear(
-            @PathVariable long idEncargo,
-            @RequestBody(required = false) PublicacionRequest dto) {
-        if (dto == null) {
-            throw new ReglaNegocioException("Los datos de la publicacion son obligatorios.");
-        }
-        PublicacionResponse creada = PublicacionResponse.desde(
-                publicaciones.crearEnEncargo(idEncargo, dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+    @PostMapping("borradores") @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(CREAR_BORRADOR)
+    public PublicacionResponse crear(@PathVariable long idEncargo,@RequestBody DatosBorrador datos,
+            @RequestHeader("Idempotency-Key")String clave,HttpServletRequest r){
+        vinculo(idEncargo,null,datos.encargo(),datos.publicacion());
+        return PublicacionResponse.desde(publicaciones.crearBorradorAnuncio(datos,SesionActual.actor(),
+                ContextoDeActuacion.de(SesionActual.sesion()),clave,procedencias.de(r)));
     }
-
-    @PutMapping("{idEncargo}/publicaciones/{idPublicacion}")
-    @PreAuthorize("hasRole('AGENTE')")
-    public PublicacionResponse actualizar(@PathVariable long idEncargo,
-                                          @PathVariable long idPublicacion,
-                                          @RequestBody(required = false) PublicacionRequest dto) {
-        if (dto == null) {
-            throw new ReglaNegocioException("Los datos de la publicacion son obligatorios.");
-        }
-        return PublicacionResponse.desde(
-                publicaciones.actualizar(idPublicacion, dto.aDatos(), SesionActual.actor()));
+    @PutMapping("{idPublicacion}/borrador") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(EDITAR_BORRADOR)
+    public PublicacionResponse editar(@PathVariable long idEncargo,@PathVariable long idPublicacion,
+            @RequestBody DatosBorrador datos,@RequestHeader("Idempotency-Key")String clave,HttpServletRequest r){
+        vinculo(idEncargo,idPublicacion,datos.encargo(),datos.publicacion());
+        return PublicacionResponse.desde(publicaciones.editarBorradorAnuncio(datos,SesionActual.actor(),
+                ContextoDeActuacion.de(SesionActual.sesion()),clave,procedencias.de(r)));
     }
-
-    /** Publicar (`P`), pausar (`S`) o cerrar (`C`) el anuncio. */
-    @PostMapping("{idEncargo}/publicaciones/{idPublicacion}/estado")
-    @PreAuthorize("hasRole('AGENTE')")
-    public PublicacionResponse cambiarEstado(@PathVariable long idEncargo,
-                                             @PathVariable long idPublicacion,
-                                             @RequestBody(required = false) EstadoPublicacionRequest dto) {
-        if (dto == null || dto.estado() == null || dto.estado().isBlank()) {
-            throw new ReglaNegocioException("El estado de la publicacion es obligatorio.");
-        }
-        return PublicacionResponse.desde(
-                publicaciones.cambiarEstado(idPublicacion, dto.estado(), SesionActual.actor()));
+    @PostMapping("{idPublicacion}/publicacion/preparacion") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(PUBLICAR)
+    public ActuacionesService.Propuesta publicar(@PathVariable long idEncargo,@PathVariable long idPublicacion,@RequestBody DatosCambio d,HttpServletRequest r){return preparar(PUBLICAR,idEncargo,idPublicacion,d,r);}
+    @PostMapping("{idPublicacion}/actualizacion-visible/preparacion") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(ACTUALIZAR_VISIBLE)
+    public ActuacionesService.Propuesta actualizar(@PathVariable long idEncargo,@PathVariable long idPublicacion,@RequestBody DatosCambio d,HttpServletRequest r){return preparar(ACTUALIZAR_VISIBLE,idEncargo,idPublicacion,d,r);}
+    @PostMapping("{idPublicacion}/pausa/preparacion") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(PAUSAR)
+    public ActuacionesService.Propuesta pausar(@PathVariable long idEncargo,@PathVariable long idPublicacion,@RequestBody DatosCambio d,HttpServletRequest r){return preparar(PAUSAR,idEncargo,idPublicacion,d,r);}
+    @PostMapping("{idPublicacion}/reanudacion/preparacion") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(REANUDAR)
+    public ActuacionesService.Propuesta reanudar(@PathVariable long idEncargo,@PathVariable long idPublicacion,@RequestBody DatosCambio d,HttpServletRequest r){return preparar(REANUDAR,idEncargo,idPublicacion,d,r);}
+    @PostMapping("{idPublicacion}/fin-difusion/preparacion") @PreAuthorize("hasRole('AGENTE')") @CapacidadReconocida(FINALIZAR)
+    public ActuacionesService.Propuesta finalizar(@PathVariable long idEncargo,@PathVariable long idPublicacion,@RequestBody DatosCambio d,HttpServletRequest r){return preparar(FINALIZAR,idEncargo,idPublicacion,d,r);}
+    private ActuacionesService.Propuesta preparar(String cap,long e,long p,DatosCambio d,HttpServletRequest r){
+        vinculo(e,p,d.encargo(),d.publicacion());return actuaciones.prepararPublicacion(cap,SesionActual.actor(),d,
+                ContextoDeActuacion.de(SesionActual.sesion()),procedencias.de(r));
+    }
+    private static void vinculo(long urlEncargo,Long urlAnuncio,long encargo,Long anuncio){
+        if(urlEncargo!=encargo||!java.util.Objects.equals(urlAnuncio,anuncio))throw new ReglaNegocioException("El cuerpo debe corresponder al Encargo y anuncio de la URL.");
     }
 }

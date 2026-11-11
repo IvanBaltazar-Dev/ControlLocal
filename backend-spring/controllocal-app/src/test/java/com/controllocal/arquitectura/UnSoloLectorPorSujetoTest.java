@@ -3,8 +3,6 @@ package com.controllocal.arquitectura;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +38,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  */
 class UnSoloLectorPorSujetoTest {
 
-    private static final JavaClasses CLASES = new ClassFileImporter()
-            .withImportOption(new ImportOption.DoNotIncludeTests())
+    private static final JavaClasses CLASES = ImportacionesDeProducto.importador()
             .importPackages("com.controllocal");
 
     /**

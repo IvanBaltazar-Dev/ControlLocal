@@ -30,21 +30,21 @@ public interface BorradorCapturaRepository extends JpaRepository<BorradorCaptura
     List<BorradorCaptura> enCursoDe(@Param("idOrganizacion") long idOrganizacion,
                                     @Param("idPersonaRol") long idPersonaRol);
 
-    /**
-     * Todo lo que el tenant tiene a medias, sin importar quien lo empezo. Es lo
-     * que permite que una captura iniciada por KAIROS la termine otra persona:
-     * el borrador es de la organizacion, no de quien tecleo primero.
-     */
-    @Query("""
-            select b from BorradorCaptura b
-            where b.organizacionId = :idOrganizacion and b.estado = 'E'
-            order by b.actualizadoEn desc
-            """)
-    List<BorradorCaptura> enCurso(@Param("idOrganizacion") long idOrganizacion);
+    Optional<BorradorCaptura> findByOrganizacionIdAndIdAndIdPersonaRol(
+            long organizacionId, long id, long idPersonaRol);
+
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended('BROX:CODIGO_CAPTURA:' || cast(:org as text),0))",
+            nativeQuery = true)
+    Integer bloquearSerie(@Param("org") long organizacionId);
 
     Optional<BorradorCaptura> findByOrganizacionIdAndCodigo(long idOrganizacion, String codigo);
 
     Optional<BorradorCaptura> findByOrganizacionIdAndId(long idOrganizacion, long id);
+
+    /** El contenido revisado y su ejecución se serializan con la misma captura. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from BorradorCaptura b where b.organizacionId = :tenant and b.id = :id")
+    Optional<BorradorCaptura> bloquear(@Param("tenant") long tenant, @Param("id") long id);
 
     /** De donde salio una entidad: que captura, por que canal y de quien. */
     @Query("""

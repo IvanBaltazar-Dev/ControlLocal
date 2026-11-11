@@ -7,23 +7,20 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * <b>La propiedad universal: alta, lectura y edicion por el modelo nuevo</b>
  * (D-E4-1, D-E4-2).
  *
- * <h2>Que resuelve, y por que en un solo caso de uso</h2>
- * Registrar una propiedad no es escribir una fila. Son nueve cosas que solo
- * valen juntas: la propiedad, su ubicacion, sus titulares con sus cuotas, sus
- * atributos gobernados, uno o dos encargos con su operacion, la condicion
- * economica de cada uno, el primer hito {@code U} de cada serie y el evento de
- * dominio que deja constancia. <b>Todo o nada.</b>
- *
- * <p>Repartirlo en cinco endpoints —crear el inmueble, luego los titulares,
- * luego el encargo...— produce medias propiedades en cuanto una llamada falla
- * o el usuario cierra la pestana, y esas medias propiedades no las arregla
- * nadie: quedan en la cartera sin titular o sin precio, contando en los
- * listados y mintiendo en los indicadores.
+ * <h2>Captura progresiva y responsabilidades</h2>
+ * CAT-E11/18 y C2 separan la identificación física de la preparación del Encargo.
+ * El alta física admite datos parciales que identifiquen el objeto; no exige
+ * propietario, área, precio ni mandato ficticios. Las relaciones y los encargos
+ * explícitamente solicitados se validan en su autoridad y transacción canónicas.
+ * La revisión competente del Encargo se registra por separado y no se infiere
+ * del guardado correcto del inmueble.
  *
  * <h2>La operacion no se infiere jamas</h2>
  * Cada elemento de {@code operaciones} declara <b>VENTA</b> o <b>ALQUILER</b>.
@@ -114,9 +111,11 @@ public interface PropiedadUniversalService {
      * @param evidenciaRef el puntero a la prueba: un documento, una foto, la
      *                     columna de la que se transcribio
      */
+    record MetadatosDeCaptura(com.controllocal.service.captura.SuficienciaInmueble.EstadoDato estado,
+                             String concepto,String referenciaCatalogo,String versionDefinicion,boolean noSabe) { }
     record ValorAtributo(String clave, String valor, String moneda, List<String> valores,
                          String naturaleza, BigDecimal confianza, LocalDate observadoEn,
-                         String evidenciaRef) {
+                         String evidenciaRef,MetadatosDeCaptura captura) {
 
         /**
          * <b>Un multivalor no llega ademas como escalar</b> (V77).
@@ -142,6 +141,11 @@ public interface PropiedadUniversalService {
                                 + "del mismo dato y elegir una por ti seria descartar la otra sin "
                                 + "decirlo.");
             }
+        }
+
+        public ValorAtributo(String clave,String valor,String moneda,List<String> valores,String naturaleza,
+                             BigDecimal confianza,LocalDate observadoEn,String evidenciaRef) {
+            this(clave,valor,moneda,valores,naturaleza,confianza,observadoEn,evidenciaRef,null);
         }
 
         /**
@@ -172,11 +176,11 @@ public interface PropiedadUniversalService {
         /** El mismo valor declarando como se obtuvo el hecho. */
         public ValorAtributo declarando(String naturaleza) {
             return new ValorAtributo(clave, valor, moneda, valores, naturaleza, confianza,
-                    observadoEn, evidenciaRef);
+                    observadoEn, evidenciaRef,captura);
         }
     }
 
-    /** Donde esta. Las coordenadas son opcionales; la direccion y el distrito no. */
+    /** Ubicación declarada: distrito y referencia suficiente; dirección exacta opcional. */
     record Ubicacion(String direccion, String distrito, String zonaUrbanizacion,
                      BigDecimal latitud, BigDecimal longitud, String interiorUnidad,
                      String piso, String referenciaInterna, String nombreEdificioGaleria) {
@@ -193,7 +197,9 @@ public interface PropiedadUniversalService {
                                String tipoComision, String baseCalculo, BigDecimal valorComision,
                                String tratamientoIgv, Boolean exclusividad,
                                LocalDate inicioEncargo, LocalDate finEncargo,
-                               List<ValorAtributo> condiciones) {
+                               List<ValorAtributo> condiciones,
+                               @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) com.controllocal.service.encargo.EncargoService.OrigenProspeccion origen) {
+        public OperacionSolicitada(String operacion,BigDecimal importe,String moneda,String tipoComision,String baseCalculo,BigDecimal valorComision,String igv,Boolean exclusividad,LocalDate desde,LocalDate hasta,List<ValorAtributo> condiciones){this(operacion,importe,moneda,tipoComision,baseCalculo,valorComision,igv,exclusividad,desde,hasta,condiciones,null);}
 
         /** El alta de siempre, sin condiciones gobernadas todavia. */
         public OperacionSolicitada(String operacion, BigDecimal importe, String moneda,
@@ -248,7 +254,7 @@ public interface PropiedadUniversalService {
      *
      * <p>Las cuatro lineas dicen lo mismo desde arriba: <b>lo que la interfaz no
      * recibio o no modifico conserva exactamente su semantica anterior</b>.
-     * Editar el precio no debe exigir reenviar los titulares, y reenviarlos
+     * Corregir la descripción no debe exigir reenviar los titulares, y reenviarlos
      * "para completar" es como se pierden datos que nadie queria cambiar.
      *
      * <p><b>{@code null} no significa borrar</b>, y no se le cambia el
@@ -257,9 +263,12 @@ public interface PropiedadUniversalService {
      * es una <b>intencion declarada</b>, y el blanco tampoco sirve — mandar
      * {@code ""} donde iba un valor se rechaza, no se adivina.
      *
-     * <p>{@code operaciones} sigue la misma regla que en el alta: cada una
-     * declara la suya. Cambiar el importe de una operacion <b>anade</b> un hito
-     * al historico; nunca sobrescribe el anterior.
+     * <p>RF013/AC053/055: la edición física exige su versión observada y un motivo
+     * cuando retira un valor vigente. No cambia términos comerciales: los bloques
+     * no vacíos de operaciones/condiciones se rechazan. Esos campos de transporte
+     * permanecen únicamente por consumidores Angular pendientes de W0; no conservan
+     * un escritor alternativo. AC066 edita el Encargo por su identificador y versión
+     * mediante EncargoService.Edicion, con SID y guardas canónicas.
      *
      * @param atributosABorrar claves <b>logicas</b> cuyo valor se retira. Un
      *                         nombre logico y no un sitio: quien pide retirar
@@ -276,7 +285,34 @@ public interface PropiedadUniversalService {
                           Ubicacion ubicacion, List<Titular> titulares,
                           List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones,
                           List<String> atributosABorrar,
-                          List<CondicionesDeEncargo> condiciones) {
+                          List<CondicionesDeEncargo> condiciones,
+                          com.controllocal.service.captura.SuficienciaInmueble.Contexto contextoCaptura,
+                          Long versionEsperada, String motivoRetiro) {
+
+        public ComandoEdicion(String claveIdempotencia,Procedencia procedencia,String descripcion,
+                              Ubicacion ubicacion,List<Titular> titulares,List<ValorAtributo> atributos,
+                              List<OperacionSolicitada> operaciones,List<String> atributosABorrar,
+                              List<CondicionesDeEncargo> condiciones,
+                              com.controllocal.service.captura.SuficienciaInmueble.Contexto contextoCaptura) {
+            this(claveIdempotencia,procedencia,descripcion,ubicacion,titulares,atributos,operaciones,
+                    atributosABorrar,condiciones,contextoCaptura,null,null);
+        }
+
+        public ComandoEdicion conVersion(long observada) {
+            return new ComandoEdicion(claveIdempotencia,procedencia,descripcion,ubicacion,titulares,
+                    atributos,operaciones,atributosABorrar,condiciones,contextoCaptura,observada,motivoRetiro);
+        }
+
+        public ComandoEdicion conMotivoRetiro(String motivo) {
+            return new ComandoEdicion(claveIdempotencia,procedencia,descripcion,ubicacion,titulares,
+                    atributos,operaciones,atributosABorrar,condiciones,contextoCaptura,versionEsperada,motivo);
+        }
+
+        public ComandoEdicion(String claveIdempotencia,Procedencia procedencia,String descripcion,
+                              Ubicacion ubicacion,List<Titular> titulares,List<ValorAtributo> atributos,
+                              List<OperacionSolicitada> operaciones,List<String> atributosABorrar,List<CondicionesDeEncargo> condiciones) {
+            this(claveIdempotencia,procedencia,descripcion,ubicacion,titulares,atributos,operaciones,atributosABorrar,condiciones,null);
+        }
 
         /**
          * Una edicion que no toca ninguna condicion comercial.
@@ -296,32 +332,17 @@ public interface PropiedadUniversalService {
     }
 
     /**
-     * <b>Las condiciones pactadas en UN encargo</b> (Corte 0C).
-     *
-     * <p>Viaja como lista de bloques —uno por {@code idEncargo}— y no como un
-     * saco comun. Es la unica forma de representar la propiedad que tiene una
-     * venta y un alquiler abiertos a la vez: la garantia pertenece al alquiler,
-     * y un saco unico obligaria al Core a adivinar a cual de los dos encargos
-     * asignar cada respuesta.
-     *
-     * <p><b>La identidad es {@code idEncargo}, jamas la operacion.</b> Dos
-     * alquileres sucesivos de la misma propiedad son dos episodios; enviarlos
-     * como «bloque ALQUILER» haria que editar el de 2026 pisara el de 2024.
-     *
-     * <p>Y la regla de bloques de 0A se aplica entera, un nivel mas adentro:
-     * <b>un bloque ausente no se toca, y un bloque presente no toca a ningun
-     * otro</b>. Enviar solo el encargo de venta deja el de alquiler exactamente
-     * como estaba, con sus valores, sus vacios y sus fechas.
-     *
-     * @param atributos        {@code null} = no tocar ninguna condicion de este
-     *                         encargo. Lista vacia significa lo mismo: no es
-     *                         «borralas todas»
-     * @param atributosABorrar claves logicas a retirar <b>de este encargo</b>.
-     *                         Misma regla que arriba: valor y borrado a la vez
-     *                         son dos intenciones contrarias y se rechaza
+     * Transporte sustituido de condiciones agrupadas por Encargo. El editor
+     * Angular todavía lo construye y queda pendiente de migración W0; Core rechaza
+     * todo bloque no vacío en editar físico. El escritor vigente es AC066 mediante
+     * EncargoService.Edicion y no consume este record. Se retirará junto con esos
+     * consumidores, sin convertir la transición de transporte en otra vía comercial.
      */
     record CondicionesDeEncargo(Long idEncargo, List<ValorAtributo> atributos,
-                                List<String> atributosABorrar) {
+                                List<String> atributosABorrar, Long versionEsperada) {
+        public CondicionesDeEncargo(Long idEncargo,List<ValorAtributo> atributos,List<String> atributosABorrar) {
+            this(idEncargo,atributos,atributosABorrar,null);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -385,15 +406,18 @@ public interface PropiedadUniversalService {
      */
     record AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
                          String valor, String moneda, List<String> valores,
-                         String estadoDato, boolean editable, String motivoNoEditable) {
+                         String estadoDato, boolean editable, String motivoNoEditable,
+                         boolean retirado, String sustituidaPor) {
 
         /** El atributo de un solo hueco: ni importe ni multivalor. */
         public AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
                              String valor) {
             this(clave, rotulo, tipoDato, unidad, valor, null, null,
-                    com.controllocal.service.soporte.ContratoDeEscritura.VIGENTE, true, null);
+                    com.controllocal.service.soporte.ContratoDeEscritura.VIGENTE, true, null,
+                    false, null);
         }
     }
+
 
     /** Un hito de la serie economica de una operacion. */
     record HitoFicha(String hito, String hitoRotulo, BigDecimal monto, String moneda,
@@ -580,7 +604,7 @@ public interface PropiedadUniversalService {
                             String estado, String estadoRotulo, LocalDate fecha,
                             BigDecimal monto, String moneda,
                             Long idEncargo, String operacion, String operacionRotulo,
-                            String ruta) {
+                            String ruta, List<InteraccionService.VinculoFicha> vinculosInteraccion) {
     }
 
     /**
@@ -663,6 +687,14 @@ public interface PropiedadUniversalService {
      *                           el cliente tiene que leer su ausencia como «no
      *                           disponible para ti» y no como «no ha pasado nada
      *                           con esta propiedad»
+     * @param fotos              la galeria, en su orden (WP-C). Lista vacia si
+     *                           no tiene ninguna: aqui no hay nada que acotar
+     *                           por actor, asi que vacio significa vacio
+     * @param fotoPortada        la de {@code orden = 1}, o {@code null} si la
+     *                           galeria esta vacia. Viaja aparte y no se deduce
+     *                           en el cliente porque «la portada es la primera»
+     *                           es una regla, y una regla en dos interfaces son
+     *                           dos reglas (D-A-1 §5)
      */
     record FichaPropiedadUniversal(Long id, String codigo, String tipoPropiedad, String tipoRotulo,
                                    String uso, String usoRotulo, String descripcion,
@@ -675,8 +707,11 @@ public interface PropiedadUniversalService {
                                    List<AtributoQueFalta> faltanParaPublicar,
                                    HistoriaComercial historia,
                                    ActividadPropiedad actividad,
+                                   List<FotoPropiedadService.FotoDePropiedad> fotos,
+                                   FotoPropiedadService.FotoDePropiedad fotoPortada,
                                    LocalDateTime fechaRegistro,
-                                   Responsabilidad responsabilidad) {
+                                   List<UnidadRelacionadaService.FichaUnidadRelacionada> unidadesRelacionadas,
+                                   Responsabilidad responsabilidad, long versionFisica) {
     }
 
     /**
@@ -743,6 +778,12 @@ public interface PropiedadUniversalService {
                            String motivo, String motivoTexto, boolean puedeTraspasar) {
     }
 
+    /** Contexto mínimo de una capacidad: no carga fotos, titulares, historia ni todos los encargos. */
+    record CapacidadSobrePropiedad(Long id, String tipoPropiedad, String etapa, boolean puedeEditar,
+                                   boolean atributoReconocido, boolean atributoEditable) { }
+
+    CapacidadSobrePropiedad capacidadSobre(long idPropiedad, String atributo, Actor actor);
+
     /** Que produjo el alta. {@code reintento} avisa de que ya existia. */
     record ResultadoRegistro(Long idPropiedad, String codigo, List<Long> idsEncargos,
                              boolean reintento) {
@@ -803,6 +844,9 @@ public interface PropiedadUniversalService {
     /** El alta completa: propiedad, titulares, atributos y encargos, todo o nada. */
     ResultadoRegistro registrar(ComandoRegistro comando, Actor actor);
 
+    /** Resultado original confirmado, reautorizado; ausencia no demuestra fallo o rollback. */
+    Optional<ResultadoRegistro> consultarResultadoRegistro(String claveIdempotencia, Actor actor);
+
     // `catalogoDe` vivia aqui hasta el Corte 0B, y lo retiro el mismo cambio que
     // migro a KAIROS. Respondia a «que se pregunta para este tipo» con seis
     // campos, mientras `/captura/definicion` respondia a lo mismo con once y
@@ -815,7 +859,27 @@ public interface PropiedadUniversalService {
     FichaPropiedadUniversal consultar(long idPropiedad, Actor actor);
 
     /** Edicion parcial: lo que llega {@code null} no se toca. */
-    FichaPropiedadUniversal editar(long idPropiedad, ComandoEdicion comando, Actor actor);
+    /** Recibo del físico resultante de la actuación, sin cartera ni historia comercial. */
+    record ResultadoEdicion(long idPropiedad, String codigo, long versionFisica,
+                           String tipoPropiedad, String uso, String descripcion, Ubicacion ubicacion,
+                           List<TitularFicha> titulares,
+                           Map<String,com.controllocal.service.captura.SuficienciaInmueble.Dato> valoresFisicos,
+                           com.controllocal.service.captura.SuficienciaInmueble.Contexto contextoCaptura,
+                           Map<String,com.controllocal.service.captura.MotorDeCaptura.MetadatoRespuesta> metadatos,
+                           List<String> clavesAfectadas,
+                           String estadoSuficiencia,
+                           com.controllocal.service.captura.SuficienciaInmueble.Evaluacion suficiencia,
+                           boolean reintento) {
+        public ResultadoEdicion {
+            titulares=List.copyOf(titulares);valoresFisicos=Map.copyOf(valoresFisicos);
+            metadatos=Map.copyOf(metadatos);clavesAfectadas=List.copyOf(clavesAfectadas);
+        }
+        public ResultadoEdicion comoReintento() {
+            return new ResultadoEdicion(idPropiedad,codigo,versionFisica,tipoPropiedad,uso,descripcion,
+                    ubicacion,titulares,valoresFisicos,contextoCaptura,metadatos,clavesAfectadas,estadoSuficiencia,suficiencia,true);
+        }
+    }
+    ResultadoEdicion editar(long idPropiedad, ComandoEdicion comando, Actor actor);
 
     // ------------------------------------------------------------------
     // El traspaso del responsable (P0-2)

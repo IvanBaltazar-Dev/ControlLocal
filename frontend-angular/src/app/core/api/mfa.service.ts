@@ -37,12 +37,6 @@ export interface Reautenticacion {
   codigo: string;
 }
 
-/** Token de elevación: 5 minutos, un solo uso, para UNA acción. */
-export interface Elevacion {
-  token: string;
-  expiraEn: string;
-}
-
 /**
  * Segundo factor del **propio** titular (V37).
  *
@@ -58,7 +52,7 @@ export class MfaService {
   private readonly api = inject(ApiClient);
 
   estado(): Promise<EstadoMfa> {
-    return this.api.get<EstadoMfa>('perfil/mfa');
+    return this.api.get<EstadoMfa>('cuenta/mfa');
   }
 
   /**
@@ -67,7 +61,7 @@ export class MfaService {
    * antes de crear el nuevo.
    */
   iniciar(): Promise<EnrolamientoMfa> {
-    return this.api.post<EnrolamientoMfa>('perfil/mfa');
+    return this.api.post<EnrolamientoMfa>('cuenta/mfa');
   }
 
   /**
@@ -79,7 +73,7 @@ export class MfaService {
    * consumido: no sirve para el ingreso siguiente.
    */
   confirmar(codigo: string): Promise<CodigosRespaldo> {
-    return this.api.post<CodigosRespaldo>('perfil/mfa/confirmar', { codigo });
+    return this.api.post<CodigosRespaldo>('cuenta/mfa/confirmar', { codigo });
   }
 
   /**
@@ -90,7 +84,7 @@ export class MfaService {
    * motivo. Compárese con `reemplazar`, donde sí cambia el factor.
    */
   regenerarCodigos(reautenticacion: Reautenticacion): Promise<CodigosRespaldo> {
-    return this.api.post<CodigosRespaldo>('perfil/mfa/codigos', reautenticacion);
+    return this.api.post<CodigosRespaldo>('cuenta/mfa/codigos', reautenticacion);
   }
 
   /**
@@ -103,29 +97,7 @@ export class MfaService {
    * si dejara al tenant sin administrador operativo.
    */
   reemplazar(reautenticacion: Reautenticacion): Promise<void> {
-    return this.api.delete<void>('perfil/mfa', reautenticacion);
+    return this.api.delete<void>('cuenta/mfa', reautenticacion);
   }
 
-  /**
-   * Token de elevación para una acción sensible sobre OTRA persona. Existe
-   * porque el token de sesión está congelado y **no lleva** cuándo se probó el
-   * segundo factor: dar por buena una sesión que nació con MFA hace horas
-   * dejaría pasar una sesión robada a media tarde.
-   */
-  elevar(reautenticacion: Reautenticacion): Promise<Elevacion> {
-    return this.api.post<Elevacion>('perfil/elevacion', reautenticacion);
-  }
-
-  /**
-   * Nivel 2 de la recuperación: el gobierno **revoca** el factor de otra
-   * persona. No lo ve ni lo fija — la cuenta queda obligada a enrolar y el
-   * titular lo hace él mismo.
-   */
-  revocarAjeno(idPersona: number, motivo: string, tokenElevacion: string): Promise<void> {
-    return this.api.delete<void>(
-      `accesos/${idPersona}/mfa`,
-      { motivo },
-      { 'X-Elevacion': tokenElevacion },
-    );
-  }
 }

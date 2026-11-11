@@ -1,0 +1,10 @@
+{
+  "estado": "EXITO",
+  "resultado": {
+    "idBorrador": 7,
+    "idPropiedad": 19,
+    "codigoPropiedad": "PROP-19",
+    "idsEncargos": [],
+    "reintento": true
+  }
+}

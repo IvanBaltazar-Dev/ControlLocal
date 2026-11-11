@@ -16,6 +16,7 @@ import com.controllocal.persistence.busqueda.ConjuntoDeCandidatos;
 import com.controllocal.persistence.busqueda.CriterioBusquedaInmobiliaria;
 import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.query.LocalListado;
+import com.controllocal.persistence.query.AlquilerLocalParaLectura;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.persistence.repositorio.FotoPropiedadRepository;
@@ -28,7 +29,6 @@ import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.ProspeccionService;
-import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.AutoridadDePropiedad;
@@ -88,7 +88,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     private final DistritoRepository distritos;
     private final FotoPropiedadRepository fotos;
     private final PrecioPropiedadRepository precios;
-    private final PublicacionService publicaciones;
     private final ProspeccionService prospecciones;
     private final CaptacionRepository captaciones;
     // `prospeccionesRepo` se retiro con `exigirPertenencia` (P0): era su unico
@@ -127,7 +126,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                                      DistritoRepository distritos,
                                      FotoPropiedadRepository fotos,
                                      PrecioPropiedadRepository precios,
-                                     PublicacionService publicaciones,
                                      ProspeccionService prospecciones,
                                      CaptacionRepository captaciones,
                                      Transiciones transiciones,
@@ -143,7 +141,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         this.distritos = distritos;
         this.fotos = fotos;
         this.precios = precios;
-        this.publicaciones = publicaciones;
         this.prospecciones = prospecciones;
         this.captaciones = captaciones;
         this.transiciones = transiciones;
@@ -165,7 +162,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         // recurso para esos ids. Es la misma estrategia que usa el listado
         // universal: lo que la configura es el criterio, no otra consulta.
         CriterioBusquedaInmobiliaria criterio = FiltrosDeListadoInmobiliario.deLocales(
-                actor.idOrganizacion(), filtros.texto(), filtros.estado(),
+                actor.idOrganizacion(), autoridad.alcanceDeLectura(actor).rolesAgente(), filtros.texto(), filtros.estado(),
                 filtros.pagina(), filtros.tamano(), MAXIMO_POR_PAGINA);
         ConjuntoDeCandidatos candidatos = motor.resolver(criterio);
 
@@ -178,8 +175,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         List<Long> ids = filas.stream().map(LocalListado::getId).toList();
         Map<Long, String> portadas = ids.isEmpty() ? Map.of() : fotos.portadas(ids).stream()
                 .collect(Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
-        Map<Long, String> estadosPublicacion =
-                ids.isEmpty() ? Map.of() : publicaciones.codigosEstadoPublicacion(ids);
+        Map<Long, AlquilerLocalParaLectura> alquileres = alquileresDe(ids, actor);
 
         // TERCERA consulta en lote, y por la misma razon que las dos de arriba:
         // las seis claves gobernadas ya no viajan en la proyeccion porque su
@@ -188,8 +184,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Map<Long, ValoresGobernados> gobernados = lector.gobernadosDeVarias(ids);
 
         return new Pagina<>(filas.stream()
-                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
-                        LectorPorAutoridad.de(gobernados, p.getId())))
+                .map(p -> ficha(p, portadas.get(p.getId()),
+                        LectorPorAutoridad.de(gobernados, p.getId()), alquileres.get(p.getId())))
                 .toList(), total);
     }
 
@@ -206,7 +202,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         // cuadraria con ella. El estado viaja nulo a proposito: el resumen
         // cuenta los tres cubos, no filtra por uno.
         Map<String, Long> porEstado = motor.contarPorEstadoLegado(
-                FiltrosDeListadoInmobiliario.deLocales(actor.idOrganizacion(), texto, null,
+                FiltrosDeListadoInmobiliario.deLocales(actor.idOrganizacion(),
+                        autoridad.alcanceDeLectura(actor).rolesAgente(), texto, null,
                         1, 1, MAXIMO_POR_PAGINA));
 
         long disponibles = porEstado.getOrDefault(Propiedad.LEGADO_DISPONIBLE, 0L);
@@ -226,9 +223,10 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         }
 
         String direccion = normalizarTecnico(datos.direccion());
-        return propiedades.findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(
+        return propiedades.candidatosDuplicadosParaLectura(
                         actor.idOrganizacion(), datos.idPropietario(),
-                        idExcluir != null && idExcluir > 0 ? idExcluir : -1L).stream()
+                        idExcluir != null && idExcluir > 0 ? idExcluir : -1L,
+                        autoridad.alcanceDeLectura(actor).paramRolesArray()).stream()
                 .filter(candidato -> normalizarTecnico(candidato.getDireccion()).equals(direccion))
                 .filter(candidato -> compatibleOpcional(candidato.getInteriorUnidad(), datos.interiorUnidad()))
                 .filter(candidato -> compatibleOpcional(candidato.getPiso(), datos.piso()))
@@ -244,7 +242,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Transactional(readOnly = true)
     public Optional<FichaLocal> buscarPorId(long id, Actor actor) {
         validarId(id, "El id de local comercial");
-        return propiedades.buscarFicha(actor.idOrganizacion(), id)
+        return autoridad.buscarParaLectura(actor, id)
                 .map(p -> fichaCompleta(actor, p));
     }
 
@@ -301,83 +299,18 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         List<Long> ids = pagina.stream().map(Propiedad::getId).toList();
         Map<Long, String> portadas = ids.isEmpty() ? Map.of() : fotos.portadas(ids).stream()
                 .collect(Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
-        Map<Long, String> estadosPublicacion = publicaciones.codigosEstadoPublicacion(ids);
+        Map<Long, AlquilerLocalParaLectura> alquileres = alquileresDe(ids, actor);
         Map<Long, ValoresGobernados> valores =
                 lector.deVarias(actor.idOrganizacion(), pagina.getContent());
         List<FichaLocal> items = pagina.stream()
-                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
+                .map(p -> ficha(p, portadas.get(p.getId()),
                         nombrePropietario(p),
                         LectorPorAutoridad.de(valores, p.getId()),
                         // Listado: misma razon que el otro. La cartera propia
                         // del agente no pinta botones de escritura por fila.
-                        null))
+                        null, alquileres.get(p.getId())))
                 .toList();
         return new Pagina<>(items, pagina.getTotalElements());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<FotoLocal> listarFotos(long idPropiedad) {
-        validarId(idPropiedad, "El id del local");
-        return fotos.findByIdPropiedadOrderByOrdenAscIdAsc(idPropiedad).stream()
-                .map(f -> new FotoLocal(f.getId(), f.getClave(), f.getNombreArchivo()))
-                .toList();
-    }
-
-    @Override
-    @Transactional
-    public FotoLocal agregarFoto(long idPropiedad, String clave, String nombreArchivo, Actor actor) {
-        validarId(idPropiedad, "El id del local");
-        // Las fotos SON la ficha del inmueble, asi que las escribe quien
-        // responde por el (P0-1). Hasta V87 esto solo miraba el tenant: la
-        // portada de cualquier propiedad de la corredora la ponia cualquiera.
-        // Se carga la entidad en vez de preguntar `exists` porque la autoridad
-        // necesita la fila, no su existencia. Y se carga TOMANDOLA (F2.10): la
-        // foto es un hecho de la ficha, asi que la autoridad tiene que valer
-        // tambien en el instante en que la fila de foto_propiedad se inserta,
-        // no solo cuando se leyo la propiedad.
-        Propiedad propiedad = propiedades
-                .bloquearParaEscritura(actor.idOrganizacion(), idPropiedad)
-                .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
-        autoridad.exigirEdicion(actor, propiedad);
-
-        long actuales = fotos.countByIdPropiedad(idPropiedad);
-        if (actuales >= 6) {
-            throw new ReglaNegocioException("Maximo 6 fotos por local. Elimina alguna para subir otra.");
-        }
-        FotoPropiedad foto = new FotoPropiedad();
-        foto.setOrganizacionId(actor.idOrganizacion());
-        foto.setIdPropiedad(idPropiedad);
-        foto.setClave(clave);
-        foto.setNombreArchivo(nombreArchivo);
-        foto.setOrden((int) actuales);
-        fotos.save(foto);
-        return new FotoLocal(foto.getId(), foto.getClave(), foto.getNombreArchivo());
-    }
-
-    @Override
-    @Transactional
-    public Optional<String> eliminarFoto(long idFoto, Actor actor) {
-        validarId(idFoto, "El id de la foto");
-        return fotos.findById(idFoto)
-                // Una foto de otra corredora se comporta como inexistente (404).
-                .filter(foto -> foto.getOrganizacionId().equals(actor.idOrganizacion()))
-                .map(foto -> {
-                    // La autoridad es la de la PROPIEDAD, no la de la foto: la
-                    // foto no tiene dueno propio y llegar por su id no puede ser
-                    // una puerta mas barata que llegar por el del inmueble
-                    // (P0-1). Si la propiedad no aparece —imposible por la FK—
-                    // se deniega, que es el lado seguro. Y se toma la fila
-                    // (F2.10): borrar una foto es la escritura mas
-                    // irreversible de la ficha, y tiene que decidirse sobre el
-                    // responsable que seguira siendo verdad al borrarla.
-                    Propiedad propiedad = propiedades
-                            .bloquearParaEscritura(actor.idOrganizacion(), foto.getIdPropiedad())
-                            .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
-                    autoridad.exigirEdicion(actor, propiedad);
-                    fotos.delete(foto);
-                    return foto.getClave();
-                });
     }
 
     // ------------------------------------------------------------------
@@ -492,12 +425,15 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * backend rechaza desde V87.
      */
     private FichaLocal fichaCompleta(Actor actor, Propiedad p) {
-        String portada = fotos.findByIdPropiedadOrderByOrdenAscIdAsc(p.getId()).stream()
+        // Sólo la referencia Core llega al cliente; el proveedor permanece detrás de A04.
+        String portada = fotos.deLaPropiedad(actor.idOrganizacion(), p.getId()).stream()
                 .findFirst()
-                .map(FotoPropiedad::getClave)
+                .map(f -> Objects.requireNonNull(f.getArchivoRef(),
+                        "La foto carece de referencia de archivo").toString())
                 .orElse(null);
-        return ficha(p, publicaciones.codigoEstadoPublicacion(p.getId()), portada, nombrePropietario(p),
-                lector.de(actor.idOrganizacion(), p), autoridad.responsabilidadDe(actor, p));
+        return ficha(p, portada, nombrePropietario(p),
+                lector.de(actor.idOrganizacion(), p), autoridad.responsabilidadDe(actor, p),
+                alquileresDe(List.of(p.getId()), actor).get(p.getId()));
     }
 
     /**
@@ -520,13 +456,14 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * en el catalogo, y {@link LectorPorAutoridad} ya la resolvio. Si manana
      * {@code ambientes} se promoviera a estructural, aqui no cambia una linea.
      */
-    private FichaLocal ficha(Propiedad p, String estadoPublicacion, String fotoPortadaClave,
+    private FichaLocal ficha(Propiedad p, String fotoPortadaClave,
                              String propietarioNombre, ValoresGobernados valores,
-                             PropiedadUniversalService.Responsabilidad responsabilidad) {
+                             PropiedadUniversalService.Responsabilidad responsabilidad,
+                             AlquilerLocalParaLectura alquiler) {
 
         return new FichaLocal(
                 p.getId(), p.getCodigo(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
-                p.getPrecioReferencial(), p.getMonedaReferencial(),
+                alquiler == null ? null : alquiler.getImporte(), alquiler == null ? null : alquiler.getMoneda(),
                 valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO),
                 p.getDescripcion(), p.estadoLegado(),
                 p.getRolPropietario() != null ? p.getRolPropietario().getId() : null,
@@ -534,7 +471,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 p.getTipoInmueble(), p.getUso(),
                 valores.entero(CatalogoAtributo.CLAVE_AMBIENTES),
                 valores.entero(CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS),
-                p.getZonaUrbanizacion(), p.getGeoLat(), p.getGeoLong(), estadoPublicacion,
+                p.getZonaUrbanizacion(), p.getGeoLat(), p.getGeoLong(),
+                alquiler == null ? null : alquiler.getEstadoPublicacion(),
                 valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
                 valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
                 valores.booleano(CatalogoAtributo.CLAVE_APTO_LICENCIA),
@@ -554,17 +492,17 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * eso es lo que un listado puede ordenar y filtrar en SQL; {@code valores}
      * trae lo gobernado, ya hidratado en lote para los ids de la pagina.
      */
-    private FichaLocal ficha(LocalListado p, String estadoPublicacion, String fotoPortadaClave,
-                             ValoresGobernados valores) {
+    private FichaLocal ficha(LocalListado p, String fotoPortadaClave,
+                             ValoresGobernados valores, AlquilerLocalParaLectura alquiler) {
         return new FichaLocal(
                 p.getId(), p.getCodigoLocal(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
-                p.getPrecioReferencial(), p.getMonedaReferencial(),
+                alquiler == null ? null : alquiler.getImporte(), alquiler == null ? null : alquiler.getMoneda(),
                 valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO), p.getDescripcion(), p.getEstado(),
                 p.getIdPropietario(), p.getPropietarioNombre(), p.getTipoInmueble(), p.getUso(),
                 valores.entero(CatalogoAtributo.CLAVE_AMBIENTES),
                 valores.entero(CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS),
                 p.getZonaUrbanizacion(), p.getGeoLat(),
-                p.getGeoLong(), estadoPublicacion,
+                p.getGeoLong(), alquiler == null ? null : alquiler.getEstadoPublicacion(),
                 valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
                 valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
                 valores.booleano(CatalogoAtributo.CLAVE_APTO_LICENCIA),
@@ -576,5 +514,13 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 // no resuelve la autoridad: costaria una consulta por fila para
                 // pintar nada. Ausente = el cliente no ofrece el boton.
                 null, null, null, null, null, null, null);
+    }
+
+    /** El contrato legado es alquiler; nunca toma el precio físico de origen ambiguo. */
+    private Map<Long, AlquilerLocalParaLectura> alquileresDe(List<Long> ids, Actor actor) {
+        if (ids.isEmpty()) return Map.of();
+        return captaciones.alquileresParaLectura(actor.idOrganizacion(), ids,
+                        autoridad.alcanceDeLectura(actor).paramRolesArray()).stream()
+                .collect(Collectors.toMap(AlquilerLocalParaLectura::getIdPropiedad, a -> a));
     }
 }

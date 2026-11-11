@@ -1,13 +1,11 @@
 package com.controllocal.web.controlador;
 
 import com.controllocal.service.ClienteService;
-import com.controllocal.service.CoincidenciaService;
 import com.controllocal.service.FichaComercialService;
 import com.controllocal.service.Pagina;
 import com.controllocal.web.dto.AutorizacionResponse;
 import com.controllocal.web.dto.ClienteRequest;
 import com.controllocal.web.dto.ClienteResponse;
-import com.controllocal.web.dto.CoincidenciasResponse;
 import com.controllocal.web.dto.FichaClienteResponse;
 import com.controllocal.web.dto.FichaSectionResponse;
 import com.controllocal.web.dto.ResumenClientesResponse;
@@ -37,17 +35,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("clientes")
 public class ClientesController {
 
-    /** Tamano por defecto del panel de coincidencias (§7 del contrato). */
-    private static final int COINCIDENCIAS_POR_DEFECTO = 6;
-
     private final ClienteService clientes;
-    private final CoincidenciaService coincidencias;
     private final FichaComercialService fichas;
 
-    public ClientesController(ClienteService clientes, CoincidenciaService coincidencias,
+    public ClientesController(ClienteService clientes,
                               FichaComercialService fichas) {
         this.clientes = clientes;
-        this.coincidencias = coincidencias;
         this.fichas = fichas;
     }
 
@@ -59,6 +52,7 @@ public class ClientesController {
      * conjunto que cuenta el resumen.
      */
     @GetMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida({"buscar_persona"})
     public PageResponse<ClienteResponse> listar(@RequestParam(defaultValue = "1") int pagina,
                                                 @RequestParam(defaultValue = "10") int tamano,
                                                 @RequestParam(required = false) String texto,
@@ -122,16 +116,6 @@ public class ClientesController {
                 SesionActual.actor()));
     }
 
-    /** Cliente -> propiedades compatibles. Acepta los dos juegos de parametros del cable. */
-    @GetMapping("{id}/coincidencias")
-    public CoincidenciasResponse coincidencias(@PathVariable long id,
-                                               @RequestParam(required = false) Integer page,
-                                               @RequestParam(required = false) Integer pagina,
-                                               @RequestParam(name = "page_size", required = false) Integer pageSize,
-                                               @RequestParam(required = false) Integer tamano) {
-        return CoincidenciasResponse.desde(coincidencias.propiedadesParaCliente(id,
-                paginaSolicitada(page, pagina), tamanoSolicitado(pageSize, tamano), SesionActual.actor()));
-    }
 
     @PostMapping
     @PreAuthorize("hasRole('AGENTE')")
@@ -161,11 +145,6 @@ public class ClientesController {
     /** {@code page} gana a {@code pagina}; sin ninguno, la primera. */
     static int paginaSolicitada(Integer page, Integer pagina) {
         return page != null ? page : pagina != null ? pagina : 1;
-    }
-
-    /** {@code page_size} gana a {@code tamano}; sin ninguno, 6 (tope de 24 en el service). */
-    static int tamanoSolicitado(Integer pageSize, Integer tamano) {
-        return pageSize != null ? pageSize : tamano != null ? tamano : COINCIDENCIAS_POR_DEFECTO;
     }
 
     /** Alias de ficha: mismo orden de precedencia, pero su default congelado es 8. */

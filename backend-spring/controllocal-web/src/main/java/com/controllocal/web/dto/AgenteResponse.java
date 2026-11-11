@@ -1,15 +1,17 @@
 package com.controllocal.web.dto;
 
 import com.controllocal.service.AgenteService;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDate;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record AgenteResponse(Long id, String codigoAgente, String nombre,
                              String tipoPersona, String tipoDocumento,
                              String numeroDocumento, String telefono, String correo,
                              String usuario, String zona, LocalDate fechaIngreso,
                              String estadoAdministrativo, String estadoOperativo,
-                             int captacionesActivas, int operacionesActivas) {
+                             Integer captacionesActivas, Integer operacionesActivas) {
 
     public static AgenteResponse desde(AgenteService.FichaAgente ficha) {
         return new AgenteResponse(ficha.id(), ficha.codigoAgente(), ficha.nombre(),

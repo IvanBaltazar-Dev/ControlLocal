@@ -19,6 +19,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogoEstadosTest {
 
     @Test
+    void el_encargo_c2_conserva_codigos_persistidos_y_nombres_propios() {
+        var nombres=Arrays.stream(EstadosDominio.EstadoCaptacion.values())
+                .collect(java.util.stream.Collectors.toMap(Enum::name,EstadosDominio.EstadoCaptacion::codigo));
+        assertEquals(java.util.Map.of("EN_PREPARACION","P","APROBADO","A","FINALIZADO","C","RESCINDIDO","S"),nombres);
+        assertThrows(IllegalArgumentException.class,()->EstadosDominio.EstadoCaptacion.desde("O"));
+        assertThrows(IllegalArgumentException.class,()->EstadosDominio.EstadoCaptacion.desde("R"));
+        assertThrows(IllegalArgumentException.class,()->EstadosDominio.EstadoCaptacion.desde("V"));
+    }
+
+    @Test
     void todosLosEnumsSonUnitariosEstrictosYEstanDocumentados() throws Exception {
         String documento = Files.readString(localizarMatriz());
         List<Class<?>> enums = Arrays.stream(EstadosDominio.class.getDeclaredClasses())

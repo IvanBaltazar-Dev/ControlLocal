@@ -1,264 +1,150 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-
 import { API_BASE_URL } from '../api/api.config';
-import { LoginResponse, Sesion } from './sesion.model';
-import { AuthService } from './auth.service';
+import { AuthService, NAVEGACION_COMPLETA } from './auth.service';
+import { ContextoAcceso, LoginResponse, RolSesion, Sesion, SesionEfectiva } from './sesion.model';
 
-const CLAVE_SESION = 'controllocal.sesion.v2';
+const CLAVE = 'controllocal.sesion.v3';
+const OPCION: ContextoAcceso = { referencia: 'ofrecida-por-core', idOrganizacion: 7,
+  idPersona: 2, idRolOperativo: 10, rol: 'BROKER', modalidad: 'EMPRESARIAL', nombreOrganizacion: 'Organización de prueba' };
+function cable(rol: RolSesion = 'IDENTIDAD'): LoginResponse {
+  return { token: 'token-prueba', expiraEnSegundos: 1800, rol, idUsuario: rol === 'IDENTIDAD' ? 0 : 2,
+    idDominio: rol === 'IDENTIDAD' ? 0 : 10, nombre: 'Profesional', usuario: 'cuenta-global',
+    expiraEn: new Date(Date.now()+1800000).toISOString(), contextoRequerido: rol === 'IDENTIDAD',
+    contextos: [OPCION], idOrganizacion: rol === 'IDENTIDAD' ? 0 : 7,
+    idCuenta: 99, revisionContexto: rol === 'IDENTIDAD' ? 0 : 1, modalidad: rol === 'IDENTIDAD' ? null : 'EMPRESARIAL' };
+}
+function perfil(rol: RolSesion = 'IDENTIDAD'): SesionEfectiva {
+  const c = cable(rol);
+  return { rol, usuario: c.usuario, idPersona: c.idUsuario, idDominio: c.idDominio,
+    idOrganizacion: c.idOrganizacion, idCuenta: c.idCuenta, referenciaSesion: 'sesion-core',
+    revisionContexto: c.revisionContexto, contextoRef: rol === 'IDENTIDAD' ? null : OPCION.referencia,
+    modalidad: c.modalidad, contextoRequerido: c.contextoRequerido,
+    debeCambiarContrasena: false, debeEnrolarMfa: false };
+}
+function guardada(rol: RolSesion = 'AGENTE'): Sesion {
+  return { ...cable(rol), referenciaSesion: 'sesion-core', contextoRef: rol === 'IDENTIDAD' ? null : OPCION.referencia };
+}
+function tick(): Promise<void> { return new Promise(resolve => setTimeout(resolve,0)); }
 
-describe('AuthService', () => {
-  const navegar = jasmine.createSpy('navigate');
-  // `url` es mutable: es lo que lee `cerrarSesion` para recordar dónde estaba
-  // el usuario cuando le caducó la sesión.
-  const enrutador = { navigate: navegar, url: '/' };
+describe('AuthService contextual', () => {
   let http: HttpTestingController;
-
+  const navegar = jasmine.createSpy('navigate');
+  const completa = jasmine.createSpy('navegacionCompleta');
+  const router = { navigate: navegar, url: '/' };
   beforeEach(() => {
-    localStorage.clear();
-    navegar.calls.reset();
-    navegar.and.resolveTo(true);
-    enrutador.url = '/';
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        {
-          provide: Router,
-          useValue: enrutador,
-        },
-      ],
-    });
+    localStorage.clear(); navegar.calls.reset(); completa.calls.reset(); navegar.and.resolveTo(true); router.url = '/';
+    TestBed.configureTestingModule({ providers: [provideHttpClient(),provideHttpClientTesting(),
+      { provide: Router, useValue: router }, { provide: NAVEGACION_COMPLETA, useValue: completa }] });
     http = TestBed.inject(HttpTestingController);
   });
+  afterEach(() => { http.verify(); localStorage.clear(); });
 
-  afterEach(() => localStorage.clear());
-
-  it('descarta una sesión persistida que ya expiró', () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() - 60_000))));
-
-    const auth = TestBed.inject(AuthService);
-
-    expect(auth.sesion()).toBeNull();
-    expect(auth.token).toBeNull();
-    expect(localStorage.getItem(CLAVE_SESION)).toBeNull();
+  it('retira la sesión legada sin traducir ADMIN a otra atribución', () => {
+    localStorage.setItem('controllocal.sesion.v2',JSON.stringify({ ...guardada(), rol:'ADMIN' }));
+    const a = TestBed.inject(AuthService);
+    expect(a.sesion()).toBeNull(); expect(a.token).toBeNull();
+    expect(localStorage.getItem('controllocal.sesion.v2')).toBeNull();
+  });
+  it('descarta una sesión vencida o sin metadatos contextuales', () => {
+    localStorage.setItem(CLAVE,JSON.stringify({ ...guardada(), expiraEn:new Date(Date.now()-1000).toISOString() }));
+    expect(TestBed.inject(AuthService).sesion()).toBeNull();
+  });
+  it('limpia una sola vez ante cierres concurrentes y conserva el destino seguro', () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada())); router.url='/propiedades?pagina=3';
+    const a=TestBed.inject(AuthService); a.cerrarSesion(); a.cerrarSesion();
+    expect(a.sesion()).toBeNull(); expect(localStorage.getItem(CLAVE)).toBeNull();
+    expect(navegar).toHaveBeenCalledOnceWith(['/login'],{queryParams:{volverA:'/propiedades?pagina=3'},replaceUrl:true});
+  });
+  it('logout conserva el token hasta avisar al servidor y limpia aunque falle la red', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada())); const a=TestBed.inject(AuthService);
+    const salida=a.salir(); expect(a.token).toBe('token-prueba');
+    http.expectOne(`${API_BASE_URL}/auth/logout`).flush({error:'red'},{status:500,statusText:'Error'});
+    await salida; expect(a.token).toBeNull(); expect(navegar).toHaveBeenCalledOnceWith(['/login'],{replaceUrl:true});
+  });
+  it('un desafío MFA todavía no crea sesión ni consulta un contexto', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush({desafio:'reto',expiraEn:'2099-01-01',metodo:'TOTP'},{status:202,statusText:'Accepted'});
+    expect((await entrada).tipo).toBe('desafio'); expect(a.token).toBeNull(); http.expectNone(`${API_BASE_URL}/sesion`);
+  });
+  it('login abre IDENTIDAD y no elige ni siquiera la única opción ofrecida', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable()); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush(perfil()); await entrada;
+    expect(a.sesion()?.rol).toBe('IDENTIDAD'); expect(a.contextoRequerido()).toBeTrue(); expect(a.tieneContexto()).toBeFalse();
+    expect(a.sesion()?.idCuenta).toBe(99); expect(a.sesion()?.revisionContexto).toBe(0);
+    http.expectNone(`${API_BASE_URL}/sesion/contexto`); expect(completa).not.toHaveBeenCalled();
+  });
+  it('un fallo técnico de GET sesion elimina la sesión y no fabrica una banda', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    const rechazo=expectAsync(entrada).toBeRejected();
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable()); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({error:'fallo'},{status:500,statusText:'Error'}); await rechazo;
+    expect(a.sesion()).toBeNull(); expect(localStorage.getItem(CLAVE)).toBeNull();
+  });
+  it('la obligación MFA conserva únicamente IDENTIDAD y el acceso al enrolamiento', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable()); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({...perfil(),debeEnrolarMfa:true}); await entrada;
+    expect(a.debeEnrolarMfa()).toBeTrue(); expect(a.sesion()?.rol).toBe('IDENTIDAD'); expect(a.tieneContexto()).toBeFalse();
+  });
+  it('la contraseña obligatoria no permite entrar al negocio', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable()); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({...perfil(),debeCambiarContrasena:true}); await entrada;
+    expect(a.debeCambiarContrasena()).toBeTrue(); expect(a.tieneContexto()).toBeFalse();
+  });
+  it('canjear el segundo factor también comprueba la sesión actual', async () => {
+    const a=TestBed.inject(AuthService); const entrada=a.verificarSegundoFactor('reto','123456');
+    http.expectOne(`${API_BASE_URL}/auth/mfa/verificar`).flush(cable()); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush(perfil()); await entrada;
+    expect(a.sesion()?.referenciaSesion).toBe('sesion-core'); expect(a.tieneContexto()).toBeFalse();
+  });
+  it('consulta las opciones actuales sin construir otro tenant o rol', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada('IDENTIDAD'))); const a=TestBed.inject(AuthService);
+    const consulta=a.contextosDisponibles(); http.expectOne(`${API_BASE_URL}/sesion/contextos`).flush([OPCION]);
+    expect(await consulta).toEqual([OPCION]); expect(a.sesion()?.idOrganizacion).toBe(0);
+  });
+  it('selecciona sólo la referencia y reinicia la página con todos los IDs confirmados', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada('IDENTIDAD'))); const a=TestBed.inject(AuthService);
+    const seleccion=a.seleccionarContexto(OPCION.referencia,'/propiedades?pagina=2');
+    const post=http.expectOne(`${API_BASE_URL}/sesion/contexto`); expect(post.request.body).toEqual({referencia:OPCION.referencia});
+    post.flush(cable('BROKER')); await tick(); http.expectOne(`${API_BASE_URL}/sesion`).flush(perfil('BROKER'));
+    const s=await seleccion;
+    expect([s.idCuenta,s.idOrganizacion,s.idUsuario,s.idDominio,s.revisionContexto]).toEqual([99,7,2,10,1]);
+    expect(s.contextoRef).toBe(OPCION.referencia); expect(s.modalidad).toBe('EMPRESARIAL');
+    expect(completa).toHaveBeenCalledOnceWith('/propiedades?pagina=2'); expect(a.sesion()?.rol).toBe('IDENTIDAD');
+    expect(JSON.parse(localStorage.getItem(CLAVE)!).rol).toBe('BROKER');
+  });
+  it('rechaza metadatos mezclados y no navega con una selección no comprobada', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada('IDENTIDAD'))); const a=TestBed.inject(AuthService);
+    const seleccion=a.seleccionarContexto(OPCION.referencia); const rechazo=expectAsync(seleccion).toBeRejected();
+    http.expectOne(`${API_BASE_URL}/sesion/contexto`).flush(cable('BROKER')); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({...perfil('BROKER'),idOrganizacion:99}); await rechazo;
+    expect(a.sesion()).toBeNull(); expect(completa).not.toHaveBeenCalled();
+  });
+  it('renovar vuelve a comprobar organización revisión y atribución', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada('AGENTE'))); const a=TestBed.inject(AuthService);
+    const renovada=a.renovar(); http.expectOne(`${API_BASE_URL}/auth/renovar`).flush(cable('AGENTE')); await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush(perfil('AGENTE')); await renovada;
+    expect(a.sesion()?.idOrganizacion).toBe(7); expect(a.tieneContexto()).toBeTrue();
+  });
+  it('un contexto de gobierno pendiente de MFA navega sólo al enrolamiento confirmado por Core', async () => {
+    localStorage.setItem(CLAVE,JSON.stringify(guardada('IDENTIDAD')));const a=TestBed.inject(AuthService);
+    const seleccion=a.seleccionarContexto(OPCION.referencia,'/seguridad');
+    const login={...cable('TENANT_ADMIN'),contextos:[{...OPCION,rol:'TENANT_ADMIN'}]};
+    http.expectOne(`${API_BASE_URL}/sesion/contexto`).flush(login);await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({...perfil('TENANT_ADMIN'),debeEnrolarMfa:true});await seleccion;
+    expect(completa).toHaveBeenCalledOnceWith('/enrolar-mfa?obligatorio=1');
+  });
+  it('una respuesta sin restricciones explícitas se rechaza, sin sesión provisional persistida', async () => {
+    const a=TestBed.inject(AuthService);const entrada=a.login({correo:'personal@brox.test',contrasena:'clave'});
+    const rechazo=expectAsync(entrada).toBeRejected();
+    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable());await tick();
+    http.expectOne(`${API_BASE_URL}/sesion`).flush({...perfil(),debeEnrolarMfa:undefined});await rechazo;
+    expect(a.sesion()).toBeNull();expect(localStorage.getItem(CLAVE)).toBeNull();
   });
 
-  it('limpia estado y almacenamiento y navega una sola vez ante 401 concurrentes', () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    auth.cerrarSesion();
-    auth.cerrarSesion();
-
-    expect(auth.sesion()).toBeNull();
-    expect(localStorage.getItem(CLAVE_SESION)).toBeNull();
-    expect(navegar).toHaveBeenCalledOnceWith(['/login'], { replaceUrl: true });
-  });
-
-  // ------------------------------------------------------------------
-  // D-S0-12: logout con efecto en servidor
-  // ------------------------------------------------------------------
-
-  it('salir avisa al servidor ANTES de limpiar, y luego limpia', async () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    const salida = auth.salir();
-    const peticion = http.expectOne(`${API_BASE_URL}/auth/logout`);
-    expect(peticion.request.method).toBe('POST');
-    // La sesión sigue viva mientras la petición viaja: si se limpiara antes, el
-    // interceptor mandaría el logout SIN token y el servidor no sabría a quién
-    // invalidar.
-    expect(auth.sesion()).not.toBeNull();
-
-    peticion.flush(null, { status: 204, statusText: 'No Content' });
-    await salida;
-
-    expect(auth.sesion()).toBeNull();
-    expect(localStorage.getItem(CLAVE_SESION)).toBeNull();
-    expect(navegar).toHaveBeenCalledWith(['/login'], { replaceUrl: true });
-  });
-
-  it('si el servidor falla, salir limpia igual: no deja al usuario atrapado', async () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    const salida = auth.salir();
-    http.expectOne(`${API_BASE_URL}/auth/logout`)
-      .flush({ error: 'boom' }, { status: 500, statusText: 'Server Error' });
-    await salida;
-
-    // El token caduca solo en 30 min; dejar al usuario dentro porque el
-    // servidor no contestó sería peor.
-    expect(auth.sesion()).toBeNull();
-    expect(localStorage.getItem(CLAVE_SESION)).toBeNull();
-    expect(navegar).toHaveBeenCalledWith(['/login'], { replaceUrl: true });
-  });
-
-  // ------------------------------------------------------------------
-  // Sesión por INACTIVIDAD: cuando caduca, el usuario no debería perder
-  // además la pantalla en la que estaba.
-  // ------------------------------------------------------------------
-
-  it('al caducar la sesión recuerda la pantalla para volver a ella', () => {
-    enrutador.url = '/locales?estado=D&page=3';
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    auth.cerrarSesion();
-
-    expect(navegar).toHaveBeenCalledOnceWith(['/login'], {
-      queryParams: { volverA: '/locales?estado=D&page=3' },
-      replaceUrl: true,
-    });
-  });
-
-  it('salir a propósito NO recuerda la pantalla: se espera el panel al volver', async () => {
-    enrutador.url = '/comisiones';
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    const salida = auth.salir();
-    http.expectOne(`${API_BASE_URL}/auth/logout`)
-      .flush(null, { status: 204, statusText: 'No Content' });
-    await salida;
-
-    expect(navegar).toHaveBeenCalledWith(['/login'], { replaceUrl: true });
-  });
-
-  it('renovar reemite la sesión y vuelve a resolver la banda efectiva', async () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    const renovada = auth.renovar();
-    const peticion = http.expectOne(`${API_BASE_URL}/auth/renovar`);
-    expect(peticion.request.method).toBe('POST');
-    peticion.flush({ ...cable(), token: 'token-renovado' });
-    await tick();
-    // La banda efectiva no cabe en el token: se relee en cada renovación para
-    // que un rol cambiado en el servidor no siga mandando en el menú otra
-    // media hora. Aquí el cable dice ADMIN y el servidor, TENANT_ADMIN.
-    http.expectOne(`${API_BASE_URL}/sesion`).flush({ rol: 'TENANT_ADMIN' });
-
-    await renovada;
-
-    expect(auth.token).toBe('token-renovado');
-    expect(auth.sesion()?.rol).toBe('TENANT_ADMIN');
-  });
-
-  // ------------------------------------------------------------------
-  // V37 (D-S0-22): el ingreso es de dos pasos, y el primero no siempre abre
-  // sesión. El SPA no puede saber de antemano quién tiene segundo factor —
-  // preguntarlo sería un padrón de cuentas—, así que distingue por el estado.
-  // ------------------------------------------------------------------
-
-  it('el 202 del desafío NO abre sesión: un desafío no autoriza nada', async () => {
-    const auth = TestBed.inject(AuthService);
-
-    const entrando = auth.login({ usuario: 'admin', contrasena: 'x' });
-    const peticion = http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`);
-    peticion.flush(
-      { desafio: 'vale-de-cinco-minutos', expiraEn: '2026-08-06T10:00:00Z', metodo: 'TOTP' },
-      { status: 202, statusText: 'Accepted' },
-    );
-    const resultado = await entrando;
-
-    expect(resultado.tipo).toBe('desafio');
-    expect(auth.sesion()).toBeNull();
-    expect(auth.token).toBeNull();
-    expect(localStorage.getItem(CLAVE_SESION)).toBeNull();
-    // Nada que pedir todavía: sin sesión no hay banda efectiva que resolver.
-    http.expectNone(`${API_BASE_URL}/sesion`);
-  });
-
-  it('canjear el desafío abre la sesión igual que un login sin segundo factor', async () => {
-    const auth = TestBed.inject(AuthService);
-
-    const verificando = auth.verificarSegundoFactor('vale', '123456');
-    http.expectOne(`${API_BASE_URL}/auth/mfa/verificar`).flush(cable());
-    await tick();
-    // La banda real la resuelve el servidor: el `rol` del cable congelado solo
-    // admite ADMIN|BROKER|AGENTE y ese ADMIN no es gobierno.
-    http.expectOne(`${API_BASE_URL}/sesion`).flush({
-      rol: 'TENANT_ADMIN',
-      usuario: 'admin',
-      idPersona: 1,
-      idDominio: 1,
-    });
-    const abierta = await verificando;
-
-    expect(abierta.rol).toBe('TENANT_ADMIN');
-    expect(auth.token).toBe('token-prueba');
-    expect(localStorage.getItem(CLAVE_SESION)).not.toBeNull();
-  });
-
-  it('anota la sesión capada cuando GET /sesion responde el 403 del enrolamiento', async () => {
-    const auth = TestBed.inject(AuthService);
-
-    const entrando = auth.login({ usuario: 'admin', contrasena: 'x' });
-    http.expectOne(`${API_BASE_URL}/auth/mfa/desafio`).flush(cable());
-    await tick();
-    http.expectOne(`${API_BASE_URL}/sesion`).flush(
-      { error: 'Debes enrolar tu segundo factor antes de continuar.', codigo: 'ENROLAMIENTO_MFA_REQUERIDO' },
-      { status: 403, statusText: 'Forbidden' },
-    );
-    await entrando;
-
-    // La sesión existe —el token vale para el enrolamiento— pero el panel
-    // respondería 403 entero, así que el login manda al paso que falta.
-    expect(auth.debeEnrolarMfa()).toBeTrue();
-    expect(auth.token).toBe('token-prueba');
-  });
-
-  it('cerrarSesion NO llama al servidor: es también el camino del 401', () => {
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion(new Date(Date.now() + 60_000))));
-    const auth = TestBed.inject(AuthService);
-
-    auth.cerrarSesion();
-
-    // Con el token ya inválido, pedir el logout devolvería otro 401 y
-    // realimentaría el mismo cierre.
-    http.expectNone(`${API_BASE_URL}/auth/logout`);
-    expect(auth.sesion()).toBeNull();
-  });
 });
-
-/**
- * Deja correr la cola de microtareas. Hace falta porque `GET /sesion` no se
- * emite dentro del `flush`: sale del `await` que sigue a la respuesta del
- * login, y sin ceder el turno `expectOne` buscaría una petición que todavía no
- * existe.
- */
-function tick(): Promise<void> {
-  return new Promise((resolver) => setTimeout(resolver, 0));
-}
-
-/** `LoginResponse` tal cual sale del cable congelado. */
-function cable(): LoginResponse {
-  return {
-    token: 'token-prueba',
-    expiraEnSegundos: 3600,
-    rol: 'ADMIN',
-    idUsuario: 1,
-    idDominio: 1,
-    nombre: 'Administrador',
-    usuario: 'admin',
-    expiraEn: new Date(Date.now() + 3_600_000).toISOString(),
-  };
-}
-
-function sesion(expiraEn: Date): Sesion {
-  return {
-    token: 'token-prueba',
-    expiraEnSegundos: 3600,
-    rol: 'AGENTE',
-    idUsuario: 1,
-    idDominio: 2,
-    nombre: 'Agente Prueba',
-    usuario: 'agente',
-    expiraEn: expiraEn.toISOString(),
-  };
-}

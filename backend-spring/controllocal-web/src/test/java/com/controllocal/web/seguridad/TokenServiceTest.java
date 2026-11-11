@@ -1,137 +1,102 @@
 package com.controllocal.web.seguridad;
 
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.EstadoDeAcceso;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Base64;
+import java.util.function.Consumer;
+import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * El formato del token es parte del contrato compartido con el backend
- * Jakarta (SSO del Strangler): estas pruebas fijan firma, claims y rechazo.
- */
+/** JWT v2 transporta una sesión durable Core; no crea atribuciones. */
 class TokenServiceTest {
-
-    /** Sin secreto configurado usa el fallback dev compartido con el backend viejo. */
     private final TokenService tokens = new TokenService("");
-
-    @Test
-    void emiteYValidaIdaYVuelta() {
-        TokenService.Sesion emitida = tokens.emitir("vmora", "AGENTE", 7, 101);
-        String jwt = tokens.firmar(emitida);
-
-        Optional<TokenService.Sesion> validada = tokens.validar(jwt);
-        assertTrue(validada.isPresent());
-        assertEquals("vmora", validada.get().usuario());
-        assertEquals("AGENTE", validada.get().rol());
-        assertEquals(7, validada.get().idUsuario());
-        assertEquals(101, validada.get().idDominio());
+    private static final String SID = "s".repeat(43);
+    private static final ContextosService.IdentidadAutenticada IDENTIDAD =
+            new ContextosService.IdentidadAutenticada(1000,"persona","persona@cuentas.example.test","Persona");
+    private static final ContextosService.Contexto CONTEXTO =
+            new ContextosService.Contexto("opaco",92,99,880,"AGENTE","EMPRESARIAL","Agencia");
+    private ContextosService.SesionAccesoDTO sesion(ContextosService.Contexto contexto,long revision) {
+        Instant iat=Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        return new ContextosService.SesionAccesoDTO(SID,revision,IDENTIDAD,contexto,iat,
+                iat.plusSeconds(TokenService.DURACION_SEGUNDOS),EstadoDeAcceso.SIN_RESTRICCIONES);
     }
-
-    @Test
-    void rechazaTokenManipulado() {
-        String jwt = tokens.firmar(tokens.emitir("rsalas", "BROKER", 2, 8));
-        String manipulado = jwt.substring(0, jwt.length() - 2) + "xx";
-        assertTrue(tokens.validar(manipulado).isEmpty());
+    @Test void firmaYValidaSesionCoreExactaConPersonaDelContextoElegido() {
+        var core=sesion(CONTEXTO,4);var emitida=tokens.de(core);
+        var validada=tokens.validar(tokens.firmar(emitida)).orElseThrow();
+        assertEquals(emitida,validada);assertEquals(99,validada.idUsuario());assertEquals(880,validada.idDominio());
+        assertNotEquals(IDENTIDAD.idCuenta(),validada.idUsuario());
+        assertEquals(SID,validada.referenciaSesion());assertEquals(4,validada.revisionContexto());
     }
-
-    @Test
-    void rechazaFirmaDeOtroSecreto() {
-        TokenService otro = new TokenService("un-secreto-distinto-de-al-menos-32-caracteres");
-        String jwt = otro.firmar(otro.emitir("admin", "ADMIN", 1, 1));
-        assertTrue(tokens.validar(jwt).isEmpty());
+    @Test void sinContextoFirmaIdentidadSinInventarAtribucionComercial() {
+        var validada=tokens.validar(tokens.firmar(tokens.de(sesion(null,1)))).orElseThrow();
+        assertEquals("IDENTIDAD",validada.rol());assertEquals(0,validada.idUsuario());assertEquals(0,validada.idDominio());
     }
-
-    @Test
-    void rechazaBasura() {
-        assertTrue(tokens.validar(null).isEmpty());
-        assertTrue(tokens.validar("").isEmpty());
-        assertTrue(tokens.validar("a.b").isEmpty());
-        assertTrue(tokens.validar("a.b.c").isEmpty());
+    @Test void claimsVersionSesionYRevisionSonExplicitos() throws Exception {
+        String jwt=tokens.firmar(tokens.de(sesion(CONTEXTO,4)));
+        var c=new ObjectMapper().readTree(Base64.getUrlDecoder().decode(jwt.split("\\.")[1]));
+        assertEquals(2,c.path("v").asInt());assertEquals(SID,c.path("sid").asText());
+        assertEquals(4,c.path("ctx").asLong());assertFalse(c.has("organizacionId"));
     }
-
-    @Test
-    void noEmiteSesionesInvalidas() {
-        assertThrows(IllegalArgumentException.class, () -> tokens.emitir("", "AGENTE", 1, 1));
-        assertThrows(IllegalArgumentException.class, () -> tokens.emitir("x", "OTRO", 1, 1));
-        assertThrows(IllegalArgumentException.class, () -> tokens.emitir("x", "AGENTE", 0, 1));
-        assertFalse(TokenService.DURACION_SEGUNDOS <= 0);
+    @Test void rechazaTokenManipulado() {
+        String jwt=tokens.firmar(tokens.de(sesion(CONTEXTO,1)));
+        assertTrue(tokens.validar(jwt.substring(0,jwt.length()-2)+"xx").isEmpty());
     }
-
-    // ------------------------------------------------------------------
-    // D-S0-12: `iat` expuesto, que es lo que permite invalidar sesiones
-    // ------------------------------------------------------------------
-
-    @Test
-    void elIatViajaEnElTokenYVuelveEnLaSesion() {
-        TokenService.Sesion emitida = tokens.emitir("vmora", "AGENTE", 7, 101);
-
-        TokenService.Sesion validada = tokens.validar(tokens.firmar(emitida)).orElseThrow();
-
-        // Ida y vuelta exacto: el filtro compara este instante contra
-        // sesiones_invalidas_desde, asi que un desfase seria una revocacion
-        // que no revoca o un token vivo que muere sin motivo.
-        assertEquals(emitida.emitidoEn(), validada.emitidoEn());
+    @Test void rechazaFirmaDeOtroSecreto() {
+        var otro=new TokenService("un-secreto-distinto-de-al-menos-32-caracteres");
+        assertTrue(tokens.validar(otro.firmar(otro.de(sesion(CONTEXTO,1)))).isEmpty());
     }
-
-    @Test
-    void elIatFirmadoEsElDeLaSesionYNoUnInstanteNuevo() {
-        TokenService.Sesion emitida = tokens.emitir("vmora", "AGENTE", 7, 101);
-
-        String uno = tokens.firmar(emitida);
-        String otro = tokens.firmar(emitida);
-
-        // Firmar dos veces la MISMA sesion da el mismo token. Si `firmar`
-        // volviera a leer el reloj, dos firmas separadas por un segundo
-        // producirian tokens distintos con `iat` distintos.
-        assertEquals(uno, otro);
+    @Test void rechazaBasuraYClaimsObligatoriosAusentes() {
+        for(String jwt:new String[]{null,"","a.b","a.b.c"})assertTrue(tokens.validar(jwt).isEmpty());
+        for(String claim:new String[]{"v","sid","ctx","iat","exp","rol","idUsuario","idDominio"})
+            assertTrue(tokens.validar(refirmar(c->c.remove(claim))).isEmpty(),claim);
     }
-
-    @Test
-    void elIatTienePrecisionDeSegundo() {
-        TokenService.Sesion emitida = tokens.emitir("vmora", "AGENTE", 7, 101);
-
-        // El claim viaja en segundos epoch; guardar mas resolucion en el record
-        // haria que el objeto y el JWT firmado dijeran cosas distintas.
-        assertEquals(0, emitida.emitidoEn().getNano());
-        assertEquals(TokenService.DURACION_SEGUNDOS,
-                emitida.expiraEn().getEpochSecond() - emitida.emitidoEn().getEpochSecond());
+    @Test void versionUnoYAdminHistoricoNoAbrenSesionActual() {
+        assertTrue(tokens.validar(refirmar(c->c.put("v",1))).isEmpty());
+        assertTrue(tokens.validar(refirmar(c->c.put("rol","ADMIN"))).isEmpty());
     }
-
-    @Test
-    void unTokenSinIatSeLeeComoEmitidoEnEpoch() {
-        // No se exige `iat` para no romper el SSO si el otro backend lo omitiera.
-        // Ausente = EPOCH, que es "emitido hace siempre": cualquier
-        // invalidacion posterior lo mata. Falla del lado seguro.
-        TokenService.Sesion emitida = tokens.emitir("vmora", "AGENTE", 7, 101);
-        String sinIat = firmarSin("iat", emitida);
-
-        TokenService.Sesion validada = tokens.validar(sinIat).orElseThrow();
-
-        assertEquals(java.time.Instant.EPOCH, validada.emitidoEn());
+    @Test void referenciaInvalidaYRevisionNegativaSeRechazan() {
+        assertTrue(tokens.validar(refirmar(c->c.put("sid","uuid-no-es-referencia-durable"))).isEmpty());
+        assertTrue(tokens.validar(refirmar(c->c.put("ctx",-1))).isEmpty());
+        var core=sesion(CONTEXTO,1);
+        assertThrows(IllegalArgumentException.class,()->tokens.firmar(new TokenService.Sesion("persona","AGENTE",99,880,
+                core.emitidaEn(),core.venceEn(),null,1)));
     }
-
-    /** Reconstruye el token quitando un claim, para probar el borde del SSO. */
-    private String firmarSin(String claim, TokenService.Sesion sesion) {
-        String jwt = tokens.firmar(sesion);
-        String[] partes = jwt.split("\\.", -1);
-        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    @Test void identidadNoAdmiteRolOperativoYContextoComercialNoAdmiteCero() {
+        assertTrue(tokens.validar(refirmar(c->{c.put("rol","IDENTIDAD");c.put("idDominio",880);})).isEmpty());
+        assertTrue(tokens.validar(refirmar(c->c.put("idDominio",0))).isEmpty());
+    }
+    @Test void expiracionYEmisionPosteriorAlVencimientoSeRechazan() {
+        assertTrue(tokens.validar(refirmar(c->c.put("exp",Instant.now().minusSeconds(1).getEpochSecond()))).isEmpty());
+        assertTrue(tokens.validar(refirmar(c->c.put("iat",Instant.now().plusSeconds(3600).getEpochSecond()))).isEmpty());
+    }
+    @Test void firmaConservaIatCoreEnPrecisionDeSegundo() {
+        var core=sesion(CONTEXTO,1);var emitida=tokens.de(core);
+        String una=tokens.firmar(emitida),otra=tokens.firmar(emitida);
+        assertEquals(una,otra);assertEquals(core.emitidaEn(),tokens.validar(una).orElseThrow().emitidoEn());
+        assertEquals(0,emitida.emitidoEn().getNano());
+        assertEquals(TokenService.DURACION_SEGUNDOS,emitida.expiraEn().getEpochSecond()-emitida.emitidoEn().getEpochSecond());
+    }
+    @Test void dosRevisionesEnElMismoSegundoTienenTokensDistintos() {
+        var a=sesion(CONTEXTO,1);
+        var b=new ContextosService.SesionAccesoDTO(a.referencia(),2,a.identidad(),a.activo(),a.emitidaEn(),a.venceEn(),a.restricciones());
+        String primero=tokens.firmar(tokens.de(a)),segundo=tokens.firmar(tokens.de(b));
+        assertNotEquals(primero,segundo);
+        assertEquals(tokens.validar(primero).orElseThrow().emitidoEn(),tokens.validar(segundo).orElseThrow().emitidoEn());
+        assertNotEquals(tokens.validar(primero).orElseThrow().revisionContexto(),tokens.validar(segundo).orElseThrow().revisionContexto());
+    }
+    private String refirmar(Consumer<ObjectNode> cambio) {
+        String[] partes=tokens.firmar(tokens.de(sesion(CONTEXTO,1))).split("\\.",-1);
         try {
-            var carga = (com.fasterxml.jackson.databind.node.ObjectNode)
-                    json.readTree(java.util.Base64.getUrlDecoder().decode(partes[1]));
-            carga.remove(claim);
-            String cargaNueva = java.util.Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(carga.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            // Hay que refirmar: cambiar la carga invalida la firma anterior.
-            java.lang.reflect.Method firma = TokenService.class.getDeclaredMethod("firma", String.class);
-            firma.setAccessible(true);
-            String contenido = partes[0] + "." + cargaNueva;
-            return contenido + "." + firma.invoke(tokens, contenido);
-        } catch (ReflectiveOperationException | java.io.IOException error) {
-            throw new IllegalStateException("No se pudo preparar el fixture", error);
-        }
+            var carga=(ObjectNode)new ObjectMapper().readTree(Base64.getUrlDecoder().decode(partes[1]));cambio.accept(carga);
+            String contenido=partes[0]+"."+Base64.getUrlEncoder().withoutPadding().encodeToString(carga.toString().getBytes(StandardCharsets.UTF_8));
+            var firma=TokenService.class.getDeclaredMethod("firma",String.class);firma.setAccessible(true);
+            return contenido+"."+firma.invoke(tokens,contenido);
+        } catch(ReflectiveOperationException|java.io.IOException e){throw new IllegalStateException("Fixture JWT",e);}
     }
 }
+

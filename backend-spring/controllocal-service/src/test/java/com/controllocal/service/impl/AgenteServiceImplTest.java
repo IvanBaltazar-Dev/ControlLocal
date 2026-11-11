@@ -1,7 +1,6 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.organizacion.UsuarioOrganizacion;
-import com.controllocal.domain.persona.CredencialUsuario;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
@@ -15,7 +14,6 @@ import com.controllocal.persistence.query.MovimientoComisionPorMoneda;
 import com.controllocal.persistence.query.RepartoComisionPorMoneda;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.CredencialUsuarioRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
@@ -29,6 +27,7 @@ import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.UsuariosInternos;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -39,18 +38,22 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashMap;
+import java.util.Collection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
 
 class AgenteServiceImplTest {
 
@@ -63,8 +66,6 @@ class AgenteServiceImplTest {
     private final DetalleBrokerRepository brokers = mock(DetalleBrokerRepository.class);
     private final SupervisionAgenteRepository supervisiones =
             mock(SupervisionAgenteRepository.class);
-    private final CredencialUsuarioRepository credenciales =
-            mock(CredencialUsuarioRepository.class);
     private final PersonaRepository personas = mock(PersonaRepository.class);
     private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
     private final OportunidadComercialRepository oportunidades =
@@ -75,12 +76,20 @@ class AgenteServiceImplTest {
     private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
 
     private final AgenteServiceImpl service = new AgenteServiceImpl(
-            agentes, brokers, supervisiones, credenciales, personas,
+            agentes, brokers, supervisiones, personas,
             captaciones, oportunidades, solicitudes, contratos, usuarios);
 
     private final Actor broker = new Actor(ORG, 2L, BROKER, "BROKER");
     private final Actor admin = new Actor(ORG, 1L, ADMIN, "TENANT_ADMIN");
     private final Actor agenteActor = new Actor(ORG, 3L, AGENTE, "AGENTE");
+    private final Map<Long,String> estadosLocales=new HashMap<>();
+
+    @BeforeEach void membresias() {
+        when(usuarios.estadoLocalDelRol(anyLong(),anyLong(),any())).thenAnswer(i->estadosLocales.getOrDefault(i.getArgument(1),"A"));
+        when(usuarios.estadosLocalesDelRol(anyLong(),anyCollection(),any())).thenAnswer(i->{
+            Map<Long,String> r=new HashMap<>();for(Long id:(Collection<Long>)i.getArgument(1))r.put(id,estadosLocales.getOrDefault(id,"A"));return r;
+        });
+    }
 
     @Test
     void elBrokerListaSoloSuPaginaYLosContadoresLleganAgrupados() {
@@ -91,7 +100,7 @@ class AgenteServiceImplTest {
         when(agentes.buscar(eq(ORG), eq(false), eq(BROKER), isNull(), isNull(), isNull(),
                 isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(agente)));
-        when(usuarios.credencialesPorPersona(ORG, List.of(3L)))
+        when(usuarios.cuentasPorPersona(ORG, List.of(3L)))
                 .thenReturn(Map.of(3L,
                         credencial(agente.getRol().getPersona(), "vmora", "A")));
         when(captaciones.contarEnCarteraPorAgentes(ORG, List.of(AGENTE)))
@@ -119,6 +128,21 @@ class AgenteServiceImplTest {
                 isNull(), any(Pageable.class));
     }
 
+    @Test
+    void elPadronDeGobiernoOmiteActividadSinConsultarCartera() {
+        DetalleAgente fila = agente(AGENTE, 3L);
+        when(agentes.buscar(eq(ORG), eq(true), anyLong(), isNull(), isNull(), isNull(),
+                isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(fila)));
+        when(usuarios.cuentasPorPersona(ORG, List.of(3L)))
+                .thenReturn(Map.of(3L, credencial(fila.getRol().getPersona(), "vmora", "A")));
+
+        var proyeccion = service.listar(1, 50, admin).items().getFirst();
+
+        assertNull(proyeccion.captacionesActivas());
+        assertNull(proyeccion.operacionesActivas());
+        verifyNoInteractions(captaciones, oportunidades, solicitudes, contratos);
+    }
+
     /**
      * Los cuatro filtros son ADITIVOS: llegan tal cual a la consulta, en
      * mayuscula los codigos, y el texto recortado. Sin ellos, la llamada es
@@ -144,6 +168,15 @@ class AgenteServiceImplTest {
                 () -> service.listar(1, 50, agenteActor));
     }
 
+    @Test
+    void elPadronExigeUnaAtribucionExplicitaInclusoSinHttp() {
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(1, 50,
+                new Actor(ORG, 1L, ADMIN, "IDENTIDAD")));
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(1, 50,
+                new Actor(ORG, 1L, ADMIN, null)));
+        verifyNoInteractions(agentes);
+    }
+
     // ------------------------------------------------------------------
     // Ficha individual (extension aditiva)
     // ------------------------------------------------------------------
@@ -158,13 +191,13 @@ class AgenteServiceImplTest {
     void laFichaSeparaComisionGeneradaCobradaAsignadaYPagada() {
         prepararFicha();
         when(contratos.comisionesGeneradasDeAgente(ORG, AGENTE))
-                .thenReturn(List.of(generada("PEN", "10000.00")));
+                .thenReturn(List.of(generada("PEN", "10000.00","4000.00")));
         when(contratos.repartosDeAgente(ORG, AGENTE))
-                .thenReturn(List.of(reparto("PEN", "3000.00")));
+                .thenReturn(List.of(reparto("PEN", "3000.00","2000.00")));
         when(contratos.movimientosDeAgente(ORG, AGENTE))
                 .thenReturn(List.of(movimiento("PEN", "6000.00", "1000.00")));
 
-        var comisiones = service.ficha(AGENTE, admin).comisiones();
+        var comisiones = service.ficha(AGENTE, broker).comisiones();
 
         assertEquals(new BigDecimal("10000.00"), comisiones.generada().getFirst().monto());
         assertEquals(new BigDecimal("6000.00"), comisiones.cobrada().getFirst().monto());
@@ -180,11 +213,11 @@ class AgenteServiceImplTest {
     void elSaldoPendienteNuncaEsNegativo() {
         prepararFicha();
         when(contratos.comisionesGeneradasDeAgente(ORG, AGENTE))
-                .thenReturn(List.of(generada("USD", "1000.00")));
+                .thenReturn(List.of(generada("USD", "1000.00","0")));
         when(contratos.movimientosDeAgente(ORG, AGENTE))
                 .thenReturn(List.of(movimiento("USD", "1500.00", "0.00")));
 
-        var comisiones = service.ficha(AGENTE, admin).comisiones();
+        var comisiones = service.ficha(AGENTE, broker).comisiones();
 
         assertEquals(BigDecimal.ZERO, comisiones.pendienteCobro().getFirst().monto());
     }
@@ -198,9 +231,9 @@ class AgenteServiceImplTest {
         when(solicitudes.contarPorEstadoDeAgente(ORG, AGENTE))
                 .thenReturn(List.of(conteoEstado("C", 2)));
 
-        var ficha = service.ficha(AGENTE, admin);
+        var ficha = service.ficha(AGENTE, broker);
 
-        assertEquals("Activa", ficha.captaciones().getFirst().descripcion());
+        assertEquals("Aprobado", ficha.captaciones().getFirst().descripcion());
         assertEquals(3, ficha.captaciones().getFirst().total());
         assertEquals("Cerrada", ficha.solicitudes().getFirst().descripcion());
     }
@@ -218,26 +251,42 @@ class AgenteServiceImplTest {
 
     @Test
     void laFichaDeUnAgenteInexistenteResponde404() {
-        prepararBroker(ADMIN, 1L, true, "admin@controllocal.test");
+        prepararBroker(BROKER, 2L, false, "rsalas");
         when(agentes.buscarFicha(ORG, 999L)).thenReturn(Optional.empty());
 
-        assertThrows(NoEncontradoException.class, () -> service.ficha(999L, admin));
+        assertThrows(NoEncontradoException.class, () -> service.ficha(999L, broker));
     }
 
-    /** Sin supervision vigente la ficha no inventa un broker: viaja nula. */
+    /** Sin supervisión vigente no subsiste la autoridad comercial de otro equipo. */
     @Test
-    void unAgenteSinSupervisorVigenteTieneFichaSinBroker() {
+    void sinSupervisionVigenteElBrokerNoObtieneElExpediente() {
         prepararFicha();
         when(supervisiones.buscarActivaPorAgente(ORG, AGENTE)).thenReturn(Optional.empty());
 
-        assertNull(service.ficha(AGENTE, admin).supervision());
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.ficha(AGENTE, broker));
+    }
+
+    @Test
+    void administrarNoPermiteConsultarCarteraNiComisiones() {
+        assertThrows(AccesoNoAutorizadoException.class, () -> service.ficha(AGENTE, admin));
+        verifyNoInteractions(agentes, captaciones, oportunidades, solicitudes, contratos);
+    }
+
+    @Test
+    void elPerfilDeGobiernoSeSeleccionaExactamenteSinConsultarCartera() {
+        var fila=agente(AGENTE,3L);when(agentes.buscarFicha(ORG,AGENTE)).thenReturn(Optional.of(fila));
+        when(usuarios.cuenta(ORG,3L)).thenReturn(credencial(fila.getRol().getPersona(),"vmora","A"));
+        var perfil=service.consultarParaGobierno(AGENTE,admin);
+        assertEquals(AGENTE,perfil.id());assertNull(perfil.captacionesActivas());assertNull(perfil.operacionesActivas());
+        verifyNoInteractions(captaciones,oportunidades,solicitudes,contratos);
+        assertThrows(AccesoNoAutorizadoException.class,()->service.consultarParaGobierno(AGENTE,broker));
     }
 
     private void prepararFicha() {
-        prepararBroker(ADMIN, 1L, true, "admin@controllocal.test");
+        prepararBroker(BROKER, 2L, false, "rsalas");
         DetalleAgente agente = agente(AGENTE, 3L);
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(agente));
-        when(usuarios.credencial(ORG, 3L))
+        when(usuarios.cuenta(ORG, 3L))
                 .thenReturn(credencial(agente.getRol().getPersona(), "vmora", "A"));
         when(supervisiones.buscarActivaPorAgente(ORG, AGENTE))
                 .thenReturn(Optional.of(supervision(BROKER)));
@@ -262,17 +311,51 @@ class AgenteServiceImplTest {
         };
     }
 
-    private static ComisionGeneradaPorMoneda generada(String moneda, String monto) {
+    @Test void sobrerecibidoDeUnaComisionNoCompensaElSaldoDeOtra(){
+        prepararFicha();
+        when(contratos.comisionesGeneradasDeAgente(ORG,AGENTE))
+                .thenReturn(List.of(generada("PEN","20000","10000")));
+        when(contratos.movimientosDeAgente(ORG,AGENTE))
+                .thenReturn(List.of(movimiento("PEN","15000","0")));
+        assertEquals(new BigDecimal("10000"),service.ficha(AGENTE,broker).comisiones().pendienteCobro().getFirst().monto());
+    }
+    @Test void basePendienteNoSeTransformaEnCeroYLaCoberturaSigueVisible(){
+        prepararFicha();var fila=org.mockito.Mockito.mock(ComisionGeneradaPorMoneda.class);
+        when(fila.getMoneda()).thenReturn("PEN");when(fila.getDeterminados()).thenReturn(0L);
+        when(fila.getPendientes()).thenReturn(1L);when(fila.getSaldoDeterminados()).thenReturn(0L);
+        when(fila.getSaldoPendientes()).thenReturn(1L);
+        when(contratos.comisionesGeneradasDeAgente(ORG,AGENTE)).thenReturn(List.of(fila));
+        var datos=service.ficha(AGENTE,broker).comisiones();
+        assertNull(datos.generada().getFirst().monto());assertEquals(1L,datos.generada().getFirst().pendientes());
+        assertNull(datos.pendienteCobro().getFirst().monto());
+    }
+    @Test void corrupcionDeUnMovimientoNoSeOcultaConUnMaximoCero(){
+        prepararFicha();var fila=org.mockito.Mockito.mock(MovimientoComisionPorMoneda.class);
+        when(fila.getAnomalia()).thenReturn(true);
+        when(contratos.movimientosDeAgente(ORG,AGENTE)).thenReturn(List.of(fila));
+        assertThrows(IllegalStateException.class,()->service.ficha(AGENTE,broker));
+    }
+    private static ComisionGeneradaPorMoneda generada(String moneda, String monto,String saldo) {
         return new ComisionGeneradaPorMoneda() {
             @Override public String getMoneda() { return moneda; }
             @Override public BigDecimal getMonto() { return new BigDecimal(monto); }
+            @Override public BigDecimal getSaldoInformativoSobreCalculo(){return new BigDecimal(saldo);}
+            @Override public Long getDeterminados(){return 1L;}
+            @Override public Long getPendientes(){return 0L;}
+            @Override public Long getSaldoDeterminados(){return 1L;}
+            @Override public Long getSaldoPendientes(){return 0L;}
         };
     }
 
-    private static RepartoComisionPorMoneda reparto(String moneda, String parte) {
+    private static RepartoComisionPorMoneda reparto(String moneda, String parte,String saldo) {
         return new RepartoComisionPorMoneda() {
             @Override public String getMoneda() { return moneda; }
             @Override public BigDecimal getParteAgente() { return new BigDecimal(parte); }
+            @Override public BigDecimal getSaldoPagoAgente(){return new BigDecimal(saldo);}
+            @Override public Long getDeterminados(){return 1L;}
+            @Override public Long getPendientes(){return 0L;}
+            @Override public Long getSaldoDeterminados(){return 1L;}
+            @Override public Long getSaldoPendientes(){return 0L;}
         };
     }
 
@@ -282,19 +365,11 @@ class AgenteServiceImplTest {
             @Override public String getMoneda() { return moneda; }
             @Override public BigDecimal getMontoCobrado() { return new BigDecimal(cobrado); }
             @Override public BigDecimal getMontoPagadoAgente() { return new BigDecimal(pagado); }
+            @Override public Boolean getAnomalia(){return false;}
         };
     }
 
-    @Test
-    void elAltaExigeLosTresCamposDelCableAntesDeValidarSupervisor() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new AgenteService.DatosAgente(
-                        "", null, null, null, null, null,
-                        "nuevo", "clave", null, null, null, null, null), admin));
 
-        assertEquals("Nombre, usuario y contrasena del agente son obligatorios.",
-                error.getMessage());
-    }
 
     /**
      * D-S0-17 fila 17: el alta cambio de dueno. Antes la hacia el broker y el
@@ -302,79 +377,13 @@ class AgenteServiceImplTest {
      * fijaba la regla vieja y ahora fija la nueva — la comprobacion no
      * desaparece, se da la vuelta.
      */
-    @Test
-    void elBrokerYaNoRegistraAgentes() {
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(datosAlta(), broker));
 
-        verifyNoInteractions(supervisiones);
-    }
 
-    @Test
-    void elAltaExigeElBrokerSupervisorPorqueElAdministradorNoSupervisaANadie() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new AgenteService.DatosAgente(
-                        "Agente Nuevo", null, null, "1234", null, null,
-                        "anuevo", "Temporal2026", "Lima", null, null, null, null), admin));
 
-        assertEquals("Debe indicar el broker que supervisara al agente.",
-                error.getMessage());
-    }
 
-    @Test
-    void elAdminCreaLosDosRolesDetalleYSupervisionInicialAtomicos() {
-        prepararBroker(BROKER, 2L, false, "rsalas");
-        when(agentes.countByOrganizacionId(ORG)).thenReturn(6L);
-        Persona persona = persona(3L, "Agente Nuevo");
-        PersonaRol rol = rol(AGENTE, persona, TipoRol.AGENTE);
-        CredencialUsuario credencial = credencial(persona, "anuevo", "A");
-        when(usuarios.registrar(eq(ORG), eq(TipoRol.AGENTE), eq("N"), eq("D"),
-                eq("1234"), eq("Agente Nuevo"), any(), any(), eq("anuevo"),
-                eq("Temporal2026"), eq("A")))
-                .thenReturn(new UsuariosInternos.Alta(persona, rol, credencial, membresia()));
-        when(agentes.save(any(DetalleAgente.class))).thenAnswer(inv -> {
-            DetalleAgente guardado = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardado, "id", AGENTE);
-            return guardado;
-        });
 
-        var creado = service.registrar(datosAlta(), admin);
 
-        assertEquals("AGE-007", creado.codigoAgente());
-        assertEquals("D", creado.estadoOperativo());
-        assertEquals(0, creado.captacionesActivas());
-        assertEquals(0, creado.operacionesActivas());
-        ArgumentCaptor<SupervisionAgente> supervision =
-                ArgumentCaptor.forClass(SupervisionAgente.class);
-        verify(supervisiones).save(supervision.capture());
-        assertEquals(BROKER, supervision.getValue().getIdRolBroker());
-        assertEquals(AGENTE, supervision.getValue().getIdRolAgente());
-        assertEquals("Asignacion inicial por registro de agente.",
-                supervision.getValue().getMotivo());
-    }
 
-    @Test
-    void documentoCortoNoDisparaLaValidacionDePropietarios() {
-        prepararBroker(BROKER, 2L, false, "rsalas");
-        when(agentes.countByOrganizacionId(ORG)).thenReturn(0L);
-        Persona persona = persona(3L, "Agente Nuevo");
-        persona.setNumeroDocumento("1234");
-        PersonaRol rol = rol(AGENTE, persona, TipoRol.AGENTE);
-        when(usuarios.registrar(eq(ORG), eq(TipoRol.AGENTE), eq("N"), eq("D"),
-                eq("1234"), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new UsuariosInternos.Alta(persona, rol,
-                        credencial(persona, "anuevo", "A"), membresia()));
-        when(agentes.save(any(DetalleAgente.class))).thenAnswer(inv -> {
-            DetalleAgente guardado = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardado, "id", AGENTE);
-            return guardado;
-        });
-
-        service.registrar(datosAlta(), admin);
-
-        verify(usuarios).registrar(eq(ORG), eq(TipoRol.AGENTE), eq("N"), eq("D"),
-                eq("1234"), any(), any(), any(), any(), any(), any());
-    }
 
     /**
      * Fila 18: la edicion paso a ser gobierno. El filtro de supervision que
@@ -385,7 +394,7 @@ class AgenteServiceImplTest {
     @Test
     void elBrokerYaNoEditaAgentes() {
         assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.actualizar(AGENTE, datosAlta(), broker));
+                () -> service.actualizar(AGENTE, datosEdicion(), broker));
 
         verifyNoInteractions(agentes);
     }
@@ -394,7 +403,7 @@ class AgenteServiceImplTest {
     void elPutSoloTocaLosCamposPermitidosYRespondeContadoresEnCero() {
         prepararBroker(BROKER, 2L, false, "rsalas");
         DetalleAgente agente = agente(AGENTE, 3L);
-        CredencialUsuario credencial =
+        CuentaAcceso credencial =
                 credencial(agente.getRol().getPersona(), "vmora", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(agente));
         // D-P0-13: este cuerpo trae `estado` y `estadoOperativo`, o sea cambia
@@ -405,48 +414,36 @@ class AgenteServiceImplTest {
         when(agentes.bloquearParaGobierno(ORG, AGENTE)).thenReturn(Optional.of(agente));
         when(supervisiones.buscarActivaPorAgente(ORG, AGENTE))
                 .thenReturn(Optional.of(supervision(BROKER, AGENTE)));
-        when(usuarios.credencial(ORG, 3L)).thenReturn(credencial);
+        when(usuarios.cuenta(ORG, 3L)).thenReturn(credencial);
 
         var ficha = service.actualizar(AGENTE, new AgenteService.DatosAgente(
-                "Valentina Editada", "J", "R", "99999999999",
-                "999111222", "editada@test.pe", "ignorado", "ignorada",
-                "Nueva zona", "AGE-999", "I", "L", null), admin);
+                "Valentina Editada", "999111222", "editada@test.pe", "Nueva zona", "L"), admin);
 
         assertEquals("Valentina Editada", ficha.nombre());
         assertEquals("D", ficha.tipoDocumento());
         assertEquals("11111111", ficha.numeroDocumento());
         assertEquals("vmora", ficha.usuario());
         assertEquals("AGE-001", ficha.codigoAgente());
-        assertEquals("I", ficha.estadoAdministrativo());
+        assertEquals("A", ficha.estadoAdministrativo());
         assertEquals("L", ficha.estadoOperativo());
-        assertEquals(0, ficha.captacionesActivas());
-        assertEquals(0, ficha.operacionesActivas());
+        assertNull(ficha.captacionesActivas());
+        assertNull(ficha.operacionesActivas());
+        verifyNoInteractions(captaciones, oportunidades, solicitudes, contratos);
     }
 
-    @Test
-    void unTipoDePersonaInvalidoConservaElMensajeV1() {
-        prepararBroker(BROKER, 2L, false, "rsalas");
 
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new AgenteService.DatosAgente(
-                        "Agente", "X", "D", "1234", null, null,
-                        "nuevo", "clave", null, null, null, null, BROKER), admin));
-
-        assertEquals("Valor invalido: X", error.getMessage());
-    }
 
     private void prepararBroker(long id, long idPersona,
                                 boolean esAdmin, String usuario) {
         DetalleBroker detalle = broker(id, idPersona, esAdmin);
         when(brokers.buscarFicha(ORG, id)).thenReturn(Optional.of(detalle));
-        when(usuarios.credencial(ORG, idPersona))
+        when(usuarios.cuenta(ORG, idPersona))
                 .thenReturn(credencial(detalle.getRol().getPersona(), usuario, "A"));
     }
 
-    private static AgenteService.DatosAgente datosAlta() {
+    private static AgenteService.DatosAgente datosEdicion() {
         return new AgenteService.DatosAgente(
-                "Agente Nuevo", null, null, "1234", null, null,
-                "anuevo", "Temporal2026", "Lima", null, null, null, BROKER);
+                "Agente Nuevo", null, null, "Lima", null);
     }
 
     private static DetalleBroker broker(long id, long idPersona, boolean esAdmin) {
@@ -455,7 +452,6 @@ class AgenteServiceImplTest {
         broker.setRol(rol(id, persona(idPersona, "Broker"), TipoRol.BROKER));
         broker.setCodigoBroker(esAdmin ? "BRK-ADM-001" : "BRK-001");
         broker.setFechaDesignacion(LocalDate.of(2024, 1, 1));
-        broker.setEsAdministrador(esAdmin);
         ReflectionTestUtils.setField(broker, "id", id);
         return broker;
     }
@@ -504,22 +500,16 @@ class AgenteServiceImplTest {
         return rol;
     }
 
-    /** El alta devuelve tambien la membresia desde el Bloque 5 (D-S0-8). */
-    private static UsuarioOrganizacion membresia() {
-        UsuarioOrganizacion membresia = new UsuarioOrganizacion();
-        membresia.setOrganizacionId(ORG);
-        membresia.setRol(UsuarioOrganizacion.ROL_AGENTE);
-        return membresia;
-    }
 
-    private static CredencialUsuario credencial(
+    private static CuentaAcceso credencial(
             Persona persona, String usuario, String estado) {
-        CredencialUsuario credencial = new CredencialUsuario();
-        credencial.setOrganizacionId(ORG);
-        credencial.setRol(rol(90L, persona, TipoRol.USUARIO_INTERNO));
+        CuentaAcceso credencial = new CuentaAcceso();
+        credencial.setId(90L);
+        credencial.setCorreoPropio(usuario + "@cuenta.example");
+        credencial.setCorreoConfirmadoEn(java.time.Instant.parse("2026-01-01T00:00:00Z"));
         credencial.setNombreUsuario(usuario);
         credencial.setContrasenaHash("pbkdf2$100000$x$x");
-        credencial.setEstadoAdministrativo(estado);
+        credencial.setEstado(estado);
         return credencial;
     }
 

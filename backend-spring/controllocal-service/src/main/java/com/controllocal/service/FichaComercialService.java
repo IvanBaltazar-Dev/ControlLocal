@@ -19,7 +19,7 @@ public interface FichaComercialService {
 
     record FichaCliente(
             ClienteService.FichaCliente cliente,
-            boolean requerimientoActivo,
+            Boolean requerimientoActivo,
             String ctaRuta,
             Map<String, SeccionFicha> sections) {
     }

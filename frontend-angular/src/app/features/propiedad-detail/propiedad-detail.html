@@ -207,6 +207,48 @@
     }
   </section>
 
+  @if (unidadesRelacionadas().length > 0) {
+    <section class="bloque">
+      <h2>Unidades relacionadas</h2>
+      <ul class="titulares unidades-relacionadas">
+        @for (unidad of unidadesRelacionadas(); track unidad.idRelacion) {
+          <li>
+            <div>
+              <strong>{{ valor(unidad.codigo) }}</strong>
+              <dl class="datos">
+                <div>
+                  <dt>Relación</dt>
+                  <dd>{{ unidad.tipoRelacionRotulo }}</dd>
+                </div>
+                <div>
+                  <dt>Tipo de unidad</dt>
+                  <dd>{{ unidad.tipoRotulo }}</dd>
+                </div>
+                @if (unidad.partidaRegistral) {
+                  <div>
+                    <dt>Partida registral</dt>
+                    <dd>{{ unidad.partidaRegistral }}</dd>
+                  </div>
+                }
+                <div>
+                  <dt>Vigencia</dt>
+                  <dd>
+                    {{ fecha(unidad.vigenteDesde) }}
+                    @if (unidad.vigenteHasta) {
+                      — {{ fecha(unidad.vigenteHasta) }}
+                    } @else {
+                      — vigente
+                    }
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
   <!-- ================================================================
        2. La gestión comercial: un bloque POR ENCARGO.
 

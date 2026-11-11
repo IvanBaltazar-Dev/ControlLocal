@@ -13,7 +13,7 @@ public record ProspeccionResponse(Long id, String codigoProspeccion, Long localI
                                   String agenteNombre, String estado, String resultadoPropuesta,
                                   LocalDate fechaContacto, LocalDate fechaReunion, LocalDate fechaPropuesta,
                                   LocalDate fechaRecontacto, String observaciones, Long idCaptacion,
-                                  String captacionCodigo, String disponibilidad) {
+                                  String captacionCodigo, String disponibilidad,long version) {
 
     public static ProspeccionResponse desde(ProspeccionService.FichaProspeccion f) {
         return new ProspeccionResponse(f.id(), f.codigoProspeccion(), f.localId(), f.localCodigo(),
@@ -21,6 +21,6 @@ public record ProspeccionResponse(Long id, String codigoProspeccion, Long localI
                 f.monedaReferencial(), f.propietarioNombre(), f.idAgente(), f.agenteNombre(),
                 f.estado(), f.resultadoPropuesta(),
                 f.fechaContacto(), f.fechaReunion(), f.fechaPropuesta(), f.fechaRecontacto(),
-                f.observaciones(), f.idCaptacion(), f.captacionCodigo(), f.disponibilidad());
+                f.observaciones(), f.idCaptacion(), f.captacionCodigo(), f.disponibilidad(),f.version());
     }
 }

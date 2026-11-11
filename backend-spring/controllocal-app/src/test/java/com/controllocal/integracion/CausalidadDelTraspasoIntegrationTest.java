@@ -575,6 +575,7 @@ class CausalidadDelTraspasoIntegrationTest {
         Actor haciaB = agenteDelEquipo(1);
         Actor quien = broker();
         long idPropiedad = registrar(duena);
+        long versionFisicaObservada=propiedades.consultar(idPropiedad,duena).versionFisica();
         long a = duena.idRolOperativo();
 
         // CONTROL POSITIVO de partida: el alta dejo a A como responsable. Sin
@@ -605,7 +606,7 @@ class CausalidadDelTraspasoIntegrationTest {
             // cargada, su responsable (A) en memoria y la FILA TOMADA.
             Future<?> edicion = hilos.submit(() -> propiedades.editar(idPropiedad,
                     new ComandoEdicion(null, null, DESCRIPCION_EDITADA, null, null, null, null,
-                            null),
+                            null).conVersion(versionFisicaObservada),
                     duena));
 
             assertTrue(cargada.await(20, TimeUnit.SECONDS),
@@ -765,8 +766,7 @@ class CausalidadDelTraspasoIntegrationTest {
 
     /** Lo minimo para poner de licencia a un agente por su caso de uso. */
     private com.controllocal.service.AgenteService.DatosAgente deLicencia() {
-        return new com.controllocal.service.AgenteService.DatosAgente(null, null, null, null,
-                null, null, null, null, null, null, null, "L", null);
+        return new com.controllocal.service.AgenteService.DatosAgente(null, null, null, null, "L");
     }
 
     private String estadoOperativoDe(long idRolAgente) {
@@ -838,6 +838,7 @@ class CausalidadDelTraspasoIntegrationTest {
         Actor haciaB = agenteDelEquipo(1);
         Actor quien = broker();
         long idPropiedad = registrar(duena);
+        long versionFisicaObservada=propiedades.consultar(idPropiedad,duena).versionFisica();
         long a = duena.idRolOperativo();
 
         assertEquals(a, responsableDe(idPropiedad),
@@ -881,7 +882,7 @@ class CausalidadDelTraspasoIntegrationTest {
             // decidio pero todavia no ha comiteado.
             Future<?> edicion = hilos.submit(() -> propiedades.editar(idPropiedad,
                     new ComandoEdicion(null, null, DESCRIPCION_EDITADA, null, null, null, null,
-                            null),
+                            null).conVersion(versionFisicaObservada),
                     duena));
 
             esperarAUnaSesionEsperandoUnLock(edicion);
@@ -1042,7 +1043,7 @@ class CausalidadDelTraspasoIntegrationTest {
         return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
                 "Caso de causalidad",
                 new Ubicacion("Av. Causalidad " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "Unidad TEST 101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),

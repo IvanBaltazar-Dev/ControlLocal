@@ -1,11 +1,11 @@
 package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comun.EstadosDominio.EstadoPublicacion;
-import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.Publicacion;
 import com.controllocal.persistence.repositorio.PublicacionRepository;
+import com.controllocal.persistence.repositorio.HistoriaPublicacionRepository;
 import com.controllocal.service.PublicacionService.FichaPublicacion;
+import com.controllocal.service.publicacion.ProyeccionPublicacion;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -38,9 +38,11 @@ import java.util.Map;
 public class AnunciosDeLosEncargos {
 
     private final PublicacionRepository publicaciones;
+    private final HistoriaPublicacionRepository historia;
 
-    public AnunciosDeLosEncargos(PublicacionRepository publicaciones) {
+    public AnunciosDeLosEncargos(PublicacionRepository publicaciones,HistoriaPublicacionRepository historia) {
         this.publicaciones = publicaciones;
+        this.historia = historia;
     }
 
     /**
@@ -53,25 +55,19 @@ public class AnunciosDeLosEncargos {
         if (encargos.isEmpty()) {
             return Map.of();
         }
-        Map<Long, OperacionInmobiliaria> operaciones = new LinkedHashMap<>();
-        encargos.forEach(encargo -> operaciones.put(encargo.getId(), encargo.operacion()));
+        Map<Long, Captacion> episodios = new LinkedHashMap<>();
+        encargos.forEach(encargo -> episodios.put(encargo.getId(), encargo));
+        var versionesComposicion=historia.versionesComposiciones(idOrganizacion,encargos.stream()
+                .map(Captacion::getIdComposicionActual).filter(java.util.Objects::nonNull).distinct().toList());
 
         Map<Long, List<FichaPublicacion>> porEncargo = new LinkedHashMap<>();
-        for (Publicacion anuncio : publicaciones.deEncargos(idOrganizacion, operaciones.keySet())) {
-            OperacionInmobiliaria operacion = operaciones.get(anuncio.getIdEncargo());
+        for (Publicacion anuncio : publicaciones.deEncargos(idOrganizacion, episodios.keySet())) {
+            Captacion encargo = episodios.get(anuncio.getIdEncargo());
             porEncargo.computeIfAbsent(anuncio.getIdEncargo(), id -> new ArrayList<>())
-                    .add(ficha(anuncio, operacion));
+                    .add(ProyeccionPublicacion.ficha(anuncio, encargo,encargo.getIdComposicionActual()==null?null:
+                            versionesComposicion.get(encargo.getIdComposicionActual())));
         }
         return porEncargo;
     }
 
-    private static FichaPublicacion ficha(Publicacion p, OperacionInmobiliaria operacion) {
-        return new FichaPublicacion(p.getId(), p.getIdEncargo(), p.getCanal(), p.getTituloAnuncio(),
-                p.getImportePublicado(), p.getMoneda(),
-                operacion == null ? null : operacion.nombreDelImporte(),
-                p.getEstado(),
-                p.getEstado() == null ? null : EstadoPublicacion.desde(p.getEstado()).descripcion(),
-                Fechas.local(p.getFechaPublicacion()), Fechas.local(p.getFechaBaja()),
-                p.getUrlPublicacion(), p.getCodigoOrigen());
-    }
 }

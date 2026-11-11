@@ -23,7 +23,7 @@ import java.util.List;
  *
  * <h2>Y todo puede no haber</h2>
  *
- * <p>Las cuatro consultas devuelven su <b>N</b> junto al resultado, siempre. Sin
+ * <p>Las tres consultas devuelven su <b>N</b> junto al resultado, siempre. Sin
  * N, el servicio no puede distinguir «la media es 1 de cada 3» de «hubo una
  * visita y acabo en propuesta», y esa distincion es la diferencia entre informar
  * y aparentar.
@@ -133,42 +133,6 @@ public interface ContrasteRepository extends Repository<Organizacion, Long> {
     MediaPropia diasHastaContrato(@Param("idOrganizacion") long idOrganizacion,
                                   @Param("sinScope") boolean sinScope,
                                   @Param("rolesAgente") Collection<Long> rolesAgente);
-
-    /**
-     * Cada cuantos dias vuelve a contactarse <b>de verdad</b> una prospeccion.
-     *
-     * <p>No confundir con {@code PoliticaComercial.RECONTACTO}, que son los 7
-     * dias que la casa <b>se propone</b>. Esto es lo que de hecho tarda, y el
-     * contraste entre las dos cifras es justamente la informacion.
-     *
-     * <p>Sale de los intervalos entre interacciones consecutivas sobre la misma
-     * prospeccion. Medido el 2026-08-19: hay <b>cero</b> interacciones con
-     * {@code id_prospeccion}, con 63 prospecciones en la base, asi que la media
-     * no existe todavia. Se descartan los intervalos de cero dias —dos apuntes
-     * del mismo dia son un apunte doble, no dos contactos— porque incluirlos
-     * daria «tu casa recontacta en 0 dias».
-     */
-    @Query(value = """
-            with contacto as (
-                select i.id_prospeccion as id_prospeccion,
-                       i.fecha_hora     as fecha_hora,
-                       lag(i.fecha_hora) over (partition by i.id_prospeccion
-                                               order by i.fecha_hora) as anterior
-                  from interaccion_comercial i
-                 where i.organizacion_id = :idOrganizacion
-                   and i.id_prospeccion is not null
-                   and (:sinScope = true or i.id_rol_agente in (:rolesAgente))
-            )
-            select count(*)                                                      as base,
-                   count(*)                                                      as casos,
-                   avg(extract(epoch from (fecha_hora - anterior)) / 86400)      as valor
-              from contacto
-             where anterior is not null
-               and fecha_hora::date > anterior::date
-            """, nativeQuery = true)
-    MediaPropia plazoRealDeRecontacto(@Param("idOrganizacion") long idOrganizacion,
-                                      @Param("sinScope") boolean sinScope,
-                                      @Param("rolesAgente") Collection<Long> rolesAgente);
 
     /** Las zonas y tramos que hoy tienen muestra, para saber donde SI hay rango. */
     @Query(value = """

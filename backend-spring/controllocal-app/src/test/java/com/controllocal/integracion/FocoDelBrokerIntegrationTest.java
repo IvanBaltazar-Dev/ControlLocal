@@ -63,16 +63,16 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("la bandeja del agente sigue cerrada al broker")
     void laBandejaDelAgenteSigueCerradaAlBroker() {
-        assertThrows(AccesoNoAutorizadoException.class, () -> tareas.bandejaDe(broker()),
+        assertThrows(AccesoNoAutorizadoException.class, () -> tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker()),
                 "la bandeja no es un tablero de control: es la lista de cosas que un AGENTE "
                         + "tiene que hacer, y eso no cambia porque el broker tenga la suya");
-        assertThrows(AccesoNoAutorizadoException.class, () -> tareas.bandejaDe(admin()));
+        assertThrows(AccesoNoAutorizadoException.class, () -> tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),admin()));
     }
 
     @Test
     @DisplayName("y el agente no recibe los asuntos del broker")
     void elAgenteNoRecibeLosAsuntosDelBroker() {
-        assertTrue(focoDelBroker.de(agente()).isEmpty(),
+        assertTrue(focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),agente()).isEmpty(),
                 "aprobar una captacion o firmar una evaluacion no es del agente");
     }
 
@@ -85,7 +85,7 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("el TENANT_ADMIN no tiene asuntos: puede auditar, no decidir")
     void elAdminNoTieneAsuntos() {
-        assertTrue(focoDelBroker.de(admin()).isEmpty());
+        assertTrue(focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),admin()).isEmpty());
     }
 
     // ==================================================================
@@ -104,10 +104,10 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("el foco del broker y el del agente no comparten ni un id")
     void losDosFocosNoCompartenIds() {
-        Set<String> delBroker = focoDelBroker.de(broker()).stream()
+        Set<String> delBroker = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker()).stream()
                 .map(AsuntoDelBroker::id)
                 .collect(Collectors.toSet());
-        Set<String> delAgente = tareas.bandejaDe(agente()).stream()
+        Set<String> delAgente = tareas.bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),agente()).stream()
                 .map(t -> t.entidadTipo() + ":" + t.entidadId())
                 .collect(Collectors.toSet());
 
@@ -145,7 +145,7 @@ class FocoDelBrokerIntegrationTest {
                         + "pendientes, asi que su foco puede venir vacio con razon y esta prueba "
                         + "ya no mide lo que cree medir");
 
-        List<AsuntoDelBroker> asuntos = focoDelBroker.de(elBroker);
+        List<AsuntoDelBroker> asuntos = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),elBroker);
         assertFalse(asuntos.isEmpty(),
                 "el foco del broker salio vacio y sin embargo su equipo tiene "
                         + pendientesEnSuEquipo + " captaciones pendientes de revision: el "
@@ -168,7 +168,7 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("ningun codigo tecnico en el texto que el broker lee")
     void ningunCodigoTecnicoVisible() {
-        for (AsuntoDelBroker asunto : focoDelBroker.de(broker())) {
+        for (AsuntoDelBroker asunto : focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker())) {
             asunto.interpretacion().comoEsta().hechos().forEach(hecho ->
                     assertFalse(InterpretacionDelAsunto.llevaCodigoTecnico(hecho.texto()),
                             "quien opera identifica la operacion por la direccion y la persona: "
@@ -179,8 +179,8 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("dos lecturas seguidas devuelven el mismo orden")
     void elOrdenEsDeterminista() {
-        List<String> primera = focoDelBroker.de(broker()).stream().map(AsuntoDelBroker::id).toList();
-        List<String> segunda = focoDelBroker.de(broker()).stream().map(AsuntoDelBroker::id).toList();
+        List<String> primera = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker()).stream().map(AsuntoDelBroker::id).toList();
+        List<String> segunda = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker()).stream().map(AsuntoDelBroker::id).toList();
 
         assertTrue(primera.equals(segunda),
                 "la misma politica de despacho del agente, con su criterio de estabilidad");
@@ -200,7 +200,7 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("los cuatro disparadores comparten vocabulario, orden e interpretacion")
     void losCuatroDisparadoresSonHomogeneos() {
-        List<AsuntoDelBroker> asuntos = focoDelBroker.de(broker());
+        List<AsuntoDelBroker> asuntos = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker());
         Set<String> tipos = asuntos.stream().map(AsuntoDelBroker::tipo).collect(Collectors.toSet());
 
         assertFalse(asuntos.isEmpty(), "el escenario exige asuntos del broker");
@@ -229,7 +229,7 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("una solicitud nunca produce dos asuntos a la vez")
     void unaSolicitudNoSeDuplica() {
-        List<Long> solicitudes = focoDelBroker.de(broker()).stream()
+        List<Long> solicitudes = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker()).stream()
                 .filter(a -> "SOLICITUD_ALQUILER".equals(a.entidadTipo()))
                 .map(AsuntoDelBroker::entidadId)
                 .toList();
@@ -248,7 +248,7 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("documentos por conformar lleva su avance contado, no estimado")
     void losDocumentosLlevanAvanceReal() {
-        List<AsuntoDelBroker> foco = focoDelBroker.de(broker());
+        List<AsuntoDelBroker> foco = focoDelBroker.de(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta.todas(),broker());
         // Control de universo. Antes esto era `findFirst().orElse(null)` y, sin
         // documentos pendientes, `return`: verde sin una sola asercion. El foco
         // no puede venir vacio -- si lo esta, lo que sigue no mide nada, y eso

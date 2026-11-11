@@ -24,15 +24,17 @@ public final class SesionActual {
 
     /**
      * Actor para los casos de uso: organizacion (frontera de tenant) + persona
-     * (identidad unica) + rol con el que firma + <b>banda efectiva</b>.
-     *
-     * <p>La banda sale de {@code SesionDeRequest}, no de {@code token().rol()}:
-     * el token dice {@code ADMIN} por compatibilidad con GlassFish (R1) y esa
-     * banda heredada no debe llegar a ningun caso de uso.
+     * (identidad local) + rol con el que firma + atribución seleccionada en Core.
+     * La cuenta global no se utiliza como persona ni como rol operativo.
      */
     public static Actor actor() {
         SesionDeRequest sesion = sesion();
+        if (sesion.idOrganizacion() <= 0 || "IDENTIDAD".equals(sesion.rolEfectivo())) {
+            throw new com.controllocal.service.excepcion.ConflictoException("Selecciona un contexto autorizado antes de operar.");
+        }
         return new Actor(sesion.idOrganizacion(), sesion.token().idUsuario(),
                 sesion.token().idDominio(), sesion.rolEfectivo());
     }
+
+    public static long idCuenta() { return sesion().idCuenta(); }
 }

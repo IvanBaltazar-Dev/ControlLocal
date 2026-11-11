@@ -160,12 +160,13 @@ describe('Clientes', () => {
     expect(contenido).toContain('Uso de datos: no');
   });
 
-  it('la ruta está abierta a los tres roles (catálogo compartido)', () => {
+  it('la ruta comercial está abierta a agente y broker, sin gobierno', () => {
     const modulo = MODULOS.find((m) => m.ruta === 'clientes')!;
     expect(modulo).toBeDefined();
-    for (const rol of ['AGENTE', 'BROKER', 'TENANT_ADMIN'] as RolSesion[]) {
+    for (const rol of ['AGENTE', 'BROKER'] as RolSesion[]) {
       expect(puedeEntrar(modulo, rol)).toBeTrue();
     }
+    expect(puedeEntrar(modulo, 'TENANT_ADMIN')).toBeFalse();
   });
 
   describe('filtrosClientesDesdeUrl', () => {
@@ -183,6 +184,8 @@ describe('Clientes', () => {
   ): Promise<ComponentFixture<Clientes>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,

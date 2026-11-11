@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       y el alcance sobre el saliente, y despues llama aqui. La lista es una
  *       ayuda de pantalla; la autorizacion es el comando.</li>
  *   <li><b>No inventa estados.</b> Las cinco condiciones son las autoridades que
- *       ya existen —{@code persona_rol}, {@code credencial_usuario},
+ *       ya existen —{@code persona_rol}, {@code cuenta_acceso},
  *       {@code usuario_organizacion}, {@code detalle_agente} y
  *       {@code supervision_agente}—, cada una consultada donde vive.</li>
  *   <li><b>No reasigna nada</b> (D-P0-8). Desactivar a un agente lo saca de esta

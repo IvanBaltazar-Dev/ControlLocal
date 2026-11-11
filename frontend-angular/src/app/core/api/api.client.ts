@@ -76,12 +76,7 @@ export class ApiClient {
     return this.pedir(this.http.patch<T>(this.url(ruta), cuerpo ?? {}));
   }
 
-  /**
-   * `cuerpo` y `cabeceras` son opcionales y existen por el segundo factor: la
-   * revocación de un factor **lleva cuerpo** (el motivo, obligatorio) y la
-   * ajena lleva además el token de elevación **en cabecera**, nunca en la URL
-   * —una URL viaja a los logs del servidor y al historial del navegador—.
-   */
+  /** Cuerpo y cabeceras de la actuación autorizada; la ruta no contiene pruebas sensibles. */
   delete<T>(ruta: string, cuerpo?: unknown, cabeceras?: Record<string, string>): Promise<T> {
     return this.pedir(this.http.delete<T>(this.url(ruta), { body: cuerpo, headers: cabeceras }));
   }

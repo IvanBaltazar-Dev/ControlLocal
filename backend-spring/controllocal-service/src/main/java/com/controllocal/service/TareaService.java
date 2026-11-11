@@ -11,9 +11,10 @@ import java.util.List;
  *
  * <p><b>No hay alta manual y la lectura ESCRIBE.</b> Las tareas se derivan del
  * estado del flujo (siete disparadores, §5.1 del contrato) y cada lectura
- * <i>reconcilia</i>: crea las que faltan y da por hechas las que ya no
- * aplican. Es la unica forma de que la bandeja este al dia sin planificador,
- * y es cable real (D-F7-3).
+ * <i>reconcilia</i>: crea o actualiza las proyecciones justificadas por su fuente.
+ * R27 conserva sus necesidades y episodios canónicos. En C6 la causa de
+ * conservación tiene un estado propio: retirarla no acredita una actuación
+ * humana realizada; perder lectura la oculta sin inventar su finalización.
  *
  * <p>Alcance (§6): la bandeja es <b>estrictamente personal del AGENTE</b>. Ni
  * el broker ni el admin entran — es el unico recurso del sistema sin acceso de
@@ -35,14 +36,17 @@ public interface TareaService {
      *
      * <p>{@code prioridad} sigue viajando porque el filtro de la bandeja la usa,
      * pero <b>ya no ordena</b>: el orden lo decide {@code PoliticaDeDespacho} con
-     * sus seis criterios, y la lista llega ordenada.
+     * sus seis criterios, y la lista llega ordenada. El aviso informativo C6
+     * usa prioridad nula (no aplicable), sin asignarle una importancia comercial.
      */
     record FichaTarea(Long id, String tipo, String entidadTipo, Long entidadId, String entidadCodigo,
                       String rutaResolver, String descripcion, String estado, String prioridad,
                       OffsetDateTime fechaProgramada, Integer diasSinAccion,
                       LocalDate fechaVencimiento,
                       boolean dependeDeMi, String lado, String paso,
-                      InterpretacionDelAsunto.Interpretacion interpretacion) {
+                      InterpretacionDelAsunto.Interpretacion interpretacion,
+                      java.time.LocalTime horaActuacion,
+                      com.controllocal.service.soporte.PoliticaDeDespacho.Clasificacion orden) {
     }
 
     /**
@@ -58,22 +62,23 @@ public interface TareaService {
      * contrato, asi que esto puede devolver 30 o 50 fichas y quien las pinte
      * tiene que aguantarlas.
      */
-    List<FichaTarea> bandejaDe(Actor actor);
+    List<FichaTarea> bandejaDe(com.controllocal.service.soporte.PoliticaDeDespacho.Consulta consulta,Actor actor);
 
     /**
-     * Soft-cancel del agente. Ojo con lo que significa: cancelar <b>no
-     * pospone</b>, el reconcile no vuelve a crear la tarea de esa entidad
-     * nunca mas (§5.2, trampa 1).
+     * Cancelación voluntaria del agente; no pospone ni altera el vencimiento.
+     * R27 y C6 conservan la causa cancelada y no la reabren por leer, recortar
+     * un grupo o cambiar una versión técnica. Un hecho material nuevo acreditado
+     * por su fuente puede originar otra ocurrencia vinculada, conforme a D6.
+     * Las demás familias conservan su conciliación y autoridad vigentes.
      */
     void cancelar(long id, Actor actor);
 
     /**
-     * <b>Efecto 7 de la cascada de F4</b>: al concretarse el alquiler se dan
-     * por hechas las tareas abiertas de la operacion —oportunidad, solicitud,
-     * captacion y local—. Lo llama {@code ContratoService} dentro de su
-     * transaccion.
+     * Efecto del cierre contractual confirmado. Core deriva los recursos de la
+     * revisión y exige la autoridad de decisión del Encargo, sin abrir la
+     * lectura de expedientes vinculados ni aceptar IDs libres del llamante.
      */
-    void resolverDeEntidad(String entidadTipo, Long entidadId, Actor actor);
+    void resolverPorCierreConfirmado(long revisionHito, Actor actor);
 
     /**
      * Tarea obligatoria al finalizar, rescindir o anular un contrato.

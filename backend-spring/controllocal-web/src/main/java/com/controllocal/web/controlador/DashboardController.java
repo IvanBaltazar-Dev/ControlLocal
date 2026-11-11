@@ -1,11 +1,6 @@
 package com.controllocal.web.controlador;
 
-import com.controllocal.service.FocoDelBrokerService;
-import com.controllocal.service.HallazgoService;
-import com.controllocal.service.IndicadorService;
 import com.controllocal.service.RendimientoComercialService;
-import com.controllocal.service.TareaService;
-import com.controllocal.service.soporte.AccesosDelInicio;
 import com.controllocal.web.dto.AccesoResponse;
 import com.controllocal.web.dto.AsuntoDelBrokerResponse;
 import com.controllocal.web.dto.DashboardResponse;
@@ -45,76 +40,32 @@ import java.util.List;
 @RequestMapping("dashboard")
 public class DashboardController {
 
-    private final IndicadorService indicadores;
-    private final TareaService tareas;
-    private final HallazgoService hallazgos;
-    private final FocoDelBrokerService focoDelBroker;
+    private final com.controllocal.service.FocoService focos;
     private final RendimientoComercialService rendimiento;
 
-    public DashboardController(IndicadorService indicadores, TareaService tareas,
-                               HallazgoService hallazgos,
-                               FocoDelBrokerService focoDelBroker,
+    public DashboardController(com.controllocal.service.FocoService focos,
                                RendimientoComercialService rendimiento) {
-        this.indicadores = indicadores;
-        this.tareas = tareas;
-        this.hallazgos = hallazgos;
-        this.focoDelBroker = focoDelBroker;
+        this.focos = focos;
         this.rendimiento = rendimiento;
     }
 
     @GetMapping
+    @com.controllocal.web.capacidades.CapacidadReconocida({"que_resolver_hoy"})
     public DashboardResponse cargar(@RequestParam(required = false) String periodo,
                                     @RequestParam(required = false) String mes,
-                                    @RequestParam(defaultValue = "5") int tamano) {
+                                    @RequestParam(defaultValue = "5") int tamano,
+                                    @org.springframework.web.bind.annotation.ModelAttribute com.controllocal.service.soporte.PoliticaDeDespacho.Consulta consulta) {
         var actor = SesionActual.actor();
-        // El pie del Inicio no calcula nada por su cuenta: lee los mismos cuatro
-        // KPI que Indicadores, del mismo productor. Por construccion no puede
-        // contradecirlo, que es lo que D-E2-1 seccion 6.2 exige.
-        IndicadoresResponse resumen = IndicadoresResponse.desde(
-                indicadores.resumen(periodo, actor),
+        var foco = focos.de(consulta,periodo, actor);
+        IndicadoresResponse resumen = IndicadoresResponse.desde(foco.indicadores(),
                 RendimientoResponse.desde(rendimiento.del(mes, actor)));
         int tamanoValido = Math.max(1, Math.min(100, tamano));
-
-        if (!actor.esAgente()) {
-            // El broker no recibe bandeja -- esa es del agente y no se comparte --
-            // sino SUS asuntos: lo que solo el puede decidir (D-E2-5).
-            List<AsuntoDelBrokerResponse> suyos = focoDelBroker.de(actor).stream()
-                    .map(AsuntoDelBrokerResponse::desde)
-                    .toList();
-            // El broker TAMBIEN tiene hallazgos, y son de otra naturaleza: no
-            // coincidencias de cartera sino concentracion del equipo (D-E2-1
-            // seccion 7.1). Devolver aqui una lista vacia era dejarlo sin
-            // hallazgo -- justo el rol al que mas le sirve que BROX encuentre
-            // algo que la media esconde.
-            List<HallazgoResponse> descubiertos = hallazgos.de(actor).stream()
-                    .map(HallazgoResponse::desde)
-                    .toList();
-            return new DashboardResponse(resumen,
-                    new PageResponse<>(List.of(), 0, 1, tamanoValido), descubiertos, suyos,
-                    AccesoResponse.desde(actor));
-        }
-        List<TareaResponse> fuente = tareas.bandejaDe(actor).stream()
-                .map(TareaResponse::desde)
-                .toList();
+        List<TareaResponse> fuente = foco.bandeja().stream().map(TareaResponse::desde).toList();
         int hasta = Math.min(tamanoValido, fuente.size());
-
-        // Los hallazgos NO se recortan con `tamano`: ese parametro pagina la
-        // bandeja, y aplicarselo tambien seria hacer que dos colecciones
-        // distintas compartieran un tope pensado para una sola.
-        List<HallazgoResponse> descubiertos = hallazgos.de(actor).stream()
-                .map(HallazgoResponse::desde)
-                .toList();
-
-        // El foco del broker lo decide el SERVICIO, tambien para un agente -- que
-        // recibe vacio porque aprobar captaciones no es suyo.
-        //
-        // Aqui habia un `List.of()` fijo, el mismo patron que dejo al broker sin
-        // hallazgo en la rama de al lado: una coleccion vaciada a mano en una
-        // rama de rol no falla, no la ve ningun test de servicio, y miente. Que
-        // conteste el servicio hace imposible esa clase de rama muerta.
-        return new DashboardResponse(resumen, new PageResponse<>(
-                fuente.subList(0, hasta), fuente.size(), 1, tamanoValido), descubiertos,
-                focoDelBroker.de(actor).stream().map(AsuntoDelBrokerResponse::desde).toList(),
-                AccesoResponse.desde(actor));
+        return new DashboardResponse(resumen,
+                new PageResponse<>(fuente.subList(0, hasta), fuente.size(), 1, tamanoValido),
+                foco.hallazgos().stream().map(HallazgoResponse::desde).toList(),
+                foco.asuntosDelBroker().stream().map(AsuntoDelBrokerResponse::desde).toList(),
+                AccesoResponse.desde(actor),foco.actuaciones());
     }
 }

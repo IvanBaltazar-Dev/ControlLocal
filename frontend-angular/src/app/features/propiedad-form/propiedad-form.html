@@ -11,6 +11,20 @@
   <button acciones type="button" class="secundario" (click)="cancelar()">Volver</button>
 </brox-page-header>
 
+@if (referenciasPendientes().length > 0) {
+  <section class="seccion" aria-label="Resultados por verificar">
+    <h2>Resultados por verificar</h2>
+    @for (entrada of referenciasPendientes(); track entrada.referencia) {
+      <p>
+        Un registro todavía no tiene resultado recibido.
+        <button type="button" class="enlace" [disabled]="guardando()" (click)="consultarReferencia(entrada)">
+          Consultar resultado
+        </button>
+      </p>
+    }
+  </section>
+}
+
 <cl-estado-listado
   [cargando]="cargando()"
   [error]="errorCarga()"
@@ -19,9 +33,36 @@
   (reintentar)="reintentar()"
 />
 
-@if (!cargando() && !errorCarga()) {
+@if (!cargando() && !errorCarga() && !borrador() && capturasEnCurso().length > 0) {
+  <section class="seccion borradores-en-curso">
+    <div class="seccion-titulo">
+      <span class="numero">1</span>
+      <div>
+        <h2>Registros en curso</h2>
+        <p>Retoma un borrador guardado o empieza otro registro.</p>
+      </div>
+    </div>
+    <ul class="borradores">
+      @for (captura of capturasEnCurso(); track captura.idBorrador) {
+        <li>
+          <div>
+            <strong>{{ captura.codigo }}</strong>
+            <small>Registro de propiedad en curso</small>
+          </div>
+          <button type="button" class="secundario" (click)="retomar(captura)">
+            Retomar
+          </button>
+        </li>
+      }
+    </ul>
+    <button type="button" class="enlace" (click)="iniciarNuevo()">Empezar un registro nuevo</button>
+  </section>
+}
+
+@if (!cargando() && !errorCarga() && borrador()) {
   <div class="distribucion">
     <main>
+      <fieldset [disabled]="enVerificacion()" style="border: 0; padding: 0; margin: 0; min-width: 0">
       <!-- 1 · Lo que decide todo lo demás -->
       <section class="seccion">
         <div class="seccion-titulo">
@@ -37,12 +78,21 @@
 
         <div class="campos">
           @for (pregunta of apertura(); track pregunta.clave) {
-            <cl-campo-gobernado
-              [pregunta]="pregunta"
-              [valor]="valorDe(pregunta.clave)"
-              (cambio)="anotar(pregunta.clave, $event)"
-              (cambioValores)="anotar(pregunta.clave, $event.join(','))"
-            />
+            <div class="campo-con-exigencia">
+              <cl-campo-gobernado
+                [pregunta]="pregunta"
+                [valor]="valorDe(pregunta.clave)"
+                (cambio)="anotar(pregunta.clave, $event)"
+                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
+                [moneda]="monedaDe(pregunta)"
+                (cambioMoneda)="anotarMoneda(pregunta, $event)"
+              />
+              @if (pregunta.exigencia) {
+                <span class="exigencia" [attr.data-exigencia]="pregunta.exigencia">
+                  {{ pregunta.exigencia }}
+                </span>
+              }
+            </div>
           }
         </div>
 
@@ -119,15 +169,22 @@
               }
             }
 
-            <label class="campo">
-              <span>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</span>
-              <input
-                type="search"
-                placeholder="Nombre, razón social o documento"
-                [value]="busquedaPropietario()"
-                (input)="buscarPropietario($event)"
-              />
-            </label>
+            <div class="campo-con-exigencia">
+              <label class="campo">
+                <span>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</span>
+                <input
+                  type="search"
+                  placeholder="Nombre, razón social o documento"
+                  [value]="busquedaPropietario()"
+                  (input)="buscarPropietario($event)"
+                />
+              </label>
+              @if (pregunta.exigencia) {
+                <span class="exigencia" [attr.data-exigencia]="pregunta.exigencia">
+                  {{ pregunta.exigencia }}
+                </span>
+              }
+            </div>
 
             @if (propietariosVisibles().length > 0) {
               <ul class="candidatos">
@@ -217,12 +274,21 @@
           </div>
           <div class="campos">
             @for (pregunta of preguntasDeUbicacion(); track pregunta.clave) {
-              <cl-campo-gobernado
-                [pregunta]="pregunta"
-                [valor]="valorDe(pregunta.clave)"
-                (cambio)="anotar(pregunta.clave, $event)"
-                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
-              />
+              <div class="campo-con-exigencia">
+                <cl-campo-gobernado
+                  [pregunta]="pregunta"
+                  [valor]="valorDe(pregunta.clave)"
+                  (cambio)="anotar(pregunta.clave, $event)"
+                  (cambioValores)="anotar(pregunta.clave, $event.join(','))"
+                  [moneda]="monedaDe(pregunta)"
+                  (cambioMoneda)="anotarMoneda(pregunta, $event)"
+                />
+                @if (pregunta.exigencia) {
+                  <span class="exigencia" [attr.data-exigencia]="pregunta.exigencia">
+                    {{ pregunta.exigencia }}
+                  </span>
+                }
+              </div>
             }
           </div>
         </section>
@@ -242,12 +308,21 @@
             </div>
             <div class="campos">
               @for (pregunta of preguntasDelTipo(); track pregunta.clave) {
-                <cl-campo-gobernado
-                [pregunta]="pregunta"
-                [valor]="valorDe(pregunta.clave)"
-                (cambio)="anotar(pregunta.clave, $event)"
-                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
-              />
+                <div class="campo-con-exigencia">
+                  <cl-campo-gobernado
+                    [pregunta]="pregunta"
+                    [valor]="valorDe(pregunta.clave)"
+                    (cambio)="anotar(pregunta.clave, $event)"
+                    (cambioValores)="anotar(pregunta.clave, $event.join(','))"
+                    [moneda]="monedaDe(pregunta)"
+                    (cambioMoneda)="anotarMoneda(pregunta, $event)"
+                  />
+                  @if (pregunta.exigencia) {
+                    <span class="exigencia" [attr.data-exigencia]="pregunta.exigencia">
+                      {{ pregunta.exigencia }}
+                    </span>
+                  }
+                </div>
               }
             </div>
           </section>
@@ -274,18 +349,28 @@
               <h3>{{ bloque.rotulo }}</h3>
               <div class="campos">
                 @for (pregunta of bloque.preguntas; track pregunta.clave) {
-                  <cl-campo-gobernado
-                [pregunta]="pregunta"
-                [valor]="valorDe(pregunta.clave)"
-                (cambio)="anotar(pregunta.clave, $event)"
-                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
-              />
+                  <div class="campo-con-exigencia">
+                    <cl-campo-gobernado
+                      [pregunta]="pregunta"
+                      [valor]="valorDe(pregunta.clave)"
+                      (cambio)="anotar(pregunta.clave, $event)"
+                      (cambioValores)="anotar(pregunta.clave, $event.join(','))"
+                      [moneda]="monedaDe(pregunta)"
+                      (cambioMoneda)="anotarMoneda(pregunta, $event)"
+                    />
+                    @if (pregunta.exigencia) {
+                      <span class="exigencia" [attr.data-exigencia]="pregunta.exigencia">
+                        {{ pregunta.exigencia }}
+                      </span>
+                    }
+                  </div>
                 }
               </div>
             </div>
           }
         </section>
       }
+      </fieldset>
     </main>
 
     <!-- Resumen y confirmación -->
@@ -327,7 +412,7 @@
               }
             </ul>
           </div>
-        } @else {
+        } @else if (revisionActuacion()) {
           <p class="listo">Ya hay todo lo necesario para registrarla.</p>
         }
       }
@@ -341,10 +426,14 @@
           <button
             type="button"
             class="primario"
-            [disabled]="!planListo() || guardando()"
+            [disabled]="guardando()"
             (click)="revisar()"
           >
-            {{ guardando() ? 'Comprobando…' : 'Revisar' }}
+            {{ guardando() ? 'Guardando…' : 'Revisar y guardar avance' }}
+          </button>
+        } @else if (enVerificacion()) {
+          <button type="button" class="primario" [disabled]="guardando()" (click)="verificarActuacion()">
+            {{ guardando() ? 'Verificando…' : 'Verificar resultado' }}
           </button>
         } @else {
           <button
@@ -359,8 +448,10 @@
             Seguir editando
           </button>
         }
+        <button type="button" class="enlace descartar" [disabled]="guardando() || enVerificacion()" (click)="descartarBorrador()">
+          Descartar borrador
+        </button>
       </div>
     </aside>
   </div>
 }
-

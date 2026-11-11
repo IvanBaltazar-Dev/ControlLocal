@@ -7,11 +7,11 @@ import { ApiError } from '../../core/api/api.types';
 import { Captacion, CaptacionesService } from '../../core/api/captaciones.service';
 import { DocumentosService } from '../../core/api/documentos.service';
 import {
-  FotoLocal,
-  Local,
-  LocalesService,
-  PrecioLocal,
-} from '../../core/api/locales.service';
+  FichaPropiedad as PropiedadFicha,
+  FotoPropiedad,
+  HitoDeLaHistoria,
+  PropiedadesService,
+} from '../../core/api/propiedades.service';
 import { Responsabilidad } from '../../core/api/propiedades.service';
 import { Propietario, PropietariosService } from '../../core/api/propietarios.service';
 import { ArchivoPreparado } from '../../core/archivos/archivos.service';
@@ -48,21 +48,23 @@ const CAPTACION: Captacion = {
   agenteNombre: 'Valeria Mora',
 };
 
-const LOCAL: Local = {
+const PROPIEDAD: PropiedadFicha = {
   id: 77,
-  codigoLocal: 'LOC-0001',
-  direccion: 'Av. Larco 812',
-  distrito: 'Miraflores',
-  metraje: 120,
-  precioReferencial: 8500,
-  monedaReferencial: 'PEN',
-  rubroPermitido: 'Restaurante / cafeteria',
+  codigo: 'PROP-0001',
+  tipoPropiedad: 'LOCAL',
+  tipoRotulo: 'Local comercial',
+  ubicacion: { direccion: 'Av. Larco 812', distrito: 'Miraflores' },
   descripcion: 'Local comercial en esquina, primera linea de avenida.',
-  idPropietario: 42,
-  estado: 'D',
-  tipoInmueble: 'L',
-  uso: 'C',
-  ambientes: 3,
+  titulares: [{ idPropietario: 42, nombre: 'Inmobiliaria Pacifico SAC', representante: true }],
+  atributos: [
+    { clave: 'metraje_total', rotulo: 'Metraje total', tipoDato: 'DECIMAL', unidad: 'm²', valor: '120' },
+    { clave: 'rubro_permitido', rotulo: 'Rubro permitido', tipoDato: 'TEXTO', unidad: null, valor: 'Restaurante / cafeteria' },
+    { clave: 'ambientes', rotulo: 'Ambientes', tipoDato: 'ENTERO', unidad: null, valor: '3' },
+  ],
+  encargos: [],
+  atributosQueFaltan: [],
+  faltanParaPublicar: [],
+  responsabilidad: { idResponsable: 2, nombre: 'Prueba', puedeEditar: true },
 };
 
 const PROPIETARIO: Propietario = {
@@ -77,19 +79,19 @@ const PROPIETARIO: Propietario = {
   cantidadLocales: 3,
 };
 
-const PRECIO: PrecioLocal = {
-  id: 1,
-  idLocal: 77,
+const PRECIO: HitoDeLaHistoria = {
   hito: 'U',
+  hitoRotulo: 'Autorizado',
   moneda: 'PEN',
   monto: 8500,
   fecha: '2026-02-01',
 };
 
-const FOTO: FotoLocal = {
-  idFoto: 5,
+const FOTO: FotoPropiedad = {
+  id: 5,
   clave: 'locales/77/abc12345-fachada.png',
-  nombre: 'fachada.png',
+  nombreArchivo: 'fachada.png',
+  orden: 1,
   proveedor: 'DISCO',
 };
 
@@ -113,7 +115,7 @@ function archivo(nombre = 'foto.png'): ArchivoPreparado {
 
 describe('FichaPropiedad', () => {
   let captaciones: jasmine.SpyObj<CaptacionesService>;
-  let locales: jasmine.SpyObj<LocalesService>;
+  let propiedades: jasmine.SpyObj<PropiedadesService>;
   let propietarios: jasmine.SpyObj<PropietariosService>;
   let router: jasmine.SpyObj<Router>;
 
@@ -123,9 +125,8 @@ describe('FichaPropiedad', () => {
     ]);
     captaciones.obtenerPorCodigo$.and.returnValue(of(CAPTACION));
 
-    locales = jasmine.createSpyObj<LocalesService>('LocalesService', [
-      'obtener$',
-      'precios$',
+    propiedades = jasmine.createSpyObj<PropiedadesService>('PropiedadesService', [
+      'consultar$',
       'fotos$',
       'fotos',
       'subirFoto',
@@ -134,12 +135,11 @@ describe('FichaPropiedad', () => {
     // Por defecto, quien mira ES el responsable: es el caso normal y deja que
     // el resto de pruebas hablen de otra cosa. Los demás casos de autoridad se
     // piden con `conAutoridad(...)`, que sustituye este stub.
-    locales.obtener$.and.returnValue(of({ ...LOCAL, responsabilidad: responde() }));
-    locales.precios$.and.returnValue(of([PRECIO]));
-    locales.fotos$.and.returnValue(of([FOTO]));
-    locales.fotos.and.resolveTo([FOTO]);
-    locales.subirFoto.and.resolveTo(FOTO);
-    locales.eliminarFoto.and.resolveTo(undefined);
+    propiedades.consultar$.and.returnValue(of({ ...PROPIEDAD, responsabilidad: responde(), historia: { porOperacion: [], linea: [PRECIO] } }));
+    propiedades.fotos$.and.returnValue(of([FOTO]));
+    propiedades.fotos.and.resolveTo([FOTO]);
+    propiedades.subirFoto.and.resolveTo(FOTO);
+    propiedades.eliminarFoto.and.resolveTo(undefined);
 
     propietarios = jasmine.createSpyObj<PropietariosService>('PropietariosService', [
       'obtener$',
@@ -155,7 +155,7 @@ describe('FichaPropiedad', () => {
 
     expect(captaciones.obtenerPorCodigo$).toHaveBeenCalledOnceWith('CAP-0001');
     // El local sale de `idLocal` de la captación...
-    expect(locales.obtener$).toHaveBeenCalledOnceWith(77);
+    expect(propiedades.consultar$).toHaveBeenCalledOnceWith(77);
     // ...y el propietario de `idPropietario` del local.
     expect(propietarios.obtener$).toHaveBeenCalledOnceWith(42);
   });
@@ -240,7 +240,7 @@ describe('FichaPropiedad', () => {
     });
   });
 
-  it('muestra la descripción del local, no un párrafo inventado', async () => {
+  it('muestra la descripción de la propiedad, no un párrafo inventado', async () => {
     const fixture = await montar();
 
     expect(texto(fixture)).toContain('Local comercial en esquina');
@@ -266,22 +266,22 @@ describe('FichaPropiedad', () => {
   });
 
   it('sigue dibujando la ficha aunque falle un bloque complementario', async () => {
-    locales.precios$.and.returnValue(throwError(() => new ApiError(500, 'Histórico caído.')));
+    propiedades.fotos$.and.returnValue(throwError(() => new ApiError(500, 'Galería caída.')));
 
     const fixture = await montar();
     const html = texto(fixture);
 
     expect(html).toContain('Av. Larco 812');
-    expect(html).toContain('Histórico caído.');
+    expect(html).toContain('Galería caída.');
   });
 
-  it('si falla el local, la ficha se mantiene y el propietario no se pide', async () => {
-    locales.obtener$.and.returnValue(throwError(() => new ApiError(500, 'Local caído.')));
+  it('si falla la propiedad, la ficha se mantiene y el propietario no se pide', async () => {
+    propiedades.consultar$.and.returnValue(throwError(() => new ApiError(500, 'Propiedad caída.')));
 
     const fixture = await montar();
 
     expect(texto(fixture)).toContain('CAP-0001');
-    expect(texto(fixture)).toContain('Local caído.');
+    expect(texto(fixture)).toContain('Propiedad caída.');
     expect(propietarios.obtener$).not.toHaveBeenCalled();
   });
 
@@ -324,11 +324,11 @@ describe('FichaPropiedad', () => {
 
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
       await acceso.fotosElegidas([archivo()]);
-      expect(locales.subirFoto).toHaveBeenCalledTimes(1);
-      expect(locales.subirFoto.calls.mostRecent().args[0]).toBe(77);
+      expect(propiedades.subirFoto).toHaveBeenCalledTimes(1);
+      expect(propiedades.subirFoto.calls.mostRecent().args[0]).toBe(77);
 
-      await acceso.eliminarFoto(FOTO.idFoto);
-      expect(locales.eliminarFoto).toHaveBeenCalledOnceWith(77, FOTO.idFoto);
+      await acceso.eliminarFoto(FOTO.id);
+      expect(propiedades.eliminarFoto).toHaveBeenCalledOnceWith(77, FOTO.id);
     });
 
     it('OTRO responsable: ni botones ni escritura, y se dice por qué', async () => {
@@ -338,7 +338,7 @@ describe('FichaPropiedad', () => {
       const fixture = await montar('AGENTE');
       const html = texto(fixture);
 
-      expect(html).toContain('Galería del local');
+      expect(html).toContain('Galería de la propiedad');
       expect(html).not.toContain('Agregar fotos');
       expect(html).not.toContain('Eliminar');
       // Y no desaparecen en silencio: el motivo lo escribe el Core.
@@ -347,9 +347,9 @@ describe('FichaPropiedad', () => {
 
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
       await acceso.fotosElegidas([archivo()]);
-      await acceso.eliminarFoto(FOTO.idFoto);
-      expect(locales.subirFoto).not.toHaveBeenCalled();
-      expect(locales.eliminarFoto).not.toHaveBeenCalled();
+      await acceso.eliminarFoto(FOTO.id);
+      expect(propiedades.subirFoto).not.toHaveBeenCalled();
+      expect(propiedades.eliminarFoto).not.toHaveBeenCalled();
     });
 
     it('propiedad FALTANTE: nadie escribe, y el motivo lo dice', async () => {
@@ -363,7 +363,7 @@ describe('FichaPropiedad', () => {
 
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
       await acceso.fotosElegidas([archivo()]);
-      expect(locales.subirFoto).not.toHaveBeenCalled();
+      expect(propiedades.subirFoto).not.toHaveBeenCalled();
     });
 
     it('sin bloque de autoridad en el cable, no se ofrece nada', async () => {
@@ -376,7 +376,7 @@ describe('FichaPropiedad', () => {
       expect(texto(fixture)).not.toContain('Agregar fotos');
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
       await acceso.fotosElegidas([archivo()]);
-      expect(locales.subirFoto).not.toHaveBeenCalled();
+      expect(propiedades.subirFoto).not.toHaveBeenCalled();
     });
 
     // Dos pruebas y no un bucle: `TestBed.configureTestingModule` no se puede
@@ -387,13 +387,13 @@ describe('FichaPropiedad', () => {
       const fixture = await montar('BROKER');
       const html = texto(fixture);
 
-      expect(html).toContain('Galería del local');
+      expect(html).toContain('Galería de la propiedad');
       expect(html).not.toContain('Agregar fotos');
       expect(html).toContain('Supervisar y gobernar no es registrar');
 
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
       await acceso.fotosElegidas([archivo()]);
-      expect(locales.subirFoto).not.toHaveBeenCalled();
+      expect(propiedades.subirFoto).not.toHaveBeenCalled();
     });
 
     it('el gobierno del tenant tampoco escribe: las fotos son del responsable', async () => {
@@ -403,7 +403,7 @@ describe('FichaPropiedad', () => {
 
       await acceso.fotosElegidas([archivo()]);
 
-      expect(locales.subirFoto).not.toHaveBeenCalled();
+      expect(propiedades.subirFoto).not.toHaveBeenCalled();
       expect(texto(fixture)).not.toContain('Agregar fotos');
     });
 
@@ -422,20 +422,20 @@ describe('FichaPropiedad', () => {
   it('no intenta pasarse del tope de fotos del backend', async () => {
     const llena = Array.from({ length: MAXIMO_FOTOS }, (_, indice) => ({
       ...FOTO,
-      idFoto: indice + 1,
+      id: indice + 1,
     }));
-    locales.fotos$.and.returnValue(of(llena));
+    propiedades.fotos$.and.returnValue(of(llena));
 
     const fixture = await montar('AGENTE');
     const acceso = fixture.componentInstance as unknown as AccesoFicha;
     await acceso.fotosElegidas([archivo()]);
 
-    expect(locales.subirFoto).not.toHaveBeenCalled();
-    expect(texto(fixture)).toContain('Límite de 6 fotos alcanzado');
+    expect(propiedades.subirFoto).not.toHaveBeenCalled();
+    expect(texto(fixture)).toContain('Límite de 12 fotos alcanzado');
   });
 
   it('relee la galería aunque la subida falle a mitad de tanda', async () => {
-    locales.subirFoto.and.rejectWith(new ApiError(500, 'Almacén caído.'));
+    propiedades.subirFoto.and.rejectWith(new ApiError(500, 'Almacén caído.'));
 
     const fixture = await montar('AGENTE');
     const acceso = fixture.componentInstance as unknown as AccesoFicha;
@@ -443,7 +443,7 @@ describe('FichaPropiedad', () => {
     fixture.detectChanges();
 
     expect(texto(fixture)).toContain('Almacén caído.');
-    expect(locales.fotos).toHaveBeenCalledWith(77);
+    expect(propiedades.fotos).toHaveBeenCalledWith(77);
   });
 
   it('una captación sin local lo dice en vez de fingir ficha técnica', async () => {
@@ -451,8 +451,8 @@ describe('FichaPropiedad', () => {
 
     const fixture = await montar();
 
-    expect(texto(fixture)).toContain('no tiene un local asociado');
-    expect(locales.obtener$).not.toHaveBeenCalled();
+    expect(texto(fixture)).toContain('no tiene una propiedad asociada');
+    expect(propiedades.consultar$).not.toHaveBeenCalled();
   });
 
   describe('diasHasta', () => {
@@ -484,7 +484,7 @@ describe('FichaPropiedad', () => {
    */
   /** Sustituye la ficha del local por una con OTRA autoridad. */
   function conAutoridad(responsabilidad: Responsabilidad | undefined): void {
-    locales.obtener$.and.returnValue(of({ ...LOCAL, responsabilidad }));
+    propiedades.consultar$.and.returnValue(of({ ...PROPIEDAD, responsabilidad }));
   }
 
   function responde(): Responsabilidad {
@@ -531,6 +531,8 @@ describe('FichaPropiedad', () => {
     codigo = 'CAP-0001',
   ): Promise<ComponentFixture<FichaPropiedad>> {
     const sesion = signal<Sesion | null>({
+      idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+      modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't',
       expiraEnSegundos: 3600,
       rol,
@@ -545,7 +547,7 @@ describe('FichaPropiedad', () => {
       imports: [FichaPropiedad],
       providers: [
         { provide: CaptacionesService, useValue: captaciones },
-        { provide: LocalesService, useValue: locales },
+        { provide: PropiedadesService, useValue: propiedades },
         { provide: PropietariosService, useValue: propietarios },
         { provide: AuthService, useValue: { sesion } },
         // La miniatura pide su binario con token; aquí basta con que no falle.

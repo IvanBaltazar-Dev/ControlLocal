@@ -8,6 +8,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
@@ -24,6 +26,117 @@ import java.util.Optional;
  * las dos ramas en vez de filtrar siempre por el agente de la fila.
  */
 public interface OportunidadComercialRepository extends JpaRepository<OportunidadComercial, Long> {
+    /** Metadata exclusivamente comercial; no hidrata personas, documentos o condiciones privadas. */
+    interface FuenteDesenlace {
+        Long getId();Long getVersion();Long getResponsable();Long getResponsableEncargo();
+        String getEstado();String getOperacion();Long getResponsableHistorico();Long getRevisionHito();Long getHistorial();
+        java.time.Instant getRegistrado();java.time.Instant getActualizado();java.time.LocalDate getFechaResolucion();Boolean getConfirmadoC5();
+    }
+    @Query(value="""
+        select o.id_oportunidad as id,o.version as version,o.id_rol_agente as responsable,
+          c.id_rol_agente as "responsableEncargo",o.estado as estado,c.motivo_operacion as operacion,
+          case when o.estado in ('F','N','X') then he.id_rol_responsable else o.id_rol_agente end as "responsableHistorico",
+          rh.id_revision_hito as "revisionHito",he.id_historial as historial,
+          coalesce(rh.registrado_en,he.fecha_evento,o.fecha_registro) as registrado,o.fecha_actualizacion as actualizado,
+          case when o.estado in ('N','X') then he.fecha_efectiva
+            when o.estado='F' and e.id_expediente is not null then rh.fecha_efectiva end as "fechaResolucion",
+          (o.estado='F' and e.id_expediente is not null and rh.id_revision_hito is not null) as "confirmadoC5"
+        from oportunidad_comercial o join captacion c
+          on c.organizacion_id=o.organizacion_id and c.id_captacion=o.id_captacion
+        left join lateral(select h.* from historial_estado h where h.organizacion_id=o.organizacion_id
+          and h.entidad_tipo='OPORTUNIDAD' and h.id_entidad=o.id_oportunidad
+          and h.estado_nuevo=o.estado and h.estado_nuevo in ('F','N','X') and h.fecha_evento<=:corte
+          order by h.id_historial desc limit 1) he on true
+        left join revision_hito_contractual original on original.organizacion_id=o.organizacion_id
+          and original.id_revision_hito=he.id_revision_hito and original.tipo_registro in ('CONFIRMACION','RECTIFICACION')
+        left join hito_contractual hito on hito.organizacion_id=original.organizacion_id
+          and hito.id_hito=original.id_hito and hito.id_expediente=original.id_expediente
+          and ((c.motivo_operacion='V' and hito.tipo='ESCRITURA') or (c.motivo_operacion='A' and hito.tipo='CONTRATO_ALQUILER'))
+        left join expediente_operacion e on e.organizacion_id=hito.organizacion_id and e.id_expediente=hito.id_expediente
+          and e.id_oportunidad=o.id_oportunidad and e.id_captacion=c.id_captacion
+          and ((c.motivo_operacion='V' and e.id_contrato_venta is not null) or (c.motivo_operacion='A' and e.id_contrato_alquiler is not null))
+        left join lateral(select r.id_revision_hito,r.registrado_en,r.fecha_efectiva
+          from revision_hito_contractual r where r.organizacion_id=e.organizacion_id and r.id_expediente=e.id_expediente
+          and r.id_hito=hito.id_hito and r.tipo_registro in ('CONFIRMACION','RECTIFICACION') and r.registrado_en<=:corte
+          order by r.id_revision_hito desc limit 1) rh on true
+        where o.organizacion_id=:org and o.fecha_registro<=:corte
+          and (o.id_rol_agente in :roles or c.id_rol_agente in :roles)
+        order by o.id_oportunidad
+        """,nativeQuery=true)
+    List<FuenteDesenlace> fuentesDesenlace(@Param("org") long org,@Param("roles") Collection<Long> roles,
+                                           @Param("corte") java.time.Instant corte);
+
+    interface VersionActividad {
+        long getVersion(); java.time.Instant getRegistradoEn(); String getOperacion(); String getMotivo(); String getFicha();
+    }
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value="INSERT INTO oportunidad_historia(organizacion_id,id_oportunidad,version,registrado_en,operacion,motivo,ficha) VALUES (:org,:id,:version,:fecha,:operacion,:motivo,CAST(:ficha AS jsonb))",nativeQuery=true)
+    void historizar(@Param("org") long org,@Param("id") long id,@Param("version") long version,
+        @Param("fecha") java.time.Instant fecha,@Param("operacion") String operacion,@Param("motivo") String motivo,@Param("ficha") String ficha);
+    @Query(value="SELECT ficha::text FROM oportunidad_historia WHERE organizacion_id=:org AND id_oportunidad=:id AND registrado_en<=:corte ORDER BY version DESC LIMIT 1",nativeQuery=true)
+    Optional<String> fichaAlCorte(@Param("org") long org,@Param("id") long id,@Param("corte") java.time.Instant corte);
+    @Query(value="SELECT ficha::text FROM oportunidad_historia WHERE organizacion_id=:org AND id_oportunidad=:id AND version=:version",nativeQuery=true)
+    Optional<String> fichaVersion(@Param("org") long org,@Param("id") long id,@Param("version") long version);
+    @Query(value="SELECT version,registrado_en AS \"registradoEn\",operacion,motivo,ficha::text AS ficha FROM oportunidad_historia WHERE organizacion_id=:org AND id_oportunidad=:id AND registrado_en<=:corte ORDER BY version",nativeQuery=true)
+    List<VersionActividad> historia(@Param("org") long org,@Param("id") long id,@Param("corte") java.time.Instant corte);
+
+    interface ContextoOportunidad {
+        Long getId(); Long getOrganizacion(); long getVersion(); Long getEncargo();
+        Long getResponsable(); Long getResponsableEncargo(); String getEstado();
+        String getOperacion();
+        Long getPropiedad(); Long getPersona(); Long getCliente();
+    }
+    @Query("""
+        select o.id as id,o.organizacionId as organizacion,o.version as version,
+          c.id as encargo,o.agente.id as responsable,c.agente.id as responsableEncargo,
+          o.estado as estado,c.motivoOperacion as operacion,c.propiedad.id as propiedad,
+          coalesce(pi.id,pc.id) as persona,cli.id as cliente
+        from OportunidadComercial o join o.captacion c
+        left join o.personaInteresada pi left join o.cliente cli
+        left join cli.rol rc left join rc.persona pc
+        where o.organizacionId=:org and o.id=:id
+        """)
+    Optional<ContextoOportunidad> contexto(@Param("org") long org,@Param("id") long id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from OportunidadComercial o where o.organizacionId=:org and o.id=:id")
+    Optional<OportunidadComercial> bloquear(@Param("org") long org,@Param("id") long id);
+    @Query(value="select 1 from pg_advisory_xact_lock(hashtextextended('BROX:OP:'||cast(:org as text),0))",nativeQuery=true)
+    int bloquearNumeracion(@Param("org") long org);
+    @Query(value="select coalesce(max(id_oportunidad),0)+1 from oportunidad_comercial where organizacion_id=:org",nativeQuery=true)
+    long siguienteNumero(@Param("org") long org);
+    @Query("""
+        select count(o)>0 from OportunidadComercial o left join o.personaInteresada pi
+          left join o.cliente cli left join cli.rol cr left join cr.persona pc
+        where o.organizacionId=:org and o.estado='A' and o.captacion.id=:encargo
+          and (pi.id=:persona or pc.id=:persona)
+        """)
+    boolean existeAbiertaDelInteresado(@Param("org") long org,@Param("encargo") long encargo,@Param("persona") long persona);
+    /** Revalida pertenencia/rol actual sin recuperar cartera ni datos de la Persona. */
+    @Query("""
+        select count(r)>0 from PersonaRol r,UsuarioOrganizacion u,CuentaAcceso c,Organizacion o
+        where r.id=:rol and r.organizacionId=:org and r.persona.id=:persona
+          and r.persona.estado='A' and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
+          and u.organizacionId=:org and u.idPersona=:persona and u.estado='A' and u.rol=:atribucion
+          and ((:atribucion='AGENTE' and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.AGENTE)
+            or (:atribucion='BROKER' and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.BROKER))
+          and c.id=u.idUsuario and c.estado='A' and c.correoConfirmadoEn is not null
+          and o.id=:org and o.estado='A'
+        """)
+    boolean contextoOperativoActual(@Param("org") long org,@Param("persona") long persona,
+        @Param("rol") long rol,@Param("atribucion") String atribucion,@Param("hoy") java.time.LocalDate hoy);
+
+    /** Sólo definición estática: gobierno vigente no obtiene cartera ni operación. */
+    @Query("""
+        select count(r)>0 from PersonaRol r,UsuarioOrganizacion u,CuentaAcceso c,Organizacion o
+        where r.id=:rol and r.organizacionId=:org and r.persona.id=:persona
+          and r.persona.estado='A' and r.vigenciaHasta is null and r.vigenciaDesde<=:hoy
+          and r.tipoRol=com.controllocal.domain.persona.enums.TipoRol.ADMIN
+          and u.organizacionId=:org and u.idPersona=:persona and u.estado='A' and u.administrar=true
+          and c.id=u.idUsuario and c.estado='A' and c.correoConfirmadoEn is not null
+          and o.id=:org and o.estado='A'
+        """)
+    boolean contextoGobiernoParaMetadata(@Param("org") long org,@Param("persona") long persona,
+        @Param("rol") long rol,@Param("hoy") java.time.LocalDate hoy);
 
     String SCOPE = """
             where o.organizacionId = :idOrganizacion
@@ -153,6 +266,14 @@ public interface OportunidadComercialRepository extends JpaRepository<Oportunida
             """ + COMUN + """
                and lower(perCli.nombres_o_razon_social)""" + PATRON + """
 
+            union
+            select o.id_oportunidad as id
+              from oportunidad_comercial o
+              join captacion cap on cap.id_captacion = o.id_captacion
+              join persona perInteres on perInteres.id_persona=o.id_persona_interesada
+            """ + COMUN + """
+               and lower(perInteres.nombres_o_razon_social)""" + PATRON + """
+
             """;
 
     /**
@@ -205,9 +326,10 @@ public interface OportunidadComercialRepository extends JpaRepository<Oportunida
 
     String FICHA = """
             select o from OportunidadComercial o
-              join fetch o.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona
+              left join fetch o.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona
+              left join fetch o.personaInteresada
               join fetch o.captacion cap
               join fetch cap.propiedad
               join fetch cap.agente capAg

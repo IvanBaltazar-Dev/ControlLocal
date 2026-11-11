@@ -1,5 +1,6 @@
 package com.controllocal.web.dto;
 
+import com.controllocal.service.FotoPropiedadService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ActividadPropiedad;
 import com.controllocal.service.PropiedadUniversalService.AtributoFicha;
@@ -16,6 +17,7 @@ import com.controllocal.service.PropiedadUniversalService.HitoFicha;
 import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
 import com.controllocal.service.PropiedadUniversalService.TitularFicha;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
+import com.controllocal.service.UnidadRelacionadaService.FichaUnidadRelacionada;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.web.dto.PublicacionDtos.PublicacionResponse;
@@ -94,7 +96,13 @@ public final class PropiedadUniversalDtos {
      */
     public record AtributoRequest(String clave, String valor, String moneda,
                                   List<String> valores, String naturaleza, BigDecimal confianza,
-                                  LocalDate observadoEn, String evidenciaRef) {
+                                  LocalDate observadoEn, String evidenciaRef,
+                                  PropiedadUniversalService.MetadatosDeCaptura captura) {
+
+        public AtributoRequest(String clave,String valor,String moneda,List<String> valores,String naturaleza,
+                               BigDecimal confianza,LocalDate observadoEn,String evidenciaRef) {
+            this(clave,valor,moneda,valores,naturaleza,confianza,observadoEn,evidenciaRef,null);
+        }
 
         /** El valor sin declarar procedencia: el cable de todos los clientes de hoy. */
         public AtributoRequest(String clave, String valor, String moneda, List<String> valores) {
@@ -108,7 +116,7 @@ public final class PropiedadUniversalDtos {
 
         PropiedadUniversalService.ValorAtributo aDatos() {
             return new PropiedadUniversalService.ValorAtributo(clave, valor, moneda, valores,
-                    naturaleza, confianza, observadoEn, evidenciaRef);
+                    naturaleza, confianza, observadoEn, evidenciaRef,captura);
         }
     }
 
@@ -186,6 +194,10 @@ public final class PropiedadUniversalDtos {
      * <p>{@code null} <b>no</b> significa borrar, y {@code ""} tampoco: los dos
      * se rechazan o se ignoran segun el campo, nunca se adivinan. Borrar es una
      * intencion que se declara con su nombre.
+     * La versión física observada es obligatoria para cambiar el físico; retirar
+     * un valor vigente también exige motivoRetiro. operaciones/condiciones son
+     * transporte pendiente de W0 y sus bloques no vacíos se rechazan: AC066 usa
+     * la edición versionada del propio Encargo.
      *
      * @param atributosABorrar claves <b>logicas</b> — {@code "piso"},
      *                         {@code "interiorUnidad"} — sin decir donde viven.
@@ -198,7 +210,32 @@ public final class PropiedadUniversalDtos {
                                  List<TitularRequest> titulares, List<AtributoRequest> atributos,
                                  List<OperacionRequest> operaciones,
                                  List<String> atributosABorrar,
-                                 List<CondicionesEncargoRequest> condiciones) {
+                                 List<CondicionesEncargoRequest> condiciones,
+                                 com.controllocal.service.captura.SuficienciaInmueble.Contexto contextoCaptura,
+                                 Long versionEsperada, String motivoRetiro) {
+
+        public EdicionRequest(String descripcion,UbicacionRequest ubicacion,List<TitularRequest> titulares,
+                              List<AtributoRequest> atributos,List<OperacionRequest> operaciones,
+                              List<String> atributosABorrar,List<CondicionesEncargoRequest> condiciones,
+                              com.controllocal.service.captura.SuficienciaInmueble.Contexto contextoCaptura) {
+            this(descripcion,ubicacion,titulares,atributos,operaciones,atributosABorrar,condiciones,contextoCaptura,null,null);
+        }
+
+        public EdicionRequest conVersion(long observada) {
+            return new EdicionRequest(descripcion,ubicacion,titulares,atributos,operaciones,atributosABorrar,
+                    condiciones,contextoCaptura,observada,motivoRetiro);
+        }
+
+        public EdicionRequest conMotivoRetiro(String motivo) {
+            return new EdicionRequest(descripcion,ubicacion,titulares,atributos,operaciones,atributosABorrar,
+                    condiciones,contextoCaptura,versionEsperada,motivo);
+        }
+
+        public EdicionRequest(String descripcion,UbicacionRequest ubicacion,List<TitularRequest> titulares,
+                              List<AtributoRequest> atributos,List<OperacionRequest> operaciones,
+                              List<String> atributosABorrar,List<CondicionesEncargoRequest> condiciones) {
+            this(descripcion,ubicacion,titulares,atributos,operaciones,atributosABorrar,condiciones,null);
+        }
 
         public PropiedadUniversalService.ComandoEdicion aDatos(String claveIdempotencia,
                                                                Procedencia procedencia) {
@@ -209,31 +246,19 @@ public final class PropiedadUniversalDtos {
                     operaciones == null ? null : operaciones.stream().map(OperacionRequest::aDatos).toList(),
                     atributosABorrar,
                     condiciones == null ? null
-                            : condiciones.stream().map(CondicionesEncargoRequest::aDatos).toList());
+                            : condiciones.stream().map(CondicionesEncargoRequest::aDatos).toList(),contextoCaptura,versionEsperada,motivoRetiro);
         }
     }
 
-    /**
-     * <b>Las condiciones pactadas en UN encargo.</b>
-     *
-     * <p>Un bloque por {@code idEncargo}, nunca una lista comun. Una propiedad
-     * con la venta y el alquiler abiertos a la vez manda dos bloques, y el que
-     * no manda queda intacto: la regla de bloques dice lo mismo aqui dentro que
-     * fuera.
-     *
-     * <p>El cliente manda el <b>id del encargo</b> y no su operacion. No es
-     * pedanteria: dos alquileres sucesivos de la misma propiedad son dos
-     * episodios, y decir «bloque ALQUILER» haria que editar el de este ano
-     * pisara el del anterior.
-     */
+    /** Transporte sustituido: consumidor Angular pendiente W0; no habilita escritura comercial por el físico. */
     public record CondicionesEncargoRequest(Long idEncargo, List<AtributoRequest> atributos,
-                                            List<String> atributosABorrar) {
+                                            List<String> atributosABorrar, Long versionEsperada) {
 
         PropiedadUniversalService.CondicionesDeEncargo aDatos() {
             return new PropiedadUniversalService.CondicionesDeEncargo(idEncargo,
                     atributos == null ? null
                             : atributos.stream().map(AtributoRequest::aDatos).toList(),
-                    atributosABorrar);
+                    atributosABorrar, versionEsperada);
         }
     }
 
@@ -268,14 +293,56 @@ public final class PropiedadUniversalDtos {
      * {@code motivoNoEditable} es nulo cuando se puede editar, y entonces NO
      * viaja -- que es correcto: no hay motivo que dar.
      */
+    /**
+     * @param retirado     la clave <b>se retiro del catalogo</b> (`N16`). Es
+     *                     mas estrecho que {@code estadoDato = HISTORICO}, que
+     *                     tambien cubre «sigue viva y dejo de aplicar a este
+     *                     tipo». Los retirados llegan <b>al final</b> de
+     *                     {@code atributos}, con su valor intacto
+     * @param sustituidaPor la clave que ocupo su sitio, si se declaro. Ausente
+     *                     —Jackson va {@code NON_NULL}— cuando se retiro sin
+     *                     sustituta o cuando no consta. El <b>texto</b> ya lo
+     *                     dice {@code motivoNoEditable}; esto viaja para quien
+     *                     quiera enlazarla
+     */
     public record AtributoResponse(String clave, String rotulo, String tipoDato, String unidad,
                                    String valor, String moneda, List<String> valores,
-                                   String estadoDato, boolean editable, String motivoNoEditable) {
+                                   String estadoDato, boolean editable, String motivoNoEditable,
+                                   boolean retirado, String sustituidaPor) {
         static AtributoResponse desde(AtributoFicha f) {
             return new AtributoResponse(f.clave(), f.rotulo(), f.tipoDato(), f.unidad(),
                     f.valor(), f.moneda(), f.valores(),
-                    f.estadoDato(), f.editable(), f.motivoNoEditable());
+                    f.estadoDato(), f.editable(), f.motivoNoEditable(),
+                    f.retirado(), f.sustituidaPor());
         }
+    }
+
+    /**
+     * <b>Una foto de la galeria</b> (WP-C).
+     *
+     * <p>Viaja la <b>clave</b> y no una URL: el binario se pide con
+     * {@code GET /documentos/contenido?clave=…}, y la URL la compone el cliente
+     * con su propia base. {@code proveedor} —{@code DISCO} o {@code S3}— dice
+     * quien la sirve hoy; no cambia como se pide.
+     */
+    public record FotoResponse(Long id, String clave, String nombreArchivo, int orden,
+                               String proveedor,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) FotoPropiedadService.UtilidadFoto utilidad) {
+        public FotoResponse(Long id,String clave,String nombreArchivo,int orden,String proveedor){this(id,clave,nombreArchivo,orden,proveedor,null);}
+        public static FotoResponse desde(FotoPropiedadService.FotoDePropiedad f) {
+            return f == null ? null : new FotoResponse(f.id(), f.clave(), f.nombreArchivo(),
+                    f.orden(), f.proveedor(),f.utilidad());
+        }
+    }
+
+    /** La imagen entra en base64, igual que en {@code /locales/{id}/fotos}. */
+    public record FotoRequest(String nombreArchivo, String contenidoBase64) {
+    }
+
+    /**
+     * El orden completo de la galeria: los ids de <b>todas</b> sus fotos, en la
+     * posicion que se quiere. La primera de la lista queda como portada.
+     */
+    public record OrdenFotosRequest(List<Long> ids) {
     }
 
     /** Un movimiento de la serie economica de un encargo, con su nombre. */
@@ -341,7 +408,7 @@ public final class PropiedadUniversalDtos {
                     f.operacionRotulo(), f.estado(), f.estadoRotulo(), f.vivo(),
                     f.importe(), f.moneda(), f.importeRotulo(), f.exclusividad(),
                     f.idAgente(), f.agenteNombre(), f.inicio(), f.fin(),
-                    f.historico().stream().map(HitoResponse::desde).toList(),
+                    f.historico()==null?null:f.historico().stream().map(HitoResponse::desde).toList(),
                     // Las condiciones viajan DENTRO del encargo, no en la ficha:
                     // es donde se pactaron y es donde se editan (Corte 0C).
                     f.condiciones().stream().map(AtributoResponse::desde).toList(),
@@ -375,11 +442,11 @@ public final class PropiedadUniversalDtos {
                                 String detalle, String estado, String estadoRotulo,
                                 LocalDate fecha, BigDecimal monto, String moneda,
                                 Long idEncargo, String operacion,
-                                String operacionRotulo, String ruta) {
+                                String operacionRotulo, String ruta,List<com.controllocal.service.InteraccionService.VinculoFicha> vinculosInteraccion) {
         static HechoResponse desde(HechoDeActividad f) {
             return new HechoResponse(f.proceso(), f.id(), f.codigo(), f.titulo(), f.detalle(),
                     f.estado(), f.estadoRotulo(), f.fecha(), f.monto(), f.moneda(),
-                    f.idEncargo(), f.operacion(), f.operacionRotulo(), f.ruta());
+                    f.idEncargo(), f.operacion(), f.operacionRotulo(), f.ruta(),f.vinculosInteraccion());
         }
     }
 
@@ -440,6 +507,7 @@ public final class PropiedadUniversalDtos {
     public record HistoriaResponse(List<EpisodiosResponse> porOperacion,
                                    List<HitoHistoriaResponse> linea) {
         static HistoriaResponse desde(HistoriaComercial f) {
+            if(f==null)return null;
             return new HistoriaResponse(
                     f.porOperacion().stream().map(EpisodiosResponse::desde).toList(),
                     f.linea().stream().map(HitoHistoriaResponse::desde).toList());
@@ -453,6 +521,7 @@ public final class PropiedadUniversalDtos {
                                     List<HechoResponse> expedientes,
                                     List<HechoResponse> contratos) {
         static ActividadResponse desde(ActividadPropiedad f) {
+            if(f==null)return null;
             return new ActividadResponse(hechos(f.oportunidades()), hechos(f.visitas()),
                     hechos(f.interacciones()), hechos(f.expedientes()), hechos(f.contratos()));
         }
@@ -506,10 +575,20 @@ public final class PropiedadUniversalDtos {
                                     List<AtributoQueFaltaResponse> faltanParaPublicar,
                                     HistoriaResponse historia,
                                     ActividadResponse actividad,
+                                    List<FotoResponse> fotos,
+                                    FotoResponse fotoPortada,
                                     LocalDateTime fechaRegistro,
-                                    ResponsabilidadResponse responsabilidad) {
+                                    List<UnidadRelacionadaResponse> unidadesRelacionadas,
+                                    ResponsabilidadResponse responsabilidad, long versionFisica) {
 
-        public static PropiedadResponse desde(FichaPropiedadUniversal f) {
+        /**
+         * @param proveedorDeAlmacen quien sirve los binarios hoy ({@code DISCO}
+         *                           o {@code S3}). Llega desde la capa web
+         *                           porque el almacen es una frontera de
+         *                           infraestructura y el servicio no la conoce
+         */
+        public static PropiedadResponse desde(FichaPropiedadUniversal f,
+                                              String proveedorDeAlmacen) {
             return new PropiedadResponse(f.id(), f.codigo(), f.tipoPropiedad(), f.tipoRotulo(),
                     f.uso(), f.usoRotulo(), f.descripcion(),
                     f.estadoRegistro(), f.estadoRegistroRotulo(),
@@ -522,8 +601,27 @@ public final class PropiedadUniversalDtos {
                     f.faltanParaPublicar().stream().map(AtributoQueFaltaResponse::desde).toList(),
                     HistoriaResponse.desde(f.historia()),
                     ActividadResponse.desde(f.actividad()),
+                    f.fotos().stream()
+                            .map(foto -> FotoResponse.desde(foto.servidaPor(proveedorDeAlmacen)))
+                            .toList(),
+                    FotoResponse.desde(f.fotoPortada() == null
+                            ? null : f.fotoPortada().servidaPor(proveedorDeAlmacen)),
                     f.fechaRegistro(),
-                    ResponsabilidadResponse.desde(f.responsabilidad()));
+                    f.unidadesRelacionadas().stream().map(UnidadRelacionadaResponse::desde).toList(),
+                    ResponsabilidadResponse.desde(f.responsabilidad()),f.versionFisica());
+        }
+    }
+
+    /** Una unidad fisica relacionada, con su identidad y vigencia historica. */
+    public record UnidadRelacionadaResponse(Long idRelacion, Long idPropiedad, String codigo,
+                                            String tipoPropiedad, String tipoRotulo,
+                                            String tipoRelacion, String tipoRelacionRotulo,
+                                            String partidaRegistral, LocalDate vigenteDesde,
+                                            LocalDate vigenteHasta) {
+        static UnidadRelacionadaResponse desde(FichaUnidadRelacionada f) {
+            return new UnidadRelacionadaResponse(f.idRelacion(), f.idPropiedad(), f.codigo(),
+                    f.tipoPropiedad(), f.tipoRotulo(), f.tipoRelacion(), f.tipoRelacionRotulo(),
+                    f.partidaRegistral(), f.vigenteDesde(), f.vigenteHasta());
         }
     }
 

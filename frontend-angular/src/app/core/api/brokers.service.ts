@@ -5,12 +5,7 @@ import { ApiClient } from './api.client';
 import { Agente } from './agentes.service';
 import { PageResponse } from './api.types';
 
-/**
- * Contrato CONGELADO: `BrokerResponse` de la v1 (E1 §3).
- *
- * `id` es el `persona_rol.id` del rol BROKER. `agentesACargo` cuenta
- * supervisiones **vigentes**, no históricas.
- */
+/** Directorio organizacional; el acceso personal y la pertenencia tienen contratos propios. */
 export interface Broker {
   id: number;
   codigoBroker?: string;
@@ -23,45 +18,22 @@ export interface Broker {
   usuario?: string;
   zona?: string;
   fechaDesignacion?: string;
-  /** A activo, I inactivo. */
   estadoAdministrativo?: string;
   esAdministrador?: boolean;
   agentesACargo?: number;
 }
 
-/**
- * Espejo de `BrokerRequest`.
- *
- * El PUT **no cambia `esAdministrador`**, ni documento, tipos, usuario,
- * contraseña, código ni fecha de designación. Quien administra se decide al
- * dar de alta y no se edita desde aquí.
- */
+/** Edición laboral autorizada; sin credenciales ni alta/baja de pertenencia. */
 export interface DatosBroker {
   nombre?: string;
-  tipoPersona?: string;
-  tipoDocumento?: string;
-  numeroDocumento?: string;
   telefono?: string;
-  correo?: string;
-  usuario?: string;
-  contrasena?: string;
+  correoLaboral?: string;
   zona?: string;
-  codigoBroker?: string;
-  /** Estado administrativo: A activo, I inactivo. */
-  estado?: string;
-  esAdministrador?: boolean;
 }
 
 const RECURSO = 'brokers';
 
-/**
- * Las tres lecturas admiten **cualquier sesión autenticada** —el catálogo de
- * brokers no lleva alcance— pero **el alta y la edición son de ADMIN**.
- *
- * Regla que la pantalla tiene que respetar: **solo puede existir un broker
- * administrador por organización**. Un segundo alta con `esAdministrador` no
- * da un error de formulario, da un 400 del backend.
- */
+/** Consultas y edición local; Core aplica autoridad y aislamiento. */
 @Injectable({ providedIn: 'root' })
 export class BrokersService {
   private readonly api = inject(ApiClient);
@@ -84,7 +56,7 @@ export class BrokersService {
 
   /**
    * El equipo vigente del broker. Llega **sin contadores comerciales**: los dos
-   * viajan en 0 aunque el agente tenga captaciones y oportunidades abiertas
+   * no se incluyen en la proyección mínima de equipo
    * (rareza del cable, E1 §3). Para los números reales hay que ir a
    * `GET /agentes`.
    */
@@ -96,30 +68,7 @@ export class BrokersService {
     return this.api.get<Agente[]>(`${RECURSO}/${id}/agentes`);
   }
 
-  registrar(datos: DatosBroker): Promise<Broker> {
-    return this.api.post<Broker>(RECURSO, datos);
-  }
-
   actualizar(id: number, datos: DatosBroker): Promise<Broker> {
     return this.api.put<Broker>(`${RECURSO}/${id}`, datos);
-  }
-
-  /** No hay DELETE: la baja es el PUT con estado `I`. */
-  desactivar(id: number, broker: Broker): Promise<Broker> {
-    return this.actualizar(id, this.editables(broker, 'I'));
-  }
-
-  reactivar(id: number, broker: Broker): Promise<Broker> {
-    return this.actualizar(id, this.editables(broker, 'A'));
-  }
-
-  private editables(broker: Broker, estado: string): DatosBroker {
-    return {
-      nombre: broker.nombre,
-      telefono: broker.telefono,
-      correo: broker.correo,
-      zona: broker.zona,
-      estado,
-    };
   }
 }

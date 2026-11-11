@@ -4,17 +4,12 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Blinda la politica de contrasenas (§4.5) y el generador de temporales.
+ * Blinda la politica de contrasenas propias (§4.5).
  *
  * <p>Lo que mas importa de aqui no es que rechace lo malo, sino <b>que no
  * exija lo que no debe</b>: una regla de "mayuscula + digito + simbolo"
@@ -62,28 +57,4 @@ class PoliticaContrasenasTest {
                 PoliticaContrasenas.exigirValida(new char[0], "vmora"));
     }
 
-    @Test
-    @DisplayName("la temporal no lleva caracteres que se confundan al dictarla")
-    void temporalSinAmbiguos() {
-        String clave = new String(PoliticaContrasenas.generarTemporal());
-        // I/l/1 y O/0 son la diferencia entre entrar y consumir cupo del
-        // bloqueo por un intento fallido que nadie escribio mal.
-        for (char ambiguo : new char[]{'I', 'l', '1', 'O', '0'}) {
-            assertFalse(clave.indexOf(ambiguo) >= 0,
-                    "la temporal " + clave + " contiene el caracter ambiguo " + ambiguo);
-        }
-    }
-
-    @Test
-    @DisplayName("la temporal cumple la propia politica y no se repite")
-    void temporalValidaYUnica() {
-        Set<String> vistas = new HashSet<>();
-        for (int i = 0; i < 200; i++) {
-            char[] temporal = PoliticaContrasenas.generarTemporal();
-            assertDoesNotThrow(() -> PoliticaContrasenas.exigirValida(temporal, "vmora"),
-                    "una temporal generada por el sistema no puede fallar su propia politica");
-            vistas.add(new String(temporal));
-        }
-        assertEquals(200, vistas.size(), "el generador repitio una contrasena temporal");
-    }
 }

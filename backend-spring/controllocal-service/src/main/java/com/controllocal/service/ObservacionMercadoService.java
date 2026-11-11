@@ -45,7 +45,8 @@ public interface ObservacionMercadoService {
      * una observacion es un hecho fechado y corregirla borraria la muestra. Si
      * el precio cambio, se observa otra vez.
      */
-    FichaObservacion registrar(DatosObservacion datos, Actor actor);
+    FichaObservacion registrar(DatosObservacion datos, Actor actor, String claveIdempotencia,
+                               com.controllocal.service.soporte.Procedencia procedencia);
 
     /** Lo observado de una propiedad, de lo mas reciente a lo mas antiguo. */
     List<FichaObservacion> listarDe(long idPropiedad, Actor actor);

@@ -5,22 +5,36 @@ import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 
 import { PageResponse } from '../../core/api/api.types';
 import { Captacion, CaptacionesService, CaptacionRequest } from '../../core/api/captaciones.service';
-import { Local, LocalesService } from '../../core/api/locales.service';
+import { FichaPropiedad, FilaPropiedad, PropiedadesService } from '../../core/api/propiedades.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { Sesion } from '../../core/auth/sesion.model';
 import { CaptacionForm, generarCodigoCaptacion } from './captacion-form';
 
-const LOCAL: Local = {
-  id: 12, codigoLocal: 'LOC-0012', direccion: 'Av. Larco 700', distrito: 'Miraflores',
-  metraje: 95, precioReferencial: 2800, monedaReferencial: 'PEN', rubroPermitido: 'Tienda', estado: 'D',
-  propietarioNombre: 'Ana Torres',
+const FILA: FilaPropiedad = {
+  id: 12, codigo: 'PROP-0012', tipoPropiedad: 'LOCAL', tipoRotulo: 'Local comercial',
+  direccion: 'Av. Larco 700', distrito: 'Miraflores', metraje: 95, estado: 'D',
+  propietarioNombre: 'Ana Torres', titulares: 1,
+  encargos: [{ operacion: 'ALQUILER', estado: 'A', importe: 2800, moneda: 'PEN' }],
+};
+const FICHA: FichaPropiedad = {
+  id: FILA.id, codigo: FILA.codigo, tipoPropiedad: FILA.tipoPropiedad,
+  tipoRotulo: FILA.tipoRotulo, ubicacion: { direccion: FILA.direccion, distrito: FILA.distrito },
+  titulares: [{ idPropietario: 1, nombre: 'Ana Torres', representante: true }],
+  atributos: [{ clave: 'metraje_total', rotulo: 'Metraje total', valor: '95' }],
+  encargos: [{
+    idEncargo: 1, codigo: 'ENC-001', operacion: 'ALQUILER', operacionRotulo: 'Alquiler',
+    estado: 'A', estadoRotulo: 'Activa', vivo: true, importe: 2800, moneda: 'PEN',
+    importeRotulo: 'renta mensual', publicaciones: [], condiciones: [], faltanParaPublicar: [],
+    historico: [], puedeEditar: true,
+  }],
+  atributosQueFaltan: [], faltanParaPublicar: [],
 };
 const PROSPECCION: Prospeccion = {
-  id: 7, codigoProspeccion: 'PRO-0007', localId: LOCAL.id, estado: 'S',
+  id: 7, codigoProspeccion: 'PRO-0007', localId: FILA.id, estado: 'S',
 };
 const CREADA: Captacion = {
-  id: 21, codigoCaptacion: 'CAP-0021', idLocal: LOCAL.id, idAgente: 30, estado: 'P',
+  id: 21, codigoCaptacion: 'CAP-0021', idLocal: FILA.id, idAgente: 30, estado: 'P',
 };
 
 interface AccesoFormulario {
@@ -31,7 +45,7 @@ interface AccesoFormulario {
 describe('CaptacionForm', () => {
   let captaciones: jasmine.SpyObj<CaptacionesService>;
   let prospecciones: jasmine.SpyObj<ProspeccionesService>;
-  let locales: jasmine.SpyObj<LocalesService>;
+  let propiedades: jasmine.SpyObj<PropiedadesService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
@@ -45,9 +59,9 @@ describe('CaptacionForm', () => {
     ]);
     prospecciones.obtener.and.resolveTo(PROSPECCION);
     prospecciones.marcarCaptada.and.resolveTo({ ...PROSPECCION, estado: 'T' });
-    locales = jasmine.createSpyObj<LocalesService>('LocalesService', ['obtener', 'pagina']);
-    locales.obtener.and.resolveTo(LOCAL);
-    locales.pagina.and.resolveTo(pagina([LOCAL]));
+    propiedades = jasmine.createSpyObj<PropiedadesService>('PropiedadesService', ['consultar', 'listar']);
+    propiedades.consultar.and.resolveTo(FICHA);
+    propiedades.listar.and.resolveTo(pagina([FILA]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
   });
@@ -214,8 +228,8 @@ describe('CaptacionForm', () => {
 
   it('el alta libre pide solo una página de locales disponibles', async () => {
     await montar(null, {});
-    expect(locales.pagina).toHaveBeenCalledOnceWith({
-      page: 1, tamano: 20, texto: undefined, estado: 'D',
+    expect(propiedades.listar).toHaveBeenCalledOnceWith({
+      pagina: 1, tamano: 20, texto: undefined, estado: 'D',
     });
   });
 
@@ -231,6 +245,8 @@ describe('CaptacionForm', () => {
   ): Promise<ComponentFixture<CaptacionForm>> {
     TestBed.resetTestingModule();
     const sesion = signal<Sesion | null>({
+        idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+        modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
       token: 't', expiraEnSegundos: 3600, rol: 'AGENTE', idUsuario: 1, idDominio: 30,
       nombre: 'Prueba', usuario: 'prueba', expiraEn: '2099-01-01T00:00:00',
     });
@@ -239,7 +255,7 @@ describe('CaptacionForm', () => {
       providers: [
         { provide: CaptacionesService, useValue: captaciones },
         { provide: ProspeccionesService, useValue: prospecciones },
-        { provide: LocalesService, useValue: locales },
+        { provide: PropiedadesService, useValue: propiedades },
         { provide: AuthService, useValue: { sesion } },
         {
           provide: ActivatedRoute,

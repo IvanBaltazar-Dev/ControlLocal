@@ -19,6 +19,8 @@ import java.util.Optional;
  * oportunidades de su equipo, por lo que llega como lista de ids.
  */
 public interface DetalleClienteRepository extends JpaRepository<DetalleCliente, Long> {
+    @Query("select c.rol.persona.id from DetalleCliente c where c.organizacionId=:org and c.id=:id")
+    Optional<Long> personaContextual(@Param("org") long org,@Param("id") long id);
 
     String FICHA = """
             select c from DetalleCliente c

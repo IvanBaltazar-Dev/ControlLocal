@@ -9,7 +9,7 @@ import {
   CaptacionesService,
 } from '../../core/api/captaciones.service';
 import { describir, ESTADO_CAPTACION, RESULTADO_PROPUESTA } from '../../core/api/codigos';
-import { Local, LocalesService } from '../../core/api/locales.service';
+import { FichaPropiedad, PropiedadesService } from '../../core/api/propiedades.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { calcularCondicionComision, descripcionCondicionComision, importeTexto } from '../../core/comision';
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
@@ -28,7 +28,7 @@ type Decision = 'A' | 'O' | 'R';
 })
 export class CaptacionReview implements OnInit {
   private readonly api = inject(CaptacionesService);
-  private readonly locales = inject(LocalesService);
+  private readonly propiedades = inject(PropiedadesService);
   private readonly prospecciones = inject(ProspeccionesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -39,7 +39,7 @@ export class CaptacionReview implements OnInit {
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly mensaje = signal<string | null>(null);
   protected readonly captacion = signal<Captacion | null>(null);
-  protected readonly local = signal<Local | null>(null);
+  protected readonly propiedad = signal<FichaPropiedad | null>(null);
   protected readonly prospeccion = signal<Prospeccion | null>(null);
   /**
    * **Los destinos que el Core ofrece para ESTE encargo** (D-P0-7 + D-P0-12).
@@ -104,7 +104,7 @@ export class CaptacionReview implements OnInit {
     if (codigo) void this.router.navigate(['/captaciones', codigo]);
   }
 
-  protected verLocal(): void {
+  protected verPropiedad(): void {
     const id = this.captacion()?.idLocal;
     if (id) void this.router.navigate(['/propiedades', id]);
   }
@@ -201,21 +201,31 @@ export class CaptacionReview implements OnInit {
       this.motivoReasignacion.markAsTouched();
       return;
     }
-    await this.ejecutar(
-      () => this.api.reasignar(captacion.id, idAgente, motivo, observado),
-      'Captación reasignada. La revisión sigue pendiente.',
-    );
-    if (!this.errorAccion()) {
+    this.procesando.set(true);
+    this.errorAccion.set(null);
+    this.mensaje.set(null);
+    this.ultimoFallo = null;
+    try {
+      await this.api.reasignar(captacion.id, idAgente, motivo, observado);
       this.dialogoReasignar.set(false);
-    } else if (this.ultimoFallo instanceof ApiError && this.ultimoFallo.conflicto) {
-      // Las dos cosas, y en este orden: recargar deja ver quién lo lleva ahora,
-      // y el mensaje se vuelve a poner DESPUÉS porque `cargar()` limpia los
-      // errores de acción — sin esto la pantalla se refrescaba en silencio y
-      // quien reasignó no llegaba a enterarse de por qué no se hizo.
-      const porQue = this.errorAccion();
-      this.dialogoReasignar.set(false);
-      await this.cargar();
+      // La respuesta de gobierno no sustituye una ficha comercial. Se vuelve
+      // a consultar sólo desde la actuación comercial ofrecida por Core.
+      this.captacion.set(null);
+      this.propiedad.set(null);
+      this.prospeccion.set(null);
+      if (captacion.capacidades?.puedeRevisar === true) await this.cargar();
+      // Una consulta posterior fallida no convierte el cambio correcto en fallo.
+      this.mensaje.set('Captación reasignada. La revisión sigue pendiente.');
+    } catch (error) {
+      this.ultimoFallo = error;
+      const porQue = mensajeError(error, 'No se pudo registrar la reasignación.');
+      if (error instanceof ApiError && error.conflicto) {
+        this.dialogoReasignar.set(false);
+        if (captacion.capacidades?.puedeRevisar === true) await this.cargar();
+      }
       this.errorAccion.set(porQue);
+    } finally {
+      this.procesando.set(false);
     }
   }
 
@@ -250,7 +260,7 @@ export class CaptacionReview implements OnInit {
     return 'aviso';
   }
 
-  protected valor(valor: string | undefined): string { return texto(valor); }
+  protected valor(valor: string | null | undefined): string { return texto(valor); }
   protected fecha(valor: string | undefined): string { return fechaCorta(valor); }
   protected area(valor: number | undefined): string { return valor === undefined ? SIN_DATO : `${numero(valor)} m²`; }
   protected precio(valor: number | undefined, moneda: string | undefined): string { return monto(valor, moneda); }
@@ -275,11 +285,11 @@ export class CaptacionReview implements OnInit {
       // encargo los resuelve el Core cuando se abre la reasignación.
       const captacion = await this.api.obtenerPorCodigo(codigo);
       this.captacion.set(captacion);
-      const [local, paginaProspeccion] = await Promise.all([
-        captacion.idLocal ? this.locales.obtener(captacion.idLocal) : Promise.resolve(null),
+      const [propiedad, paginaProspeccion] = await Promise.all([
+        captacion.idLocal ? this.propiedades.consultar(captacion.idLocal) : Promise.resolve(null),
         this.prospecciones.pagina({ idCaptacion: captacion.id, pagina: 1, tamano: 1 }),
       ]);
-      this.local.set(local);
+      this.propiedad.set(propiedad);
       this.prospeccion.set(paginaProspeccion.items[0] ?? null);
     } catch (error) {
       this.captacion.set(null);

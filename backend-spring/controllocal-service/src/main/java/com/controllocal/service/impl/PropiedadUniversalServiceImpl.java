@@ -8,7 +8,6 @@ import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comun.EstadosDominio;
 import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
-import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.AsignacionResponsablePropiedad;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.OrigenIncorporacion;
@@ -20,7 +19,6 @@ import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.persistence.repositorio.EventoDominioRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
@@ -31,8 +29,10 @@ import com.controllocal.persistence.query.PropiedadListado;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.TitularidadPropiedadRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.FotoPropiedadService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.UnidadRelacionadaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
@@ -42,6 +42,11 @@ import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.captura.SuficienciaInmueble;
+import com.controllocal.service.captura.SuficienciaRegistrada;
+import com.controllocal.service.captura.ValidadorRespuestaCaptura;
+import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.soporte.AnunciosDeLosEncargos;
 import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.AtributosDeEncargo;
@@ -51,13 +56,11 @@ import com.controllocal.service.soporte.ComandosIdempotentes;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Documentos;
 import com.controllocal.service.soporte.ElegibilidadDeResponsable;
-import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.soporte.ProcedenciaDelValor;
 import com.controllocal.service.soporte.ValorEntrante;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.FiltrosDeListadoInmobiliario;
-import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -80,6 +83,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static com.controllocal.service.soporte.EntradasDeValores.*;
+
 /**
  * El alta, la lectura y la edicion universales (D-E4-1, D-E4-2).
  *
@@ -97,10 +102,11 @@ import java.util.function.Function;
  * </ol>
  *
  * <p><b>Todo o nada.</b> {@code @Transactional} no es aqui una anotacion de
- * rutina: si falla la titularidad, un atributo obligatorio, el tenant, la
- * operacion o cualquier invariante, no puede quedar media propiedad. Una
- * propiedad sin titular o sin precio no la arregla nadie despues — cuenta en
- * los listados y miente en los indicadores.
+ * rutina: si falla una titularidad declarada, un atributo obligatorio, el
+ * tenant, la operacion o cualquier invariante, no puede quedar media
+ * propiedad. Una propiedad que aun no conoce titular, partida o encargo se
+ * conserva con esos datos FALTANTES; cuando se declara una operacion, su
+ * importe y moneda siguen siendo obligatorios para ese encargo.
  *
  * <h2>Tres columnas viejas que se siguen escribiendo, y por que</h2>
  * {@code propiedad.id_rol_propietario}, {@code precio_referencial} y
@@ -125,7 +131,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
     private static final String EVENTO_REGISTRADA = "PROPIEDAD_REGISTRADA";
     private static final String EVENTO_EDITADA = "PROPIEDAD_EDITADA";
-    private static final String EVENTO_ENCARGO = "ENCARGO_ABIERTO";
     private static final String EVENTO_PRECIO = "PRECIO_AUTORIZADO";
     /** El traspaso de autoridad es un hecho, y como tal deja evento (P0-2). */
     private static final String EVENTO_RESPONSABLE = "PROPIEDAD_RESPONSABLE_ASIGNADO";
@@ -133,7 +138,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final PropiedadRepository propiedades;
     private final PersonaRolRepository roles;
     private final DetalleAgenteRepository agentes;
-    private final DistritoRepository distritos;
+    private final com.controllocal.service.soporte.ResolverDeDistrito distritos;
+    private final org.springframework.context.ApplicationEventPublisher cambiosComerciales;
     private final TitularidadPropiedadRepository titularidades;
     private final CaptacionRepository captaciones;
     private final PrecioPropiedadRepository precios;
@@ -142,8 +148,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final AtributosGobernados gobierno;
     /** El enrutador del OTRO sujeto. Nunca se le pide nada de la propiedad. */
     private final AtributosDeEncargo condiciones;
-    /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
-    private final TitularParaEncargar titularParaEncargar;
     private final LectorPorAutoridad lector;
     private final ComandosIdempotentes comandos;
     private final Documentos documentos;
@@ -164,6 +168,22 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      */
     private final MotorBusquedaInmobiliaria motor;
 
+    /**
+     * <b>La galeria, por su unico servicio</b> (WP-C).
+     *
+     * <p>La ficha no lee {@code foto_propiedad} por su cuenta aunque seria una
+     * consulta trivial: el invariante «la portada es la foto con orden 1» vive
+     * en un sitio, y el segundo lector es como se pierde -- no porque haga algo
+     * distinto, sino porque deja de enterarse de los cambios del primero.
+     */
+    private final FotoPropiedadService fotos;
+    private final UnidadRelacionadaService unidadesRelacionadas;
+    private final EncargoService encargos;
+    private final SuficienciaInmueble suficiencia;
+    private final SuficienciaRegistrada suficienciaRegistrada;
+    private final ValidadorRespuestaCaptura validadorRespuestas;
+    private final jakarta.persistence.EntityManager entidades;
+
     // Las cuatro tablas de valor gobernado ya no se inyectan aqui (4.P). Este
     // caso de uso ORQUESTA -- decide que se escribe, en que orden y dentro de
     // que transaccion -- y el que ESCRIBE es el enrutador de cada sujeto, que es
@@ -172,7 +192,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     // eso no se arregla acordandose: se arregla quitando el camino.
 
     public PropiedadUniversalServiceImpl(PropiedadRepository propiedades, PersonaRolRepository roles,
-                                         DetalleAgenteRepository agentes, DistritoRepository distritos,
+                                         DetalleAgenteRepository agentes, com.controllocal.service.soporte.ResolverDeDistrito distritos,
                                          TitularidadPropiedadRepository titularidades,
                                          CaptacionRepository captaciones,
                                          PrecioPropiedadRepository precios,
@@ -180,7 +200,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          BorradorCapturaRepository borradores,
                                          AtributosGobernados gobierno,
                                          AtributosDeEncargo condiciones,
-                                         TitularParaEncargar titularParaEncargar,
                                          LectorPorAutoridad lector,
                                          ComandosIdempotentes comandos, Documentos documentos,
                                          Transiciones transiciones,
@@ -188,8 +207,20 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          AnunciosDeLosEncargos publicaciones,
                                          AutoridadDePropiedad autoridad,
                                          ElegibilidadDeResponsable elegibilidad,
-                                         MotorBusquedaInmobiliaria motor) {
+                                         FotoPropiedadService fotos,
+                                         MotorBusquedaInmobiliaria motor,
+                                         UnidadRelacionadaService unidadesRelacionadas, EncargoService encargos, SuficienciaInmueble suficiencia,
+                                         SuficienciaRegistrada suficienciaRegistrada,ValidadorRespuestaCaptura validadorRespuestas,
+                                         jakarta.persistence.EntityManager entidades,org.springframework.context.ApplicationEventPublisher cambiosComerciales) {
+        this.cambiosComerciales=cambiosComerciales;
+        this.entidades=entidades;
+        this.suficiencia = suficiencia;
+        this.suficienciaRegistrada=suficienciaRegistrada;
+        this.validadorRespuestas=validadorRespuestas;
+        this.encargos = encargos;
+        this.fotos = fotos;
         this.motor = motor;
+        this.unidadesRelacionadas = unidadesRelacionadas;
         this.propiedades = propiedades;
         this.roles = roles;
         this.agentes = agentes;
@@ -201,7 +232,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.borradores = borradores;
         this.gobierno = gobierno;
         this.condiciones = condiciones;
-        this.titularParaEncargar = titularParaEncargar;
         this.lector = lector;
         this.comandos = comandos;
         this.documentos = documentos;
@@ -222,17 +252,26 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         if (comando == null) {
             throw new ReglaNegocioException("El comando de registro es obligatorio.");
         }
+        if(comando.atributos()!=null&&comando.atributos().stream().anyMatch(v->v!=null&&v.captura()!=null))
+            throw new ReglaNegocioException("Los metadatos del alta se aportan en el borrador de captura; la corrección explícita corresponde a la edición física.");
         String tipoPropiedad = tipoValidado(comando.tipoPropiedad());
         Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
 
         // La huella se calcula sobre lo que DEFINE el comando. Si cambia
         // cualquiera de estos campos, ya no es el mismo comando y una clave
         // repetida deja de ser un reintento.
-        String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
-                "tipo", tipoPropiedad,
-                "direccion", texto(comando.ubicacion() == null ? null : comando.ubicacion().direccion()),
-                "titulares", titularesEnHuella(comando.titulares()),
-                "operaciones", operacionesEnHuella(comando.operaciones()))));
+        Map<String, Object> comandoParaHuella = new LinkedHashMap<>();
+        comandoParaHuella.put("tipo", tipoPropiedad);
+        comandoParaHuella.put("codigo", valorEnHuella(comando.codigo()));
+        comandoParaHuella.put("uso", valorEnHuella(comando.uso()));
+        comandoParaHuella.put("descripcion", valorEnHuella(comando.descripcion()));
+        comandoParaHuella.put("ubicacion", ubicacionEnHuella(comando.ubicacion()));
+        comandoParaHuella.put("titulares", titularesEnHuella(comando.titulares()));
+        comandoParaHuella.put("atributos", atributosEnHuella(comando.atributos()));
+        comandoParaHuella.put("operaciones", operacionesEnHuella(comando.operaciones()));
+        comandoParaHuella.put("idBorrador", valorEnHuella(comando.idBorrador()));
+        comandoParaHuella.put("origen", valorEnHuella(comando.origen()));
+        String huella = documentos.huellaDe(comandoParaHuella);
 
         Optional<ComandoIdempotente> yaHecho =
                 comandos.buscar(actor, comando.claveIdempotencia(), COMANDO_REGISTRO, huella);
@@ -240,6 +279,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             // El reintento recibe LO MISMO que el primer intento. Si aqui se
             // devolviera un conflicto, un canal conversacional le diria al
             // usuario que fallo algo que en realidad salio bien.
+            consultarPropiedad(yaHecho.get().getEntidadId(), actor);
             return reconstruir(yaHecho.get());
         }
 
@@ -251,11 +291,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 atributosValidados(comando.atributos()), comando.ubicacion());
         List<Titular> titulares = titularesValidados(comando.titulares());
 
-        // Se comprueba ANTES de escribir nada: "te falta el metraje" es un
-        // mensaje que se entiende, y un fallo del trigger a mitad de la
-        // transaccion no lo es.
-        exigirObligatorios(actor.idOrganizacion(), tipoPropiedad, valores.keySet());
-
+        // CAT-E11/18: identificar el registro físico no exige mínimos comerciales.
+        // Los datos materiales se comprueban al confirmar/habilitar el Encargo.
         // El agente se resuelve solo si va a abrirse algun encargo: es el
         // encargo el que necesita saber quien responde por el, y registrar una
         // propiedad para prospectarla no abre ninguno. Exigirlo igualmente
@@ -267,27 +304,21 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         propiedad.setOrganizacionId(actor.idOrganizacion());
         propiedad.setCodigo(codigoDePropiedad(actor.idOrganizacion(), comando.codigo()));
         propiedad.setTipoInmueble(tipoPropiedad);
-        propiedad.setUso(usoValidado(comando.uso(), tipoPropiedad));
+        propiedad.setUso(usoValidado(comando.uso()));
         propiedad.setDescripcion(comando.descripcion());
         aplicarUbicacion(propiedad, ubicacion);
+        incorporarMetadatosDeCaptura(propiedad, comando, actor);
+        exigirIdentificacion(tipoPropiedad, comando.uso(), ubicacion,
+                suficienciaRegistrada.contexto(propiedad.getContextoCaptura()));
+        validarZonificacionDeAlta(propiedad, valores, actor);
 
-        // `metraje` es NOT NULL, asi que tiene que estar puesto ANTES del
-        // primer save. Lo pone el enrutador de autoridad, no este metodo: el
-        // caso de uso ya no sabe que clave lo alimenta (D-E4-3, paso 4).
-        //
-        // Se hace aqui y se repite despues del save para los atributos porque
-        // el orden lo impone la BD: la propiedad no se puede insertar sin
-        // metraje, y un atributo no se puede insertar sin propiedad. Y el
-        // LINAJE de estos estructurales tambien va despues, por la misma razon
-        // al reves: se direcciona por el id de la propiedad, que aqui todavia
-        // no existe (4.P).
+        // El enrutador conserva la autoridad de cada valor conocido; C2 admite
+        // área desconocida y no fabrica cero para satisfacer una columna.
         List<ValorEntrante> entrantes = entrantes(valores, procedencia);
         gobierno.aplicarEstructuralesAlAlta(actor.idOrganizacion(), propiedad, entrantes);
 
-        // `precio_referencial` y `moneda_referencial` son NOT NULL y todo el
-        // cable actual las lee. Se proyectan del encargo de ALQUILER si lo hay
-        // -- la columna se llama "renta referencial" en media docena de sitios
-        // -- y del de venta si solo hay venta.
+        // Proyección comercial sólo cuando se declaró una operación con precio;
+        // un registro físico sin Encargo conserva ausentes ambos componentes.
         operacionDeReferencia(operaciones).ifPresent(referencia -> {
             propiedad.setPrecioReferencial(referencia.importe());
             propiedad.setMonedaReferencial(referencia.moneda());
@@ -335,11 +366,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         gobierno.escribirAlAlta(actor, propiedad, entrantes);
 
         List<Long> idsEncargos = new ArrayList<>();
-        if (!operaciones.isEmpty()) {
-            // Abrir un encargo es empezar una relacion comercial, y esa si
-            // necesita saber de quien es el inmueble (V76).
-            titularParaEncargar.exigirParaEncargo(propiedad);
-        }
         for (OperacionSolicitada solicitada : operaciones) {
             idsEncargos.add(abrirEncargo(actor, propiedad, agente, solicitada, procedencia));
         }
@@ -387,14 +413,13 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     public Pagina<FilaPropiedad> listar(FiltrosPropiedad filtros, Actor actor) {
         List<OperacionInmobiliaria> exigidas = operacionesDelFiltro(filtros.operaciones());
 
-        // La MISMA estrategia que `/locales`, configurada distinto: sin la rama
-        // del rubro -que es del contrato de aquel-, con los filtros propios del
-        // modelo universal y con el orden descendente que publica este recurso.
+        // La MISMA estrategia que `/locales`, con las tres ramas de texto,
+        // los filtros propios y el orden descendente del listado universal.
         // Lo que decide que ids entran es el motor; lo unico que queda aqui es
         // la fila universal y sus encargos, que es lo que de verdad distingue a
         // este listado del heredado.
         CriterioBusquedaInmobiliaria criterio = FiltrosDeListadoInmobiliario.dePropiedades(
-                actor.idOrganizacion(), filtros.texto(), filtros.estado(),
+                actor.idOrganizacion(), autoridad.alcanceDeLectura(actor).rolesAgente(), filtros.texto(), filtros.estado(),
                 filtros.tipoPropiedad() == null || filtros.tipoPropiedad().isBlank()
                         ? null : tipoValidado(filtros.tipoPropiedad()),
                 filtros.distrito(),
@@ -427,7 +452,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     @Override
     @Transactional(readOnly = true)
     public OpcionesDeFiltro opcionesDeFiltro(Actor actor) {
-        return new OpcionesDeFiltro(propiedades.distritosConCartera(actor.idOrganizacion()));
+        return new OpcionesDeFiltro(propiedades.distritosConCartera(actor.idOrganizacion(),
+                autoridad.alcanceDeLectura(actor).paramRolesArray()));
     }
 
     /** Los encargos vivos de toda la pagina, en una consulta. */
@@ -436,7 +462,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             return Map.of();
         }
         Map<Long, List<EncargoEnLista>> porPropiedad = new LinkedHashMap<>();
-        for (Captacion encargo : captaciones.encargosVivosDe(actor.idOrganizacion(), ids)) {
+        for (Captacion encargo : captaciones.encargosVivosParaLectura(actor.idOrganizacion(), ids,
+                autoridad.alcanceDeLectura(actor).paramRoles())) {
             CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
             porPropiedad.computeIfAbsent(encargo.getPropiedad().getId(), id -> new ArrayList<>())
                     .add(new EncargoEnLista(encargo.operacion().name(), encargo.estadoActual(),
@@ -473,12 +500,44 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     @Override
     @Transactional(readOnly = true)
     public FichaPropiedadUniversal consultar(long idPropiedad, Actor actor) {
-        Propiedad propiedad = propiedades
-                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+        return ficha(actor, consultarPropiedad(idPropiedad, actor));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ResultadoRegistro> consultarResultadoRegistro(String claveIdempotencia, Actor actor) {
+        if (!actor.esAgente()) throw new com.controllocal.service.excepcion.AccesoNoAutorizadoException();
+        return comandos.consultarResultado(actor, claveIdempotencia, COMANDO_REGISTRO).map(previo -> {
+            if (!Propiedad.ENTIDAD_TIPO.equals(previo.getEntidadTipo()) || previo.getEntidadId() == null) {
+                throw new IllegalStateException("El registro de comando no corresponde a una Propiedad.");
+            }
+            consultarPropiedad(previo.getEntidadId(), actor); // Autoridad vigente; sin ficha, fotos o historia.
+            return reconstruir(previo);
+        });
+    }
+
+    private Propiedad consultarPropiedad(long idPropiedad, Actor actor) {
+        return autoridad.buscarParaLectura(actor, idPropiedad)
                 // 404 y no 403 cuando el id es de otro tenant: decir "existe
                 // pero no puedes" ya seria filtrar la cartera del vecino.
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
-        return ficha(actor, propiedad);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CapacidadSobrePropiedad capacidadSobre(long idPropiedad, String atributo, Actor actor) {
+        Propiedad p = consultarPropiedad(idPropiedad, actor);
+        boolean reconocida = true;
+        boolean editable = true;
+        if (atributo != null) {
+            Map<String, CatalogoAtributo> definiciones = gobierno.definicionesParaLeer(
+                    actor.idOrganizacion(), p.getTipoInmueble(), Set.of(atributo));
+            CatalogoAtributo definicion = definiciones.get(atributo);
+            reconocida = definicion != null || lector.de(actor.idOrganizacion(), p).claves().contains(atributo);
+            editable = ContratoDeEscritura.dePropiedad(definicion, p.getTipoInmueble()).editable();
+        }
+        return new CapacidadSobrePropiedad(p.getId(), AtributosGobernados.nombreDelTipo(p.getTipoInmueble()),
+                p.estadoActual(), autoridad.puedeEditar(actor, p), reconocida, editable);
     }
 
     // ==================================================================
@@ -487,75 +546,66 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
     @Override
     @Transactional
-    public FichaPropiedadUniversal editar(long idPropiedad, ComandoEdicion comando, Actor actor) {
-        if (comando == null) {
-            throw new ReglaNegocioException("El comando de edicion es obligatorio.");
+    public ResultadoEdicion editar(long idPropiedad, ComandoEdicion comando, Actor actor) {
+        if(comando==null) throw new ReglaNegocioException("El comando de edición es obligatorio.");
+        Propiedad propiedad=propiedades.bloquearParaEscritura(actor.idOrganizacion(),idPropiedad)
+                .orElseThrow(()->new NoEncontradoException("Propiedad"));
+        // Un contexto de persistencia que leyó antes no puede conservar una versión antigua tras esperar el lock.
+        entidades.refresh(propiedad,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        Procedencia procedencia=Procedencia.oPantalla(comando.procedencia());
+        // El replay es lectura del recibo original; no pide conservar la facultad de editar.
+        consultarPropiedad(idPropiedad,actor);
+        // RF013/AC053: esta entrada sólo corrige el físico. AC066 conserva el único escritor del pacto.
+        if(comando.operaciones()!=null&&!comando.operaciones().isEmpty()
+                ||comando.condiciones()!=null&&!comando.condiciones().isEmpty())
+            throw new ReglaNegocioException("Los términos y condiciones del Encargo se editan por su identificador y versión en /encargos/{id}/condiciones.");
+        boolean tocaFisico=comando.descripcion()!=null||comando.ubicacion()!=null||comando.titulares()!=null
+                ||comando.contextoCaptura()!=null||comando.atributos()!=null&&!comando.atributos().isEmpty()
+                ||comando.atributosABorrar()!=null&&!comando.atributosABorrar().isEmpty();
+        Map<String,Object> entrada=new LinkedHashMap<>();
+        entrada.put("idPropiedad",idPropiedad);entrada.put("descripcion",valorEnHuella(comando.descripcion()));
+        entrada.put("ubicacion",ubicacionEnHuella(comando.ubicacion()));entrada.put("titulares",titularesEnHuella(comando.titulares()));
+        entrada.put("atributos",atributosEnHuella(comando.atributos()));entrada.put("borrados",clavesEnHuella(comando.atributosABorrar()));
+        entrada.put("operaciones",operacionesEnHuella(comando.operaciones()));entrada.put("condiciones",comando.condiciones());
+        entrada.put("contextoCaptura",contextoEnHuella(comando.contextoCaptura()));
+        entrada.put("versionEsperada",comando.versionEsperada());entrada.put("motivoRetiro",comando.motivoRetiro());
+        String huella=com.controllocal.service.soporte.Idempotencia.huellaExacta(documentos.objetoCanonico(entrada));
+        // La sintaxis de clave sigue siendo un error de entrada, no un conflicto de contenido.
+        com.controllocal.service.soporte.Idempotencia.normalizar(comando.claveIdempotencia());
+        Optional<ComandoIdempotente> previo;
+        try { previo=comandos.buscar(actor,comando.claveIdempotencia(),COMANDO_EDICION,huella); }
+        catch(ReglaNegocioException reutilizada) {
+            throw new com.controllocal.service.excepcion.ConflictoException("La clave ya identifica otra edición; no se reinterpretó su contenido.");
         }
-        // LA FILA, TOMADA (F2.10). Es la misma carga de siempre —mismo tenant,
-        // mismo 404— con el candado puesto: la autoridad de mas abajo tiene que
-        // comprobarse sobre el estado que seguira siendo verdad cuando esto
-        // escriba. Sin el, entre `exigirEdicion` y el flush cabia un traspaso
-        // entero, y la edicion del saliente aterrizaba sobre una propiedad que
-        // ya era de otro.
-        //
-        // Va aqui, ANTES de nada, y no despues de `tocaLaFicha`: es la primera
-        // carga de esta fila en la transaccion, y tiene que serlo. Hibernate
-        // devuelve la instancia ya cargada sin refrescarla, asi que un candado
-        // tomado despues comprobaria la autoridad sobre el valor viejo.
-        Propiedad propiedad = propiedades
-                .bloquearParaEscritura(actor.idOrganizacion(), idPropiedad)
-                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
-        Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
-
-        Map<String, ValorAtributo> valores = conElPisoGobernado(actor.idOrganizacion(),
-                atributosDeEdicion(comando.atributos()), comando.ubicacion());
-        // Se calcula DESPUES de fusionar el piso: mandar `ubicacion.piso` y a la
-        // vez "piso" en atributosABorrar son dos ordenes contrarias, y aqui es
-        // donde se ven las dos.
-        List<String> aBorrar = clavesABorrar(comando.atributosABorrar(), valores);
-
-        // ---------------------------------------------------------------
-        // LA AUTORIDAD, antes de escribir nada (P0).
-        //
-        // Este endpoint mezcla DOS cosas que hasta V87 viajaban bajo la misma
-        // autorizacion —la de nadie: solo se comprobaba el tenant—. Se separan
-        // aqui porque son dos autoridades distintas y pueden ser dos personas:
-        //
-        //   la FICHA FISICA (descripcion, ubicacion, titulares, atributos y
-        //   retiradas)          -> el responsable de la PROPIEDAD
-        //
-        //   los ENCARGOS (importe, exclusividad, vigencia y condiciones)
-        //                       -> el agente de CADA encargo, uno por uno,
-        //                          dentro de `actualizarEncargo` y
-        //                          `aplicarCondicionesDe`
-        //
-        // Se comprueban por separado y no con un OR, y eso importa en las dos
-        // direcciones: responder por la propiedad no deja tocar el encargo
-        // ajeno, y tener un encargo no deja tocar la ficha. Tambien importa lo
-        // que NO se comprueba: una peticion que solo trae `operaciones` o
-        // `condiciones` no pide la autoridad de la propiedad, asi que el agente
-        // de un encargo lo sigue operando aunque la propiedad este FALTANTE.
-        if (tocaLaFicha(comando, valores, aBorrar)) {
-            autoridad.exigirEdicion(actor, propiedad);
+        if(previo.isPresent()) return reconstruirEdicion(previo.get(),idPropiedad);
+        if(tocaFisico) {
+            autoridad.exigirEdicion(actor,propiedad);
+            if(comando.versionEsperada()==null||comando.versionEsperada()<0)
+                throw new ReglaNegocioException("La versión física observada es obligatoria para editar el físico.");
+            if(comando.versionEsperada()!=propiedad.getVersionFisica())
+                throw new com.controllocal.service.excepcion.ConflictoException("El físico cambió; consulta su versión antes de corregirlo.");
         }
+        long versionAnterior=propiedad.getVersionFisica();
+        ValoresGobernados valoresAnteriores=lector.de(actor.idOrganizacion(),propiedad);
+        ResultadoEdicion fisicoAnterior=reciboFisico(propiedad,valoresAnteriores,List.of());
+        // La identidad del comando usa lo solicitado, no una retirada derivada
+        // del estado posterior; un replay no vuelve a evaluar ni escribir el efecto.
+        var captura=prepararEdicionFisica(propiedad,comando,actor);
+        Map<String,ValorAtributo> valores=conElPisoGobernado(actor.idOrganizacion(),atributosDeEdicion(captura.valores()),comando.ubicacion());
+        List<String> aBorrar=clavesABorrar(captura.retiradas(),valores);
 
-        String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
-                "idPropiedad", idPropiedad,
-                "descripcion", texto(comando.descripcion()),
-                "titulares", titularesEnHuella(comando.titulares()),
-                "atributos", atributosEnHuella(comando.atributos()),
-                "borrados", String.join(",", aBorrar),
-                "operaciones", operacionesEnHuella(comando.operaciones()),
-                // Sin esto, dos ediciones que solo se diferencian en las
-                // condiciones de un encargo tendrian la misma huella y la
-                // segunda se descartaria como repetida (V73).
-                "condiciones", condicionesEnHuella(comando.condiciones()))));
-        Optional<ComandoIdempotente> yaHecho =
-                comandos.buscar(actor, comando.claveIdempotencia(), COMANDO_EDICION, huella);
-        if (yaHecho.isPresent()) {
-            return ficha(actor, propiedad);
+        String metadatosAnteriores = propiedad.getMetadatosAtributos();
+        String contextoAnterior=propiedad.getContextoCaptura();
+        boolean tocaAtributos = !valores.isEmpty() || !aBorrar.isEmpty()||!captura.metadatos().isEmpty();
+        if(aBorrar.stream().anyMatch(k->valorFisicoVigente(k,propiedad,valoresAnteriores))
+                &&(comando.motivoRetiro()==null||comando.motivoRetiro().isBlank()))
+            throw new ReglaNegocioException("El retiro de un valor físico vigente necesita motivo.");
+        if(tocaFisico) {
+            if(propiedades.incrementarVersionFisicaSi(actor.idOrganizacion(),idPropiedad,comando.versionEsperada())!=1)
+                throw new com.controllocal.service.excepcion.ConflictoException("El físico cambió; la edición no sobrescribe otra versión.");
+            // Antes de mutar datos: adoptar el contador real sin descartar cambios de este comando.
+            entidades.refresh(propiedad,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         }
-
         if (comando.descripcion() != null) {
             propiedad.setDescripcion(comando.descripcion());
         }
@@ -574,24 +624,32 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // Despues de los valores: si la misma peticion cambia unas claves y
         // retira otras, el orden no puede depender de como se recorra el mapa.
         retirarValores(actor, propiedad, aBorrar, procedencia);
-        if (comando.operaciones() != null) {
-            for (OperacionSolicitada solicitada : operacionesValidadas(comando.operaciones())) {
-                actualizarEncargo(actor, propiedad, solicitada, procedencia);
-            }
+        ValoresGobernados valoresDespues=tocaAtributos?lector.de(actor.idOrganizacion(),propiedad):valoresAnteriores;
+        if (tocaAtributos) actualizarMetadatosFisicos(propiedad,valoresAnteriores,valoresDespues,valores);
+        if(!captura.metadatos().isEmpty()){
+            var metadatos=suficienciaRegistrada.metadatos(propiedad.getMetadatosAtributos());
+            metadatos.putAll(captura.metadatos());propiedad.setMetadatosAtributos(suficienciaRegistrada.metadatosJson(metadatos));
         }
-        // Y las condiciones de cada encargo, en su bloque (Corte 0C). Van
-        // despues de las operaciones porque una operacion recien declarada abre
-        // el encargo al que estas condiciones pueden pertenecer.
-        aplicarCondiciones(actor, propiedad, comando.condiciones(), procedencia);
-        propiedades.save(propiedad);
-
-        anotarEvento(actor, EVENTO_EDITADA, Propiedad.ENTIDAD_TIPO, propiedad.getId(), procedencia,
-                Map.of("idPropiedad", propiedad.getId()));
-        comandos.registrar(actor, comando.claveIdempotencia(), COMANDO_EDICION, huella,
-                Propiedad.ENTIDAD_TIPO, propiedad.getId(), procedencia,
-                documentos.objeto(Map.of("idPropiedad", propiedad.getId())));
-
-        return ficha(actor, propiedad);
+        if(comando.contextoCaptura()!=null||captura.metadatos().keySet().stream().anyMatch(k->k.startsWith("contexto.")))
+            propiedad.setContextoCaptura(suficienciaRegistrada.contextoJson(captura.contexto()));
+        propiedades.saveAndFlush(propiedad);
+        List<String> afectadas=clavesFisicasAfectadas(comando,valores,aBorrar,captura.metadatos().keySet());
+        ResultadoEdicion resultado=reciboFisico(propiedad,valoresDespues,afectadas);
+        Map<String,Object> payload=comoMapaDeResultado(resultado);
+        String resultadoCanonico=documentos.objetoCanonico(Map.of("resultado",payload));
+        // La primera respuesta usa el mismo contrato tipado que la restauración durable.
+        resultado=documentos.comoObjeto(documentos.objetoCanonico(payload),ResultadoEdicion.class);
+        Map<String,Object> evento=new LinkedHashMap<>();
+        evento.put("idPropiedad",propiedad.getId());evento.put("versionFisicaAnterior",versionAnterior);
+        evento.put("versionFisicaActual",propiedad.getVersionFisica());evento.put("clavesAfectadas",afectadas);
+        evento.put("motivoRetiro",comando.motivoRetiro());evento.put("fisicoAnterior",fisicoAnterior);evento.put("fisicoActual",resultado);
+        evento.put("metadatosAnteriores",metadatosAnteriores);evento.put("metadatosActuales",propiedad.getMetadatosAtributos());
+        evento.put("contextoAnterior",contextoAnterior);evento.put("contextoActual",propiedad.getContextoCaptura());
+        anotarEvento(actor,EVENTO_EDITADA,Propiedad.ENTIDAD_TIPO,propiedad.getId(),procedencia,evento);
+        comandos.registrar(actor,comando.claveIdempotencia(),COMANDO_EDICION,huella,Propiedad.ENTIDAD_TIPO,
+                propiedad.getId(),procedencia,documentos.objetoCanonico(Map.of("version",1,"resultado",payload,
+                        "huellaResultado",com.controllocal.service.soporte.Idempotencia.huellaExacta(resultadoCanonico))));
+        return resultado;
     }
 
     // ==================================================================
@@ -732,116 +790,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 : agentes.findById(idRol).map(a -> nombreDe(a.getRol())).orElse(null);
     }
 
-    /**
-     * <b>¿Esta peticion escribe algun hecho de la PROPIEDAD?</b>
-     *
-     * <p>Mira los cinco huecos que pertenecen al inmueble, y ninguno de los dos
-     * que pertenecen a sus encargos. Se pregunta sobre el <b>mapa ya fusionado</b>
-     * y sobre la lista ya resuelta de retiradas, no sobre {@code comando
-     * .atributos()}: el piso puede llegar solo dentro de {@code ubicacion}, y
-     * mirando el comando en crudo una edicion que solo cambia el piso pasaria
-     * por "no toca la ficha" — que es exactamente la puerta de al lado que este
-     * P0 viene a cerrar.
-     */
-    private static boolean tocaLaFicha(ComandoEdicion comando, Map<String, ValorAtributo> valores,
-                                       List<String> aBorrar) {
-        return comando.descripcion() != null
-                || comando.ubicacion() != null
-                || comando.titulares() != null
-                || !valores.isEmpty()
-                || !aBorrar.isEmpty();
-    }
-
     // ==================================================================
     // Escritura, pieza a pieza
     // ==================================================================
-
-    /**
-     * <b>Las condiciones de cada encargo, cada una en el suyo</b> (Corte 0C).
-     *
-     * <p>La regla de bloques de 0A, un nivel mas adentro y sin excepciones:
-     *
-     * <pre>
-     *   condiciones == null            -> no se toca NINGUN encargo
-     *   bloque de un encargo ausente   -> ese encargo queda como estaba
-     *   bloque presente                -> solo toca a SU idEncargo
-     * </pre>
-     *
-     * <p>Lo tercero es lo que hace falta vigilar. Guardar el bloque de la venta
-     * no puede vaciar la garantia del alquiler, ni completarla por defecto, ni
-     * copiar en el nuevo alquiler lo que se pacto en el anterior. Como el valor
-     * cuelga de {@code id_captacion} y no de la operacion, aqui basta con no
-     * salirse del encargo que el bloque nombra -- y eso es exactamente lo que
-     * comprueba {@code SujetoDelDatoIntegrationTest}.
-     */
-    private void aplicarCondiciones(Actor actor, Propiedad propiedad,
-                                    List<CondicionesDeEncargo> bloques, Procedencia procedencia) {
-        if (bloques == null || bloques.isEmpty()) {
-            return;
-        }
-        Set<Long> repetidos = new java.util.HashSet<>();
-        for (CondicionesDeEncargo bloque : bloques) {
-            if (bloque == null || bloque.idEncargo() == null) {
-                throw new ReglaNegocioException(
-                        "Unas condiciones comerciales llegaron sin decir de que encargo son. "
-                                + "Con una venta y un alquiler abiertos a la vez no hay forma de "
-                                + "adivinarlo, y adivinarlo seria escribir en el equivocado.");
-            }
-            if (!repetidos.add(bloque.idEncargo())) {
-                throw new ReglaNegocioException(
-                        "El encargo " + bloque.idEncargo() + " llego dos veces en la misma "
-                                + "peticion. Cual de los dos bloques gana no lo puede decidir el "
-                                + "Core: seria una regla inventada que el cliente no sabe.");
-            }
-            aplicarCondicionesDe(actor, propiedad, bloque, procedencia);
-        }
-    }
-
-    private void aplicarCondicionesDe(Actor actor, Propiedad propiedad,
-                                      CondicionesDeEncargo bloque, Procedencia procedencia) {
-        // El encargo tiene que ser de ESTA propiedad y de ESTE tenant. Sin la
-        // comprobacion, un id ajeno escribiria condiciones en la cartera de otra
-        // corredora -- y la FK compuesta lo dejaria pasar, porque la organizacion
-        // que viaja es la del actor.
-        //
-        // Y se carga TOMANDO la fila (F2.10): las condiciones pactadas son
-        // hechos del trato, asi que la autoridad de abajo tiene que decidirse
-        // sobre el agente que seguira siendo verdad al escribirlas. El filtro
-        // de organizacion se resuelve ahora en la consulta -- mismo 404.
-        Captacion encargo = captaciones
-                .bloquearParaEscritura(actor.idOrganizacion(), bloque.idEncargo())
-                .filter(c -> c.getPropiedad() != null
-                        && Objects.equals(c.getPropiedad().getId(), propiedad.getId()))
-                .orElseThrow(() -> new NoEncontradoException("Encargo"));
-
-        // Y tiene que ser SUYO (P0-4). Las condiciones comerciales gobernadas
-        // —garantia, adelanto, plazo— son datos del encargo tanto como el
-        // importe, y sin esto el agente del alquiler escribia las de la venta
-        // ajena con solo nombrar su id.
-        autoridad.exigirEdicionDelEncargo(actor, encargo);
-
-        Comercializacion donde = Comercializacion.de(encargo, propiedad);
-        Map<String, ValorAtributo> valores = atributosDeEdicion(bloque.atributos());
-        List<String> aBorrar = clavesABorrar(bloque.atributosABorrar(), valores);
-
-        if (bloque.atributos() != null) {
-            for (ValorEntrante entrante : entrantes(valores, procedencia)) {
-                condiciones.escribir(actor, donde, entrante);
-            }
-        }
-        // Despues de los valores, igual que en la propiedad: si la misma
-        // peticion cambia unas claves y retira otras, el resultado no puede
-        // depender de como se recorra el mapa.
-        for (String clave : aBorrar) {
-            if (!condiciones.retirar(actor, donde, clave,
-                    ProcedenciaDelValor.delActo(procedencia)).gobernada()) {
-                throw new ReglaNegocioException(
-                        "El atributo \"" + clave + "\" no esta en el catalogo, asi que no hay "
-                                + "nada que retirar del encargo " + encargo.getCodigoCaptacion()
-                                + ".");
-            }
-        }
-    }
 
     private void escribirTitularidades(Actor actor, Long idPropiedad, List<Titular> titulares,
                                        List<PersonaRol> rolesTitulares) {
@@ -870,7 +821,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * lo que hace cualquier pantalla que carga el formulario del Core y lo
      * guarda— cerraba la vigente y abria otra con fecha de hoy. Los anios que
      * el dueno llevaba con la propiedad desaparecian en un guardado que no
-     * cambio nada, y el gate de conservacion lo veia en los siete tipos:
+     * cambio nada, y el gate de conservacion lo veia en todos los tipos:
      * <pre>
      *   titular.43.desde: "2022-08-20"  ->  "2026-08-20"
      * </pre>
@@ -931,85 +882,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         if (!titulares.isEmpty()) {
             propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
         }
-    }
-
-    /**
-     * <b>Cada valor con SU procedencia, y el acto compartido</b> (4.P).
-     *
-     * <p>La {@link Procedencia} del acto —canal, agente, conversacion, turno— es
-     * la misma para toda la peticion: es lo que el Core sabe siempre. Lo que
-     * cambia valor a valor es la <b>naturaleza</b>, y por eso se compone aqui,
-     * una por clave, en vez de estamparse una sola vez sobre el guardado entero.
-     *
-     * <p>Es la conversion que hace real la regla que abrio el microcorte: un
-     * mismo {@code PUT} puede traer {@code tipo_acceso} observado en una visita,
-     * {@code zonificacion} leida de un certificado y {@code vigilancia} dicha por
-     * el propietario, y las tres salen de aqui con la suya.
-     */
-    private static List<ValorEntrante> entrantes(Map<String, ValorAtributo> valores,
-                                                 Procedencia acto) {
-        List<ValorEntrante> entrantes = new ArrayList<>();
-        valores.forEach((clave, valor) -> entrantes.add(entrante(valor, acto)));
-        return entrantes;
-    }
-
-    private static ValorEntrante entrante(ValorAtributo valor, Procedencia acto) {
-        return new ValorEntrante(valor.clave(), valor.valor(), valor.moneda(), valor.valores(),
-                new ProcedenciaDelValor(acto, valor.naturaleza(), valor.observadoEn(),
-                        valor.evidenciaRef(), valor.confianza()));
-    }
-
-    /**
-     * Los valores de una edicion. Igual que en el alta, mas una regla propia:
-     * <b>un valor en blanco se rechaza</b>.
-     *
-     * <p>Porque {@code ""} es ambiguo y este corte no adivina. Puede ser "lo
-     * quiero quitar", puede ser un campo que la pantalla no relleno, y puede
-     * ser un espacio de mas. Darle a los tres el mismo destino es reinterpretar
-     * lo que el usuario hizo, que es la fuga que 0A contiene. Retirar un valor
-     * tiene su via, se llama por su nombre y viaja aparte.
-     */
-    private static Map<String, ValorAtributo> atributosDeEdicion(List<ValorAtributo> valores) {
-        Map<String, ValorAtributo> porClave = atributosValidados(valores);
-        porClave.forEach((clave, valor) -> {
-            if (valor.valores() == null && (valor.valor() == null || valor.valor().isBlank())) {
-                throw new ReglaNegocioException(
-                        "El atributo \"" + clave + "\" llego vacio. Un valor en blanco no es una "
-                                + "forma de borrar: si lo quieres retirar, nombralo en "
-                                + "\"atributosABorrar\".");
-            }
-        });
-        return porClave;
-    }
-
-    /**
-     * Las claves a retirar, comprobadas contra lo que la misma peticion cambia.
-     *
-     * <p>Una clave que llega <b>a la vez</b> con valor y en la lista de borrado
-     * son dos intenciones contrarias en el mismo comando. No se elige entre
-     * ellas por precedencia —cualquier orden que se escoja seria una regla
-     * inventada que el cliente no sabe— y no se aplica ninguna: se avisa.
-     */
-    private static List<String> clavesABorrar(List<String> claves, Map<String, ValorAtributo> valores) {
-        if (claves == null || claves.isEmpty()) {
-            return List.of();
-        }
-        List<String> limpias = new ArrayList<>();
-        for (String clave : claves) {
-            if (clave == null || clave.isBlank()) {
-                throw new ReglaNegocioException("\"atributosABorrar\" trae una clave vacia.");
-            }
-            String limpia = clave.trim();
-            if (valores.containsKey(limpia)) {
-                throw new ReglaNegocioException(
-                        "El atributo \"" + limpia + "\" llego con valor y a la vez en "
-                                + "\"atributosABorrar\". Son dos ordenes contrarias: manda una.");
-            }
-            if (!limpias.contains(limpia)) {
-                limpias.add(limpia);
-            }
-        }
-        return limpias;
     }
 
     /**
@@ -1080,186 +952,16 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private Long abrirEncargo(Actor actor, Propiedad propiedad, DetalleAgente agente,
                               OperacionSolicitada solicitada, Procedencia procedencia) {
         OperacionInmobiliaria operacion = OperacionInmobiliaria.desde(solicitada.operacion());
-
-        CondicionEconomicaCaptacion condicion = new CondicionEconomicaCaptacion();
-        condicion.setOrganizacionId(actor.idOrganizacion());
-        condicion.setTipoOperacion(operacion.codigo());
-        condicion.setImporteReferencia(solicitada.importe());
-        condicion.setMonedaReferencia(solicitada.moneda());
-        condicion.setTipoComision(solicitada.tipoComision() != null
-                ? solicitada.tipoComision() : CondicionEconomicaCaptacion.PORCENTAJE);
-        condicion.setBaseCalculo(solicitada.baseCalculo() != null
-                ? solicitada.baseCalculo()
-                : (operacion == OperacionInmobiliaria.VENTA
-                        ? CondicionEconomicaCaptacion.PRECIO_VENTA
-                        : CondicionEconomicaCaptacion.RENTA_MENSUAL));
-        condicion.setValorComision(solicitada.valorComision() != null
-                ? solicitada.valorComision() : BigDecimal.ZERO);
-        condicion.setMonedaComision(solicitada.moneda());
-        condicion.setTratamientoIgv(solicitada.tratamientoIgv() != null
-                ? solicitada.tratamientoIgv() : CondicionEconomicaCaptacion.IGV_NO_APLICA);
-        // `ck_condicion_sin_comision` exige que una comision de CERO diga por
-        // que. La regla es buena y no se rodea: en el alta la comision puede no
-        // estar pactada todavia -- el encargo nace PENDIENTE y solo puede
-        // ACTIVARSE con su condicion completa (`ck_captacion_activa_completa`)
-        // --, asi que el motivo se declara con esas palabras en vez de colar un
-        // cero mudo que nadie sabria interpretar seis meses despues.
-        if (condicion.getValorComision().signum() == 0) {
-            condicion.setMotivoSinComision(
-                    "Comision no pactada al registrar la propiedad; se define antes de activar el encargo.");
-        }
-
-        // La duracion por defecto del encargo es una REGLA de negocio y vive en
-        // un solo sitio (`PoliticaComercial.ENCARGO`). Escribir aqui seis meses
-        // a mano crearia una segunda copia que divergiria en silencio el dia
-        // que la corredora cambie el plazo — que es justo lo que el gate de la
-        // politica unica existe para impedir.
-        LocalDate inicio = solicitada.inicioEncargo() != null ? solicitada.inicioEncargo() : LocalDate.now();
-        LocalDate fin = solicitada.finEncargo() != null
-                ? solicitada.finEncargo() : PoliticaComercial.finDelEncargo(inicio);
-
-        Captacion encargo = new Captacion();
-        encargo.setOrganizacionId(actor.idOrganizacion());
-        encargo.setCodigoCaptacion(codigoDeEncargo(actor.idOrganizacion()));
-        encargo.setFechaCaptacion(LocalDate.now());
-        encargo.setFechaInicioVigencia(inicio);
-        encargo.setFechaFinVigencia(fin);
-        encargo.setCondicionEconomica(condicion);
-        encargo.setMotivoOperacion(operacion.codigo());
-        encargo.setExclusividad(solicitada.exclusividad() != null ? solicitada.exclusividad() : Boolean.FALSE);
-        encargo.setPropiedad(propiedad);
-        encargo.setAgente(agente);
-        transiciones.iniciar(encargo, Captacion.PENDIENTE_REVISION);
-        captaciones.save(encargo);
-        // Abrir el encargo es lo que pone la propiedad EN OFERTA (V75). Antes lo
-        // hacia el alta de forma incondicional, y por eso una propiedad que solo
-        // se prospectaba nacia diciendo «disponible».
-        entrarEnOferta(actor, propiedad, "Entra al mercado: se abrio el encargo "
-                + encargo.getCodigoCaptacion() + ".");
-
-        // Primer hito 'U' (autorizado) de ESTA serie. Va atado al encargo: es
-        // lo que permite que la venta y el alquiler de la misma propiedad
-        // tengan historicos separados de verdad y no una lista mezclada en la
-        // que 180 000 y 2 900 solo se distinguen por su magnitud.
-        precios.save(PrecioPropiedad.hito(actor.idOrganizacion(), propiedad.getId(), operacion,
-                        PrecioPropiedad.HITO_AUTORIZADO, solicitada.moneda(), solicitada.importe(),
-                        LocalDate.now())
-                .delEncargo(encargo.getId()));
-
-        // Y las condiciones que se pactaron al abrirlo, si vinieron (V73). Van
-        // aqui y no en el bloque de atributos de la propiedad: en el alta el
-        // encargo todavia no tiene id, asi que la unica forma de decir a cual
-        // pertenece cada condicion es que viajen DENTRO de su operacion.
-        if (solicitada.condiciones() != null) {
-            Comercializacion donde = new Comercializacion(encargo.getId(),
-                    propiedad.getTipoInmueble(), operacion.codigo());
-            for (ValorEntrante entrante
-                    : entrantes(atributosValidados(solicitada.condiciones()), procedencia)) {
-                condiciones.escribir(actor, donde, entrante);
-            }
-        }
-
-        anotarEvento(actor, EVENTO_ENCARGO, "CAPTACION", encargo.getId(), procedencia,
-                Map.of("idPropiedad", propiedad.getId(), "idCaptacion", encargo.getId(),
-                        "operacion", operacion.name(), "importe", solicitada.importe(),
-                        "moneda", solicitada.moneda()));
-        return encargo.getId();
-    }
-
-    /**
-     * <b>La propiedad entra al mercado</b>, y queda dicho en su expediente.
-     *
-     * <p>Va por {@code Transiciones} y no por el setter del agregado porque
-     * {@code disponibilidad_comercial} tiene historial desde V20: «entra al
-     * mercado» es el hecho comercial mas importante de una propiedad y no puede
-     * ser el unico que no deje fila. Sin esto el expediente empezaria en
-     * DISPONIBLE sin decir como llego.
-     *
-     * <p>Y no pisa lo ya declarado: si la propiedad esta ALQUILADA, RESERVADA o
-     * RETIRADA, abrir otro encargo no la vuelve a poner disponible.
-     */
-    private void entrarEnOferta(Actor actor, Propiedad propiedad, String motivo) {
-        if (propiedad.estaOfrecida()) {
-            return;
-        }
-        transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
-                EstadosDominio.DisponibilidadComercial.DISPONIBLE, actor, motivo);
-    }
-
-    /**
-     * Cambiar el importe de una operacion <b>anade</b> un hito. No sobrescribe
-     * nada: el precio de salida es el que mide cuanto cedio el titular hasta el
-     * cierre, y no se reconstruye desde ninguna otra tabla.
-     */
-    private void actualizarEncargo(Actor actor, Propiedad propiedad, OperacionSolicitada solicitada,
-                                   Procedencia procedencia) {
-        OperacionInmobiliaria operacion = OperacionInmobiliaria.desde(solicitada.operacion());
-        // Las filas de los encargos VIVOS, tomadas antes de elegir cual (F2.10).
-        // Se bloquea el conjunto y no la fila elegida por dos razones:
-        //
-        //   1. tiene que ser la PRIMERA carga de esa fila en la transaccion --
-        //      un candado tomado despues devolveria la instancia ya cargada sin
-        //      refrescar, o sea la autoridad decidida sobre el valor viejo;
-        //   2. una peticion puede traer VENTA y ALQUILER, y el orden en que
-        //      llegan lo decide el cliente. El conjunto se toma SIEMPRE en
-        //      orden de id, asi que dos peticiones con las operaciones al reves
-        //      no pueden bloquearse entre ellas.
-        //
-        // El resultado se descarta a proposito: lo que hace falta es el
-        // bloqueo. La consulta de abajo devuelve la misma instancia gestionada,
-        // ya cargada bajo el.
-        captaciones.bloquearEncargosVivosParaEscritura(actor.idOrganizacion(), propiedad.getId());
-        Captacion encargo = captaciones
-                .encargoVivoDe(actor.idOrganizacion(), propiedad.getId(), operacion.codigo())
-                .orElseThrow(() -> new ReglaNegocioException(
-                        "Esta propiedad no tiene ningun encargo vivo de " + operacion.name()
-                                + ". Abrelo antes de cambiar su " + operacion.nombreDelImporte() + "."));
-
-        // El encargo lo edita SU agente (P0-4). Va antes de tocar la condicion
-        // economica a proposito: el efecto que hay que impedir no es solo el
-        // cambio de importe, es el hito `U` que ese cambio anade a la serie
-        // economica de un encargo que no es del actor. Y va bajo el candado de
-        // arriba, para que el agente que se comprueba sea el que seguira siendo
-        // verdad al escribir el hito.
-        autoridad.exigirEdicionDelEncargo(actor, encargo);
-
-        CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
-        boolean cambioElImporte = condicion == null
-                || condicion.getImporteReferencia() == null
-                || condicion.getImporteReferencia().compareTo(solicitada.importe()) != 0
-                || !solicitada.moneda().equals(condicion.getMonedaReferencia());
-
-        if (condicion != null) {
-            condicion.setImporteReferencia(solicitada.importe());
-            condicion.setMonedaReferencia(solicitada.moneda());
-        }
-        if (solicitada.exclusividad() != null) {
-            encargo.setExclusividad(solicitada.exclusividad());
-        }
-        if (solicitada.inicioEncargo() != null) {
-            encargo.setFechaInicioVigencia(solicitada.inicioEncargo());
-        }
-        if (solicitada.finEncargo() != null) {
-            encargo.setFechaFinVigencia(solicitada.finEncargo());
-        }
-        captaciones.save(encargo);
-
-        if (cambioElImporte) {
-            precios.save(PrecioPropiedad.hito(actor.idOrganizacion(), propiedad.getId(), operacion,
-                            PrecioPropiedad.HITO_AUTORIZADO, solicitada.moneda(), solicitada.importe(),
-                            LocalDate.now())
-                    .delEncargo(encargo.getId()));
-            anotarEvento(actor, EVENTO_PRECIO, "CAPTACION", encargo.getId(), procedencia,
-                    Map.of("idPropiedad", propiedad.getId(), "idCaptacion", encargo.getId(),
-                            "operacion", operacion.name(), "importe", solicitada.importe(),
-                            "moneda", solicitada.moneda()));
-        }
-
-        // La columna espejo sigue lo que lee el cable: la renta si la hay.
-        if (operacion == operacionProyectada(actor, propiedad)) {
-            propiedad.setPrecioReferencial(solicitada.importe());
-            propiedad.setMonedaReferencial(solicitada.moneda());
-        }
+        EncargoService.Condiciones pacto = new EncargoService.Condiciones(
+                solicitada.importe(), solicitada.moneda(),
+                operacion == OperacionInmobiliaria.ALQUILER ? "MENSUAL" : null,
+                solicitada.tipoComision(), solicitada.baseCalculo(), solicitada.valorComision(),
+                null, solicitada.tratamientoIgv(), null, null, null, null, null, null, List.of(), null,null);
+        EncargoService.Apertura apertura = encargos.abrir(new EncargoService.DatosApertura(
+                propiedad.getId(), agente.getId(), null, operacion, solicitada.inicioEncargo(),
+                solicitada.finEncargo(), solicitada.exclusividad(), null, pacto, procedencia,
+                solicitada.condiciones(),solicitada.origen()), actor);
+        return apertura.id();
     }
 
     // ==================================================================
@@ -1271,14 +973,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         long idPropiedad = propiedad.getId();
         String tipo = propiedad.getTipoInmueble();
 
-        List<TitularFicha> titulares = titularidades.vigentesDe(idPropiedad).stream()
-                .map(titularidad -> new TitularFicha(
-                        titularidad.getRolPropietario().getId(),
-                        nombreDe(titularidad.getRolPropietario()),
-                        titularidad.getCuota(),
-                        titularidad.isEsRepresentante(),
-                        titularidad.getVigenteDesde()))
-                .toList();
+        List<TitularFicha> titulares = titularesFisicos(idPropiedad);
 
         // El LECTOR tambien enruta por autoridad, igual que el escritor.
         //
@@ -1314,33 +1009,25 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         for (String clave : leidos.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);
             valores.add(fichaDeAtributo(clave, definicion, leidos,
-                    ContratoDeEscritura.dePropiedad(definicion, tipo)));
+                    ContratoDeEscritura.dePropiedad(definicion, tipo,
+                            rotuloDeLaSustituta(definicion, definiciones))));
         }
-        // Por el ORDEN del catalogo, no alfabetico por clave: la colocacion la
-        // gobierna el catalogo desde 0B, y ordenar por clave aqui la tiraba.
-        valores.sort(java.util.Comparator
-                .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())
-                        ? definiciones.get(a.clave()).getOrden() : Integer.MAX_VALUE)
-                .thenComparing(AtributoFicha::clave));
+        ordenarConLosRetiradosAlFinal(valores, definiciones);
 
-        // La serie se lee UNA vez y se reparte por encargo. Consultarla dentro
-        // del bucle serian dos consultas identicas por propiedad — el N+1 que
-        // RC-003 vino a quitar, en pequeno.
-        List<PrecioPropiedad> serie = precios.findByIdPropiedadOrderByFechaAscIdAsc(idPropiedad);
+        // Encargos autorizados vivos y cerrados. Leer el inmueble físico no
+        // concede condiciones, anuncios ni episodios comerciales de otro ámbito.
+        List<Captacion> todos = ordenados(captaciones.encargosParaLectura(idOrganizacion, idPropiedad,
+                autoridad.alcanceDeLectura(actor).paramRoles()));
+        List<Long> idsEncargos = todos.stream().map(Captacion::getId).toList();
+        List<PrecioPropiedad> serie = idsEncargos.isEmpty() ? List.of()
+                : precios.findByIdPropiedadAndIdCaptacionInOrderByFechaAscIdAsc(idPropiedad, idsEncargos);
 
-        // TODOS los encargos, no solo los vivos. La ficha responde "que ha
-        // pasado con esta propiedad", y un encargo cerrado es el UNICO sitio
-        // donde vive su historico economico: filtrarlo borraria de la vista una
-        // serie entera sin decir que existe. El listado si se queda con los
-        // vivos, porque su pregunta es "que hay en cartera".
-        List<Captacion> todos = ordenados(captaciones.encargosDe(idOrganizacion, idPropiedad));
-
-        // Los anuncios de TODOS los encargos en una consulta, no una por bloque.
+        // Los anuncios de los Encargos autorizados, en una consulta por lote.
         // Mismo patron con el que el listado cuelga los encargos de una pagina.
         Map<Long, List<PublicacionService.FichaPublicacion>> anuncios =
                 publicaciones.deEncargos(idOrganizacion, todos);
 
-        // Las condiciones de TODOS los encargos en una consulta, igual que los
+        // Las condiciones de los Encargos autorizados en una consulta, igual que los
         // anuncios. Preguntarlas dentro del bucle serian N consultas por ficha
         // -- el N+1 que RC-003 retiro, reapareciendo con un sujeto nuevo.
         Map<Long, ValoresGobernados> pactadas = lector.deEncargos(
@@ -1385,22 +1072,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // D-P0-6: que HISTORIA puede leer quien pregunta
         // ------------------------------------------------------------------
         //
-        // La ficha no se recorta entera: lo que se recorta es la informacion
-        // COMERCIAL HISTORICA --el historico de cada encargo, la historia del
-        // inmueble y su actividad--. El resto sigue llegando igual para todos:
-        // la cosa fisica, los titulares, los atributos, los importes vigentes de
-        // cada encargo y la responsabilidad. Ver la propiedad y ver lo que se
-        // pidio por ella en 2023 son dos preguntas, y solo la segunda es
-        // historia.
+        // C1/RF007: el recurso físico ya fue autorizado; la consulta de Encargos
+        // también cerró el alcance antes de cargar condiciones e historia.
         //
         // Jackson esta configurado NON_NULL, asi que un bloque nulo NO VIAJA por
         // el cable: en el SPA llega como `undefined`. Eso es lo que el cliente
         // tiene que leer como «no disponible para ti», y NO como «vacio» -- una
         // propiedad sin historia y una propiedad cuya historia no te corresponde
         // se pintan distinto, y la diferencia esta en que el campo exista.
-        List<Captacion> visibles = todos.stream()
-                .filter(encargo -> autoridad.puedeLeerHistoricoDelEncargo(actor, encargo))
-                .toList();
+        List<Captacion> visibles = todos;
         Set<Long> idsVisibles = visibles.stream().map(Captacion::getId)
                 .collect(java.util.stream.Collectors.toSet());
         boolean leeLaHistoria = autoridad.puedeLeerHistoriaDeLaPropiedad(actor, propiedad);
@@ -1409,7 +1089,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // capacidad `publicacionGestionable` de cada bloque necesita la deuda de
         // la PROPIEDAD --que es una sola para todos-- ademas de la suya. Es la
         // unica razon del orden.
-        List<EncargoFicha> encargos = todos.stream()
+        List<EncargoFicha> encargos = visibles.stream()
                 .map(encargo -> fichaDeEncargo(actor, encargo, serie,
                         anuncios.getOrDefault(encargo.getId(), List.of()),
                         idOrganizacion, tipo,
@@ -1444,12 +1124,16 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                     ? null : candidata;
         }
 
-        // La ACTIVIDAD son los hechos DE SUS ENCARGOS, asi que se pide sobre los
-        // encargos visibles y no sobre todos: filtrar despues traeria de la base
-        // filas que despues se tiran, y las cinco consultas ya van por
-        // `id in (...)`. Sin ningun encargo visible el bloque entero no viaja.
-        ActividadPropiedad actividadVisible = visibles.isEmpty()
-                ? null : actividad.de(idOrganizacion, visibles);
+        // Los hechos comerciales usan los Encargos visibles. Las interacciones
+        // se reautorizan por Propiedad y pueden preceder al primer Encargo.
+        ActividadPropiedad actividadVisible = actividad.de(actor, idPropiedad, visibles);
+        if (visibles.isEmpty() && actividadVisible.interacciones().isEmpty()) actividadVisible = null;
+
+        // La galería revalida el mismo ámbito físico; sus bytes se autorizan
+        // además por recurso, finalidad y versión al descargarlos.
+        List<FotoPropiedadService.FotoDePropiedad> galeria = fotos.listar(idPropiedad, actor);
+        List<UnidadRelacionadaService.FichaUnidadRelacionada> relacionadas =
+                unidadesRelacionadas.deLaPropiedad(idPropiedad, actor);
 
         return new FichaPropiedadUniversal(idPropiedad, propiedad.getCodigo(),
                 AtributosGobernados.nombreDelTipo(tipo), AtributosGobernados.rotuloDelTipo(tipo),
@@ -1478,8 +1162,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // a lo que este actor puede leer (D-P0-6).
                 historia,
                 actividadVisible,
+                // La galeria (WP-C). Una consulta, por el MISMO servicio que la
+                // escribe: la ficha no vuelve a leer `foto_propiedad` por su
+                // cuenta -- dos lectores del mismo dato divergen, y el primero
+                // que se olvidara del orden dejaria la portada al azar.
+                galeria, portadaDe(galeria),
                 Fechas.local(propiedad.getFechaRegistro()),
-                responsabilidadDe(actor, propiedad));
+                relacionadas,
+                responsabilidadDe(actor, propiedad),propiedad.getVersionFisica());
     }
 
     /**
@@ -1502,6 +1192,19 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      */
     private Responsabilidad responsabilidadDe(Actor actor, Propiedad propiedad) {
         return autoridad.responsabilidadDe(actor, propiedad);
+    }
+
+    /**
+     * <b>La portada: la foto con {@code orden = 1}</b> (V91).
+     *
+     * <p>No es «la primera de la lista»: es la que ocupa la posicion 1, y se
+     * comprueba. Con el invariante 1..N las dos frases coinciden siempre, y
+     * escribir la segunda haria que el dia que el invariante se rompiera la
+     * ficha siguiera afirmando una portada — la que hubiera quedado delante.
+     */
+    private static FotoPropiedadService.FotoDePropiedad portadaDe(
+            List<FotoPropiedadService.FotoDePropiedad> galeria) {
+        return galeria.stream().filter(foto -> foto.orden() == 1).findFirst().orElse(null);
     }
 
     /**
@@ -1600,17 +1303,22 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     /**
      * Lo que se PIDIO: el importe autorizado, o el publicado.
      *
+     * <p>Es <b>la constante del dominio</b> y no una copia suya. Habia una copia
+     * aqui, con la misma lista y el mismo comentario, escrita antes de que WP-A
+     * subiera la definicion a {@code PrecioPropiedad}: dos listas idénticas de
+     * lo que cuenta como «precio del inmueble», y la que se olvidara de un hito
+     * nuevo habria empezado a dibujar otra linea sin que nada avisara.
+     *
      * <p>{@code O} ofertado no entra: una oferta es lo que ofrecio un
      * interesado, no lo que pedia el propietario.
      */
-    private static final Set<String> PEDIDOS =
-            Set.of(PrecioPropiedad.HITO_AUTORIZADO, PrecioPropiedad.HITO_PUBLICADO);
+    private static final Set<String> PEDIDOS = PrecioPropiedad.HITOS_PEDIDOS;
 
     /**
      * Lo que se CERRO de verdad. Solo {@code C}: {@code A} aceptado es un
      * acuerdo que todavia puede caerse antes de la firma.
      */
-    private static final Set<String> CIERRES = Set.of("C");
+    private static final Set<String> CIERRES = Set.of(PrecioPropiedad.HITO_CIERRE);
 
     /**
      * El ultimo importe de una clase de hito, o {@code null}.
@@ -1691,7 +1399,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // el alquiler cerrado de 2024 sigue ensenando los suyos.
                 condicionesDe(idOrganizacion, encargo, tipoPropiedad, pactadas),
                 faltanDelEncargo,
-                anuncios, gestionDePublicacion(encargo, faltanDeLaPropiedad, faltanDelEncargo),
+                anuncios, gestionDePublicacion(actor, encargo, faltanDeLaPropiedad, faltanDelEncargo),
                 // Y si QUIEN PREGUNTA puede tocar ESTE encargo (P0-4). Es una
                 // tercera autoridad, distinta de la de la propiedad: el
                 // responsable del inmueble no manda sobre el encargo ajeno, y
@@ -1754,7 +1462,17 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // dejaria muda la retirada siguiente y no diria nada de
                 // `area_terreno`, que no esta retirada y tampoco se puede
                 // corregir en un terreno.
-                vigencia.estadoDato(), vigencia.editable(), vigencia.motivoNoEditable());
+                vigencia.estadoDato(), vigencia.editable(), vigencia.motivoNoEditable(),
+                // RETIRADO es mas estrecho que HISTORICO, y por eso viaja aparte
+                // (`N16`). `estadoDato = HISTORICO` cubre DOS situaciones: la
+                // clave se retiro del catalogo, o sigue viva y dejo de aplicar a
+                // este tipo. Solo la primera es una retirada, y solo de la
+                // primera se puede decir cuando fue y quien la sustituye. Un
+                // cliente que dedujera «historico = retirado» diria de
+                // `area_terreno` en un terreno que se retiro, y es falso: se
+                // sigue preguntando en una casa.
+                definicion != null && !definicion.isActivo(),
+                definicion == null ? null : definicion.getSustituidaPor());
     }
 
     private List<AtributoFicha> condicionesDe(long idOrganizacion, Captacion encargo,
@@ -1774,13 +1492,61 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             CatalogoAtributo definicion = definiciones.get(clave);
             valores.add(fichaDeAtributo(clave, definicion, pactadas,
                     ContratoDeEscritura.deEncargo(definicion, tipoPropiedad,
-                            encargo.getMotivoOperacion())));
+                            encargo.getMotivoOperacion(),
+                            rotuloDeLaSustituta(definicion, definiciones))));
         }
+        // Con los retirados al final, igual que el bloque fisico (`N16`): una
+        // condicion que ya no se pacta no puede quedarse en medio de las vivas
+        // por su orden de catalogo.
+        ordenarConLosRetiradosAlFinal(valores, definiciones);
+        return List.copyOf(valores);
+    }
+
+    /**
+     * <b>El orden de la ficha: primero lo vigente, y lo RETIRADO al final</b>
+     * (`N16`).
+     *
+     * <p>Hasta aqui la lista se ordenaba solo por el {@code orden} del catalogo,
+     * asi que una clave retirada aparecia <b>en medio de las vivas</b> —en su
+     * sitio de siempre— con su mismo rotulo y su mismo tipo. Desde 5A la lectura
+     * completa la definicion de las retiradas, que era lo que faltaba, y el
+     * efecto secundario fue ese: un atributo indistinguible de uno editable que
+     * el editor no ofrece, sin que nadie explique por que.
+     *
+     * <p>Se mueven al final y no se esconden. Esconderlos seria perder el dato en
+     * la lectura, que es exactamente lo que 5A vino a arreglar; y dejarlos donde
+     * estaban obliga a la pantalla a decidir que hacer con ellos, que es una
+     * regla de negocio en el cliente.
+     *
+     * <p>Dentro de cada grupo, el orden de siempre: el del catalogo, y la clave
+     * como desempate.
+     */
+    private static void ordenarConLosRetiradosAlFinal(List<AtributoFicha> valores,
+                                                      Map<String, CatalogoAtributo> definiciones) {
         valores.sort(java.util.Comparator
-                .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())
+                .comparing(AtributoFicha::retirado)
+                .thenComparingInt(a -> definiciones.containsKey(a.clave())
                         ? definiciones.get(a.clave()).getOrden() : Integer.MAX_VALUE)
                 .thenComparing(AtributoFicha::clave));
-        return List.copyOf(valores);
+    }
+
+    /**
+     * El <b>rotulo</b> de la clave que sustituyo a una retirada, si el catalogo
+     * de esta lectura lo trae (`N16`).
+     *
+     * <p>Se resuelve contra el mapa que ya esta cargado y no con una consulta
+     * nueva: seria una por atributo retirado. Cuando la sustituta no esta en el
+     * mapa —porque no aplica a este tipo, o porque se declaro una clave que ya
+     * no existe— se devuelve {@code null} y la frase usa la clave tal cual: no
+     * se inventa un nombre.
+     */
+    private static String rotuloDeLaSustituta(CatalogoAtributo definicion,
+                                              Map<String, CatalogoAtributo> definiciones) {
+        if (definicion == null || definicion.getSustituidaPor() == null) {
+            return null;
+        }
+        CatalogoAtributo sustituta = definiciones.get(definicion.getSustituidaPor());
+        return sustituta == null ? null : sustituta.getRotulo();
     }
 
     /**
@@ -1855,7 +1621,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      *                            encargos
      * @param faltanDelEncargo    la de este encargo concreto
      */
-    private GestionDePublicacion gestionDePublicacion(Captacion encargo,
+    private GestionDePublicacion gestionDePublicacion(Actor actor, Captacion encargo,
                                                       List<AtributoQueFalta> faltanDeLaPropiedad,
                                                       List<AtributoQueFalta> faltanDelEncargo) {
         // No se publica lo que ya no se ofrece. Es la regla que ya estaba, y se
@@ -1864,6 +1630,10 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             return new GestionDePublicacion(false,
                     "El encargo " + encargo.getCodigoCaptacion() + " ya no esta vigente.");
         }
+
+        var vigencia = encargos.consultarVigencia(encargo.getId(), LocalDate.now(java.time.ZoneId.of("America/Lima")), actor);
+        if (!vigencia.habilitado()) return new GestionDePublicacion(false,
+                "El Encargo no está habilitado: " + String.join(", ", vigencia.faltantes()));
 
         boolean faltaFicha = !faltanDeLaPropiedad.isEmpty();
         boolean faltaPacto = !faltanDelEncargo.isEmpty();
@@ -1909,16 +1679,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private static String tipoValidado(String tipoPropiedad) {
         return AtributosGobernados.codigoDelTipo(tipoPropiedad)
                 .orElseThrow(() -> new ReglaNegocioException(
-                        "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Son siete: LOCAL, "
-                                + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
+                        "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Tipos admitidos: "
+                                + AtributosGobernados.tiposAdmitidos() + "."));
     }
 
-    /**
-     * El uso por defecto sale del TIPO y no de una constante: una vivienda es
-     * uso V y un local es uso C. Ponerlo siempre a comercial —que es lo que
-     * hacia el alta legada— etiquetaba mal cada departamento que entrara.
-     */
-    private static String usoValidado(String uso, String tipoPropiedad) {
+    /** Un uso no declarado conserva su ausencia; el tipo no lo acredita. */
+    private static String usoValidado(String uso) {
         if (uso != null && !uso.isBlank()) {
             String limpio = uso.trim().toUpperCase(Locale.ROOT);
             String codigo = switch (limpio) {
@@ -1934,11 +1700,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             }
             return codigo;
         }
-        return switch (tipoPropiedad) {
-            case "D", "C" -> "V";
-            case "A" -> "I";
-            default -> "C";
-        };
+        return null;
     }
 
     /**
@@ -2032,12 +1794,26 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         return conElPiso;
     }
 
+    private void exigirIdentificacion(String tipo, String uso, Ubicacion ubicacion,
+                                      SuficienciaInmueble.Contexto declarado) {
+        Map<String, SuficienciaInmueble.Dato> datos = new LinkedHashMap<>();
+        datos.put("distrito", SuficienciaInmueble.Dato.conocido(ubicacion.distrito()));
+        datos.put("direccion", SuficienciaInmueble.Dato.conocido(ubicacion.direccion()));
+        datos.put("referenciaInterna", SuficienciaInmueble.Dato.conocido(ubicacion.referenciaInterna()));
+        datos.put("interiorUnidad", SuficienciaInmueble.Dato.conocido(ubicacion.interiorUnidad()));
+        var contexto = new SuficienciaInmueble.Contexto(tipo, uso,
+                declarado == null ? ubicacion.referenciaInterna() : declarado.objetoOfrecido(),
+                null, Map.of(), Set.of());
+        var evaluacion = suficiencia.evaluar(SuficienciaInmueble.Accion.IDENTIFICAR, contexto, datos);
+        if (!evaluacion.suficiente()) {
+            throw new ReglaNegocioException("Falta identificar el inmueble: " + evaluacion.faltantes().stream()
+                    .map(SuficienciaInmueble.Faltante::clave).distinct().collect(java.util.stream.Collectors.joining(", ")));
+        }
+    }
+
     private static Ubicacion ubicacionValidada(Ubicacion ubicacion) {
         if (ubicacion == null) {
-            throw new ReglaNegocioException("La ubicacion es obligatoria: direccion y distrito.");
-        }
-        if (ubicacion.direccion() == null || ubicacion.direccion().isBlank()) {
-            throw new ReglaNegocioException("La direccion es obligatoria.");
+            throw new ReglaNegocioException("La ubicación debe declarar distrito y referencia suficiente del objeto.");
         }
         if (ubicacion.distrito() == null || ubicacion.distrito().isBlank()) {
             throw new ReglaNegocioException("El distrito es obligatorio.");
@@ -2132,23 +1908,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         return 0;
     }
 
-    private static Map<String, ValorAtributo> atributosValidados(List<ValorAtributo> valores) {
-        Map<String, ValorAtributo> porClave = new LinkedHashMap<>();
-        if (valores == null) {
-            return porClave;
-        }
-        for (ValorAtributo valor : valores) {
-            if (valor.clave() == null || valor.clave().isBlank()) {
-                throw new ReglaNegocioException("Un atributo sin clave no se puede guardar.");
-            }
-            if (porClave.put(valor.clave().trim(), valor) != null) {
-                throw new ReglaNegocioException(
-                        "El atributo \"" + valor.clave() + "\" llego dos veces con valores distintos.");
-            }
-        }
-        return porClave;
-    }
-
     /**
      * Las operaciones declaradas, sin repetir. Dos elementos de la misma
      * operacion serian dos encargos identicos, que es lo que
@@ -2200,7 +1959,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                     // vez: el alta se guardaba en verde y la garantia dictada
                     // desaparecia sin un solo error. Es la misma perdida callada
                     // que persigue el Corte 0A, en una linea que parecia inocente.
-                    solicitada.condiciones()));
+                    solicitada.condiciones(),solicitada.origen()));
         }
         return normalizadas;
     }
@@ -2244,16 +2003,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .filter(operacion -> operacion == OperacionInmobiliaria.ALQUILER)
                 .findFirst()
                 .orElseGet(() -> vivos.isEmpty() ? null : vivos.get(0).operacion());
-    }
-
-    private void exigirObligatorios(long idOrganizacion, String tipoPropiedad, Set<String> conocidas) {
-        List<String> faltan = gobierno.faltantesEntre(idOrganizacion, tipoPropiedad, conocidas);
-        if (!faltan.isEmpty()) {
-            throw new ReglaNegocioException(
-                    "Faltan atributos obligatorios de "
-                            + AtributosGobernados.nombreDelTipo(tipoPropiedad) + ": "
-                            + String.join(", ", faltan) + ".");
-        }
     }
 
     private List<PersonaRol> rolesDeTitulares(long idOrganizacion, List<Titular> titulares) {
@@ -2334,7 +2083,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // dos: escribirla desde Java exigiria PostGIS en el modelo JPA.
         siViene(ubicacion.latitud(), propiedad::setGeoLat);
         siViene(ubicacion.longitud(), propiedad::setGeoLong);
-        resolverDistrito(propiedad);
+        propiedad.setIdDistrito(distritos.idParaNombre(propiedad.getDistrito()));
     }
 
     private static <T> void siViene(T valor, Consumer<T> destino) {
@@ -2343,37 +2092,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
     }
 
-    private void resolverDistrito(Propiedad propiedad) {
-        String nombre = propiedad.getDistrito();
-        if (nombre == null || nombre.isBlank()) {
-            propiedad.setIdDistrito(null);
-            return;
-        }
-        String objetivo = normalizar(nombre);
-        propiedad.setIdDistrito(distritos.findByActivoTrueOrderByNombre().stream()
-                .filter(distrito -> normalizar(distrito.getNombre()).equals(objetivo))
-                .map(Distrito::getId)
-                .findFirst()
-                .orElse(null));
-    }
-
-    private static String normalizar(String valor) {
-        return Normalizer.normalize(valor.trim(), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
-                .toLowerCase(Locale.ROOT);
-    }
-
     private String codigoDePropiedad(long idOrganizacion, String declarado) {
         if (declarado != null && !declarado.isBlank()) {
             return declarado.trim();
         }
         // Correlativo por organizacion, como las captaciones (V6.3): cada
         // corredora numera desde 0001 y no ve el ritmo de las demas.
+        propiedades.bloquearNumeracion(idOrganizacion);
         return "PROP-%04d".formatted(propiedades.countByOrganizacionId(idOrganizacion) + 1);
-    }
-
-    private String codigoDeEncargo(long idOrganizacion) {
-        return "ENC-%04d".formatted(captaciones.countByOrganizacionId(idOrganizacion) + 1);
     }
 
     private static String nombreDe(PersonaRol rol) {
@@ -2387,10 +2113,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      */
     private void anotarEvento(Actor actor, String tipo, String entidadTipo, Long entidadId,
                               Procedencia procedencia, Map<String, ?> cargaUtil) {
-        eventos.save(procedencia.sellar(EventoDominio
+        var evento=procedencia.sellar(EventoDominio
                         .de(actor.idOrganizacion(), tipo, entidadTipo, entidadId,
                                 actor.idRolOperativo(), procedencia.canal()))
-                .con(documentos.objeto(cargaUtil)));
+                .con(documentos.objeto(cargaUtil));
+        eventos.save(evento);
+        if(EVENTO_EDITADA.equals(tipo)&&Propiedad.ENTIDAD_TIPO.equals(entidadTipo))
+            cambiosComerciales.publishEvent(new com.controllocal.service.soporte.CambioDeOfertaComercial(
+                    com.controllocal.service.soporte.CambioDeOfertaComercial.Recurso.PROPIEDAD,entidadId,actor,evento));
     }
 
     /**
@@ -2398,6 +2128,127 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * entidad que produjo. Es lo que permite responder despues "esta propiedad
      * la registro KAIROS a partir de la conversacion del martes".
      */
+    private void actualizarMetadatosFisicos(Propiedad p, ValoresGobernados antes, ValoresGobernados despues,
+                                             Map<String,ValorAtributo> entradas) {
+        Map<String,Object> metadatos = new LinkedHashMap<>(documentos.comoMapa(p.getMetadatosAtributos()));
+        Set<String> claves = new LinkedHashSet<>(antes.claves()); claves.addAll(despues.claves());
+        boolean cambio = false;
+        for (String clave : claves) {
+            if (Objects.equals(antes.valor(clave),despues.valor(clave))) continue;
+            cambio = true;
+            var dato = new LinkedHashMap<String,Object>();
+            dato.put("estado",despues.valor(clave)==null ? "FALTANTE" : "CONOCIDO");
+            ValorAtributo entrada = entradas.get(clave);
+            if (entrada!=null && entrada.evidenciaRef()!=null) dato.put("evidenciaRef",entrada.evidenciaRef());
+            if (entrada!=null && entrada.observadoEn()!=null) dato.put("observadoEn",entrada.observadoEn());
+            // No adjudicar al valor nuevo el concepto/catálogo/evidencia de otro valor.
+            metadatos.put(clave,dato);
+        }
+        if(cambio) p.setMetadatosAtributos(documentos.objetoCanonico(metadatos));
+    }
+
+    private record EdicionFisica(List<ValorAtributo> valores,List<String> retiradas,
+            Map<String,MotorDeCaptura.MetadatoRespuesta> metadatos,SuficienciaInmueble.Contexto contexto) { }
+
+    /** Una sola autoridad para el valor; los metadatos explícitos usan el contrato del borrador. */
+    private EdicionFisica prepararEdicionFisica(Propiedad p,ComandoEdicion comando,Actor actor) {
+        var entradas=atributosValidados(comando.atributos());
+        var contexto= contextoFisico(p,comando.contextoCaptura());
+        var valores=new LinkedHashMap<String,ValorAtributo>();
+        var retiradas=new LinkedHashSet<String>(comando.atributosABorrar()==null?List.of():comando.atributosABorrar());
+        var metadatos=new LinkedHashMap<String,MotorDeCaptura.MetadatoRespuesta>();
+        var respuestasContextuales=new LinkedHashMap<String,MotorDeCaptura.Respuesta>();
+        for(var entrada:entradas.entrySet()){
+            String clave=entrada.getKey();ValorAtributo valor=entrada.getValue();
+            if(valor.captura()==null&&!"zonificacion".equals(clave)){valores.put(clave,valor);continue;}
+            if(retiradas.contains(clave))throw new ReglaNegocioException("Una respuesta de captura y atributosABorrar no se envían para la misma clave.");
+            var c=valor.captura();String escalar=c==null||valor.valores()==null?valor.valor():documentos.lista(valor.valores());
+            var estado=c==null?SuficienciaInmueble.EstadoDato.CONOCIDO:c.estado();
+            if(estado!=SuficienciaInmueble.EstadoDato.CONOCIDO&&(valor.moneda()!=null||valor.valores()!=null))
+                throw new ReglaNegocioException("Un estado sin valor conocido no admite moneda o lista ocultas.");
+            var respuesta=new MotorDeCaptura.Respuesta(escalar,estado,valor.evidenciaRef(),c==null?null:c.concepto(),
+                    c==null?null:c.referenciaCatalogo(),c==null?null:c.versionDefinicion(),valor.observadoEn(),c!=null&&c.noSabe());
+            var meta=validadorRespuestas.validar(actor,clave,respuesta);
+            if("zonificacion".equals(clave)&&estado==SuficienciaInmueble.EstadoDato.CONOCIDO){
+                var revisada=validadorRespuestas.validarZonificacion(actor.idOrganizacion(),escalar,meta,contexto);
+                meta=revisada.metadato();
+            }
+            metadatos.put(clave,meta);
+            // Coordenada declarada del contexto, no otro atributo físico ni
+            // un borrado de una clave inexistente en el catálogo.
+            if(clave.startsWith("contexto.")){respuestasContextuales.put(clave,respuesta);continue;}
+            if(meta.estado()==SuficienciaInmueble.EstadoDato.CONOCIDO)valores.put(clave,valor);
+            else retiradas.add(clave);
+        }
+        contexto=validadorRespuestas.reconciliarContexto(suficienciaRegistrada.contexto(p.getContextoCaptura()),
+                contexto,comando.contextoCaptura(),respuestasContextuales,metadatos);
+        // Cambiar jurisdicción tampoco traslada a otro perfil la acreditación de la opción anterior.
+        if(comando.contextoCaptura()!=null&&!entradas.containsKey("zonificacion")){
+            var anteriores=lector.de(actor.idOrganizacion(),p);String valor=anteriores.texto("zonificacion");
+            if(valor!=null){
+                var meta=suficienciaRegistrada.metadatos(p.getMetadatosAtributos()).get("zonificacion");
+                var revisada=validadorRespuestas.validarZonificacion(actor.idOrganizacion(),valor,meta,contexto);
+                metadatos.put("zonificacion",revisada.metadato());
+                if(revisada.valorConocido()==null)retiradas.add("zonificacion");
+            }
+        }
+        return new EdicionFisica(List.copyOf(valores.values()),new ArrayList<>(retiradas),metadatos,contexto);
+    }
+
+    /** El alta técnica también conserva pendiente una opción que el catálogo no puede acreditar. */
+    private void validarZonificacionDeAlta(Propiedad p,Map<String,ValorAtributo> valores,Actor actor){
+        ValorAtributo valor=valores.get("zonificacion");
+        if(valor==null)return;
+        var metadatos=suficienciaRegistrada.metadatos(p.getMetadatosAtributos());
+        var meta=metadatos.get("zonificacion");
+        String escalar=valor.valor();
+        if(meta==null)meta=validadorRespuestas.validar(actor,"zonificacion",new MotorDeCaptura.Respuesta(
+                escalar,SuficienciaInmueble.EstadoDato.CONOCIDO,valor.evidenciaRef(),null,null,null,valor.observadoEn(),false));
+        var revisada=validadorRespuestas.validarZonificacion(actor.idOrganizacion(),escalar,meta,
+                suficienciaRegistrada.contexto(p,null,null));
+        metadatos.put("zonificacion",revisada.metadato());
+        p.setMetadatosAtributos(suficienciaRegistrada.metadatosJson(metadatos));
+        if(revisada.valorConocido()==null)valores.remove("zonificacion");
+    }
+
+    private SuficienciaInmueble.Contexto contextoFisico(Propiedad p,SuficienciaInmueble.Contexto declarado){
+        if(declarado!=null){
+            if(declarado.tipoPropiedad()!=null&&!tipoValidado(declarado.tipoPropiedad()).equals(p.getTipoInmueble()))
+                throw new ReglaNegocioException("El contexto conserva el tipo del inmueble identificado.");
+            if(declarado.usoOfrecido()!=null&&!Objects.equals(usoValidado(declarado.usoOfrecido()),p.getUso()))
+                throw new ReglaNegocioException("El contexto conserva el uso declarado del inmueble.");
+            if(declarado.operacion()!=null)OperacionInmobiliaria.desde(declarado.operacion());
+        }
+        return suficienciaRegistrada.contexto(p,null,declarado);
+    }
+
+    private String contextoEnHuella(SuficienciaInmueble.Contexto contexto){
+        if(contexto==null)return null;
+        var mapa=documentos.comoMapa(suficienciaRegistrada.contextoJson(contexto));
+        mapa.put("prestacionesOfrecidas",new java.util.TreeSet<>(contexto.prestacionesOfrecidas()));
+        return documentos.objetoCanonico(mapa);
+    }
+
+    private void incorporarMetadatosDeCaptura(Propiedad propiedad, ComandoRegistro comando, Actor actor) {
+        if (comando.idBorrador() == null) return;
+        var b = borradores.bloquear(actor.idOrganizacion(), comando.idBorrador())
+                .orElseThrow(() -> new NoEncontradoException("Captura"));
+        if (!Objects.equals(b.getIdPersonaRol(),actor.idRolOperativo()))
+            throw new AccesoNoAutorizadoException();
+        if (!b.estaEnCurso()) throw new com.controllocal.service.excepcion.ConflictoException("La captura ya no está en curso.");
+        var conocidos = documentos.comoMapa(b.getDatosConocidos());
+        if (!Objects.equals(AtributosGobernados.codigoDelTipo(Objects.toString(conocidos.get("tipoPropiedad"),null)).orElse(null),
+                propiedad.getTipoInmueble()))
+            throw new com.controllocal.service.excepcion.ConflictoException("El tipo del registro difiere de la captura revisada.");
+        // Un comando no puede reutilizar la procedencia de otro valor conocido.
+        for (ValorAtributo valor : comando.atributos()==null ? List.<ValorAtributo>of() : comando.atributos()) {
+            if (valor.valor()!=null && !Objects.equals(valor.valor(),Objects.toString(conocidos.get(valor.clave()),null)))
+                throw new com.controllocal.service.excepcion.ConflictoException("El valor difiere de la captura revisada: " + valor.clave());
+        }
+        propiedad.setContextoCaptura(b.getContextoCaptura());
+        propiedad.setMetadatosAtributos(b.getMetadatosRespuestas());
+    }
+
     private void cerrarBorrador(Actor actor, Long idBorrador, Long idPropiedad) {
         if (idBorrador == null) {
             return;
@@ -2413,12 +2264,23 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     /** La respuesta del primer intento, reconstruida sin re-ejecutar nada. */
     private ResultadoRegistro reconstruir(ComandoIdempotente previo) {
         Map<String, Object> resultado = documentos.comoMapa(previo.getResultado());
-        Object codigo = resultado.get("codigo");
-        @SuppressWarnings("unchecked")
-        List<Number> encargos = (List<Number>) resultado.getOrDefault("idsEncargos", List.of());
-        return new ResultadoRegistro(previo.getEntidadId(),
-                codigo == null ? null : codigo.toString(),
-                encargos.stream().map(Number::longValue).toList(), true);
+        if (idDelResultado(resultado.get("idPropiedad")) != previo.getEntidadId()
+                || !(resultado.get("codigo") instanceof String codigo) || codigo.isBlank()
+                || !(resultado.get("idsEncargos") instanceof List<?> encargos)) {
+            throw new IllegalStateException("El resultado persistido del registro está incompleto o es incompatible.");
+        }
+        return new ResultadoRegistro(previo.getEntidadId(), codigo,
+                encargos.stream().map(PropiedadUniversalServiceImpl::idDelResultado).toList(), true);
+    }
+
+    private static long idDelResultado(Object valor) {
+        if (valor instanceof Number numero) {
+            try {
+                long id = new BigDecimal(numero.toString()).longValueExact();
+                if (id > 0) return id;
+            } catch (NumberFormatException | ArithmeticException invalido) { /* Dato persistido incompatible. */ }
+        }
+        throw new IllegalStateException("El resultado persistido contiene una referencia incompatible.");
     }
 
     private static String texto(String valor) {
@@ -2427,14 +2289,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
     private static String titularesEnHuella(List<Titular> titulares) {
         if (titulares == null) {
-            return "";
+            return "<nulo>";
         }
         return titulares.stream()
-                .map(titular -> titular.idRolPropietario() + ":"
-                        + (titular.cuota() == null ? "" : titular.cuota().stripTrailingZeros().toPlainString()))
+                .map(titular -> titular == null ? "<nulo>"
+                        : "id=" + valorEnHuella(titular.idRolPropietario())
+                                + ";cuota=" + valorEnHuella(titular.cuota())
+                                + ";representante=" + valorEnHuella(titular.representante()))
                 .sorted()
-                .reduce((a, b) -> a + "," + b)
-                .orElse("");
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
 
     /**
@@ -2451,49 +2314,140 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      */
     private static String atributosEnHuella(List<ValorAtributo> valores) {
         if (valores == null) {
-            return "";
+            return "<nulo>";
         }
         return valores.stream()
-                .map(valor -> valor.clave() + "=" + valor.valor()
-                        + (valor.naturaleza() == null ? "" : "@" + valor.naturaleza())
-                        + (valor.confianza() == null ? ""
-                                : "~" + valor.confianza().stripTrailingZeros().toPlainString()))
+                .map(valor -> valor == null ? "<nulo>"
+                        : "clave=" + valorEnHuella(valor.clave())
+                                + ";valor=" + valorEnHuella(valor.valor())
+                                + ";moneda=" + valorEnHuella(valor.moneda())
+                                + ";valores=" + valoresEnHuella(valor.valores())
+                                + ";naturaleza=" + valorEnHuella(valor.naturaleza())
+                                + ";confianza=" + valorEnHuella(valor.confianza())
+                                + ";observadoEn=" + valorEnHuella(valor.observadoEn())
+                                + ";evidenciaRef=" + valorEnHuella(valor.evidenciaRef())
+                                + ";captura="+valorEnHuella(valor.captura()))
                 .sorted()
-                .reduce((a, b) -> a + "," + b)
-                .orElse("");
-    }
-
-    /**
-     * Las condiciones de cada encargo en la huella de idempotencia.
-     *
-     * <p>Lleva el {@code idEncargo} delante, y por eso mismo: sin el, cambiar la
-     * garantia de la venta y luego la del alquiler produciria la misma huella y
-     * la segunda edicion se descartaria como repetida.
-     */
-    private static String condicionesEnHuella(List<CondicionesDeEncargo> bloques) {
-        if (bloques == null) {
-            return "";
-        }
-        return bloques.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(bloque -> bloque.idEncargo() + ":" + atributosEnHuella(bloque.atributos())
-                        + ":" + (bloque.atributosABorrar() == null ? ""
-                                : String.join("|", bloque.atributosABorrar())))
-                .sorted()
-                .reduce((a, b) -> a + ";" + b)
-                .orElse("");
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
 
     private static String operacionesEnHuella(List<OperacionSolicitada> operaciones) {
         if (operaciones == null) {
-            return "";
+            return "<nulo>";
         }
         return operaciones.stream()
-                .map(solicitada -> solicitada.operacion() + ":"
-                        + (solicitada.importe() == null ? "" : solicitada.importe().stripTrailingZeros().toPlainString())
-                        + ":" + solicitada.moneda())
+                .map(solicitada -> solicitada == null ? "<nulo>"
+                        : "operacion=" + valorEnHuella(solicitada.operacion())
+                                + ";importe=" + valorEnHuella(solicitada.importe())
+                                + ";moneda=" + valorEnHuella(solicitada.moneda())
+                                + ";tipoComision=" + valorEnHuella(solicitada.tipoComision())
+                                + ";baseCalculo=" + valorEnHuella(solicitada.baseCalculo())
+                                + ";valorComision=" + valorEnHuella(solicitada.valorComision())
+                                + ";tratamientoIgv=" + valorEnHuella(solicitada.tratamientoIgv())
+                                + ";exclusividad=" + valorEnHuella(solicitada.exclusividad())
+                                + ";inicioEncargo=" + valorEnHuella(solicitada.inicioEncargo())
+                                + ";finEncargo=" + valorEnHuella(solicitada.finEncargo())
+                                + ";condiciones=" + atributosEnHuella(solicitada.condiciones()))
                 .sorted()
-                .reduce((a, b) -> a + "," + b)
-                .orElse("");
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
+
+    /** Todos los campos de ubicación forman parte del comando de alta/edición. */
+    private static String ubicacionEnHuella(Ubicacion ubicacion) {
+        if (ubicacion == null) {
+            return "<nulo>";
+        }
+        return "direccion=" + valorEnHuella(ubicacion.direccion())
+                + ";distrito=" + valorEnHuella(ubicacion.distrito())
+                + ";zonaUrbanizacion=" + valorEnHuella(ubicacion.zonaUrbanizacion())
+                + ";latitud=" + valorEnHuella(ubicacion.latitud())
+                + ";longitud=" + valorEnHuella(ubicacion.longitud())
+                + ";interiorUnidad=" + valorEnHuella(ubicacion.interiorUnidad())
+                + ";piso=" + valorEnHuella(ubicacion.piso())
+                + ";referenciaInterna=" + valorEnHuella(ubicacion.referenciaInterna())
+                + ";nombreEdificioGaleria=" + valorEnHuella(ubicacion.nombreEdificioGaleria());
+    }
+
+    private static String valoresEnHuella(List<String> valores) {
+        if (valores == null) {
+            return "<nulo>";
+        }
+        return valores.stream()
+                .map(PropiedadUniversalServiceImpl::valorEnHuella)
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    }
+
+    private static String clavesEnHuella(List<String> claves) {
+        return valoresEnHuella(claves);
+    }
+
+    /** Serializa null y valores delimitados sin colisiones de concatenación. */
+    private static String valorEnHuella(Object valor) {
+        if (valor == null) {
+            return "<nulo>";
+        }
+        String texto = valor instanceof BigDecimal decimal
+                ? decimal.stripTrailingZeros().toPlainString()
+                : valor.toString();
+        return texto.length() + ":" + texto;
+    }
+    private List<TitularFicha> titularesFisicos(long propiedad) {
+        return titularidades.vigentesDe(propiedad).stream().map(t->new TitularFicha(t.getRolPropietario().getId(),
+                nombreDe(t.getRolPropietario()),t.getCuota(),t.isEsRepresentante(),t.getVigenteDesde())).toList();
+    }
+    private ResultadoEdicion reciboFisico(Propiedad p,ValoresGobernados leidos,List<String> claves) {
+        var contexto=suficienciaRegistrada.contexto(p,null,null);
+        var datos=suficienciaRegistrada.datos(p,leidos);
+        SuficienciaInmueble.Evaluacion evaluacion;
+        String estadoSuficiencia;
+        try {
+            evaluacion=suficiencia.evaluar(SuficienciaInmueble.Accion.IDENTIFICAR,contexto,datos);
+            estadoSuficiencia="DISPONIBLE";
+        } catch(RuntimeException falloInformativo) {
+            // Esta recompensa pura no es una guarda: el hecho correcto y su recibo se conservan.
+            evaluacion=null;estadoSuficiencia="FALLO_TECNICO";
+        }
+        return new ResultadoEdicion(p.getId(),p.getCodigo(),p.getVersionFisica(),
+                AtributosGobernados.nombreDelTipo(p.getTipoInmueble()),p.getUso(),p.getDescripcion(),ubicacionDe(p),
+                titularesFisicos(p.getId()),datos,contexto,suficienciaRegistrada.metadatos(p.getMetadatosAtributos()),claves,estadoSuficiencia,evaluacion,false);
+    }
+    private Map<String,Object> comoMapaDeResultado(ResultadoEdicion resultado) {
+        var contenedor=documentos.comoMapa(documentos.objetoCanonico(Map.of("resultado",resultado)));
+        if(!(contenedor.get("resultado") instanceof Map<?,?> crudo))throw new IllegalStateException("El recibo físico no es un objeto.");
+        Map<String,Object> limpio=new LinkedHashMap<>();crudo.forEach((k,v)->limpio.put((String)k,v));return limpio;
+    }
+    private ResultadoEdicion reconstruirEdicion(ComandoIdempotente previo,long idPropiedad) {
+        Map<String,Object> contenedor=documentos.comoMapa(previo.getResultado());
+        if(!(contenedor.get("version") instanceof Number n)||n.intValue()!=1
+                ||!(contenedor.get("resultado") instanceof Map<?,?> crudo))
+            throw new IllegalStateException("El recibo original de edición física está incompleto.");
+        Map<String,Object> resultado=new LinkedHashMap<>();crudo.forEach((k,v)->resultado.put((String)k,v));
+        String canonico=documentos.objetoCanonico(Map.of("resultado",resultado));
+        if(!Objects.equals(contenedor.get("huellaResultado"),com.controllocal.service.soporte.Idempotencia.huellaExacta(canonico)))
+            throw new IllegalStateException("El recibo original de edición física perdió su huella.");
+        ResultadoEdicion original=documentos.comoObjeto(documentos.objetoCanonico(resultado),ResultadoEdicion.class);
+        if(original.idPropiedad()!=idPropiedad||!Propiedad.ENTIDAD_TIPO.equals(previo.getEntidadTipo())
+                ||!Objects.equals(previo.getEntidadId(),idPropiedad)||original.versionFisica()<0)
+            throw new IllegalStateException("El recibo físico no corresponde al recurso autorizado.");
+        return original.comoReintento();
+    }
+    private static boolean valorFisicoVigente(String clave,Propiedad p,ValoresGobernados leidos) {
+        if(leidos.tiene(clave))return true;
+        return switch(clave) {
+            case "descripcion"->p.getDescripcion()!=null;case "zonaUrbanizacion"->p.getZonaUrbanizacion()!=null;
+            case "interiorUnidad"->p.getInteriorUnidad()!=null;case "referenciaInterna"->p.getReferenciaInterna()!=null;
+            case "nombreEdificioGaleria"->p.getNombreEdificioGaleria()!=null;case "latitud"->p.getGeoLat()!=null;
+            case "longitud"->p.getGeoLong()!=null;case "direccion"->p.getDireccion()!=null;case "distrito"->p.getDistrito()!=null;
+            default->false;
+        };
+    }
+    private static List<String> clavesFisicasAfectadas(ComandoEdicion c,Map<String,ValorAtributo> valores,
+            List<String> retiradas,Set<String> metadatos) {
+        Set<String> claves=new java.util.TreeSet<>(valores.keySet());claves.addAll(retiradas);claves.addAll(metadatos);
+        if(c.descripcion()!=null)claves.add("descripcion");if(c.ubicacion()!=null)claves.add("ubicacion");
+        if(c.titulares()!=null)claves.add("titulares");if(c.contextoCaptura()!=null)claves.add("contextoCaptura");
+        return List.copyOf(claves);
+    }
+
 }

@@ -1,6 +1,5 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.ReasignacionCaptacion;
@@ -15,10 +14,8 @@ import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
 import com.controllocal.persistence.repositorio.FotoPropiedadRepository;
-import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.ReasignacionCaptacionRepository;
 import com.controllocal.service.Actor;
-import com.controllocal.service.AlertaService;
 import com.controllocal.service.CaptacionService;
 import com.controllocal.service.CaptacionService.CandidatoAgente;
 import com.controllocal.service.Pagina;
@@ -27,17 +24,12 @@ import com.controllocal.service.excepcion.ConflictoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.ElegibilidadDeResponsable;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
-import com.controllocal.service.soporte.OperacionDelEncargo;
 import com.controllocal.service.soporte.PoliticaComercial;
-import com.controllocal.service.soporte.TitularParaEncargar;
-import com.controllocal.service.soporte.Transiciones;
-import com.controllocal.service.soporte.CondicionesEconomicas;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,71 +37,47 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Reglas y mensajes calcados del CaptacionBusinessLogicImpl v1. La revision del
- * broker exige observacion en O/R (MEJ-03), la reasignacion es un evento de
- * actor (no transicion) y todo cambio de estado se audita en historial_estado
- * (Transiciones). Alcance por rol en el service (RC-001).
- *
- * <p>Emite las <b>tres alertas</b> de esta vertical (§4 del contrato F6):
- * {@code CAPTACION_CREADA} al broker cuando el agente registra,
- * {@code CAPTACION_REVISADA} al agente con la decision y
- * {@code CAPTACION_CERRADA} al agente al cerrar. Las tres cuelgan del AGENTE
- * aunque una este escrita para el broker: quien la lee lo decide el TIPO.
- */
+/** Lecturas y gobierno de responsabilidad; el ciclo versionado pertenece a EncargoService. */
 @Service
 public class CaptacionServiceImpl implements CaptacionService {
 
     private final CaptacionRepository captaciones;
     private final ReasignacionCaptacionRepository reasignaciones;
-    private final PropiedadRepository propiedades;
     private final DetalleAgenteRepository agentes;
     private final DetalleBrokerRepository brokers;
     private final FotoPropiedadRepository fotos;
     private final Alcances alcances;
-    private final Transiciones transiciones;
-    private final AlertaService alertas;
     private final LectorPorAutoridad lector;
-    /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
-    private final TitularParaEncargar titularParaEncargar;
-    /** Quien puede escribir el TRATO. Ver {@link #actualizar}. */
-    private final AutoridadDePropiedad autoridad;
-    /**
-     * <b>Quien puede RECIBIR el encargo</b> (D-P0-7). El mismo componente que
-     * decide los destinos de una propiedad: la pregunta es la misma y una
-     * segunda copia divergiria hacia el lado que ofrece lo que el comando
-     * rechaza.
-     */
     private final ElegibilidadDeResponsable elegibilidad;
+    private final com.controllocal.service.encargo.AccesoEncargo acceso;
+    private final com.controllocal.service.encargo.ReglasDeResponsableEncargo reglasResponsable;
+    private final com.controllocal.service.soporte.ComandosIdempotentes comandos;
+    private final com.controllocal.persistence.repositorio.ComandoIdempotenteRepository registros;
+    private final com.controllocal.persistence.repositorio.EventoDominioRepository eventos;
+    private final com.controllocal.service.soporte.Documentos json;
+    private final jakarta.persistence.EntityManager entidades;
+    private final org.springframework.context.ApplicationEventPublisher cambiosComerciales;
 
     public CaptacionServiceImpl(CaptacionRepository captaciones, ReasignacionCaptacionRepository reasignaciones,
-                                PropiedadRepository propiedades, DetalleAgenteRepository agentes,
-                                DetalleBrokerRepository brokers, FotoPropiedadRepository fotos,
-                                Alcances alcances, Transiciones transiciones,
-                                AlertaService alertas, LectorPorAutoridad lector,
-                                TitularParaEncargar titularParaEncargar,
-                                AutoridadDePropiedad autoridad,
-                                ElegibilidadDeResponsable elegibilidad) {
-        this.captaciones = captaciones;
-        this.reasignaciones = reasignaciones;
-        this.propiedades = propiedades;
-        this.agentes = agentes;
-        this.brokers = brokers;
-        this.fotos = fotos;
-        this.alcances = alcances;
-        this.transiciones = transiciones;
-        this.alertas = alertas;
-        this.lector = lector;
-        this.titularParaEncargar = titularParaEncargar;
-        this.autoridad = autoridad;
-        this.elegibilidad = elegibilidad;
+            DetalleAgenteRepository agentes,DetalleBrokerRepository brokers,FotoPropiedadRepository fotos,
+            Alcances alcances,LectorPorAutoridad lector,ElegibilidadDeResponsable elegibilidad,
+            com.controllocal.service.encargo.AccesoEncargo acceso,
+            com.controllocal.service.encargo.ReglasDeResponsableEncargo reglasResponsable,
+            com.controllocal.service.soporte.ComandosIdempotentes comandos,
+            com.controllocal.persistence.repositorio.ComandoIdempotenteRepository registros,
+            com.controllocal.persistence.repositorio.EventoDominioRepository eventos,
+            com.controllocal.service.soporte.Documentos json,jakarta.persistence.EntityManager entidades,
+            org.springframework.context.ApplicationEventPublisher cambiosComerciales) {
+        this.captaciones=captaciones; this.reasignaciones=reasignaciones; this.agentes=agentes;
+        this.brokers=brokers; this.fotos=fotos; this.alcances=alcances; this.lector=lector;
+        this.elegibilidad=elegibilidad; this.acceso=acceso; this.reglasResponsable=reglasResponsable;
+        this.comandos=comandos; this.registros=registros; this.eventos=eventos; this.json=json;
+        this.entidades=entidades;
+        this.cambiosComerciales=cambiosComerciales;
     }
 
     @Override
@@ -203,15 +171,28 @@ public class CaptacionServiceImpl implements CaptacionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Pagina<FichaCaptacion> reasignables(int pagina, int tamano, String q, Actor actor) {
-        Alcance alcance = alcances.de(actor);
+    public Pagina<EncargoReasignable> reasignables(int pagina, int tamano, String q, Actor actor) {
+        exigirBandaQueGobiernaElEncargo(actor);
+        Alcance alcance = alcances.paraGobiernoDeReasignacion(actor);
         if (alcance.vacio()) {
             return Pagina.vacia();
         }
-        Page<Captacion> page = captaciones.buscar(alcance.idOrganizacion(), alcance.global(),
-                alcance.paramRoles(), Captacion.ACTIVA, null, vacioNull(q),
+        var page = captaciones.buscarParaReasignacion(alcance.idOrganizacion(), alcance.global(),
+                alcance.paramRoles(), null, null, vacioNull(q),
                 PageRequest.of(Math.max(0, pagina - 1), tamano(tamano)));
-        return paginaConPortada(page);
+        return new Pagina<>(page.getContent().stream().map(c -> new EncargoReasignable(
+                c.getId(), c.getCodigoCaptacion(), estadoPublico(c.getEstado()), c.getDireccionLocal(),
+                c.getIdAgente(), c.getAgenteNombre(),c.getVersion())).toList(), page.getTotalElements());
+    }
+    @Override @Transactional(readOnly=true)
+    public EncargoReasignable consultarReasignable(long id,Actor actor) {
+        var c=captaciones.proyeccionDeReasignacion(actor.idOrganizacion(),id)
+                .orElseThrow(()->new NoEncontradoException("Encargo"));
+        exigirBandaQueGobiernaElEncargo(actor);
+        if(!alcances.alcanzaParaGobiernoDeReasignacion(actor,c.getIdAgente())) throw new AccesoNoAutorizadoException();
+        reglasResponsable.exigirCambioOperativo(actor.idOrganizacion(),id,c.getEstado(),c.getTerminosAceptados(),c.getIdDocumentoActual());
+        return new EncargoReasignable(c.getId(),c.getCodigoCaptacion(),estadoPublico(c.getEstado()),c.getDireccionLocal(),
+                c.getIdAgente(),c.getAgenteNombre(),c.getVersion());
     }
 
     @Override
@@ -223,164 +204,14 @@ public class CaptacionServiceImpl implements CaptacionService {
     @Override
     @Transactional(readOnly = true)
     public FichaCaptacion obtenerPorCodigo(String codigo, Actor actor) {
-        Captacion cap = captaciones
-                .buscarFichaPorCodigo(actor.idOrganizacion(), codigo == null ? "" : codigo.trim())
+        long id = captaciones
+                .idPorCodigo(actor.idOrganizacion(), codigo == null ? "" : codigo.trim())
                 .orElseThrow(() -> new NoEncontradoException("Captacion"));
-        if (!alcances.alcanza(actor, cap.getAgente().getId())) {
-            throw new AccesoNoAutorizadoException();
-        }
         // Es la SEGUNDA puerta al mismo recurso, asi que publica lo mismo que la
         // primera: el mismo productor de ficha individual, con las mismas
         // capacidades. Dos formas de leer un encargo que devolvieran formas
         // distintas obligarian al cliente a llevar la regla en una de las dos.
-        return fichaIndividual(cap, actor);
-    }
-
-    @Override
-    @Transactional
-    public FichaCaptacion registrar(DatosCaptacion datos, Actor actor) {
-        if (datos == null) {
-            throw new ReglaNegocioException("Los datos de la captacion son obligatorios.");
-        }
-        exigirTexto(datos.codigoCaptacion(), "El codigo de captacion");
-        if (datos.fechaCaptacion() == null) {
-            throw new ReglaNegocioException("La fecha de captacion es obligatoria.");
-        }
-        if (datos.idLocal() == null || datos.idLocal() <= 0) {
-            throw new ReglaNegocioException("El local de la captacion debe ser mayor que cero.");
-        }
-        DetalleAgente agente = agentes.findById(actor.idRolOperativo())
-                .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado."));
-        Propiedad propiedad = propiedades
-                .findByOrganizacionIdAndId(actor.idOrganizacion(), datos.idLocal())
-                .orElseThrow(() -> new ReglaNegocioException("El local de la captacion no existe."));
-        // Abrir un encargo es empezar una relacion comercial, y esa nace de
-        // alguien que puede encargarla (V76). Va ANTES de la condicion economica
-        // para que el mensaje hable de titularidad y no de un importe invalido.
-        titularParaEncargar.exigirParaEncargo(propiedad);
-        validarEncargo(datos.fechaInicioVigencia(), datos.fechaFinVigencia());
-        CondicionEconomicaCaptacion condicion = condicion(datos, propiedad, actor.idOrganizacion());
-        exigirEncargoLibre(actor.idOrganizacion(), propiedad.getId(),
-                OperacionInmobiliaria.deCodigo(condicion.getTipoOperacion()), null);
-
-        Captacion cap = new Captacion();
-        cap.setOrganizacionId(actor.idOrganizacion());
-        cap.setCodigoCaptacion(datos.codigoCaptacion());
-        cap.setFechaCaptacion(datos.fechaCaptacion());
-        cap.setFechaInicioVigencia(datos.fechaInicioVigencia());
-        cap.setFechaFinVigencia(datos.fechaFinVigencia());
-        cap.setCondicionEconomica(condicion);
-        cap.setObservaciones(datos.observaciones());
-        cap.setMotivoOperacion(datos.motivoOperacion());
-        cap.setUrgencia(datos.urgencia());
-        cap.setExclusividad(datos.exclusividad());
-        cap.setPropiedad(propiedad);
-        cap.setAgente(agente);
-        transiciones.iniciar(cap, Captacion.PENDIENTE_REVISION);
-        captaciones.save(cap);
-        // Aviso al broker supervisor (§4 F6, punto 2): tiene una captacion que revisar.
-        emitirAlerta(Alerta.CAPTACION_CREADA, Alerta.MEDIA, cap, agente.getId(),
-                "El agente registro la captacion " + cap.getCodigoCaptacion()
-                        + " para tu revision.", actor);
-        return fichaDe(cap.getId(), actor);
-    }
-
-    @Override
-    @Transactional
-    public FichaCaptacion actualizar(long id, DatosCaptacion datos, Actor actor) {
-        if (datos == null) {
-            throw new ReglaNegocioException("Los datos de la captacion son obligatorios.");
-        }
-        Captacion cap = cargarConAccesoParaEscribir(id, actor);
-        // P0-4: lo que sigue escribe el TRATO -- importe, exclusividad,
-        // vigencia, urgencia y observaciones-- y eso lo edita SU propio agente.
-        // `cargarConAccesoParaEscribir` resuelve otra pregunta: el tenant (404)
-        // y el alcance de LECTURA, que dice SI al broker supervisor y al
-        // gobierno del tenant. Hasta aqui lo unico que los frenaba era el
-        // @PreAuthorize del controlador, y una anotacion protege UNA PUERTA
-        // mientras la autoridad protege EL HECHO: KAIROS entra por este mismo
-        // caso de uso.
-        //
-        // Y va bajo el candado de la fila (F2.10): comprobar aqui y escribir
-        // despues dejaba una ventana donde cabia una reasignacion entera, con
-        // lo que esta edicion aterrizaba sobre un encargo que ya llevaba otro.
-        autoridad.exigirEdicionDelEncargo(actor, cap);
-        if (!cap.editable()) {
-            throw new ReglaNegocioException("Solo se puede editar una captacion pendiente u observada.");
-        }
-        if (datos.fechaCaptacion() != null) {
-            cap.setFechaCaptacion(datos.fechaCaptacion());
-        }
-        cap.setFechaInicioVigencia(datos.fechaInicioVigencia());
-        cap.setFechaFinVigencia(datos.fechaFinVigencia());
-        validarEncargo(datos.fechaInicioVigencia(), datos.fechaFinVigencia());
-        exigirMismaOperacion(cap, datos);
-        cap.setCondicionEconomica(condicion(datos, cap.getPropiedad(), actor.idOrganizacion()));
-        cap.setObservaciones(datos.observaciones());
-        cap.setMotivoOperacion(datos.motivoOperacion());
-        cap.setUrgencia(datos.urgencia());
-        cap.setExclusividad(datos.exclusividad());
-
-        // Una captacion OBSERVADA que el agente edita vuelve a la cola del broker (O -> P).
-        if (Captacion.OBSERVADA.equals(cap.estadoActual())) {
-            transiciones.aplicar(cap, id, Captacion.PENDIENTE_REVISION, actor,
-                    "Reenvio a revision tras corregir observaciones.");
-        }
-        captaciones.save(cap);
-        return fichaDe(id, actor);
-    }
-
-    @Override
-    @Transactional
-    public FichaCaptacion decidir(long id, String accion, String observacion, Actor actor) {
-        if (accion == null || accion.isBlank()) {
-            throw new ReglaNegocioException("La decision es obligatoria.");
-        }
-        Captacion cap = cargarConAcceso(id, actor);
-        // La BANDA, en el Core y no solo en la anotacion (D-S0-17 fila 5). Hasta
-        // aqui lo unico que frenaba al TENANT_ADMIN era el @PreAuthorize del
-        // controlador, y una anotacion protege UNA PUERTA mientras la regla tiene
-        // que proteger EL HECHO: KAIROS entra por este mismo caso de uso, y
-        // `cargarConAcceso` le dice que si -- alcanza el encargo para leerlo.
-        //
-        // Va DESPUES de `cargarConAcceso` para conservar el 404 de otro tenant: un
-        // id ajeno no puede empezar a responder 403, que confirmaria que existe.
-        exigirBandaComercial(actor, "decidir sobre un encargo");
-        if (!cap.editable()) {
-            throw new ReglaNegocioException("La captacion debe estar pendiente de revision u observada.");
-        }
-        DetalleBroker broker = brokers.findById(actor.idRolOperativo())
-                .orElseThrow(() -> new ReglaNegocioException("Broker no encontrado."));
-
-        switch (accion.trim().toUpperCase(Locale.ROOT)) {
-            case "APROBAR", "A" -> {
-                exigirEncargoLibre(actor.idOrganizacion(), cap.getPropiedad().getId(),
-                        cap.operacion(), cap.getId());
-                validarActivacion(cap);
-                cap.registrarRevision(broker, observacion);
-                transiciones.aplicar(cap, id, Captacion.ACTIVA, actor, "Captacion aprobada por el broker.");
-            }
-            case "OBSERVAR", "O" -> {
-                exigirTexto(observacion, "La observacion de revision");
-                cap.registrarRevision(broker, observacion);
-                transiciones.aplicar(cap, id, Captacion.OBSERVADA, actor, observacion);
-            }
-            case "RECHAZAR", "R" -> {
-                exigirTexto(observacion, "La observacion de revision");
-                cap.registrarRevision(broker, observacion);
-                transiciones.aplicar(cap, id, Captacion.RECHAZADA, actor, observacion);
-            }
-            default -> throw new ReglaNegocioException("Decision no valida.");
-        }
-        // Aviso al agente (§4 F6, punto 3). La severidad la marca el desenlace
-        // —rechazar es ALTA, observar MEDIA, aprobar INFO— y el detalle es
-        // literal: ": " + observacion cuando la hay, "." cuando no.
-        String detalle = observacion == null || observacion.isBlank() ? "." : ": " + observacion;
-        emitirAlerta(Alerta.CAPTACION_REVISADA, severidadRevision(cap.estadoActual()), cap,
-                cap.getAgente() != null ? cap.getAgente().getId() : null,
-                "Tu captacion " + cap.getCodigoCaptacion() + " fue "
-                        + descripcionRevision(cap.estadoActual()) + detalle, actor);
-        return fichaDe(id, actor);
+        return fichaIndividual(acceso.leer(id,actor), actor);
     }
 
     /**
@@ -446,95 +277,82 @@ public class CaptacionServiceImpl implements CaptacionService {
      */
     @Override
     @Transactional
-    public FichaCaptacion reasignar(long id, long idAgenteNuevo, String motivo,
-                                    long idAgenteObservado, Actor actor) {
-        Captacion cap = cargarConAcceso(id, actor);
-        // Hasta E1 aqui solo se exigia que el motivo no viniera vacio: la regla
-        // de longitud minima vivia SOLO en el formulario de Angular, asi que un
-        // POST directo colaba un "ok" en el historial de la captacion.
-        String motivoValidado = PoliticaComercial.exigirMotivoDeReasignacion(motivo);
-        // FRONTERA DE TENANT, y va antes del alcance. `findById` no filtra por
-        // organizacion, asi que un rol de otra corredora entraba aqui y lo unico
-        // que lo paraba despues era que el broker no lo supervisara -- con un
-        // mensaje que hablaba de supervision sobre un agente que no existe en
-        // esta organizacion. Se responde lo mismo que si no existiera en ninguna
-        // parte, como ya hace AutoridadDePropiedad.asignar.
-        DetalleAgente agenteNuevo = agentes.findById(idAgenteNuevo)
-                .filter(a -> Objects.equals(a.getOrganizacionId(), actor.idOrganizacion()))
-                .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado."));
-        if (!alcances.alcanza(actor, idAgenteNuevo)) {
-            throw new ReglaNegocioException("El broker no supervisa al agente responsable de esta operacion.");
-        }
-        DetalleAgente agenteAnterior = cap.getAgente();
-        if (agenteAnterior.getId() == idAgenteNuevo) {
-            throw new ReglaNegocioException("La captacion ya esta asignada a ese agente.");
-        }
-        // D-P0-7 EN TODA REASIGNACION DE AUTORIDAD. Antes esto solo lo exigia el
-        // traspaso de la propiedad, y el encargo -que es la otra autoridad
-        // mutable de P0- se podia entregar a un agente suspendido, de baja o
-        // fuera de la organizacion. Es una pregunta DISTINTA del alcance:
-        // aquella dice si el actor llega hasta ese agente, esta dice si ese
-        // agente esta en condiciones de responder por trabajo comercial hoy.
-        elegibilidad.exigirElegible(actor, idAgenteNuevo);
-        // D-S0-17 fila 6: reasignar lo conservan los DOS roles con alcances
-        // distintos —dentro del equipo es supervision, entre equipos es
-        // organigrama—, asi que el autor ya no es necesariamente un broker.
-        // Buscarlo siempre entre los brokers fallaba con "Broker no encontrado"
-        // en cuanto el actor era un TENANT_ADMIN, cuyo rol operativo es el de
-        // gobierno (V35).
-        DetalleBroker broker = actor.esBroker()
-                ? brokers.findById(actor.idRolOperativo())
-                        .orElseThrow(() -> new ReglaNegocioException("Broker no encontrado."))
-                : null;
+    public ResultadoReasignacion reasignar(long id,DatosReasignacion datos,Actor actor,
+            com.controllocal.service.actuacion.ActuacionesService.ContextoSesion sesion,
+            String claveComando,com.controllocal.service.soporte.Procedencia procedencia) {
+        if(datos==null || datos.idAgenteNuevo()<=0 || datos.idAgenteObservado()<=0)
+            throw new ReglaNegocioException("Debe identificar responsable observado y destino.");
+        String clave=com.controllocal.service.soporte.Idempotencia.exigirClave(claveComando);
+        if(procedencia==null) throw new IllegalArgumentException("Debe conservar la procedencia.");
+        var inicio=acceso.iniciarReasignacion(actor,sesion,id,datos.idAgenteNuevo());
+        String identidad=com.controllocal.service.soporte.Idempotencia.huellaExacta(
+                "BROX-COMANDO\u0000"+actor.idOrganizacion()+"\u0000"+clave);
+        registros.bloquearIdentidad(Long.parseUnsignedLong(identidad.substring(0,16),16));
+        var ids=new java.util.TreeSet<Long>();ids.add(inicio.responsable());ids.add(datos.idAgenteNuevo());
+        for(long rol:ids) agentes.bloquearParaGobierno(actor.idOrganizacion(),rol)
+                .orElseThrow(AccesoNoAutorizadoException::new);
+        Captacion cap=acceso.escribirParaReasignacion(id,actor,inicio);
+        String huella=com.controllocal.service.soporte.Idempotencia.huellaExacta(json.objetoCanonico(
+                Map.of("actor",actor,"encargo",id,"datos",datos)));
+        java.util.Optional<com.controllocal.domain.auditoria.ComandoIdempotente> previo;
+        try {previo=comandos.buscar(actor,clave,"REASIGNAR_ENCARGO",huella);}
+        catch(ReglaNegocioException distinta) {throw new ConflictoException("La clave identifica otra entrada.");}
+        if(previo.isPresent()) return resultadoReasignacion(previo.get().getResultado());
+        reglasResponsable.exigirCambioOperativo(cap);
+        String motivo=PoliticaComercial.exigirMotivoDeReasignacion(datos.motivo());
+        if(cap.getVersion()!=datos.versionEsperada() || cap.getAgente().getId()!=datos.idAgenteObservado())
+            throw new ConflictoException("El Encargo cambió; su responsable actual es "+cap.getAgente().getId()
+                    +". La reasignación no se reinterpreta sobre ese responsable; vuelve a revisar.");
+        if(datos.idAgenteObservado()==datos.idAgenteNuevo())
+            throw new ReglaNegocioException("El destino ya es responsable del Encargo.");
+        if(!alcances.alcanzaParaGobiernoDeReasignacion(actor,datos.idAgenteNuevo()))
+            throw new AccesoNoAutorizadoException();
+        elegibilidad.exigirElegible(actor,datos.idAgenteNuevo());
+        DetalleAgente anterior=cap.getAgente();
+        DetalleAgente nuevo=agentes.findById(datos.idAgenteNuevo())
+                .filter(a2->Objects.equals(a2.getOrganizacionId(),actor.idOrganizacion()))
+                .orElseThrow(AccesoNoAutorizadoException::new);
+        if(captaciones.cambiarAgenteSi(actor.idOrganizacion(),id,datos.idAgenteObservado(),
+                datos.idAgenteNuevo(),datos.versionEsperada())!=1)
+            throw new ConflictoException("La reasignación ya no corresponde a la versión observada.");
+        entidades.refresh(cap);
+        ReasignacionCaptacion r=new ReasignacionCaptacion();r.setOrganizacionId(actor.idOrganizacion());
+        r.setCaptacion(cap);r.setAgenteAnterior(anterior);r.setAgenteNuevo(nuevo);
+        r.setBroker(actor.esBroker()?brokers.findById(actor.idRolOperativo()).orElseThrow(AccesoNoAutorizadoException::new):null);
+        r.setIdPersonaActor(actor.idPersona());r.setTipoRolActor(actor.rolEfectivo());r.setMotivo(motivo);
+        reasignaciones.saveAndFlush(r);
+        var evento=procedencia.sellar(com.controllocal.domain.auditoria.EventoDominio.de(actor.idOrganizacion(),
+                "ENCARGO_REASIGNADO","CAPTACION",id,actor.idRolOperativo(),procedencia.canal()))
+                .con(json.objeto(com.controllocal.service.soporte.AvisoComercialBroker.con(Map.of("reasignacion",r.getId(),"anterior",anterior.getId(),"nuevo",nuevo.getId()),
+                    new com.controllocal.service.soporte.AvisoComercialBroker.Marca("NB-13","ENCARGO",id,cap.getVersion(),List.of("RESPONSABLE")))));
+        eventos.save(evento);
+        cambiosComerciales.publishEvent(new com.controllocal.service.soporte.CambioDeOfertaComercial(
+                com.controllocal.service.soporte.CambioDeOfertaComercial.Recurso.ENCARGO,id,actor,evento));
+        var resultado=new ResultadoReasignacion(id,cap.getCodigoCaptacion(),cap.estadoTipado().name(),
+                anterior.getId(),nuevo.getId(),r.getId(),cap.getVersion());
+        Map<String,Object> snapshot=Map.of("id",id,"codigoCaptacion",resultado.codigoCaptacion(),
+                "estado",resultado.estado(),"idAgenteAnterior",anterior.getId(),"idAgente",nuevo.getId(),
+                "idReasignacion",r.getId(),"version",cap.getVersion());
+        comandos.registrar(actor,clave,"REASIGNAR_ENCARGO",huella,"CAPTACION",id,procedencia,
+                json.objetoCanonico(Map.of("version",1,"resultado",snapshot,"huellaResultado",
+                        com.controllocal.service.soporte.Idempotencia.huellaExacta(json.objetoCanonico(snapshot)))));
+        return resultado;
+    }
 
-        // (a) La precondicion EN MEMORIA. No resuelve la carrera -- para eso
-        //     esta el CAS de abajo-- y no esta aqui por eso: esta para cortar el
-        //     comando obsoleto ANTES de tocar la base y para poder decir quien
-        //     lleva HOY el encargo, que es lo unico que permite volver a decidir.
-        if (agenteAnterior.getId() != idAgenteObservado) {
-            throw new ConflictoException(
-                    "El agente de este encargo cambio desde que se miro: hoy lo lleva "
-                            + agenteAnterior.getId() + ". No se ha hecho nada. Vuelve a cargar la "
-                            + "lista y decide sobre el agente actual: esta reasignacion NO se "
-                            + "reinterpreta sobre un estado que no es el que miraste.");
-        }
-
-        // (b) Y el COMPARE-AND-SET, que es lo que resuelve la carrera real. Es
-        //     ademas la UNICA escritura de id_rol_agente en un UPDATE: la
-        //     asociacion esta mapeada `updatable = false`, asi que ningun flush
-        //     de entidad gestionada puede mover la columna por su cuenta.
-        if (captaciones.cambiarAgenteSi(actor.idOrganizacion(), cap.getId(),
-                idAgenteObservado, idAgenteNuevo) == 0) {
-            throw new ConflictoException(
-                    "El agente de este encargo cambio mientras se ejecutaba esta reasignacion, "
-                            + "asi que no se ha hecho nada. Vuelve a cargar la lista y decide "
-                            + "sobre el agente actual: esta reasignacion NO se reinterpreta "
-                            + "sobre un estado que no es el que miraste.");
-        }
-
-        // (c) Y solo entonces la instancia en memoria, para que el rastro y la
-        //     ficha devuelta lean el MISMO valor que acaba de quedar en la fila.
-        //     Si esto fuera antes del CAS, un rechazo dejaria la entidad
-        //     gestionada diciendo una cosa y la base otra.
-        cap.setAgente(agenteNuevo);
-        captaciones.save(cap);
-
-        // Evento de actor (no transicion de estado): cambia el responsable y se
-        // conserva en la tabla-evento para el timeline (Doc 5 §7).
-        ReasignacionCaptacion evento = new ReasignacionCaptacion();
-        evento.setOrganizacionId(cap.getOrganizacionId());
-        evento.setCaptacion(cap);
-        // El predecesor es EL OBSERVADO -- que despues de (a) y (b) es
-        // exactamente el mismo valor que tenia la fila. El rastro dice de donde
-        // salio la reasignacion que de verdad ocurrio.
-        evento.setAgenteAnterior(agenteAnterior);
-        evento.setAgenteNuevo(agenteNuevo);
-        evento.setBroker(broker);
-        evento.setIdPersonaActor(actor.idPersona());
-        evento.setTipoRolActor(actor.rolEfectivo());
-        evento.setMotivo(motivoValidado);
-        reasignaciones.save(evento);
-        return fichaDe(id, actor);
+    private ResultadoReasignacion resultadoReasignacion(String guardado) {
+        var contenedor=json.comoMapa(guardado);
+        if(!(contenedor.get("resultado") instanceof Map<?,?> resultado))
+            throw new IllegalStateException("Falta el resultado durable de reasignación.");
+        Map<String,Object> mapa=new java.util.TreeMap<>();resultado.forEach((k,v)->mapa.put((String)k,v));
+        if(!Objects.equals(contenedor.get("huellaResultado"),com.controllocal.service.soporte.Idempotencia.huellaExacta(json.objetoCanonico(mapa))))
+            throw new IllegalStateException("El resultado de reasignación no conserva su huella.");
+        return new ResultadoReasignacion(numero(mapa,"id"),(String)mapa.get("codigoCaptacion"),
+                (String)mapa.get("estado"),numero(mapa,"idAgenteAnterior"),numero(mapa,"idAgente"),
+                numero(mapa,"idReasignacion"),numero(mapa,"version"));
+    }
+    private static long numero(Map<String,Object> mapa,String clave) {
+        if(!(mapa.get(clave) instanceof Number n)) throw new IllegalStateException("Resultado durable ilegible.");
+        return n.longValue();
     }
 
     /**
@@ -564,14 +382,8 @@ public class CaptacionServiceImpl implements CaptacionService {
     @Transactional(readOnly = true)
     public Pagina<CandidatoAgente> candidatosAReasignacion(long id, String texto, int pagina,
                                                            int tamano, Actor actor) {
-        Captacion cap = cargarConAcceso(id, actor);
-        if (!puedeReasignar(actor, cap)) {
-            throw new AccesoNoAutorizadoException(
-                    "No puedes cambiar quien lleva este encargo, asi que tampoco hay destinos que "
-                            + "ofrecerte. Es el mismo motivo por el que el comando te lo negaria: "
-                            + "o no es tu banda, o lo lleva hoy un agente al que no supervisas.");
-        }
-        Page<DetalleAgente> page = elegibilidad.candidatosExcluyendo(actor, cap.getAgente().getId(),
+        var cap = consultarReasignable(id, actor);
+        Page<DetalleAgente> page = elegibilidad.candidatosExcluyendo(actor, cap.idAgente(),
                 texto, PageRequest.of(Math.max(0, pagina - 1), tamano(tamano)));
         return new Pagina<>(page.getContent().stream()
                 .map(a -> new CandidatoAgente(a.getId(), nombreDe(a), a.getCodigoAgente(),
@@ -583,73 +395,6 @@ public class CaptacionServiceImpl implements CaptacionService {
         PersonaRol rol = agente.getRol();
         return rol == null || rol.getPersona() == null
                 ? null : rol.getPersona().getNombresORazonSocial();
-    }
-
-    @Override
-    @Transactional
-    public FichaCaptacion cerrar(long id, String motivo, Actor actor) {
-        Captacion cap = cargarConAcceso(id, actor);
-        // Misma razon que en `decidir` (D-S0-17 fila 7): cerrar un encargo tiene
-        // efecto sobre disponibilidad y cartera, es operacion comercial y el
-        // gobierno del tenant no la hereda. `cerrarPorContrato` NO lleva esta
-        // guarda a proposito: es la cascada del contrato, no una decision de
-        // banda, y exigirla ahi dejaria contratos que no se pueden firmar.
-        exigirBandaComercial(actor, "cerrar un encargo");
-        exigirTexto(motivo, "El motivo de cierre");
-        if (!Captacion.ACTIVA.equals(cap.estadoActual())) {
-            throw new ReglaNegocioException("La captacion debe estar ACTIVA.");
-        }
-        cap.cerrar(LocalDate.now(), "M", motivo);
-        transiciones.aplicar(cap, id, Captacion.CERRADA, actor, motivo);
-        // Aviso al agente (§4 F6, punto 4).
-        emitirAlerta(Alerta.CAPTACION_CERRADA, Alerta.MEDIA, cap,
-                cap.getAgente() != null ? cap.getAgente().getId() : null,
-                "Tu captacion " + cap.getCodigoCaptacion() + " fue cerrada: " + motivo, actor);
-        return fichaDe(id, actor);
-    }
-
-    @Override
-    @Transactional
-    public FichaCaptacion cerrarPorContrato(long id, LocalDate fecha, Actor actor, String detalle) {
-        Captacion cap = cargarConAcceso(id, actor);
-        if (!Captacion.ACTIVA.equals(cap.estadoActual())) {
-            throw new ReglaNegocioException("La captacion debe estar ACTIVA.");
-        }
-        LocalDate efectiva = fecha == null ? LocalDate.now() : fecha;
-        cap.cerrar(efectiva, "A", detalle);
-        transiciones.aplicar(cap, id, Captacion.CERRADA, actor, detalle, efectiva);
-        return fichaDe(id, actor);
-    }
-
-    /**
-     * Las tres emisiones de esta vertical. Se salta en silencio si falta la
-     * captacion o el agente: un aviso no debe tumbar la operacion principal
-     * (mismo criterio que la v1).
-     */
-    private void emitirAlerta(String tipo, String severidad, Captacion cap, Long idAgente,
-                              String mensaje, Actor actor) {
-        if (cap == null || cap.getId() == null || idAgente == null) {
-            return;
-        }
-        alertas.emitir(new AlertaService.DatosAlerta(tipo, severidad, "CAPTACION", cap.getId(),
-                idAgente, mensaje), actor);
-    }
-
-    private static String severidadRevision(String estado) {
-        return switch (estado) {
-            case Captacion.RECHAZADA -> Alerta.ALTA;
-            case Captacion.OBSERVADA -> Alerta.MEDIA;
-            default -> Alerta.INFO;
-        };
-    }
-
-    private static String descripcionRevision(String estado) {
-        return switch (estado) {
-            case Captacion.ACTIVA -> "aprobada";
-            case Captacion.OBSERVADA -> "observada";
-            case Captacion.RECHAZADA -> "rechazada";
-            default -> "revisada";
-        };
     }
 
     /**
@@ -684,7 +429,7 @@ public class CaptacionServiceImpl implements CaptacionService {
     @Transactional(readOnly = true)
     public List<FichaReasignacion> listarReasignaciones(Actor actor) {
         exigirBandaQueGobiernaElEncargo(actor);
-        Alcance alcance = alcances.de(actor);
+        Alcance alcance = alcances.paraGobiernoDeReasignacion(actor);
         if (alcance.vacio()) {
             return List.of();
         }
@@ -699,51 +444,7 @@ public class CaptacionServiceImpl implements CaptacionService {
     // ------------------------------------------------------------------
 
     private Captacion cargarConAcceso(long id, Actor actor) {
-        Captacion cap = captaciones.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Captacion"));
-        if (!alcances.alcanza(actor, cap.getAgente().getId())) {
-            throw new AccesoNoAutorizadoException();
-        }
-        return cap;
-    }
-
-    /**
-     * <b>Lo mismo, con la fila TOMADA</b> (F2.10).
-     *
-     * <p>Mismo orden de guardas —tenant (404) primero, alcance despues—, misma
-     * excepcion y mismos mensajes: lo unico que cambia es que la fila queda
-     * bloqueada, de modo que el alcance y el {@code exigirEdicionDelEncargo} que
-     * viene detras deciden sobre el agente que <b>seguira siendo verdad</b>
-     * cuando la transaccion escriba. Sin esto, entre la comprobacion y el flush
-     * cabia una reasignacion entera y la edicion del saliente aterrizaba sobre
-     * un encargo ajeno.
-     *
-     * <p><b>Tiene que ser la PRIMERA carga de esa fila en la transaccion</b>, y
-     * por eso es un metodo aparte y no una bandera de {@code cargarConAcceso}:
-     * Hibernate devuelve sin refrescar la instancia que ya este en el contexto,
-     * asi que bloquear despues de haber cargado tomaria el candado y decidiria
-     * sobre el valor viejo.
-     *
-     * <p>Lo llama <b>solo</b> {@code actualizar}. {@code decidir},
-     * {@code cerrar}, {@code cerrarPorContrato} y {@code reasignar} siguen con
-     * {@link #cargarConAcceso}: ninguno escribe hechos del trato bajo la
-     * autoridad del agente —los tres primeros son gobierno del BROKER sobre el
-     * ciclo del encargo y el cuarto ya resuelve su carrera con el
-     * compare-and-set—, y meterles un candado cambiaria el orden de bloqueos de
-     * casos que hoy no lo necesitan.
-     */
-    private Captacion cargarConAccesoParaEscribir(long id, Actor actor) {
-        Captacion cap = captaciones.bloquearParaEscritura(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Captacion"));
-        if (!alcances.alcanza(actor, cap.getAgente().getId())) {
-            throw new AccesoNoAutorizadoException();
-        }
-        return cap;
-    }
-
-    private FichaCaptacion fichaDe(long id, Actor actor) {
-        return fichaIndividual(captaciones.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Captacion")), actor);
+        return acceso.leer(id,actor);
     }
 
     /**
@@ -763,8 +464,10 @@ public class CaptacionServiceImpl implements CaptacionService {
     }
 
     private String portadaDe(Captacion cap) {
-        return fotos.findByIdPropiedadOrderByOrdenAscIdAsc(cap.getPropiedad().getId()).stream()
-                .findFirst().map(FotoPropiedad::getClave).orElse(null);
+        // Sólo la referencia Core llega al cliente; el proveedor permanece detrás de A04.
+        return fotos.deLaPropiedad(cap.getOrganizacionId(), cap.getPropiedad().getId()).stream()
+                .findFirst().map(f -> Objects.requireNonNull(f.getArchivoRef(),
+                        "La foto carece de referencia de archivo").toString()).orElse(null);
     }
 
     /**
@@ -790,16 +493,8 @@ public class CaptacionServiceImpl implements CaptacionService {
      * que decide si se le ofrecen candidatos.
      */
     private CaptacionService.Capacidades capacidadesDe(Actor actor, Captacion cap) {
-        boolean editable = cap.editable();
-        boolean puedeEditar = editable && autoridadDelEncargo(actor, cap);
-        boolean brokerConAlcance = actor.esBroker()
-                && cap.getAgente() != null
-                && alcances.alcanza(actor, cap.getAgente().getId());
-        return new CaptacionService.Capacidades(
-                puedeEditar,
-                brokerConAlcance && editable,
-                brokerConAlcance && Captacion.ACTIVA.equals(cap.estadoActual()),
-                puedeReasignar(actor, cap));
+        // Las tres mutaciones antiguas se retiraron. Los casos versionados publican sus propias facultades.
+        return new CaptacionService.Capacidades(false,false,false,puedeReasignar(actor,cap));
     }
 
     /**
@@ -819,18 +514,8 @@ public class CaptacionServiceImpl implements CaptacionService {
         if (cap.getAgente() == null) {
             return false;
         }
-        return (actor.esBroker() && alcances.alcanza(actor, cap.getAgente().getId()))
-                || actor.esTenantAdmin();
-    }
-
-    /** Se pregunta con el mismo metodo que despues deniega. */
-    private boolean autoridadDelEncargo(Actor actor, Captacion cap) {
-        try {
-            autoridad.exigirEdicionDelEncargo(actor, cap);
-            return true;
-        } catch (AccesoNoAutorizadoException denegado) {
-            return false;
-        }
+        return ((actor.esBroker() && alcances.alcanza(actor, cap.getAgente().getId()))
+                || actor.esTenantAdmin()) && reglasResponsable.permiteCambioOperativo(cap);
     }
 
     private Pagina<FichaCaptacion> paginaConPortada(Page<Captacion> page) {
@@ -886,28 +571,12 @@ public class CaptacionServiceImpl implements CaptacionService {
      * lleva, y no hereda por eso el motivo con el que se lo quitaron a otro.
      */
     private static void exigirBandaQueGobiernaElEncargo(Actor actor) {
-        if (actor.esAgente()) {
+        if (!actor.esBroker() && !actor.esTenantAdmin()) {
             throw new AccesoNoAutorizadoException(
                     "El historial de reasignaciones es rastro de gobierno del encargo: lo leen el "
                             + "BROKER que supervisa hoy a quien lo lleva y el gobierno del tenant. "
                             + "Quien opera un encargo sabe que lo lleva, y eso no le concede los "
                             + "motivos con los que se movio la cartera.");
-        }
-    }
-
-    private static void exigirBandaComercial(Actor actor, String queSeIntenta) {
-        if (!actor.esBroker()) {
-            throw new AccesoNoAutorizadoException(
-                    "Para " + queSeIntenta + " hace falta la banda BROKER: es el juicio "
-                            + "profesional sobre la relacion comercial, y el gobierno de la "
-                            + "organizacion no lo hereda. Quien gobierne y ademas supervise lo "
-                            + "hace actuando como broker.");
-        }
-    }
-
-    private static void exigirTexto(String valor, String campo) {
-        if (valor == null || valor.isBlank()) {
-            throw new ReglaNegocioException(campo + " es obligatorio.");
         }
     }
 
@@ -956,151 +625,6 @@ public class CaptacionServiceImpl implements CaptacionService {
                 capacidades);
     }
 
-    private static void validarEncargo(LocalDate inicio, LocalDate fin) {
-        if (inicio == null || fin == null) {
-            throw new ReglaNegocioException("El inicio y fin del encargo son obligatorios.");
-        }
-        if (!fin.isAfter(inicio)) {
-            throw new ReglaNegocioException("La fecha final del encargo debe ser posterior a la inicial.");
-        }
-    }
-
-    /**
-     * <b>La operacion de un encargo no se edita</b> (V76).
-     *
-     * <p>Es su identidad, no uno de sus campos: cambiarla convierte el encargo
-     * de venta de un inmueble en el encargo de alquiler del mismo inmueble
-     * <b>conservando su historico</b>, con lo que los 350 000 USD que se
-     * pidieron por venderlo pasan a leerse como rentas mensuales. Es la misma
-     * clase de reinterpretacion que el Corte 0C cerro por el otro lado: dos
-     * alquileres sucesivos de la misma propiedad son dos episodios.
-     *
-     * <p>Ademas era un error tardio y feo: si el inmueble ya tenia un encargo
-     * vivo de la operacion de destino, esto salia como un 409 de indice unico
-     * -- y si no lo tenia, salia bien y corrompia la serie en silencio.
-     */
-    private static void exigirMismaOperacion(Captacion cap, DatosCaptacion datos) {
-        String pedida = textoO(datos.tipoOperacion(), datos.motivoOperacion(), null);
-        if (pedida == null || pedida.isBlank()) {
-            return;
-        }
-        String actual = cap.getMotivoOperacion();
-        if (actual != null && !actual.equals(OperacionDelEncargo.deTexto(pedida).codigo())) {
-            throw new ReglaNegocioException(
-                    "Este encargo es de " + OperacionInmobiliaria.deCodigo(actual).name().toLowerCase(Locale.ROOT)
-                            + " y su operacion no se edita: es lo que decide si su importe es una "
-                            + "renta o un precio de venta, y cambiarla reinterpretaria todo su "
-                            + "historico. Cierra este encargo y abre el de la otra operacion.");
-        }
-    }
-
-    private static void validarActivacion(Captacion cap) {
-        validarEncargo(cap.getFechaInicioVigencia(), cap.getFechaFinVigencia());
-        if (cap.getCondicionEconomica() == null || cap.getPropiedad() == null || cap.getAgente() == null
-                || cap.getExclusividad() == null) {
-            throw new ReglaNegocioException(
-                    "La captacion no puede activarse sin condicion economica, moneda, exclusividad, propietario, agente y local.");
-        }
-    }
-
-    private static CondicionEconomicaCaptacion condicion(DatosCaptacion datos, Propiedad propiedad,
-                                                           long organizacionId) {
-        CondicionEconomicaCaptacion ce = new CondicionEconomicaCaptacion();
-        ce.setOrganizacionId(organizacionId);
-        // Sin ultimo recurso: si el cuerpo no declara la operacion, no se supone
-        // alquiler. `deTexto` da el mismo mensaje que el dominio pero como
-        // ReglaNegocioException, que es lo que la web convierte en 400: un
-        // IllegalArgumentException escapando de aqui seria un 500 por un dato
-        // que el cliente escribio mal.
-        String operacion = OperacionDelEncargo
-                .deTexto(textoO(datos.tipoOperacion(), datos.motivoOperacion(), null)).codigo();
-        BigDecimal referencia = datos.importeReferencia() != null
-                ? datos.importeReferencia() : propiedad.getPrecioReferencial();
-        String monedaReferencia = CondicionesEconomicas.moneda(
-                textoO(datos.monedaReferencia(), propiedad.getMonedaReferencial(), null),
-                "de referencia");
-        String tipo = textoO(datos.tipoComision(),
-                datos.comisionPactada() == null ? null : CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES,
-                null);
-        // El defecto de la base lo dicta la OPERACION (V76): una venta no tiene
-        // renta mensual sobre la que calcular nada.
-        String base = textoO(datos.baseCalculo(), CondicionesEconomicas.basePorDefecto(operacion), null);
-        BigDecimal valor = datos.valorComision();
-        if (valor == null && datos.comisionPactada() != null) {
-            valor = CondicionesEconomicas.comisionPactada(datos.comisionPactada())
-                    .divide(BigDecimal.valueOf(100));
-        }
-        String monedaComision = textoO(datos.monedaComision(), monedaReferencia, null);
-        String igv = textoO(datos.tratamientoIgv(), CondicionEconomicaCaptacion.IGV_NO_APLICA, null);
-        if (!List.of("A", "V").contains(operacion) || referencia == null || referencia.signum() < 0
-                || !List.of("E", "P", "F").contains(tipo) || valor == null || valor.signum() < 0
-                || !List.of("I", "A", "N").contains(igv)) {
-            throw new ReglaNegocioException("La condicion economica de la captacion es invalida.");
-        }
-        boolean combinacionValida = ("E".equals(tipo) && "R".equals(base))
-                || ("P".equals(tipo) && List.of("R", "V").contains(base))
-                || ("F".equals(tipo) && "N".equals(base));
-        if (!combinacionValida) {
-            throw new ReglaNegocioException("La combinacion de tipo y base de comision es invalida.");
-        }
-        CondicionesEconomicas.exigirBaseCoherente(operacion, tipo, base);
-        if (!"F".equals(tipo) && !monedaReferencia.equals(monedaComision)) {
-            throw new ReglaNegocioException("La comision derivada debe usar la moneda de su base.");
-        }
-        if (valor.signum() == 0 && (datos.motivoSinComision() == null || datos.motivoSinComision().isBlank())) {
-            throw new ReglaNegocioException("Una captacion sin comision requiere un motivo expreso.");
-        }
-        ce.setTipoOperacion(operacion);
-        ce.setImporteReferencia(referencia);
-        ce.setMonedaReferencia(monedaReferencia);
-        ce.setTipoComision(tipo);
-        ce.setBaseCalculo(base);
-        ce.setValorComision(valor);
-        ce.setMonedaComision(CondicionesEconomicas.moneda(monedaComision, "de la comision"));
-        ce.setTratamientoIgv(igv);
-        ce.setMotivoSinComision(datos.motivoSinComision() == null ? null : datos.motivoSinComision().trim());
-        return ce;
-    }
-
-    /**
-     * <b>Un encargo vivo por (propiedad, OPERACION)</b>, no uno por propiedad.
-     *
-     * <p>La regla de la v1 era "una propiedad, una captacion activa", y tenia
-     * sentido cuando una propiedad solo podia alquilarse. Con venta y alquiler
-     * en el modelo, esa regla prohibe justamente el caso que el modelo
-     * universal existe para admitir: la misma casa en venta y en alquiler a la
-     * vez, cada una con su precio y su historico (D-E4-1).
-     *
-     * <p>Lo que sigue prohibido — y ahora tambien en estado PENDIENTE y
-     * OBSERVADA, no solo ACTIVA — es un segundo encargo de la MISMA operacion.
-     * Es la invariante que impone {@code uq_captacion_viva_por_operacion}
-     * (V50); esto solo la anticipa con un mensaje que se entiende.
-     *
-     * @param idExcluir el encargo que se esta aprobando, para que no se
-     *                  detecte a si mismo
-     */
-    private void exigirEncargoLibre(long idOrganizacion, Long idPropiedad,
-                                    OperacionInmobiliaria operacion, Long idExcluir) {
-        if (idPropiedad == null || operacion == null) {
-            return;
-        }
-        captaciones.encargoVivoDe(idOrganizacion, idPropiedad, operacion.codigo()).stream()
-                .filter(otro -> !otro.getId().equals(idExcluir))
-                .findFirst()
-                .ifPresent(otro -> {
-                    throw new ReglaNegocioException(
-                            "Esta propiedad ya tiene un encargo de " + operacion.name()
-                                    + " vivo (" + otro.getCodigoCaptacion() + "). Cierralo antes de "
-                                    + "abrir otro. Un encargo de la OTRA operacion si es posible.");
-                });
-    }
-
-    private static String textoO(String primero, String segundo, String tercero) {
-        if (primero != null && !primero.isBlank()) return primero.trim().toUpperCase(Locale.ROOT);
-        if (segundo != null && !segundo.isBlank()) return segundo.trim().toUpperCase(Locale.ROOT);
-        return tercero;
-    }
-
     private static FichaReasignacion fichaReasignacion(ReasignacionCaptacion r) {
         Captacion cap = r.getCaptacion();
         Propiedad prop = cap != null ? cap.getPropiedad() : null;
@@ -1132,4 +656,8 @@ public class CaptacionServiceImpl implements CaptacionService {
         }
         return rol.getPersona().getNombresORazonSocial();
     }
+    private static String estadoPublico(String codigo) {
+        return com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion.desde(codigo).name();
+    }
 }
+

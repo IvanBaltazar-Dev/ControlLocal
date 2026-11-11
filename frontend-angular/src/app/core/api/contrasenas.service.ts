@@ -3,20 +3,6 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL } from './api.config';
 
-/** Respuesta de una invitación emitida por gobierno. El token viaja **una sola vez**. */
-export interface InvitacionEmitida {
-  token: string;
-  expiraEn: string;
-  entregadoAlTitular: boolean;
-}
-
-/** Contraseña temporal generada por el sistema. También de una sola vez. */
-export interface ContrasenaTemporalEmitida {
-  usuario: string;
-  contrasenaTemporal: string;
-  debeCambiarla: boolean;
-}
-
 /**
  * Contraseñas y recuperación de acceso (Bloque 4, Plan S0 §4.2–§4.5).
  *
@@ -35,7 +21,7 @@ export class ContrasenasService {
    */
   async cambiar(contrasenaActual: string, contrasenaNueva: string): Promise<void> {
     await firstValueFrom(
-      this.http.post<void>(`${API_BASE_URL}/perfil/contrasena`, {
+      this.http.post<void>(`${API_BASE_URL}/cuenta/contrasena`, {
         contrasenaActual,
         contrasenaNueva,
       }),
@@ -47,13 +33,13 @@ export class ContrasenasService {
    * la pantalla nunca puede decir si el usuario existe, porque eso convertiría
    * el formulario en un padrón.
    */
-  async solicitarRecuperacion(usuario: string): Promise<void> {
+  async solicitarRecuperacion(correo: string): Promise<void> {
     await firstValueFrom(
-      this.http.post<void>(`${API_BASE_URL}/auth/recuperacion`, { usuario }),
+      this.http.post<void>(`${API_BASE_URL}/auth/recuperacion`, { correo }),
     );
   }
 
-  /** Canje del token de un solo uso. Sirve para recuperación y para invitación. */
+  /** Canje del token de un solo uso. Corresponde a recuperación de la cuenta personal. */
   async canjear(token: string, contrasenaNueva: string): Promise<void> {
     await firstValueFrom(
       this.http.post<void>(`${API_BASE_URL}/auth/recuperacion/canje`, {
@@ -63,26 +49,4 @@ export class ContrasenasService {
     );
   }
 
-  /** Gobierno del tenant (solo ADMIN): emite invitación para otra persona. */
-  async emitirInvitacion(idPersona: number, motivo: string): Promise<InvitacionEmitida> {
-    return firstValueFrom(
-      this.http.post<InvitacionEmitida>(
-        `${API_BASE_URL}/accesos/${idPersona}/invitacion`,
-        { motivo },
-      ),
-    );
-  }
-
-  /** Gobierno del tenant (solo ADMIN): genera contraseña temporal para otra persona. */
-  async emitirContrasenaTemporal(
-    idPersona: number,
-    motivo: string,
-  ): Promise<ContrasenaTemporalEmitida> {
-    return firstValueFrom(
-      this.http.post<ContrasenaTemporalEmitida>(
-        `${API_BASE_URL}/accesos/${idPersona}/contrasena-temporal`,
-        { motivo },
-      ),
-    );
-  }
 }

@@ -32,13 +32,6 @@ import java.time.OffsetDateTime;
 @Table(name = "prospeccion")
 public class Prospeccion extends EntidadDeOrganizacion implements Transicionable {
 
-    // Aqui vivia una QUINTA copia del plazo de recontacto, `DIAS_RECONTACTO = 7`,
-    // que nadie leia: publica, con javadoc, y muerta. El inventario de E1 no la
-    // encontro —solo busco las que se usaban— y la destapo el gate
-    // PoliticaUnicaTest. Es la peor clase de copia: la que alguien reutiliza de
-    // buena fe seis meses despues porque parece la definicion oficial. El plazo
-    // lo fija PoliticaComercial.RECONTACTO, en la capa de servicio.
-
     public static final String PROSPECTO = Codigos.Prospeccion.PROSPECTO;
     public static final String CONTACTADO = Codigos.Prospeccion.CONTACTADO;
     public static final String REUNION = Codigos.Prospeccion.REUNION;
@@ -73,6 +66,9 @@ public class Prospeccion extends EntidadDeOrganizacion implements Transicionable
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_prospeccion")
     private Long id;
+
+    @jakarta.persistence.Version @Column(name="version",nullable=false) private long version;
+    public long getVersion(){return version;}
 
     @Column(name = "codigo_prospeccion", nullable = false, length = 20)
     private String codigoProspeccion;
@@ -133,6 +129,8 @@ public class Prospeccion extends EntidadDeOrganizacion implements Transicionable
         return estado;
     }
 
+    @Override public Long responsableDelHecho() { return agente == null ? null : agente.getId(); }
+
     @Override
     public void transicionarA(String nuevoEstado) {
         this.estado = EstadoProspeccion.desde(nuevoEstado).codigo();
@@ -148,18 +146,16 @@ public class Prospeccion extends EntidadDeOrganizacion implements Transicionable
     // Efectos laterales de los hitos (semantica calcada del modelo v1).
     // ------------------------------------------------------------------
 
-    /** El primer contacto queda fijo; cada contacto reinicia el reloj de recontacto. */
+    /** Hito explícito de la prospección; la cadencia se deriva sólo de las comunicaciones R27. */
     public void marcarContacto(LocalDate hoy) {
         if (fechaContacto == null) {
             fechaContacto = hoy;
         }
-        fechaRecontacto = hoy;
         touch();
     }
 
     public void marcarReunion(LocalDate hoy) {
         fechaReunion = hoy;
-        fechaRecontacto = hoy;
         touch();
     }
 
@@ -167,12 +163,6 @@ public class Prospeccion extends EntidadDeOrganizacion implements Transicionable
     public void marcarPropuesta(LocalDate hoy) {
         fechaPropuesta = hoy;
         resultadoPropuesta = RESULTADO_PENDIENTE;
-        fechaRecontacto = hoy;
-        touch();
-    }
-
-    public void marcarSeguimiento(LocalDate hoy) {
-        fechaRecontacto = hoy;
         touch();
     }
 

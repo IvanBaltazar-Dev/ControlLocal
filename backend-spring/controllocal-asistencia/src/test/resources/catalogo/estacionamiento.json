@@ -1,0 +1,377 @@
+{
+  "intencion": "REGISTRAR_PROPIEDAD",
+  "tipoPropiedad": "ESTACIONAMIENTO",
+  "operaciones": [],
+  "comunes": [
+    {
+      "clave": "titulares",
+      "rotulo": "Titulares",
+      "seccion": "COMUN",
+      "control": "TITULARES",
+      "tipoDato": "TITULARES",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Busca a la persona antes de crearla. Con varios titulares, las cuotas tienen que sumar 100 %.",
+      "orden": 0
+    },
+    {
+      "clave": "direccion",
+      "rotulo": "Dirección",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 1
+    },
+    {
+      "clave": "distrito",
+      "rotulo": "Distrito",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "Ancon",
+          "rotulo": "Ancon"
+        },
+        {
+          "valor": "Ate",
+          "rotulo": "Ate"
+        },
+        {
+          "valor": "Barranco",
+          "rotulo": "Barranco"
+        },
+        {
+          "valor": "Brena",
+          "rotulo": "Brena"
+        },
+        {
+          "valor": "Carabayllo",
+          "rotulo": "Carabayllo"
+        },
+        {
+          "valor": "Chaclacayo",
+          "rotulo": "Chaclacayo"
+        },
+        {
+          "valor": "Chorrillos",
+          "rotulo": "Chorrillos"
+        },
+        {
+          "valor": "Cieneguilla",
+          "rotulo": "Cieneguilla"
+        },
+        {
+          "valor": "Comas",
+          "rotulo": "Comas"
+        },
+        {
+          "valor": "El Agustino",
+          "rotulo": "El Agustino"
+        },
+        {
+          "valor": "Independencia",
+          "rotulo": "Independencia"
+        },
+        {
+          "valor": "Jesus Maria",
+          "rotulo": "Jesus Maria"
+        },
+        {
+          "valor": "La Molina",
+          "rotulo": "La Molina"
+        },
+        {
+          "valor": "La Victoria",
+          "rotulo": "La Victoria"
+        },
+        {
+          "valor": "Lima",
+          "rotulo": "Lima"
+        },
+        {
+          "valor": "Lince",
+          "rotulo": "Lince"
+        },
+        {
+          "valor": "Los Olivos",
+          "rotulo": "Los Olivos"
+        },
+        {
+          "valor": "Lurigancho-Chosica",
+          "rotulo": "Lurigancho-Chosica"
+        },
+        {
+          "valor": "Lurin",
+          "rotulo": "Lurin"
+        },
+        {
+          "valor": "Magdalena del Mar",
+          "rotulo": "Magdalena del Mar"
+        },
+        {
+          "valor": "Miraflores",
+          "rotulo": "Miraflores"
+        },
+        {
+          "valor": "Pachacamac",
+          "rotulo": "Pachacamac"
+        },
+        {
+          "valor": "Pucusana",
+          "rotulo": "Pucusana"
+        },
+        {
+          "valor": "Pueblo Libre",
+          "rotulo": "Pueblo Libre"
+        },
+        {
+          "valor": "Puente Piedra",
+          "rotulo": "Puente Piedra"
+        },
+        {
+          "valor": "Punta Hermosa",
+          "rotulo": "Punta Hermosa"
+        },
+        {
+          "valor": "Punta Negra",
+          "rotulo": "Punta Negra"
+        },
+        {
+          "valor": "Rimac",
+          "rotulo": "Rimac"
+        },
+        {
+          "valor": "San Bartolo",
+          "rotulo": "San Bartolo"
+        },
+        {
+          "valor": "San Borja",
+          "rotulo": "San Borja"
+        },
+        {
+          "valor": "San Isidro",
+          "rotulo": "San Isidro"
+        },
+        {
+          "valor": "San Juan de Lurigancho",
+          "rotulo": "San Juan de Lurigancho"
+        },
+        {
+          "valor": "San Juan de Miraflores",
+          "rotulo": "San Juan de Miraflores"
+        },
+        {
+          "valor": "San Luis",
+          "rotulo": "San Luis"
+        },
+        {
+          "valor": "San Martin de Porres",
+          "rotulo": "San Martin de Porres"
+        },
+        {
+          "valor": "San Miguel",
+          "rotulo": "San Miguel"
+        },
+        {
+          "valor": "Santa Anita",
+          "rotulo": "Santa Anita"
+        },
+        {
+          "valor": "Santa Maria del Mar",
+          "rotulo": "Santa Maria del Mar"
+        },
+        {
+          "valor": "Santa Rosa",
+          "rotulo": "Santa Rosa"
+        },
+        {
+          "valor": "Santiago de Surco",
+          "rotulo": "Santiago de Surco"
+        },
+        {
+          "valor": "Surquillo",
+          "rotulo": "Surquillo"
+        },
+        {
+          "valor": "Villa El Salvador",
+          "rotulo": "Villa El Salvador"
+        },
+        {
+          "valor": "Villa Maria del Triunfo",
+          "rotulo": "Villa Maria del Triunfo"
+        }
+      ],
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 2
+    },
+    {
+      "clave": "zonaUrbanizacion",
+      "rotulo": "Zona o urbanización",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 3
+    },
+    {
+      "clave": "referenciaInterna",
+      "rotulo": "Referencia interna",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 4
+    },
+    {
+      "clave": "latitud",
+      "rotulo": "Latitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 5
+    },
+    {
+      "clave": "longitud",
+      "rotulo": "Longitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 6
+    },
+    {
+      "clave": "codigo",
+      "rotulo": "Código interno",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, lo genera BROX.",
+      "orden": 7
+    },
+    {
+      "clave": "descripcion",
+      "rotulo": "Descripción",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 8
+    },
+    {
+      "clave": "uso",
+      "rotulo": "Uso",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "COMERCIAL",
+          "rotulo": "COMERCIAL"
+        },
+        {
+          "valor": "VIVIENDA",
+          "rotulo": "VIVIENDA"
+        },
+        {
+          "valor": "INDUSTRIAL",
+          "rotulo": "INDUSTRIAL"
+        },
+        {
+          "valor": "MIXTO",
+          "rotulo": "MIXTO"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, se deduce del tipo: una casa es vivienda.",
+      "orden": 9
+    }
+  ],
+  "delTipo": [
+    {
+      "clave": "metraje_total",
+      "rotulo": "Metraje total",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 10
+    },
+    {
+      "clave": "antiguedad_anios",
+      "rotulo": "Antigüedad",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "unidad": "años",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 20,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "estacionamientos",
+      "rotulo": "Estacionamientos",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 30,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "estado_ocupacion",
+      "rotulo": "Estado de ocupación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "DESOCUPADO",
+          "rotulo": "Desocupado"
+        },
+        {
+          "valor": "OCUPADO_POR_EL_PROPIETARIO",
+          "rotulo": "Ocupado por el propietario"
+        },
+        {
+          "valor": "OCUPADO_POR_INQUILINO",
+          "rotulo": "Ocupado por inquilino"
+        },
+        {
+          "valor": "OCUPADO_POR_TERCEROS_SIN_TITULO",
+          "rotulo": "Ocupado por terceros sin título"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Quién está dentro del inmueble hoy. No es su disponibilidad comercial: un inmueble disponible para vender puede estar ocupado por su propietario hasta la firma.",
+      "orden": 950
+    }
+  ],
+  "deLaOperacion": []
+}
+

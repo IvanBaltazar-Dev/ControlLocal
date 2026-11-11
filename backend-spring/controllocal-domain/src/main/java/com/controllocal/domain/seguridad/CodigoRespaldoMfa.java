@@ -1,6 +1,6 @@
 package com.controllocal.domain.seguridad;
 
-import com.controllocal.domain.comun.EntidadDeOrganizacion;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -13,11 +13,8 @@ import java.time.OffsetDateTime;
 /**
  * Codigo de respaldo del segundo factor (D-S0-24).
  *
- * <p>Lleva {@code organizacion_id} aunque cuelgue de un factor que ya vive en
- * un tenant: la regla del proyecto es que <b>toda</b> fila privada carga el
- * discriminador, y {@code ArquitecturaTenancyTest} rompe el build si alguna no
- * lo hace. Ahorrarselo en las hijas es como se cuela una consulta que cruza
- * corredoras.
+ * <p>Depende del factor de la cuenta personal global. No pertenece a una
+ * organización ni se consulta mediante permisos de gobierno organizacional.
  *
  * <p>{@code identificador} es <b>publico</b> y no es un secreto: es un indice.
  * Lo que protege el codigo son los 80 bits de {@code hashSecreto}. Su papel es
@@ -26,7 +23,7 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "codigo_respaldo_mfa")
-public class CodigoRespaldoMfa extends EntidadDeOrganizacion {
+public class CodigoRespaldoMfa {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

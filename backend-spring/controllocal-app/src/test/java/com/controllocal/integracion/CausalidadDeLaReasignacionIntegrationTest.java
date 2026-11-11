@@ -2,12 +2,20 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
-import com.controllocal.persistence.repositorio.CaptacionRepository;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.actuacion.ActuacionesService.ContextoSesion;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.CifradoSecretos;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.controllocal.persistence.repositorio.ReasignacionCaptacionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AgenteService;
 import com.controllocal.service.CaptacionService;
-import com.controllocal.service.CaptacionService.FichaCaptacion;
+import com.controllocal.service.CaptacionService.ResultadoReasignacion;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
@@ -108,6 +116,18 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired CaptacionService captaciones;
+    @Autowired EncargoService ciclo;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentasPersonales;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
+    private SesionesComercialesDePrueba sesionesFixture;
+    private synchronized SesionesComercialesDePrueba sesiones() {
+        if(sesionesFixture==null)sesionesFixture=new SesionesComercialesDePrueba(jdbc,contextos,cuentasPersonales,factores,cifrado);
+        return sesionesFixture;
+    }
+    private ContextoSesion sesion(Actor actor){return sesiones().de(actor);}
     @Autowired PropiedadUniversalService propiedades;
     @Autowired AgenteService agentes;
     @Autowired Environment entorno;
@@ -120,13 +140,11 @@ class CausalidadDeLaReasignacionIntegrationTest {
      * necesita romperlos o detenerlos. Un mock permisivo dejaria la suite verde
      * sin escribir nada, que es justo el estado que estas pruebas denuncian.
      *
-     * <p>{@code CaptacionRepository} sirve ademas para el ataque de <b>dirty
-     * checking</b>: su {@code save} es el ultimo punto de {@code actualizar}
-     * anterior al <i>flush</i>, o sea el unico momento en que hay una
-     * transaccion que <b>ya leyo</b> el agente y <b>todavia no ha escrito</b>.
+     * <p>AccesoEncargo permite detener la edición canónica con la fila tomada,
+     * antes del cambio/flush. El rastro se intercepta en su saveAndFlush real.
      */
     @MockitoSpyBean ReasignacionCaptacionRepository rastro;
-    @MockitoSpyBean CaptacionRepository encargos;
+    @MockitoSpyBean com.controllocal.service.encargo.AccesoEncargo accesoEncargo;
 
     private static final String MOTIVO = "Reparto de cartera del trimestre en el equipo";
 
@@ -135,7 +153,8 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
     @AfterEach
     void devolverLosEspias() {
-        Mockito.reset(rastro, encargos);
+        com.controllocal.service.encargo.AccesoEncargo objetivo=org.springframework.test.util.AopTestUtils.getUltimateTargetObject(accesoEncargo);
+        Mockito.reset(rastro,objetivo);
     }
 
     // ==================================================================
@@ -150,18 +169,18 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor c = agenteDelEquipo(2);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
 
         int filas = reasignacionesDe(idEncargo);
 
         // T1 gana: parte de A, que es lo que hay.
-        captaciones.reasignar(idEncargo, b.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien);
+        captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(b.idRolOperativo(), agenteDe(idEncargo));
         assertEquals(filas + 1, reasignacionesDe(idEncargo));
 
         // T2 salio del MISMO A. Llega tarde.
         ConflictoException rechazo = assertThrows(ConflictoException.class,
-                () -> captaciones.reasignar(idEncargo, c.idRolOperativo(), MOTIVO,
-                        a.idRolOperativo(), quien),
+                () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(c.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "dos reasignaciones que parten del mismo agente no pueden entrar las dos: eso es "
                         + "«la ultima escritura gana», y de un estado concreto sale UNA sola "
                         + "transicion legitima");
@@ -180,9 +199,10 @@ class CausalidadDeLaReasignacionIntegrationTest {
                 "y tiene que decir que NO se ha reinterpretado sobre el estado nuevo: "
                         + rechazo.getMessage());
 
+        long versionTrasPrimera=versionDe(idEncargo);
         // CONTROL POSITIVO: el comando no era invalido, estaba desactualizado.
         // Con el estado que hay de verdad, la misma reasignacion entra.
-        captaciones.reasignar(idEncargo, c.idRolOperativo(), MOTIVO, b.idRolOperativo(), quien);
+        captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(c.idRolOperativo(), b.idRolOperativo(), versionTrasPrimera, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(c.idRolOperativo(), agenteDe(idEncargo));
         assertEquals(filas + 2, reasignacionesDe(idEncargo));
         assertEquals(b.idRolOperativo(), anteriorDeLaUltimaFila(idEncargo),
@@ -201,12 +221,12 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor destino = agenteDelEquipo(2);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
 
         int filas = reasignacionesDe(idEncargo);
 
         ConflictoException rechazo = assertThrows(ConflictoException.class,
-                () -> captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO,
-                        otro.idRolOperativo(), quien),
+                () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), otro.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                 "aqui no hay carrera ninguna: el comando declara un estado de partida que no es "
                         + "el que hay. Una reasignacion que no sabe de donde sale no es un hecho");
 
@@ -217,8 +237,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
                         + "sobre el. Decia: " + rechazo.getMessage());
 
         // CONTROL POSITIVO: con el observado correcto, el mismo comando entra.
-        captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO, a.idRolOperativo(),
-                quien);
+        captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(destino.idRolOperativo(), agenteDe(idEncargo));
         assertEquals(filas + 1, reasignacionesDe(idEncargo));
     }
@@ -249,6 +268,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor c = agenteDelEquipo(2);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
 
         int filas = reasignacionesDe(idEncargo);
 
@@ -266,24 +286,22 @@ class CausalidadDeLaReasignacionIntegrationTest {
                         "nadie solto a T1: la prueba no llego a montar la carrera");
             }
             return comoSiempre(invocacion, rastro);
-        }).when(rastro).save(ArgumentMatchers.any());
+        }).when(rastro).saveAndFlush(ArgumentMatchers.any());
 
         ExecutorService hilos = Executors.newFixedThreadPool(2);
         try {
-            Future<FichaCaptacion> t1 = hilos.submit(() -> captaciones.reasignar(idEncargo,
-                    b.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien));
+            Future<ResultadoReasignacion> t1 = hilos.submit(() -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             assertTrue(enElCas.await(20, TimeUnit.SECONDS),
                     "T1 no llego a escribir el rastro, asi que no hay CAS ejecutado ni fila "
                             + "bloqueada: sin eso esta prueba no esta midiendo ninguna carrera");
 
-            Future<FichaCaptacion> t2 = hilos.submit(() -> captaciones.reasignar(idEncargo,
-                    c.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien));
+            Future<ResultadoReasignacion> t2 = hilos.submit(() -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(c.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             esperarAUnaSesionEsperandoUnLock(t2);
             liberar.countDown();
 
-            FichaCaptacion ganador = t1.get(20, TimeUnit.SECONDS);
+            ResultadoReasignacion ganador = t1.get(20, TimeUnit.SECONDS);
             assertEquals(b.idRolOperativo(), ganador.idAgente());
 
             ExecutionException perdedor = assertThrows(ExecutionException.class,
@@ -320,25 +338,27 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor c = agenteDelEquipo(2);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
 
         // CONTROL POSITIVO: sin romper nada, la misma reasignacion escribe LAS
         // DOS cosas. Sin esto, el rollback de abajo podria estar midiendo una
         // reasignacion que no escribia nada de todas formas.
         int filas = reasignacionesDe(idEncargo);
-        captaciones.reasignar(idEncargo, b.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien);
+        captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(b.idRolOperativo(), agenteDe(idEncargo));
         assertEquals(filas + 1, reasignacionesDe(idEncargo));
 
+        long versionTrasPrimera=versionDe(idEncargo);
         // Y ahora se rompe la fila del historial, DESPUES del compare-and-set:
         // el agente ya esta cambiado dentro de la transaccion cuando esto
         // estalla, asi que lo que se mide es el ROLLBACK y no una guarda previa.
         int filasAntes = reasignacionesDe(idEncargo);
         Mockito.doThrow(new RuntimeException("fallo inyectado al escribir el historial"))
-                .when(rastro).save(ArgumentMatchers.any());
+                .when(rastro).saveAndFlush(ArgumentMatchers.any());
 
-        assertThrows(RuntimeException.class,
-                () -> captaciones.reasignar(idEncargo, c.idRolOperativo(), MOTIVO,
-                        b.idRolOperativo(), quien));
+        RuntimeException fallo=assertThrows(RuntimeException.class,
+                () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(c.idRolOperativo(), b.idRolOperativo(), versionTrasPrimera, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
+        assertEquals("fallo inyectado al escribir el historial",fallo.getMessage());
 
         assertEquals(b.idRolOperativo(), agenteDe(idEncargo),
                 "un agente cambiado sin fila que lo explique es una autoridad que nadie puede "
@@ -392,13 +412,14 @@ class CausalidadDeLaReasignacionIntegrationTest {
      * desapareciera esta prueba seguiria verde por casualidad.
      */
     @Test
-    @DisplayName("F2.10: la edicion que tomo la fila escribe, la reasignacion espera su turno y ninguna pisa a la otra")
+    @DisplayName("F2.10/C2: la edición escribe; la reasignación espera y rechaza su versión obsoleta sin pisarla")
     void laEdicionQueTomoLaFilaEscribeYLaReasignacionEsperaSuTurno() throws Exception {
         Actor a = agenteDelEquipo(0);
         Actor b = agenteDelEquipo(1);
         Actor quien = broker();
         long idPropiedad = registrar(a);
         long idEncargo = encargoDe(idPropiedad);
+        long versionObservada=versionDe(idEncargo);
 
         assertEquals(a.idRolOperativo(), agenteDe(idEncargo),
                 "el alta tiene que dejar el encargo en manos de quien lo registro: sin eso esta "
@@ -411,23 +432,25 @@ class CausalidadDeLaReasignacionIntegrationTest {
         CountDownLatch liberar = new CountDownLatch(1);
         AtomicBoolean primera = new AtomicBoolean(false);
 
-        // El freno va en `save` y ANTES de delegar: es el ultimo punto de
-        // `actualizar` en el que la entidad esta gestionada, con su agente (A)
-        // en memoria, la FILA TOMADA y todavia sin ningun flush.
+        // La frontera compartida se ejecuta con Cuenta/sesión y fila tomados,
+        // antes de aplicar el cambio y de efectuar el flush del comando canónico.
+        com.controllocal.service.encargo.AccesoEncargo objetivo=org.springframework.test.util.AopTestUtils.getUltimateTargetObject(accesoEncargo);
+        assertTrue(Mockito.mockingDetails(objetivo).isSpy(),"El freno del montaje debe interceptar el target espía real, conservando el proxy transaccional del SUT");
         Mockito.doAnswer(invocacion -> {
             if (primera.compareAndSet(false, true)) {
                 cargado.countDown();
                 assertTrue(liberar.await(20, TimeUnit.SECONDS),
                         "nadie solto a la edicion: la prueba no llego a montar la ventana");
             }
-            return comoSiempre(invocacion, encargos);
-        }).when(encargos).save(ArgumentMatchers.any());
+            return invocacion.callRealMethod();
+        }).when(objetivo).modificarContenido(ArgumentMatchers.any(),ArgumentMatchers.anyLong(),
+                ArgumentMatchers.any(),ArgumentMatchers.any());
 
         ExecutorService hilos = Executors.newFixedThreadPool(2);
         try {
             // E: la edicion legitima de A, parada con el encargo ya cargado.
-            Future<?> edicion = hilos.submit(() -> captaciones.actualizar(idEncargo,
-                    edicionDeAlquiler(idPropiedad, a, IMPORTE_EDITADO), a));
+            Future<?> edicion = hilos.submit(() -> ciclo.editar(idEncargo,edicionDeAlquiler(versionObservada,IMPORTE_EDITADO,false),
+                    a,sesion(a),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             assertTrue(cargado.await(20, TimeUnit.SECONDS),
                     "la edicion no llego a guardar el encargo, asi que no hay ninguna "
@@ -436,18 +459,17 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
             // Y mientras esta parada, la reasignacion A->B, que tiene que
             // ESPERAR: su compare-and-set choca con el candado de la edicion.
-            Future<FichaCaptacion> reasignacion = hilos.submit(() -> captaciones.reasignar(
-                    idEncargo, b.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien));
+            Future<ResultadoReasignacion> reasignacion = hilos.submit(() -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             esperarAUnaSesionEsperandoUnLock(reasignacion);
             liberar.countDown();
 
             edicion.get(30, TimeUnit.SECONDS);
-            FichaCaptacion hecha = reasignacion.get(30, TimeUnit.SECONDS);
-            assertEquals(b.idRolOperativo(), hecha.idAgente(),
-                    "la reasignacion desperto y siguio saliendo de A: la edicion escribio el "
-                            + "trato, no la autoridad, asi que el estado observado seguia siendo "
-                            + "verdad");
+            ExecutionException obsoleta=assertThrows(ExecutionException.class,()->reasignacion.get(30,TimeUnit.SECONDS));
+            assertInstanceOf(ConflictoException.class,obsoleta.getCause(),
+                    "La edición cambió la versión: no se reinterpreta la reasignación previamente observada.");
+            assertEquals(a.idRolOperativo(),agenteDe(idEncargo));
+            assertEquals(filasAntes,reasignacionesDe(idEncargo));
         } finally {
             liberar.countDown();
             hilos.shutdownNow();
@@ -455,18 +477,15 @@ class CausalidadDeLaReasignacionIntegrationTest {
                     "los hilos de la carrera no terminaron");
         }
 
-        assertEquals(0, IMPORTE_EDITADO.compareTo(importeDe(idEncargo)),
-                "la edicion era legitima y tenia que entrar: la lanzo A cuando todavia llevaba "
-                        + "el encargo. Si el importe no esta escrito, esto no demuestra que el "
-                        + "agente se conserve, solo que la edicion no ocurrio");
-        assertEquals(b.idRolOperativo(), agenteDe(idEncargo),
-                "el encargo volvio a A por el flush de una edicion que no pidio moverlo: un "
-                        + "agente cambiado sin fila que lo explique (D-P0-10), y por una puerta "
-                        + "que no es la reasignacion. Solo la puerta canonica mueve la autoridad");
-        assertEquals(filasAntes + 1, reasignacionesDe(idEncargo),
-                "y UNA sola fila: la edicion no puede inventar ni borrar actos de gobierno");
-        assertEquals(a.idRolOperativo(), anteriorDeLaUltimaFila(idEncargo),
-                "y la fila dice «de A a B», que es lo que de verdad ocurrio");
+        assertEquals(0,IMPORTE_EDITADO.compareTo(importeDe(idEncargo)),"La edición válida quedó conservada.");
+        long versionTrasEdicion=versionDe(idEncargo); // nueva observación explícita, después de cerrar ambas TX
+        captaciones.reasignar(idEncargo,new CaptacionService.DatosReasignacion(b.idRolOperativo(),a.idRolOperativo(),
+                versionTrasEdicion,MOTIVO),quien,sesion(quien),UUID.randomUUID().toString(),
+                com.controllocal.service.soporte.Procedencia.deLaPantalla());
+        assertEquals(b.idRolOperativo(),agenteDe(idEncargo));
+        assertEquals(0,IMPORTE_EDITADO.compareTo(importeDe(idEncargo)));
+        assertEquals(filasAntes+1,reasignacionesDe(idEncargo));
+        assertEquals(a.idRolOperativo(),anteriorDeLaUltimaFila(idEncargo));
     }
 
     // ==================================================================
@@ -497,6 +516,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor destino = agenteDelEquipo(1);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
         int filas = reasignacionesDe(idEncargo);
 
         // (a) CUENTA SUSPENDIDA. El broker lo supervisa -pasa `alcanza`- y aun
@@ -505,8 +525,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         try {
             fijarEstadoAdministrativo(destino.idRolOperativo(), "I");
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO,
-                            a.idRolOperativo(), quien),
+                    () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                     "un agente con la cuenta suspendida no puede recibir un encargo, igual que "
                             + "no puede recibir una propiedad");
             assertEquals(a.idRolOperativo(), agenteDe(idEncargo), "y no se movio nada");
@@ -516,8 +535,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
             // destino, no del actor. Un TENANT_ADMIN esta exento de la
             // supervision, nunca de las cinco condiciones de la persona.
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO,
-                            a.idRolOperativo(), tenantAdmin()),
+                    () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), tenantAdmin(), sesion(tenantAdmin()), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                     "gobernar la organizacion no convierte a un agente suspendido en uno que "
                             + "puede recibir trabajo");
             assertEquals(a.idRolOperativo(), agenteDe(idEncargo));
@@ -527,20 +545,19 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
         // CONTROL POSITIVO: restituida la cuenta, el MISMO comando entra. Sin
         // esto, los rechazos de arriba podrian venir de cualquier otra cosa.
-        captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO, a.idRolOperativo(),
-                quien);
+        captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
         assertEquals(destino.idRolOperativo(), agenteDe(idEncargo));
         assertEquals(filas + 1, reasignacionesDe(idEncargo));
 
         // (b) NO OPERATIVO. Otra de las cinco, contra la autoridad que la decide
         //     (detalle_agente.estado_operativo), y con el encargo ya en manos
         //     del destino anterior.
+        long versionTrasPrimera=versionDe(idEncargo);
         String operativoAntes = estadoOperativoDe(a.idRolOperativo());
         try {
             fijarEstadoOperativo(a.idRolOperativo(), "L");
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> captaciones.reasignar(idEncargo, a.idRolOperativo(), MOTIVO,
-                            destino.idRolOperativo(), quien),
+                    () -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(a.idRolOperativo(), destino.idRolOperativo(), versionTrasPrimera, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                     "un agente de licencia sigue siendo del equipo y sigue teniendo cuenta: lo "
                             + "que no esta es en condiciones de recibir trabajo nuevo");
             assertEquals(destino.idRolOperativo(), agenteDe(idEncargo));
@@ -574,6 +591,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor a = agenteDelEquipo(0);
         Actor destino = agenteDelEquipo(1);
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
         int filas = reasignacionesDe(idEncargo);
 
         String operativoAntes = estadoOperativoDe(a.idRolOperativo());
@@ -590,8 +608,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
                     "y no hay fila en el historial, porque no ocurrio ninguna reasignacion");
 
             // Y el gobierno del tenant SI puede sacarlos, que es la salida.
-            captaciones.reasignar(idEncargo, destino.idRolOperativo(), MOTIVO,
-                    a.idRolOperativo(), tenantAdmin());
+            captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(destino.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), tenantAdmin(), sesion(tenantAdmin()), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla());
             assertEquals(destino.idRolOperativo(), agenteDe(idEncargo));
             assertEquals(filas + 1, reasignacionesDe(idEncargo));
         } finally {
@@ -629,6 +646,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor destino = agenteDelEquipo(1);
         Actor quien = broker();
         long idEncargo = encargoDe(a);
+        long versionObservada=versionDe(idEncargo);
         long b = destino.idRolOperativo();
 
         int filas = reasignacionesDe(idEncargo);
@@ -651,12 +669,11 @@ class CausalidadDeLaReasignacionIntegrationTest {
                         "nadie solto a T1: la prueba no llego a montar la ventana");
             }
             return comoSiempre(invocacion, rastro);
-        }).when(rastro).save(ArgumentMatchers.any());
+        }).when(rastro).saveAndFlush(ArgumentMatchers.any());
 
         ExecutorService hilos = Executors.newFixedThreadPool(2);
         try {
-            Future<FichaCaptacion> t1 = hilos.submit(() -> captaciones.reasignar(idEncargo, b,
-                    MOTIVO, a.idRolOperativo(), quien));
+            Future<ResultadoReasignacion> t1 = hilos.submit(() -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b, a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             assertTrue(enElRastro.await(20, TimeUnit.SECONDS),
                     "T1 no llego a escribir el rastro, asi que no hay bloqueo del destino "
@@ -685,12 +702,13 @@ class CausalidadDeLaReasignacionIntegrationTest {
         // Y AL REVES: con la baja ya comiteada, la misma reasignacion se
         // rechaza y no escribe nada.
         long idOtro = encargoDe(a);
+        long versionDelOtro=versionDe(idOtro);
         int filasDelOtro = reasignacionesDe(idOtro);
         try {
             agentes.actualizar(b, deLicencia(), tenantAdmin());
             assertEquals("L", estadoOperativoDe(b), "el montaje tiene que dejarlo de licencia");
             assertThrows(AccesoNoAutorizadoException.class,
-                    () -> captaciones.reasignar(idOtro, b, MOTIVO, a.idRolOperativo(), quien),
+                    () -> captaciones.reasignar(idOtro, new CaptacionService.DatosReasignacion(b, a.idRolOperativo(), versionDelOtro, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()),
                     "con la baja ya comiteada, el destino no puede recibir: el candado ordena la "
                             + "carrera, no perdona la guarda");
             assertEquals(a.idRolOperativo(), agenteDe(idOtro), "y no se movio nada");
@@ -704,8 +722,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
     /** Lo minimo para poner de licencia a un agente por su caso de uso. */
     private AgenteService.DatosAgente deLicencia() {
-        return new AgenteService.DatosAgente(null, null, null, null, null, null, null, null, null,
-                null, null, "L", null);
+        return new AgenteService.DatosAgente(null, null, null, null, "L");
     }
 
     // ==================================================================
@@ -751,6 +768,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
         Actor quien = broker();
         long idPropiedad = registrar(a);
         long idEncargo = encargoDe(idPropiedad);
+        long versionObservada=versionDe(idEncargo);
 
         assertEquals(a.idRolOperativo(), agenteDe(idEncargo),
                 "el alta tiene que dejar el encargo en manos de quien lo registro: sin eso no "
@@ -776,12 +794,11 @@ class CausalidadDeLaReasignacionIntegrationTest {
                         "nadie solto a T: la prueba no llego a montar la ventana");
             }
             return comoSiempre(invocacion, rastro);
-        }).when(rastro).save(ArgumentMatchers.any());
+        }).when(rastro).saveAndFlush(ArgumentMatchers.any());
 
         ExecutorService hilos = Executors.newFixedThreadPool(2);
         try {
-            Future<FichaCaptacion> t = hilos.submit(() -> captaciones.reasignar(idEncargo,
-                    b.idRolOperativo(), MOTIVO, a.idRolOperativo(), quien));
+            Future<ResultadoReasignacion> t = hilos.submit(() -> captaciones.reasignar(idEncargo, new CaptacionService.DatosReasignacion(b.idRolOperativo(), a.idRolOperativo(), versionObservada, MOTIVO), quien, sesion(quien), UUID.randomUUID().toString(), com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             assertTrue(enElRastro.await(20, TimeUnit.SECONDS),
                     "T no llego a escribir el rastro, asi que no hay compare-and-set ejecutado "
@@ -790,8 +807,8 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
             // E: la edicion del SALIENTE, con datos validos, que arranca cuando
             // la reasignacion ya decidio pero todavia no ha comiteado.
-            Future<?> edicion = hilos.submit(() -> captaciones.actualizar(idEncargo,
-                    edicionDeAlquiler(idPropiedad, a, IMPORTE_EDITADO), a));
+            Future<?> edicion = hilos.submit(() -> ciclo.editar(idEncargo,edicionDeAlquiler(versionObservada,IMPORTE_EDITADO,false),
+                    a,sesion(a),UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla()));
 
             esperarAUnaSesionEsperandoUnLock(edicion);
             liberar.countDown();
@@ -924,10 +941,12 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
     /** Una propiedad nueva con su encargo de ALQUILER, en manos de quien registra. */
     private long registrar(Actor quien) {
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        // Preparación anterior a toda carrera: selección Core y enrolamiento real, sin locks del caso retenidos.
+        sesion(quien);sesion(broker());sesion(tenantAdmin());
+        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso de causalidad del encargo",
                 new Ubicacion("Av. Encargo " + UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
@@ -943,7 +962,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
     private long encargoDe(long idPropiedad) {
         Long id = jdbc.queryForObject("""
                 select id_captacion from captacion
-                 where id_propiedad = ? and motivo_operacion = 'A' and estado <> 'C'
+                 where id_propiedad = ? and motivo_operacion = 'A' and estado in ('P','A')
                  order by id_captacion desc limit 1
                 """, Long.class, idPropiedad);
         assertNotNull(id, "el alta con operacion ALQUILER tiene que dejar su encargo abierto");
@@ -956,15 +975,13 @@ class CausalidadDeLaReasignacionIntegrationTest {
      * y la comision de un alquiler se calcula sobre la renta y en su moneda.
      * Cualquier hueco convertiria el ataque en un rechazo de validacion.
      */
-    private CaptacionService.DatosCaptacion edicionDeAlquiler(long idPropiedad, Actor deQuien,
-                                                              BigDecimal importe) {
-        return new CaptacionService.DatosCaptacion(
-                "CAP-CAUSAL-" + UUID.randomUUID().toString().substring(0, 8),
-                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
-                null, "Edicion concurrente del encargo de alquiler",
-                idPropiedad, deQuien.idRolOperativo(), "ALQUILER", 4, Boolean.FALSE,
-                "ALQUILER", importe, "PEN",
-                "P", "R", new BigDecimal("5"), "PEN", "I", null);
+    private EncargoService.Edicion edicionDeAlquiler(
+            long versionEsperada, BigDecimal importe, Boolean exclusividad) {
+        return new EncargoService.Edicion(versionEsperada,LocalDate.now(),LocalDate.now().plusMonths(6),
+                exclusividad,"Edición explícita del fixture",
+                new EncargoService.Condiciones(importe,"PEN","MENSUAL","P","R",new BigDecimal("0.05"),
+                    "PEN","I",null,"FIRMA_CONTRATO","PROPIETARIO_TEST","AGENCIA_TEST",
+                    "AL_FIRMAR","PACTO_FICTICIO_TEST",List.of(),null,null),"Corrección acordada del importe",null,null);
     }
 
     /**
@@ -973,8 +990,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
      * real de la baja no arrastra los encargos.
      */
     private AgenteService.DatosAgente datosDeBaja() {
-        return new AgenteService.DatosAgente(null, null, null, null, null, null, null, null, null,
-                null, null, "N", null);
+        return new AgenteService.DatosAgente(null, null, null, null, "N");
     }
 
     /**
@@ -1025,11 +1041,7 @@ class CausalidadDeLaReasignacionIntegrationTest {
     }
 
     /** El gobierno del tenant, con la misma identidad y otra banda. */
-    private Actor tenantAdmin() {
-        Actor base = broker();
-        return new Actor(base.idOrganizacion(), base.idPersona(), base.idRolOperativo(),
-                Actor.TENANT_ADMIN);
-    }
+    private Actor tenantAdmin(){return sesiones().gobiernoDe(broker().idOrganizacion());}
 
     private Long unPropietario(Actor actor) {
         return jdbc.queryForObject("""
@@ -1078,20 +1090,18 @@ class CausalidadDeLaReasignacionIntegrationTest {
 
     private String estadoAdministrativoDe(long idRolAgente) {
         return jdbc.queryForObject("""
-                select c.estado_administrativo from credencial_usuario c
-                  join persona_rol ru on ru.id_persona_rol = c.id_persona_rol
-                  join persona_rol ra on ra.id_persona = ru.id_persona
-                 where ra.id_persona_rol = ? and ru.vigencia_hasta is null
+                select u.estado from usuario_organizacion u
+                  join persona_rol ra on ra.id_persona=u.id_persona and ra.organizacion_id=u.organizacion_id
+                 where ra.id_persona_rol=? and u.rol='AGENTE'
                 """, String.class, idRolAgente);
     }
 
     private void fijarEstadoAdministrativo(long idRolAgente, String estado) {
         jdbc.update("""
-                update credencial_usuario set estado_administrativo = ?
-                 where id_persona_rol in (
-                     select ru.id_persona_rol from persona_rol ru
-                       join persona_rol ra on ra.id_persona = ru.id_persona
-                      where ra.id_persona_rol = ? and ru.vigencia_hasta is null)
+                update usuario_organizacion u set estado=?
+                 where u.rol='AGENTE' and exists(select 1 from persona_rol ra
+                    where ra.id_persona_rol=? and ra.id_persona=u.id_persona
+                      and ra.organizacion_id=u.organizacion_id)
                 """, estado, idRolAgente);
     }
 
@@ -1105,4 +1115,9 @@ class CausalidadDeLaReasignacionIntegrationTest {
         jdbc.update("update detalle_agente set estado_operativo = ? where id_persona_rol = ?",
                 estado, idRolAgente);
     }
+    /** Versión observada por el montaje ANTES del comando o de abrir la carrera. */
+    private long versionDe(long idEncargo) {
+        return jdbc.queryForObject("select version from captacion where id_captacion=?",Long.class,idEncargo);
+    }
+
 }

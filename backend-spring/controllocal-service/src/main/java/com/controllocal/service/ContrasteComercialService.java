@@ -37,9 +37,9 @@ public interface ContrasteComercialService {
                            BigDecimal renta, String moneda);
 
     /**
-     * Las tres medias propias, cada una con su muestra y degradando por separado.
+     * Las medias propias vigentes, cada una con su muestra y degradando por separado.
      *
-     * <p>Que exista una no dice nada sobre las otras dos.
+     * <p>Que exista una no dice nada sobre la otra.
      */
     MediasPropias mediasDe(Actor actor);
 }

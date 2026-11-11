@@ -1,0 +1,137 @@
+{
+  "alcance": "Reconocimiento y transporte declarados; no autoridad, firma ni dinero reales",
+  "casos": [
+    {
+      "id": "C5-RUTA-01",
+      "accion": "PRESENTAR_EXPEDIENTE_OPERACION",
+      "texto": "presentar expediente {\"oportunidad\":42,\"versionOportunidad\":3,\"encargo\":7,\"versionEncargo\":2,\"pacto\":{\"encargo\":7,\"revisionAprobatoria\":9},\"documentos\":[]}",
+      "datos": {
+        "oportunidad": 42,
+        "versionOportunidad": 3,
+        "encargo": 7,
+        "versionEncargo": 2,
+        "pacto": {
+          "encargo": 7,
+          "revisionAprobatoria": 9
+        },
+        "documentos": []
+      }
+    },
+    {
+      "id": "C5-RUTA-02",
+      "accion": "EVALUAR_EXPEDIENTE_OPERACION",
+      "texto": "evaluar expediente {\"expediente\":5,\"versionEsperada\":1,\"decision\":\"OBSERVAR\",\"observaciones\":\"Falta documento declarado\"}",
+      "datos": {
+        "expediente": 5,
+        "versionEsperada": 1,
+        "decision": "OBSERVAR",
+        "observaciones": "Falta documento declarado"
+      }
+    },
+    {
+      "id": "C5-RUTA-03",
+      "accion": "INFORMAR_HITO_CONTRACTUAL",
+      "texto": "informar hito contractual {\"expediente\":5,\"versionExpediente\":1,\"tipo\":\"ESCRITURA\",\"fechaEfectiva\":\"2026-10-30\",\"evidencias\":[]}",
+      "datos": {
+        "expediente": 5,
+        "versionExpediente": 1,
+        "tipo": "ESCRITURA",
+        "fechaEfectiva": "2026-10-30",
+        "evidencias": []
+      }
+    },
+    {
+      "id": "C5-RUTA-04",
+      "accion": "CONFIRMAR_HITO_CONTRACTUAL",
+      "texto": "confirmar hito contractual {\"hito\":8,\"versionHito\":1,\"versionExpediente\":2,\"revisionExpediente\":10,\"revisionInformada\":11,\"pacto\":{\"encargo\":7,\"revisionAprobatoria\":9}}",
+      "datos": {
+        "hito": 8,
+        "versionHito": 1,
+        "versionExpediente": 2,
+        "revisionExpediente": 10,
+        "revisionInformada": 11,
+        "pacto": {
+          "encargo": 7,
+          "revisionAprobatoria": 9
+        }
+      }
+    },
+    {
+      "id": "C5-RUTA-05",
+      "accion": "RECTIFICAR_HITO_CONTRACTUAL",
+      "texto": "rectificar hito contractual {\"confirmado\":{\"id\":8,\"revision\":12},\"versionHito\":2,\"versionExpediente\":3,\"motivo\":\"Fecha acreditada\",\"fechaEfectiva\":\"2026-10-29\",\"evidencias\":[]}",
+      "datos": {
+        "confirmado": {
+          "id": 8,
+          "revision": 12
+        },
+        "versionHito": 2,
+        "versionExpediente": 3,
+        "motivo": "Fecha acreditada",
+        "fechaEfectiva": "2026-10-29",
+        "evidencias": []
+      }
+    },
+    {
+      "id": "C5-RUTA-06",
+      "accion": "REGISTRAR_COBRO",
+      "texto": "registrar cobro {\"comision\":7,\"versionEsperada\":2,\"monto\":5000.25,\"moneda\":\"PEN\",\"fecha\":\"2026-10-30\"}",
+      "datos": {
+        "comision": 7,
+        "versionEsperada": 2,
+        "monto": 5000.25,
+        "moneda": "PEN",
+        "fecha": "2026-10-30"
+      }
+    },
+    {
+      "id": "C5-RUTA-07",
+      "accion": "ASIGNAR_REPARTO_COMISION",
+      "texto": "asignar reparto comision {\"comision\":7,\"versionEsperada\":2,\"montoAgente\":100}",
+      "datos": {
+        "comision": 7,
+        "versionEsperada": 2,
+        "montoAgente": 100
+      }
+    },
+    {
+      "id": "C5-RUTA-08",
+      "accion": "AUTORIZAR_BORRADOR_ADENDA",
+      "texto": "autorizar borrador adenda {\"referencia\":{\"encargo\":7,\"propuesta\":9},\"decision\":{\"actuacion\":\"OBSERVAR\",\"ultimaRevisionEsperada\":9,\"versionEncargoEsperada\":2,\"huellaPropuesta\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observaciones\":\"Revisar alcance\"}}",
+      "datos": {
+        "referencia": {
+          "encargo": 7,
+          "propuesta": 9
+        },
+        "decision": {
+          "actuacion": "OBSERVAR",
+          "ultimaRevisionEsperada": 9,
+          "versionEncargoEsperada": 2,
+          "huellaPropuesta": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observaciones": "Revisar alcance"
+        }
+      }
+    },
+    {
+      "id": "C5-RUTA-09",
+      "accion": "REPROGRAMAR_GESTION_COBRO",
+      "texto": "reprogramar gestion cobro {\"comision\":7,\"versionEsperada\":3,\"proximaRevision\":\"2026-11-04\",\"motivo\":\"Fecha de contacto acordada\"}",
+      "datos": {
+        "comision": 7,
+        "versionEsperada": 3,
+        "proximaRevision": "2026-11-04",
+        "motivo": "Fecha de contacto acordada"
+      }
+    },
+    {
+      "id": "C5-RUTA-10",
+      "accion": "CONCLUIR_GESTION_COBRO",
+      "texto": "concluir gestion cobro {\"comision\":7,\"versionEsperada\":4,\"motivo\":\"Concluir seguimiento con el importe recibido\"}",
+      "datos": {
+        "comision": 7,
+        "versionEsperada": 4,
+        "motivo": "Concluir seguimiento con el importe recibido"
+      }
+    }
+  ]
+}

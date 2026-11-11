@@ -176,8 +176,7 @@ class CadenaEstructuralCompletaTest {
         assertTrue(sinDecidir.isEmpty(), """
                 Estos conceptos caen en el `default` de `vaciar`: %s
 
-                Negarse a vaciar es legitimo --METRAJE lo hace, porque toda propiedad tiene
-                metraje-- pero tiene que ser una decision escrita con su motivo. El
+                Negarse a vaciar un concepto exige una regla vigente con su motivo. El
                 `default` dice otra cosa: que se anadio el concepto y no se penso que
                 significa retirarlo, y quien lo intente recibira un mensaje que no le
                 explica nada.

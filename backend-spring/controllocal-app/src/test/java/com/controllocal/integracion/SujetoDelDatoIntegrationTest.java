@@ -16,6 +16,7 @@ import com.controllocal.service.PublicacionService;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AtributosGobernados;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -79,8 +80,13 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class SujetoDelDatoIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -88,7 +94,43 @@ class SujetoDelDatoIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void prepararPertenenciaTecnicaDePrueba(){
+        com.controllocal.integracion.soporte.SemillaDeIdentidadPruebas.aplicar(jdbc);
+        sesiones=null;
+        preparacionPublicacion=null;
+    }
+
     @Autowired PropiedadUniversalService propiedades;
+
+    @Autowired com.controllocal.service.encargo.EncargoService encargos;
+    @Autowired com.controllocal.service.ContextosService contextos;
+    @Autowired com.controllocal.service.CuentaService cuentas;
+    @Autowired com.controllocal.persistence.repositorio.FactorAutenticacionRepository factores;
+    @Autowired com.controllocal.service.soporte.CifradoSecretos cifrado;
+    @Autowired org.springframework.transaction.PlatformTransactionManager gestor;
+    @Autowired com.controllocal.service.GobiernoCatalogoCapturaService catalogos;
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacionPublicacion;
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacionPublicacion(){
+        if(preparacionPublicacion==null)preparacionPublicacion=new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba(
+                jdbc,propiedades,encargos,catalogos,contextos,cuentas,factores,cifrado,gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);
+        return preparacionPublicacion;
+    }
+    private com.controllocal.integracion.soporte.SesionesComercialesDePrueba sesiones;
+    private com.controllocal.service.actuacion.ActuacionesService.ContextoSesion sesionDe(Actor actor){
+        if(sesiones==null)sesiones=new com.controllocal.integracion.soporte.SesionesComercialesDePrueba(jdbc,contextos,cuentas,factores,cifrado);
+        return sesiones.de(actor);
+    }
+    private com.controllocal.service.encargo.EncargoService.Ficha editarCondiciones(long encargo,
+            List<ValorAtributo> valores,List<String> retiradas,Actor actor){
+        var observacion=encargos.consultar(encargo,actor);
+        return encargos.editar(encargo,new com.controllocal.service.encargo.EncargoService.Edicion(
+                observacion.version(),null,null,null,null,null,
+                "Corrección de condiciones expresamente declarada por el fixture",valores,retiradas),
+                actor,sesionDe(actor),java.util.UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
+    }
+
     @Autowired PublicacionService publicaciones;
     @Autowired MotorDeCaptura captura;
 
@@ -255,7 +297,7 @@ class SujetoDelDatoIntegrationTest {
     // ==================================================================
 
     /**
-     * <b>Las tres que vivian del campo siguen aplicando a los siete.</b>
+     * <b>Las tres que vivian del campo siguen aplicando a todos los tipos fisicos.</b>
      *
      * <p>Son las unicas del catalogo del sistema que llevan {@code
      * aplica_todos}: {@code antiguedad_anios}, {@code estacionamientos} y
@@ -263,19 +305,19 @@ class SujetoDelDatoIntegrationTest {
      * es lo que reciben BROX Web y KAIROS— y no consultando la tabla: lo que
      * hay que conservar es la RESPUESTA, no la fila.
      *
-     * <p>Y se comprueba la exigencia junto a la aplicabilidad, porque son la
-     * misma decision: {@code metraje_total} bloquea el alta en los siete y las
-     * otras dos no bloquean nada. Un respaldo que hubiera escrito {@code ALT}
-     * de mas habria dejado la aplicabilidad intacta y roto el alta.
+     * <p>V86 conserva la aplicabilidad; la suficiencia de cada actuación tiene
+     * su autoridad propia. MAT-01/02, catálogo18 y V103 retiran la antigua
+     * obligación universal de área al guardar o identificar. Las tres claves
+     * llegan como {@code OPC} en registro, sin reducir los mínimos contextuales
+     * de confirmar o habilitar un Encargo.
      */
     @Test
-    @DisplayName("V86: las tres claves que aplicaban por el campo siguen preguntandose en los siete tipos")
-    void lasTresQueVivianDelCampoSiguenAplicandoALosSiete() {
+    @DisplayName("V94: las tres claves que aplicaban por el campo siguen preguntandose en todos los tipos fisicos")
+    void lasTresQueVivianDelCampoSiguenAplicandoALosTiposFisicos() {
         List<String> mal = new ArrayList<>();
-        for (String tipo : List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO",
-                "ALMACEN", "OTRO")) {
+        for (String tipo : AtributosGobernados.nombresDeTipos()) {
             List<MotorDeCaptura.Pregunta> preguntas =
-                    captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, null, actor())
+                    captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, null, null, actor())
                             .todas();
             Map<String, MotorDeCaptura.Pregunta> porClave = new LinkedHashMap<>();
             preguntas.forEach(p -> porClave.putIfAbsent(p.clave(), p));
@@ -286,12 +328,7 @@ class SujetoDelDatoIntegrationTest {
                     mal.add(tipo + " ya no pregunta " + clave);
                 }
             }
-            MotorDeCaptura.Pregunta metraje = porClave.get("metraje_total");
-            if (metraje != null && !"ALT".equals(metraje.exigencia())) {
-                mal.add(tipo + ": metraje_total llego con exigencia " + metraje.exigencia()
-                        + " y tenia que seguir siendo ALT");
-            }
-            for (String clave : List.of("antiguedad_anios", "estacionamientos")) {
+            for (String clave : List.of("antiguedad_anios", "estacionamientos", "metraje_total")) {
                 MotorDeCaptura.Pregunta pregunta = porClave.get(clave);
                 if (pregunta != null && !"OPC".equals(pregunta.exigencia())) {
                     mal.add(tipo + ": " + clave + " llego con exigencia " + pregunta.exigencia()
@@ -300,9 +337,9 @@ class SujetoDelDatoIntegrationTest {
             }
         }
         assertEquals(List.of(), mal, """
-                Quitarle la autoridad a `aplica_todos` cambio alguna respuesta, y no podia
-                cambiar ninguna: V86 respaldo esas claves con sus siete filas ANTES de que el
-                campo dejara de decidir, precisamente para que el nucleo contestara igual.
+                V86/V94 conservan la aplicabilidad de las tres claves para todos los tipos.
+                MAT-01/02 y V103 permiten guardar o identificar sin área completa: las tres
+                son OPC en registro; la suficiencia del Encargo se evalúa por su contexto.
                 """);
     }
 
@@ -324,9 +361,8 @@ class SujetoDelDatoIntegrationTest {
     @DisplayName("V86: la aplicabilidad que reciben Web y KAIROS es la que declara la tabla")
     void laAplicabilidadPublicadaEsLaDeLaTabla() {
         List<String> mal = new ArrayList<>();
-        for (Map.Entry<String, String> tipo : Map.of("L", "LOCAL", "O", "OFICINA",
-                "D", "DEPARTAMENTO", "C", "CASA", "T", "TERRENO", "A", "ALMACEN",
-                "X", "OTRO").entrySet()) {
+        for (String nombreTipo : AtributosGobernados.nombresDeTipos()) {
+            String codigoTipo = AtributosGobernados.codigoDelTipo(nombreTipo).orElseThrow();
 
             List<String> enLaTabla = jdbc.queryForList("""
                     select c.clave
@@ -334,17 +370,17 @@ class SujetoDelDatoIntegrationTest {
                       join catalogo_atributo_tipo t
                         on t.id_catalogo_atributo = c.id_catalogo_atributo
                      where c.activo and c.sujeto = 'PROPIEDAD'
-                       and t.tipo_propiedad = ?
+                        and t.tipo_propiedad = ?
                        and (c.organizacion_id is null or c.organizacion_id = ?)
                      order by c.clave
-                    """, String.class, tipo.getKey(), actor().idOrganizacion());
+                    """, String.class, codigoTipo, actor().idOrganizacion());
 
             // El motor publica ademas los huecos ESTRUCTURALES del guion
             // (direccion, distrito...), que no son claves del catalogo. Se
             // compara contra lo que el catalogo gobierna, que es lo que
             // `aplica_todos` decidia.
             List<String> publicadas = captura
-                    .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo.getValue(), null, actor())
+                    .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, nombreTipo, null, null, actor())
                     .todas().stream()
                     .map(MotorDeCaptura.Pregunta::clave)
                     .filter(enLaTabla::contains)
@@ -355,7 +391,7 @@ class SujetoDelDatoIntegrationTest {
             List<String> faltan = enLaTabla.stream().filter(c -> !publicadas.contains(c))
                     .sorted().toList();
             if (!faltan.isEmpty()) {
-                mal.add(tipo.getValue() + ": la tabla declara " + faltan
+                mal.add(nombreTipo + ": la tabla declara " + faltan
                         + " y el nucleo no las publica");
             }
         }
@@ -419,7 +455,8 @@ class SujetoDelDatoIntegrationTest {
                         + "afirmaria una aplicabilidad que la tabla ya no respalda");
         assertTrue(raiz(quitado).contains("no esta respaldado"),
                 "el rechazo del otro lado tiene que decir lo mismo: " + quitado);
-        assertEquals(7, jdbc.queryForObject("""
+        // V94 incorpora ESTACIONAMIENTO (E): aplica_todos respalda los ocho tipos vigentes.
+        assertEquals(8, jdbc.queryForObject("""
                 select count(*) from catalogo_atributo_tipo where id_catalogo_atributo = ?
                 """, Integer.class, id),
                 "y la fila que se intento borrar sigue donde estaba");
@@ -534,8 +571,7 @@ class SujetoDelDatoIntegrationTest {
             pactar(id, venta, new ValorAtributo(clave, "3"));
             pactar(id, alquiler, new ValorAtributo(clave, "12"));
 
-            propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null,
-                    null, List.of(new CondicionesDeEncargo(venta, null, List.of(clave)))), actor());
+            editarCondiciones(venta,null,List.of(clave),actor());
 
             assertNull(pactado(id, venta, clave), "se pidio retirarla de la venta");
             assertEquals("12", pactado(id, alquiler, clave),
@@ -560,7 +596,7 @@ class SujetoDelDatoIntegrationTest {
             Map<String, String> alquilerAntes = retratoDe(id, alquiler);
 
             propiedades.editar(id, new ComandoEdicion(null, null, "Otra descripcion", null, null,
-                    List.of(new ValorAtributo("metraje_total", "95")), null, null), actor());
+                    List.of(new ValorAtributo("metraje_total", "95")), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
 
             assertEquals(ventaAntes, retratoDe(id, venta));
             assertEquals(alquilerAntes, retratoDe(id, alquiler));
@@ -678,7 +714,7 @@ class SujetoDelDatoIntegrationTest {
             long id = registrarConVentaYAlquiler();
             ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                     () -> propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                            List.of(new ValorAtributo(clave, "3")), null, null), actor()));
+                            List.of(new ValorAtributo(clave, "3")), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor()));
             assertTrue(error.getMessage().contains("ENCARGO"),
                     "el mensaje tiene que decir de quien es el dato: " + error.getMessage());
         } finally {
@@ -714,7 +750,7 @@ class SujetoDelDatoIntegrationTest {
     }
 
     @Test
-    @DisplayName("un bloque de condiciones sin idEncargo se rechaza")
+    @DisplayName("el transporte físico sustituido no acepta condiciones ni adivina un Encargo")
     void unBloqueSinEncargoSeRechaza() {
         String clave = sembrarCondicion("zz_condicion", "ENTERO", List.of("A", "V"));
         try {
@@ -724,8 +760,8 @@ class SujetoDelDatoIntegrationTest {
                             null, null, null,
                             List.of(new CondicionesDeEncargo(null,
                                     List.of(new ValorAtributo(clave, "3")), null))), actor()));
-            assertTrue(error.getMessage().contains("encargo"),
-                    "con dos encargos abiertos, adivinar seria escribir en el equivocado");
+            assertTrue(error.getMessage().contains("/encargos/{id}/condiciones"),
+                    "la entrada sustituida debe dirigir al comando canónico; no adivina un Encargo ni escribe");
         } finally {
             retirar(clave);
         }
@@ -751,16 +787,26 @@ class SujetoDelDatoIntegrationTest {
             long id = registrarConVentaYAlquiler();
             long alquiler = encargo(id, "A");
 
+            // El rechazo tiene que medir la condición PUB, no una revisión que nunca existió.
+            preparacionPublicacion().prepararDepartamento(id,actor());
+            preparacionPublicacion().habilitar(alquiler,actor());
+
             ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> publicaciones.crearEnEncargo(alquiler, publicacionDePrueba(), actor()));
+                    () -> preparacionPublicacion().publicar(publicaciones,alquiler, publicacionDePrueba(), actor()));
             assertTrue(error.getMessage().contains("condiciones de este encargo"),
                     "el mensaje tiene que separar la ficha del encargo: " + error.getMessage());
             assertTrue(error.getMessage().contains("Prueba zz_condicion"),
                     "y nombrar el dato que falta: " + error.getMessage());
 
-            pactar(id, alquiler, new ValorAtributo(clave, "12"));
-            assertNotNull(publicaciones.crearEnEncargo(alquiler, publicacionDePrueba(), actor()),
-                    "una vez pactada, se publica");
+            // La aceptación existente tampoco se reescribe para completar una condición.
+            assertThrows(ReglaNegocioException.class,()->pactar(id,alquiler,new ValorAtributo(clave,"12")));
+            // Control positivo: otro episodio incorpora la condición ANTES de aceptación/revisión.
+            long idCompleto=registrarConVentaYAlquiler();long completo=encargo(idCompleto,"A");
+            pactar(idCompleto,completo,new ValorAtributo(clave,"12"));
+            preparacionPublicacion().prepararDepartamento(idCompleto,actor());
+            preparacionPublicacion().habilitar(completo,actor());
+            assertNotNull(preparacionPublicacion().publicar(publicaciones,completo,publicacionDePrueba(),actor()),
+                    "la condición pactada antes de aceptar permite publicar el episodio realmente habilitado");
         } finally {
             retirar(clave);
         }
@@ -806,8 +852,7 @@ class SujetoDelDatoIntegrationTest {
     @Test
     @DisplayName("la definicion pregunta la condicion dentro del bloque de su operacion")
     void laDefinicionPreguntaLaCondicionEnSuBloque() {
-        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO",
-                "VENTA,ALQUILER", actor());
+        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", "VENTA,ALQUILER", null, actor());
 
         List<String> alquiler = clavesDelBloque(definicion, "ALQUILER");
         List<String> venta = clavesDelBloque(definicion, "VENTA");
@@ -831,12 +876,11 @@ class SujetoDelDatoIntegrationTest {
      * encargo.
      */
     @Test
-    @DisplayName("lo dictado en el bloque del alquiler se guarda en el encargo de alquiler")
-    void loDictadoEnUnBloqueVaASuEncargo() {
+    @DisplayName("lo dictado para alquiler conserva su contexto y no se escribe en el inmueble")
+    void loDictadoEnUnBloqueConservaContextoSinInventarEncargo() {
         long propietario = unPropietario();
-        var vacio = captura.avanzar(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, Map.of(),
-                null, actor());
-        captura.avanzar(null, vacio.idBorrador(), Map.of(
+        var vacio = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null, respuestas(Map.of()), null), null, actor());
+        var parcial=captura.avanzar(new MotorDeCaptura.Avance(null, vacio.idBorrador(), vacio.version(), respuestas(Map.of(
                 GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
                 GuionRegistroPropiedad.OPERACIONES, "VENTA,ALQUILER",
                 GuionRegistroPropiedad.IMPORTE + ":VENTA", "350000",
@@ -847,22 +891,16 @@ class SujetoDelDatoIntegrationTest {
                 GuionRegistroPropiedad.DIRECCION,
                 "Av. Dictada " + java.util.UUID.randomUUID().toString().substring(0, 8),
                 "metraje_total", "118",
-                "dormitorios", "3"), null, actor());
-        // La condicion, en el bloque del alquiler y solo ahi.
-        captura.avanzar(null, vacio.idBorrador(), Map.of(
-                GuionRegistroPropiedad.DISTRITO, "Miraflores",
-                "garantia_meses:ALQUILER", "2"), null, actor());
-
-        var ejecucion = captura.ejecutar(vacio.idBorrador(),
-                java.util.UUID.randomUUID().toString(), null, actor());
-        long id = ejecucion.idPropiedad();
-
-        assertEquals("2", pactado(id, encargo(id, "A"), "garantia_meses"),
-                "lo dictado para el alquiler tiene que estar en el encargo de alquiler");
-        assertNull(pactado(id, encargo(id, "V"), "garantia_meses"),
-                "y no en el de venta, donde ni siquiera aplica");
-        assertNull(atributoDeLaPropiedad(id, "garantia_meses"),
-                "ni como hecho del inmueble: es un pacto, no una caracteristica");
+                "dormitorios", "3")), null), null, actor());
+        // C2 conserva la condición calificada sin convertirla en autorización.
+        var completo=captura.avanzar(new MotorDeCaptura.Avance(null,vacio.idBorrador(),parcial.version(),
+                respuestas(Map.of(GuionRegistroPropiedad.DISTRITO,"Miraflores","interiorUnidad","501",
+                        "garantia_meses:ALQUILER","2")),null),null,actor());
+        assertEquals("2",completo.conocido().get("garantia_meses:ALQUILER").toString());
+        assertNull(completo.conocido().get("garantia_meses:VENTA"));
+        var ejecucion=captura.ejecutar(vacio.idBorrador(),completo.version(),java.util.UUID.randomUUID().toString(),null,actor());
+        assertTrue(ejecucion.idsEncargos().isEmpty(),"Confirmar el físico no inventa el mandato ni su aceptación.");
+        assertNull(atributoDeLaPropiedad(ejecucion.idPropiedad(),"garantia_meses"));
     }
 
     private static List<String> clavesDelBloque(MotorDeCaptura.DefinicionCaptura definicion,
@@ -1012,7 +1050,7 @@ class SujetoDelDatoIntegrationTest {
         ReglaNegocioException pactoComoHecho = assertThrows(ReglaNegocioException.class,
                 () -> propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
                         List.of(new ValorAtributo("se_ofrece_amoblado", "true")),
-                        null, null), actor()));
+                        null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor()));
         assertTrue(pactoComoHecho.getMessage().toLowerCase().contains("se_ofrece_amoblado"),
                 pactoComoHecho.getMessage());
 
@@ -1046,7 +1084,7 @@ class SujetoDelDatoIntegrationTest {
 
         // El hecho fisico, aparte y una sola vez: el inmueble TIENE muebles.
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                List.of(new ValorAtributo("amoblado", "true")), null, null), actor());
+                List.of(new ValorAtributo("amoblado", "true")), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
 
         pactar(id, primero, new ValorAtributo("se_ofrece_amoblado", "true"));
         pactar(id, primero, new ValorAtributo("mascotas_aceptadas", "false"));
@@ -1196,45 +1234,47 @@ class SujetoDelDatoIntegrationTest {
     void elHechoCabeDondeSePactaSuCondicion() {
         record Caso(String tipo, List<ValorAtributo> obligatorios,
                     String hecho, String valorInicial, String valorEditado,
+                    String monedaHecho,
                     String condicion, String pactoInicial, String pactoEditado) {
         }
         List<Caso> casos = List.of(
                 // El que abrio V74 al ampliar la condicion a O sin ampliar el hecho.
                 new Caso("OFICINA", List.of(new ValorAtributo("metraje_total", "120")),
-                        "amoblado", "true", "false",
+                        "amoblado", "true", "false", null,
                         "se_ofrece_amoblado", "false", "true"),
                 // Parque logistico: la administracion cobra una cuota.
                 new Caso("ALMACEN", List.of(new ValorAtributo("metraje_total", "2000")),
-                        "cuota_mantenimiento", "1200", "1350",
+                        "cuota_mantenimiento", "1200", "1350", "PEN",
                         "mantenimiento_a_cargo_de", "INQUILINO", "PROPIETARIO"),
                 // Casa en condominio: la junta tambien la cobra.
                 new Caso("CASA", List.of(new ValorAtributo("metraje_total", "180"),
                                 new ValorAtributo("dormitorios", "4")),
-                        "cuota_mantenimiento", "450", "500",
+                        "cuota_mantenimiento", "450", "500", "PEN",
                         "mantenimiento_a_cargo_de", "PROPIETARIO", "INQUILINO"));
 
         for (Caso caso : casos) {
             List<ValorAtributo> atributos = new ArrayList<>(caso.obligatorios());
-            atributos.add(new ValorAtributo(caso.hecho(), caso.valorInicial()));
+            // Son importes nuevos del fixture en soles, no una moneda inferida del legado.
+            atributos.add(new ValorAtributo(caso.hecho(), caso.valorInicial(), caso.monedaHecho(), null));
             long id = registrarDeTipo(caso.tipo(), atributos);
             long alquiler = encargo(id, "A");
 
             // 1 y 2. El hecho entro por el alta; la condicion se pacta aparte.
-            assertMismoValor(caso.valorInicial(), atributoDeLaPropiedad(id, caso.hecho()),
+            assertValorDeLaPropiedad(id, caso.hecho(), caso.valorInicial(), caso.monedaHecho(),
                     caso.tipo() + ": el alta tiene que aceptar " + caso.hecho());
             pactar(id, alquiler, new ValorAtributo(caso.condicion(), caso.pactoInicial()));
 
             // 3. Los dos a la vez, cada uno en su sitio.
-            assertMismoValor(caso.valorInicial(), atributoDeLaPropiedad(id, caso.hecho()),
+            assertValorDeLaPropiedad(id, caso.hecho(), caso.valorInicial(), caso.monedaHecho(),
                     caso.tipo() + ": pactar la condicion no puede tocar el hecho");
             assertEquals(caso.pactoInicial(), pactado(id, alquiler, caso.condicion()),
                     caso.tipo() + ": la condicion tiene que quedar en el encargo");
 
             // 4. Editar el hecho: el alta y la edicion significan lo mismo.
             propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                    List.of(new ValorAtributo(caso.hecho(), caso.valorEditado())),
-                    null, null), actor());
-            assertMismoValor(caso.valorEditado(), atributoDeLaPropiedad(id, caso.hecho()),
+                    List.of(new ValorAtributo(caso.hecho(), caso.valorEditado(), caso.monedaHecho(), null)),
+                    null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
+            assertValorDeLaPropiedad(id, caso.hecho(), caso.valorEditado(), caso.monedaHecho(),
                     caso.tipo() + ": la edicion tiene que corregir " + caso.hecho());
             assertEquals(caso.pactoInicial(), pactado(id, alquiler, caso.condicion()),
                     caso.tipo() + ": corregir el hecho no puede mover lo pactado");
@@ -1243,7 +1283,7 @@ class SujetoDelDatoIntegrationTest {
             pactar(id, alquiler, new ValorAtributo(caso.condicion(), caso.pactoEditado()));
             assertEquals(caso.pactoEditado(), pactado(id, alquiler, caso.condicion()),
                     caso.tipo() + ": la condicion tiene que poder cambiar");
-            assertMismoValor(caso.valorEditado(), atributoDeLaPropiedad(id, caso.hecho()),
+            assertValorDeLaPropiedad(id, caso.hecho(), caso.valorEditado(), caso.monedaHecho(),
                     caso.tipo() + ": cambiar lo pactado no puede reescribir el hecho");
         }
     }
@@ -1305,7 +1345,9 @@ class SujetoDelDatoIntegrationTest {
         return propiedades.registrar(new ComandoRegistro(null, null, null, tipoPropiedad, null,
                 "Caso V78",
                 new Ubicacion("Av. Cobertura " + java.util.UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null,
+                        List.of("DEPARTAMENTO", "OFICINA").contains(tipoPropiedad) ? "101" : null,
+                        null, null, null),
                 List.of(new Titular(unPropietario(), null, Boolean.TRUE)),
                 atributos,
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("3000"), "PEN",
@@ -1351,7 +1393,7 @@ class SujetoDelDatoIntegrationTest {
     // ==================================================================
 
     /**
-     * Una clave del ENCARGO, del tenant, aplicable a los siete tipos en las
+     * Una clave del ENCARGO, del tenant, aplicable a todos los tipos fisicos en las
      * operaciones que se le digan.
      *
      * <p>Se siembra por caso y se retira en el {@code finally} porque estas
@@ -1373,7 +1415,7 @@ class SujetoDelDatoIntegrationTest {
                                                              tipo_operacion, exigencia)
                     select c.id_catalogo_atributo, t.tipo, ?, 'OPC'
                       from catalogo_atributo c
-                      cross join (values ('L'),('O'),('D'),('C'),('T'),('A'),('X')) as t(tipo)
+                      cross join tipos_de_propiedad() as t(tipo)
                      where c.clave = ? and c.organizacion_id = ?
                     """, operacion, clave, org);
         }
@@ -1394,9 +1436,8 @@ class SujetoDelDatoIntegrationTest {
 
     /** Escribe una condicion en UN encargo, por la puerta del caso de uso. */
     private void pactar(long idPropiedad, long idEncargo, ValorAtributo valor) {
-        propiedades.editar(idPropiedad, new ComandoEdicion(null, null, null, null, null, null,
-                null, null,
-                List.of(new CondicionesDeEncargo(idEncargo, List.of(valor), null))), actor());
+        var resultado=editarCondiciones(idEncargo,List.of(valor),null,actor());
+        assertEquals(idPropiedad,resultado.idPropiedad());
     }
 
     /** Lo que la FICHA dice que se pacto en ese encargo. Lectura por el API. */
@@ -1435,8 +1476,18 @@ class SujetoDelDatoIntegrationTest {
                 .findFirst().orElse(null);
     }
 
+    /** El DTO conserva la moneda separada y su literal en la presentacion del importe. */
+    private void assertValorDeLaPropiedad(long idPropiedad, String clave, String valor,
+                                          String moneda, String mensaje) {
+        var atributo = propiedades.consultar(idPropiedad, actor()).atributos().stream()
+                .filter(a -> clave.equals(a.clave())).findFirst().orElseThrow();
+        assertEquals(moneda, atributo.moneda(), mensaje + ": moneda del dato");
+        assertMismoValor(moneda == null ? valor : moneda + " " + valor, atributo.valor(), mensaje);
+    }
+
     /**
-     * Cierra un encargo por SQL.
+     * Antecedente técnico de lectura: representa un episodio terminado sin
+     * afirmar que se ejecutó el caso de finalización del producto.
      *
      * <p>{@code ck_captacion_cierre} exige fecha y motivo juntos: 'O' es «otro»,
      * el unico codigo que no afirma nada sobre por que se cerro -- y aqui no se
@@ -1461,27 +1512,21 @@ class SujetoDelDatoIntegrationTest {
     /**
      * Un SEGUNDO episodio de la misma operacion, cuando el anterior ya cerro.
      *
-     * <p>Se abre por SQL porque hoy no hay caso de uso que reabra: {@code editar}
-     * con una operacion <b>actualiza el encargo vivo</b> y contesta «esta
-     * propiedad no tiene ningun encargo vivo de ALQUILER» cuando no lo hay.
-     * <b>Es una capacidad que falta, no un fallo de este corte</b>, y queda
-     * anotada como tal.
-     *
-     * <p>Lo que la prueba afirma no depende de como se abra: que el episodio
-     * nuevo <b>nace sin condiciones</b>. Que se cree por SQL lo hace, si acaso,
-     * mas exigente -- ni siquiera pasa por el caso de uso que podria limpiarlas.
+     * Se abre por el productor canónico con contexto vigente. Es preparación
+     * privada: nace sin condiciones dinámicas y no se acredita como habilitado,
+     * firmado o publicado. No copia términos del antecedente terminado.
      */
     private long abrirOtroEncargo(long idEncargoCerrado) {
-        return jdbc.queryForObject("""
-                insert into captacion (codigo_captacion, fecha_captacion, estado, id_propiedad,
-                                       id_rol_agente, motivo_operacion, organizacion_id,
-                                       fecha_inicio_encargo, fecha_fin_encargo, exclusividad)
-                select left('0C-' || md5(random()::text), 20), current_date, 'P', c.id_propiedad,
-                       c.id_rol_agente, c.motivo_operacion, c.organizacion_id,
-                       current_date, current_date + 180, c.exclusividad
-                  from captacion c where c.id_captacion = ?
-                returning id_captacion
-                """, Long.class, idEncargoCerrado);
+        Actor actor=actor();var sesion=sesionDe(actor);var anterior=encargos.consultar(idEncargoCerrado,actor);
+        var hoy=java.time.LocalDate.now(java.time.ZoneId.of("America/Lima"));
+        return new org.springframework.transaction.support.TransactionTemplate(gestor).execute(tx->{
+            contextos.exigirContexto(sesion.referenciaSesion(),sesion.revisionContexto(),actor);
+            return encargos.abrir(new com.controllocal.service.encargo.EncargoService.DatosApertura(
+                    anterior.idPropiedad(),actor.idRolOperativo(),null,
+                    com.controllocal.domain.inmueble.OperacionInmobiliaria.desde(anterior.operacion()),
+                    hoy,hoy.plusDays(180),false,"Segundo episodio explícito de TEST",null,
+                    com.controllocal.service.soporte.Procedencia.deLaPantalla(),List.of()),actor).id();
+        });
     }
 
     /** Una propiedad con las DOS operaciones abiertas: el caso que lo prueba todo. */
@@ -1492,10 +1537,10 @@ class SujetoDelDatoIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso 0C",
                 new Ubicacion("Av. Sujeto " + java.util.UUID.randomUUID().toString().substring(0, 8),
-                        "Miraflores", null, null, null, null, null, null, null),
+                        "Miraflores", null, null, null, "101", null, null, null),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
@@ -1506,8 +1551,8 @@ class SujetoDelDatoIntegrationTest {
                 null), actor).idPropiedad();
     }
 
-    private PublicacionService.DatosPublicacion publicacionDePrueba() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null, new BigDecimal("2500"),
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio publicacionDePrueba() {
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio("WEB_PROPIA", null, new BigDecimal("2500"),
                 "PEN", "Anuncio de prueba 0C", null, null);
     }
 
@@ -1547,5 +1592,11 @@ class SujetoDelDatoIntegrationTest {
                   join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum
                  where c.conrelid = ?::regclass and c.contype = 'p'
                 """, String.class, tabla);
+    }
+
+    private static java.util.Map<String,MotorDeCaptura.Respuesta> respuestas(java.util.Map<String,String> datos) {
+        var resultado=new java.util.LinkedHashMap<String,MotorDeCaptura.Respuesta>();
+        datos.forEach((clave,valor)->resultado.put(clave,MotorDeCaptura.Respuesta.conocida(valor)));
+        return resultado;
     }
 }

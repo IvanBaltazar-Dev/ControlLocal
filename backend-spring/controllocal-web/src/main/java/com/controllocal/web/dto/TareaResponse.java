@@ -20,12 +20,14 @@ public record TareaResponse(Long id, String tipo, String entidadTipo, Long entid
                             String estado, String prioridad, OffsetDateTime fechaProgramada,
                             Integer diasSinAccion, LocalDate fechaVencimiento,
                             boolean dependeDeMi, String lado, String paso,
-                            InterpretacionDelAsunto.Interpretacion interpretacion) {
+                            InterpretacionDelAsunto.Interpretacion interpretacion,
+                            java.time.LocalTime horaActuacion,
+                            com.controllocal.service.soporte.PoliticaDeDespacho.Clasificacion orden) {
 
     public static TareaResponse desde(TareaService.FichaTarea f) {
         return new TareaResponse(f.id(), f.tipo(), f.entidadTipo(), f.entidadId(), f.entidadCodigo(),
                 f.rutaResolver(), f.descripcion(), f.estado(), f.prioridad(), f.fechaProgramada(),
                 f.diasSinAccion(), f.fechaVencimiento(),
-                f.dependeDeMi(), f.lado(), f.paso(), f.interpretacion());
+                f.dependeDeMi(), f.lado(), f.paso(), f.interpretacion(),f.horaActuacion(),f.orden());
     }
 }

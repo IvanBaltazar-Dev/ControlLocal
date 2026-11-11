@@ -1,6 +1,7 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.inmueble.PrecioPropiedad;
+import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
@@ -8,17 +9,24 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.PrecioLocalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AutoridadDePropiedad;
+import com.controllocal.service.soporte.Alcances;
+import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.soporte.OperacionDelEncargo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 /**
  * <b>La puerta MANUAL de la serie economica no escribe lo que produce otro</b>
@@ -49,6 +57,38 @@ class PrecioLocalServiceImplTest {
             precios, propiedades, captaciones, operaciones, autoridad);
 
     private final Actor agente = new Actor(1L, 3L, 33L, Actor.AGENTE);
+
+    @Test void deniegaAntesDeConsultarLaSerieDeUnRecursoAjeno() {
+        when(autoridad.buscarParaLectura(agente, 7L)).thenReturn(Optional.empty());
+        assertThrows(NoEncontradoException.class, () -> servicio.listarPorLocal(7L, agente));
+        verifyNoInteractions(precios, propiedades, captaciones);
+    }
+
+    @Test void listaLaSerieAutorizadaSinCargarEncargosPorCadaHito() {
+        when(autoridad.buscarParaLectura(agente, 7L)).thenReturn(Optional.of(mock(Propiedad.class)));
+        when(autoridad.alcanceDeLectura(agente)).thenReturn(new Alcances.Alcance(1L, false, List.of(33L)));
+        when(precios.serieParaLectura(1L, 7L, List.of(33L))).thenReturn(List.of());
+        assertTrue(servicio.listarPorLocal(7L, agente).isEmpty());
+        verify(precios).serieParaLectura(1L, 7L, List.of(33L));
+        verifyNoInteractions(captaciones);
+    }
+
+    @Test void conservaLaFilaHistoricaSinEncargoSinReescribirlaComoPrecioAutorizado() {
+        when(autoridad.buscarParaLectura(agente,7L)).thenReturn(Optional.of(mock(Propiedad.class)));
+        when(autoridad.alcanceDeLectura(agente)).thenReturn(new Alcances.Alcance(1L,false,List.of(33L)));
+        // Snapshot de historia ya conservada; V76 prohíbe insertar una huérfana NUEVA.
+        PrecioPropiedad historico=mock(PrecioPropiedad.class);
+        when(historico.getIdPropiedad()).thenReturn(7L);
+        when(historico.getId()).thenReturn(91L);when(historico.getHito()).thenReturn("E");
+        when(historico.getMoneda()).thenReturn("PEN");when(historico.getMonto()).thenReturn(new BigDecimal("100.00"));
+        when(historico.getOperacion()).thenReturn("A");
+        when(historico.getFecha()).thenReturn(LocalDate.of(2001,1,1));
+        when(precios.serieParaLectura(1L,7L,List.of(33L))).thenReturn(List.of(historico));
+
+        var fila=servicio.listarPorLocal(7L,agente).getFirst();
+        assertEquals(91L,fila.id());assertEquals("E",fila.hito());assertEquals(new BigDecimal("100.00"),fila.monto());
+        verifyNoInteractions(captaciones);org.mockito.Mockito.verify(precios,org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
 
     @Test
     @DisplayName("un hito OFERTADO no se teclea: nace de una vuelta de la mesa")

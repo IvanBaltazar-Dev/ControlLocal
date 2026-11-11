@@ -57,6 +57,18 @@ public class HistorialEstado extends EntidadDeOrganizacion {
     @Column(name = "fecha_efectiva")
     private LocalDate fechaEfectiva;
 
+    @Column(name = "id_rol_responsable", updatable = false)
+    private Long idRolResponsable;
+
+    /** Fuente C5 exacta del cierre, independiente de quién registró el hecho. */
+    @Column(name = "id_revision_hito", updatable = false)
+    private Long idRevisionHito;
+
+    public Long getIdRolResponsable() { return idRolResponsable; }
+    public void setIdRolResponsable(Long valor) { idRolResponsable = valor; }
+    public Long getIdRevisionHito() { return idRevisionHito; }
+    public void setIdRevisionHito(Long valor) { idRevisionHito = valor; }
+
     @PrePersist
     void prePersist() {
         if (fechaEvento == null) {

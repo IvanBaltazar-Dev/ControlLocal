@@ -91,12 +91,23 @@ public final class ContratoDeEscritura {
      *                   conoce la clave
      */
     public static Vigencia dePropiedad(CatalogoAtributo definicion, String tipoPropiedad) {
+        return dePropiedad(definicion, tipoPropiedad, null);
+    }
+
+    /**
+     * Igual, con el <b>rotulo</b> de la clave sustituta ya resuelto por quien
+     * llama (`N16`). Se pasa resuelto y no se busca aqui porque quien compone
+     * la ficha ya tiene el mapa de definiciones delante: buscarlo otra vez
+     * seria una consulta por atributo retirado.
+     */
+    public static Vigencia dePropiedad(CatalogoAtributo definicion, String tipoPropiedad,
+                                       String rotuloSustituta) {
         Vigencia desconocida = siNoEstaEnElCatalogo(definicion);
         if (desconocida != null) {
             return desconocida;
         }
         if (!definicion.isActivo()) {
-            return Vigencia.historico(retirada(definicion));
+            return Vigencia.historico(retirada(definicion, rotuloSustituta));
         }
         if (!definicion.aplicaA(tipoPropiedad)) {
             return Vigencia.historico("Ya no se pregunta para "
@@ -112,12 +123,18 @@ public final class ContratoDeEscritura {
      */
     public static Vigencia deEncargo(CatalogoAtributo definicion, String tipoPropiedad,
                                      String codigoOperacion) {
+        return deEncargo(definicion, tipoPropiedad, codigoOperacion, null);
+    }
+
+    /** Igual, con el rotulo de la sustituta ya resuelto (`N16`). */
+    public static Vigencia deEncargo(CatalogoAtributo definicion, String tipoPropiedad,
+                                     String codigoOperacion, String rotuloSustituta) {
         Vigencia desconocida = siNoEstaEnElCatalogo(definicion);
         if (desconocida != null) {
             return desconocida;
         }
         if (!definicion.isActivo()) {
-            return Vigencia.historico(retirada(definicion));
+            return Vigencia.historico(retirada(definicion, rotuloSustituta));
         }
         if (!definicion.aplicaA(tipoPropiedad, codigoOperacion)) {
             return Vigencia.historico("Ya no se pacta en un encargo de "
@@ -141,9 +158,44 @@ public final class ContratoDeEscritura {
                         + "El valor se conserva tal como se registro.");
     }
 
+    /**
+     * <b>La retirada, dicha entera</b> (`N16`, V91): cuando fue y a favor de
+     * que, si consta.
+     *
+     * <p>Las dos piezas son opcionales por separado y ninguna se inventa:
+     * <ul>
+     *   <li>sin {@code fecha_retiro} —las claves retiradas antes de V91— la
+     *       frase no dice cuando. No se pone la fecha de la migracion ni la de
+     *       hoy: seria fechar otra cosa;</li>
+     *   <li>sin {@code sustituida_por} no dice sustituta, porque se retiro sin
+     *       ella o porque no se declaro. «No hay sustituta» y «no se sabe» se
+     *       dicen igual: <b>callando</b>, que es lo unico honesto cuando el
+     *       dato no distingue los dos casos.</li>
+     * </ul>
+     *
+     * @param rotuloSustituta el rotulo de la clave sustituta si quien llama
+     *                        pudo resolverlo; {@code null} para decirlo con la
+     *                        clave tal cual. Nunca se inventa un nombre
+     */
+    static String retirada(CatalogoAtributo definicion, String rotuloSustituta) {
+        StringBuilder frase = new StringBuilder("Ya no se pregunta: «")
+                .append(definicion.getRotulo())
+                .append("» se retiro del catalogo");
+        if (definicion.getFechaRetiro() != null) {
+            frase.append(" el ").append(Fechas.enPalabras(definicion.getFechaRetiro()));
+        }
+        frase.append('.');
+        if (definicion.getSustituidaPor() != null && !definicion.getSustituidaPor().isBlank()) {
+            frase.append(" La sustituye «")
+                    .append(rotuloSustituta != null && !rotuloSustituta.isBlank()
+                            ? rotuloSustituta : definicion.getSustituidaPor())
+                    .append("».");
+        }
+        return frase.append(" El valor se conserva tal como se registro.").toString();
+    }
+
     private static String retirada(CatalogoAtributo definicion) {
-        return "Ya no se pregunta: «" + definicion.getRotulo()
-                + "» se retiro del catalogo. El valor se conserva tal como se registro.";
+        return retirada(definicion, null);
     }
 
     private static String nombreDeLaOperacion(String codigoOperacion) {

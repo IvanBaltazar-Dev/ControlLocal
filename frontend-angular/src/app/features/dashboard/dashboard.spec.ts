@@ -56,10 +56,8 @@ const INDICADORES: IndicadoresResumen = {
   operativo: {
     recontactosVencidos: 2,
     recontactosAlDia: 5,
-    diasPromedioSinSeguimiento: 9,
     visitasPendientes: 3,
     solicitudesSinCierre: 1,
-    conversionProspeccionCaptacion: 40,
   },
   // Ya clasificadas por el backend (E1). El Inicio ya no las dibuja —el foco
   // sale de la bandeja y del foco del broker—, pero siguen viajando.
@@ -70,13 +68,6 @@ const INDICADORES: IndicadoresResumen = {
       nivelAtencion: 'ALTO',
       requiereAtencion: true,
       prioridad: 1,
-    },
-    {
-      concepto: 'DEMORA_DE_SEGUIMIENTO',
-      valor: 9,
-      nivelAtencion: 'MEDIO',
-      requiereAtencion: true,
-      prioridad: 5,
     },
   ],
   pendientesDeAtencion: 8,
@@ -268,6 +259,8 @@ function carga(parcial: Partial<DashboardCarga> = {}): DashboardCarga {
 
 function sesion(rol: RolSesion): Sesion {
   return {
+      idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+      modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
     token: 't',
     expiraEnSegundos: 3600,
     rol,

@@ -29,6 +29,8 @@ public interface CandidatoTarea {
      * entidad no impone plazo.
      */
     LocalDate getFechaPlazo();
+    java.time.LocalTime getHoraPlazo();
+    java.time.OffsetDateTime getDetectadoEn();
 
     /**
      * Dato suelto que el disparador necesita para decidir prioridad o mensaje

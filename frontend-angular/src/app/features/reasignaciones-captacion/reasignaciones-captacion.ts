@@ -29,7 +29,7 @@ import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import {
   CandidatoAgente,
-  Captacion,
+  EncargoReasignable,
   CaptacionesService,
   FiltrosCaptacionesReasignables,
   ReasignacionCaptacion,
@@ -60,7 +60,7 @@ interface FiltrosReasignacionUrl {
   page: number;
 }
 
-type ResultadoCaptaciones = PageResponse<Captacion> | { error: string };
+type ResultadoCaptaciones = PageResponse<EncargoReasignable> | { error: string };
 
 /**
  * Gobierno de responsables de captación.
@@ -107,7 +107,7 @@ export class ReasignacionesCaptacion implements OnInit {
   protected readonly exito = signal<string | null>(null);
   protected readonly avisoExportacion = signal<string | null>(null);
   protected readonly dialogo = signal(false);
-  protected readonly paginaDatos = signal<PageResponse<Captacion>>(paginaVacia(POR_PAGINA));
+  protected readonly paginaDatos = signal<PageResponse<EncargoReasignable>>(paginaVacia(POR_PAGINA));
   /**
    * **Los destinos que el Core dice** para la captación seleccionada
    * (D-P0-12). No es «los agentes del tenant»: llega ya depurada por las seis
@@ -482,8 +482,8 @@ export class ReasignacionesCaptacion implements OnInit {
 
   private corregirPagina(
     filtros: FiltrosReasignacionUrl,
-    pagina: PageResponse<Captacion>,
-  ): Observable<PageResponse<Captacion>> {
+    pagina: PageResponse<EncargoReasignable>,
+  ): Observable<PageResponse<EncargoReasignable>> {
     const ultima = Math.max(1, Math.ceil(pagina.totalRecords / POR_PAGINA));
     if (filtros.page > ultima) {
       this.navegar({ page: ultima }, true);

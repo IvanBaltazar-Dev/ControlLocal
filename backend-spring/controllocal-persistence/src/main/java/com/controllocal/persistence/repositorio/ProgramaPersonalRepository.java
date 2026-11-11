@@ -1,0 +1,44 @@
+package com.controllocal.persistence.repositorio;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+import java.sql.*;
+import java.time.Instant;
+import java.util.*;
+
+/** Persistencia de PlanTareaAcotado/PasoTarea. Identidad de ocurrencia y fencing residen en PostgreSQL. */
+@Repository
+public class ProgramaPersonalRepository {
+    public record Programa(long id,long organizacion,UUID referencia,long persona,long propietario,long version,long versionMandato,String estado,String mandato,
+                           Instant proxima,Instant vence,long segundos,int maxOcurrencias,int ocurrencias,Instant registrada,Instant actualizada,String causa) { }
+    public record Paso(long id,long organizacion,long programa,UUID referencia,long versionMandato,Instant programada,String estado,int intentos,UUID reclamo,Instant lease,String prueba,String causa,Instant finalizada) { }
+    private final JdbcTemplate jdbc;
+    public ProgramaPersonalRepository(JdbcTemplate j){jdbc=j;}
+    private static final String P="id_plan_tarea,organizacion_id,referencia,id_persona,id_rol_propietario,version,version_mandato,estado,mandato_json,proxima_en,vence_en,frecuencia_segundos,max_ocurrencias,ocurrencias,registrado_en,actualizado_en,causa_estado";
+    private static final String S="id_paso_tarea,organizacion_id,id_plan_tarea,referencia,version_mandato,programada_en,estado,intentos,reclamo,lease_hasta,prueba_json,causa,finalizada_en";
+    private static Instant instante(ResultSet r,int i)throws SQLException{var t=r.getTimestamp(i);return t==null?null:t.toInstant();}
+    private static Programa programa(ResultSet r,int n)throws SQLException{return new Programa(r.getLong(1),r.getLong(2),r.getObject(3,UUID.class),r.getLong(4),r.getLong(5),r.getLong(6),r.getLong(7),r.getString(8),r.getString(9),instante(r,10),instante(r,11),r.getLong(12),r.getInt(13),r.getInt(14),instante(r,15),instante(r,16),r.getString(17));}
+    private static Paso paso(ResultSet r,int n)throws SQLException{return new Paso(r.getLong(1),r.getLong(2),r.getLong(3),r.getObject(4,UUID.class),r.getLong(5),instante(r,6),r.getString(7),r.getInt(8),r.getObject(9,UUID.class),instante(r,10),r.getString(11),r.getString(12),instante(r,13));}
+    private static Timestamp ts(Instant i){return i==null?null:Timestamp.from(i);}
+    public Optional<Programa> propio(long org,long rol,UUID ref,boolean lock){return jdbc.query("select "+P+" from plan_tarea_acotado where organizacion_id=? and id_rol_propietario=? and referencia=?"+(lock?" for update":""),ProgramaPersonalRepository::programa,org,rol,ref).stream().findFirst();}
+    public List<Programa> listar(long org,long rol,int pagina,int tamano){return jdbc.query("select "+P+" from plan_tarea_acotado where organizacion_id=? and id_rol_propietario=? order by id_plan_tarea limit ? offset ?",ProgramaPersonalRepository::programa,org,rol,tamano,Math.multiplyExact((long)pagina-1,tamano));}
+    public Programa crear(long org,long persona,long rol,String mandato,Instant proxima,Instant vence,long frecuencia,int max,Instant ahora){return jdbc.query("insert into plan_tarea_acotado(organizacion_id,referencia,id_persona,id_rol_propietario,estado,mandato_json,proxima_en,vence_en,frecuencia_segundos,max_ocurrencias,registrado_en,actualizado_en) values(?,?,?,?,'ACTIVO',?,?,?,?,?,?,?) returning "+P,ProgramaPersonalRepository::programa,org,UUID.randomUUID(),persona,rol,mandato,ts(proxima),ts(vence),frecuencia,max,ts(ahora),ts(ahora)).getFirst();}
+    public boolean configurar(Programa p,String mandato,Instant proxima,Instant vence,long frecuencia,int max,Instant ahora){return jdbc.update("update plan_tarea_acotado set mandato_json=?,proxima_en=?,vence_en=?,frecuencia_segundos=?,max_ocurrencias=?,version=version+1,version_mandato=version_mandato+1,actualizado_en=? where organizacion_id=? and id_plan_tarea=? and version=? and estado in('ACTIVO','PAUSADO')",mandato,ts(proxima),ts(vence),frecuencia,max,ts(ahora),p.organizacion(),p.id(),p.version())==1;}
+    public boolean estado(Programa p,String estado,String causa,Instant proxima,Instant ahora){return jdbc.update("update plan_tarea_acotado set estado=?,causa_estado=?,proxima_en=?,version=version+1,actualizado_en=? where organizacion_id=? and id_plan_tarea=? and version=?",estado,causa,ts(proxima),ts(ahora),p.organizacion(),p.id(),p.version())==1;}
+    /** Sólo metadata de mandatos expresos. El ejecutor debe autorizar antes de leer el recurso. */
+    public Optional<Programa> candidato(Instant ahora){return jdbc.query("select "+P+" from plan_tarea_acotado p where estado='ACTIVO' and (proxima_en<=? or exists(select 1 from paso_tarea s where s.organizacion_id=p.organizacion_id and s.id_plan_tarea=p.id_plan_tarea and s.estado='RECLAMADA' and s.lease_hasta<=?)) and not exists(select 1 from paso_tarea s where s.organizacion_id=p.organizacion_id and s.id_plan_tarea=p.id_plan_tarea and s.estado='RECLAMADA' and s.lease_hasta>?) order by proxima_en,id_plan_tarea limit 1 for update of p skip locked",ProgramaPersonalRepository::programa,ts(ahora),ts(ahora),ts(ahora)).stream().findFirst();}
+    public Optional<Paso> pendiente(Programa p){return jdbc.query("select "+S+" from paso_tarea where organizacion_id=? and id_plan_tarea=? and estado='RECLAMADA' for update",ProgramaPersonalRepository::paso,p.organizacion(),p.id()).stream().findFirst();}
+    public Paso crearPaso(Programa p,UUID token,Instant lease,Instant ahora){
+        var paso=jdbc.query("insert into paso_tarea(organizacion_id,id_plan_tarea,referencia,version_mandato,programada_en,estado,intentos,reclamo,lease_hasta) values(?,?,?,?,?,'RECLAMADA',1,?,?) returning "+S,ProgramaPersonalRepository::paso,p.organizacion(),p.id(),UUID.randomUUID(),p.versionMandato(),ts(p.proxima()),token,ts(lease)).getFirst();
+        if(jdbc.update("update plan_tarea_acotado set ocurrencias=ocurrencias+1,proxima_en=?,actualizado_en=? where organizacion_id=? and id_plan_tarea=? and version=? and estado='ACTIVO' and ocurrencias<max_ocurrencias",ts(ahora.plusSeconds(p.segundos())),ts(ahora),p.organizacion(),p.id(),p.version())!=1)throw new IllegalStateException("La ocurrencia perdió su mandato exclusivo.");return paso;
+    }
+    public Paso reclamarDeNuevo(Programa p,Paso s,UUID token,Instant lease,Instant ahora){
+        if(jdbc.update("update paso_tarea set intentos=intentos+1,reclamo=?,lease_hasta=? where organizacion_id=? and id_paso_tarea=? and estado='RECLAMADA' and reclamo=? and lease_hasta<=?",token,ts(lease),p.organizacion(),s.id(),s.reclamo(),ts(ahora))!=1)throw new IllegalStateException("Cambió el reclamo de la ocurrencia.");return paso(p.organizacion(),s.referencia()).orElseThrow();
+    }
+    public Optional<Paso> paso(long org,UUID ref){return jdbc.query("select "+S+" from paso_tarea where organizacion_id=? and referencia=?",ProgramaPersonalRepository::paso,org,ref).stream().findFirst();}
+    public List<Paso> pasos(Programa p,int pagina,int tamano){return jdbc.query("select "+S.replace("prueba_json","null::text")+" from paso_tarea where organizacion_id=? and id_plan_tarea=? order by id_paso_tarea desc limit ? offset ?",ProgramaPersonalRepository::paso,p.organizacion(),p.id(),tamano,Math.multiplyExact((long)pagina-1,tamano));}
+    public boolean terminar(Programa p,Paso s,UUID token,String estado,String resultado,String prueba,String causa,Instant ahora){return jdbc.update("update paso_tarea set estado=?,resultado_json=?,prueba_json=?,causa=?,finalizada_en=? where organizacion_id=? and id_paso_tarea=? and id_plan_tarea=? and estado='RECLAMADA' and reclamo=? and lease_hasta>? and version_mandato=?",estado,resultado,prueba,causa,ts(ahora),p.organizacion(),s.id(),p.id(),token,ts(ahora),p.versionMandato())==1;}
+    public Optional<String> resultadoAutorizado(Programa p,Paso s){return jdbc.query("select resultado_json from paso_tarea where organizacion_id=? and id_plan_tarea=? and id_paso_tarea=? and version_mandato=? and estado in('COMPLETADA','SIN_RESULTADO')",(r,n)->r.getString(1),p.organizacion(),p.id(),s.id(),p.versionMandato()).stream().filter(Objects::nonNull).findFirst();}
+    public boolean falloReintentable(Programa p,Paso s,UUID token,Instant despues,Instant ahora){return jdbc.update("update paso_tarea set causa='FALLO_TECNICO_REINTENTO_PENDIENTE',lease_hasta=? where organizacion_id=? and id_paso_tarea=? and id_plan_tarea=? and estado='RECLAMADA' and reclamo=? and lease_hasta>? and version_mandato=?",ts(despues),p.organizacion(),s.id(),p.id(),token,ts(ahora),p.versionMandato())==1;}
+    public void detenerPendiente(Programa p,String estado,String causa,Instant ahora){jdbc.update("update paso_tarea set estado=?,causa=?,finalizada_en=? where organizacion_id=? and id_plan_tarea=? and estado='RECLAMADA'",estado,causa,ts(ahora),p.organizacion(),p.id());}
+}

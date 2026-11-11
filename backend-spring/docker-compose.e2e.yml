@@ -89,7 +89,7 @@ services:
     ports:
       - "127.0.0.1:${CONTROLLOCAL_E2E_API_PORT:?CONTROLLOCAL_E2E_API_PORT requerido}:8090"
     volumes:
-      - ./controllocal-app/target/controllocal-app-2.0.0-SNAPSHOT.jar:/app/app.jar:ro
+      - "${CONTROLLOCAL_E2E_API_JAR:-./controllocal-app/target/controllocal-app-2.0.0-SNAPSHOT.jar}:/app/app.jar:ro"
     tmpfs:
       - /almacen-e2e
     command: ["java", "-jar", "/app/app.jar"]

@@ -9,8 +9,10 @@ import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura.DefinicionCaptura;
 import com.controllocal.service.captura.MotorDeCaptura.Pregunta;
 import com.controllocal.service.captura.MotorDeCaptura;
+import com.controllocal.service.captura.SuficienciaInmueble;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.EscritorEstructural;
+import com.controllocal.service.soporte.AtributosGobernados;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -72,6 +74,12 @@ class AutoridadDelDatoIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void prepararPertenenciaTecnicaDePrueba(){
+        com.controllocal.integracion.soporte.SemillaDeIdentidadPruebas.aplicar(jdbc);
+    }
+
     @Autowired MotorDeCaptura motor;
     @Autowired PropiedadUniversalService propiedades;
 
@@ -92,14 +100,12 @@ class AutoridadDelDatoIntegrationTest {
                 null, null, null, "DEPARTAMENTO", null, "Prueba del enrutador de autoridad",
                 new PropiedadUniversalService.Ubicacion(
                         "Av. Autoridad " + System.nanoTime() % 100000, "Miraflores",
-                        null, null, null, null, null, null, null),
+                        null, null, null, "101", null, null, null),
                 List.of(new PropiedadUniversalService.Titular(idPropietario, null, Boolean.TRUE)),
                 List.of(new PropiedadUniversalService.ValorAtributo("metraje_total", "90"),
                         new PropiedadUniversalService.ValorAtributo("dormitorios", "2"),
                         new PropiedadUniversalService.ValorAtributo("ambientes", "5")),
-                List.of(new PropiedadUniversalService.OperacionSolicitada(
-                        "VENTA", new java.math.BigDecimal("150000"), "USD",
-                        null, null, null, null, null, null, null)),
+                List.of(),
                 null), actor);
         return resultado.idPropiedad();
     }
@@ -115,8 +121,7 @@ class AutoridadDelDatoIntegrationTest {
                 ((Number) fila.get("id_persona_rol")).longValue(), Actor.AGENTE);
     }
 
-    private static final List<String> TIPOS = List.of(
-            "LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO");
+    private static final List<String> TIPOS = AtributosGobernados.nombresDeTipos();
     private static final List<String> OPERACIONES = List.of("VENTA", "ALQUILER");
 
     /**
@@ -141,14 +146,14 @@ class AutoridadDelDatoIntegrationTest {
                 idRol == null ? 1L : idRol, Actor.AGENTE);
     }
 
-    /** Todas las claves que el motor publica, para los siete tipos y las dos operaciones. */
+    /** Todas las claves que el motor publica, para los tipos fisicos y las dos operaciones. */
     private Set<String> clavesPublicadas() {
         Set<String> claves = new TreeSet<>();
         Actor actor = actor();
         for (String tipo : TIPOS) {
             for (String operacion : OPERACIONES) {
                 DefinicionCaptura definicion =
-                        motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, operacion, actor);
+                        motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, operacion, null, actor);
                 definicion.todas().stream().map(Pregunta::clave).forEach(claves::add);
             }
         }
@@ -165,6 +170,8 @@ class AutoridadDelDatoIntegrationTest {
 
         for (String clave : clavesPublicadas()) {
             boolean esEstructuralDelGuion = GuionRegistroPropiedad.esEstructural(clave);
+            boolean esContextual=clave.startsWith("contexto.")
+                    &&SuficienciaInmueble.COORDENADAS_APLICABILIDAD.contains(clave.substring("contexto.".length()));
             // Una clave publicada puede venir CALIFICADA con su operacion
             // --`garantia_meses:ALQUILER`, `importe:VENTA`--. Lo que se busca en
             // el catalogo es siempre la base: el sufijo dice a que encargo
@@ -191,7 +198,7 @@ class AutoridadDelDatoIntegrationTest {
                     && "ENCARGO".equals(enCatalogo.get("sujeto"));
 
             int autoridades = (autoridadEstructural ? 1 : 0) + (deLaPropiedad ? 1 : 0)
-                    + (delEncargo ? 1 : 0);
+                    + (delEncargo ? 1 : 0) + (esContextual ? 1 : 0);
 
             if (autoridades == 0) {
                 fantasmas.add(clave);
@@ -216,9 +223,34 @@ class AutoridadDelDatoIntegrationTest {
 
                     Cada clave publicada tiene que declarar donde vive su valor:
                     o es estructural del agregado, o es un atributo gobernado con
-                    destino = ATRIBUTO. Nunca las dos, nunca ninguna (D-E4-3).
+                    destino = ATRIBUTO, o es una coordenada cerrada del contexto JSON
+                    de captura. Nunca dos autoridades ni ninguna (D-E4-3/C2).
                     """.formatted(fantasmas, doblesVerdades));
         }
+    }
+
+    @Test
+    @DisplayName("C2: la coordenada contextual tiene autoridad durable en borrador y físico, sin otro EAV")
+    void laAutoridadContextualSeConservaAlMaterializarElFisico(){
+        Actor actor=actorAgente();
+        var respuestas=Map.of(
+                "tipoPropiedad",MotorDeCaptura.Respuesta.conocida("DEPARTAMENTO"),
+                "direccion",MotorDeCaptura.Respuesta.conocida("Av. Contexto TEST "+java.util.UUID.randomUUID()),
+                "distrito",MotorDeCaptura.Respuesta.conocida("Miraflores"),
+                "interiorUnidad",MotorDeCaptura.Respuesta.conocida("101"),
+                "contexto.unidadDeEdificio",MotorDeCaptura.Respuesta.conocida("APLICA"));
+        var borrador=motor.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD,
+                null,null,respuestas,null),com.controllocal.service.soporte.Procedencia.deLaPantalla(),actor);
+        assertTrue(borrador.listoParaEjecutar(),"La unidad TEST está identificada; no se exige Encargo ni todos sus mínimos.");
+        assertEquals("APLICA",jdbc.queryForObject("select contexto_captura::jsonb->'aplicabilidad'->>'unidadDeEdificio' from borrador_captura where id_borrador=?",
+                String.class,borrador.idBorrador()));
+        var alta=motor.ejecutar(borrador.idBorrador(),borrador.version(),java.util.UUID.randomUUID().toString(),
+                com.controllocal.service.soporte.Procedencia.deLaPantalla(),actor);
+        assertEquals("APLICA",jdbc.queryForObject("select contexto_captura::jsonb->'aplicabilidad'->>'unidadDeEdificio' from propiedad where id_propiedad=?",
+                String.class,alta.idPropiedad()));
+        assertEquals(0,jdbc.queryForObject("select count(*) from atributo_propiedad where id_propiedad=? and clave like 'contexto.%'",
+                Integer.class,alta.idPropiedad()));
+        assertTrue(alta.idsEncargos().isEmpty());
     }
 
     @Test
@@ -463,8 +495,7 @@ class AutoridadDelDatoIntegrationTest {
     @Test
     @DisplayName("la definicion publica el minimo que declara el catalogo")
     void elContratoPublicaElRango() {
-        var definicion = motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD,
-                "DEPARTAMENTO", "VENTA", actor());
+        var definicion = motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", "VENTA", null, actor());
 
         MotorDeCaptura.Pregunta ambientes = definicion.todas().stream()
                 .filter(p -> "ambientes".equals(p.clave()))
@@ -499,14 +530,12 @@ class AutoridadDelDatoIntegrationTest {
                 null, null, null, "DEPARTAMENTO", null, null,
                 new PropiedadUniversalService.Ubicacion(
                         "Av. Rango " + System.nanoTime() % 100000, "Miraflores",
-                        null, null, null, null, null, null, null),
+                        null, null, null, "101", null, null, null),
                 List.of(new PropiedadUniversalService.Titular(idPropietario, null, Boolean.TRUE)),
                 List.of(new PropiedadUniversalService.ValorAtributo("metraje_total", "90"),
                         new PropiedadUniversalService.ValorAtributo("dormitorios", "2"),
                         new PropiedadUniversalService.ValorAtributo("ambientes", "0")),
-                List.of(new PropiedadUniversalService.OperacionSolicitada(
-                        "VENTA", new java.math.BigDecimal("150000"), "USD",
-                        null, null, null, null, null, null, null)),
+                List.of(),
                 null);
 
         var error = assertThrows(ReglaNegocioException.class,
@@ -591,7 +620,7 @@ class AutoridadDelDatoIntegrationTest {
         propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
                 null, null, null, null, null,
                 List.of(new PropiedadUniversalService.ValorAtributo("ambientes", "7")),
-                null, null), actorAgente());
+                null, null).conVersion(propiedades.consultar(id,actorAgente()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actorAgente());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actorAgente());
         assertEquals("11223344", atributoDeLaFicha(ficha, "partida_registral"),
@@ -617,7 +646,7 @@ class AutoridadDelDatoIntegrationTest {
         propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
                 null, null, null, null, null,
                 List.of(new PropiedadUniversalService.ValorAtributo("partida_registral", "99887766")),
-                null, null), actorAgente());
+                null, null).conVersion(propiedades.consultar(id,actorAgente()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actorAgente());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actorAgente());
         assertEquals("99887766", atributoDeLaFicha(ficha, "partida_registral"));
@@ -644,7 +673,7 @@ class AutoridadDelDatoIntegrationTest {
 
         propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
                 null, null, null, null, null, null, null,
-                List.of("partida_registral")), actorAgente());
+                List.of("partida_registral")).conVersion(propiedades.consultar(id,actorAgente()).versionFisica()).conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actorAgente());
 
         assertNull(jdbc.queryForMap(
                 "select partida_registral from propiedad where id_propiedad = ?", id)
@@ -750,8 +779,7 @@ class AutoridadDelDatoIntegrationTest {
 
         List<String> ausentes = new ArrayList<>();
         dondeAplica.forEach((clave, tipo) -> {
-            DefinicionCaptura definicion = motor.definicion(
-                    MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA", actor());
+            DefinicionCaptura definicion = motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA", null, actor());
             boolean publicada = definicion.todas().stream()
                     .map(Pregunta::clave)
                     .anyMatch(clave::equals);
@@ -784,16 +812,14 @@ class AutoridadDelDatoIntegrationTest {
                 null, null, codigoIrrepetible(), "DEPARTAMENTO", null, "Identidad registral V79",
                 new PropiedadUniversalService.Ubicacion(
                         "Av. Registral " + java.util.UUID.randomUUID(), "Miraflores",
-                        null, null, null, null, null, null, null),
+                        null, null, null, "101", null, null, null),
                 List.of(new PropiedadUniversalService.Titular(idPropietario, null, Boolean.TRUE)),
                 List.of(new PropiedadUniversalService.ValorAtributo("metraje_total", "90"),
                         new PropiedadUniversalService.ValorAtributo("dormitorios", "2"),
                         new PropiedadUniversalService.ValorAtributo("ambientes", "5"),
                         new PropiedadUniversalService.ValorAtributo("partida_registral", partida),
                         new PropiedadUniversalService.ValorAtributo("oficina_registral", oficina)),
-                List.of(new PropiedadUniversalService.OperacionSolicitada(
-                        "ALQUILER", new java.math.BigDecimal("2500"), "PEN",
-                        null, null, null, null, null, null, null)),
+                List.of(),
                 null), actor).idPropiedad();
     }
 

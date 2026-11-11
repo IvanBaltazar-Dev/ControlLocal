@@ -63,7 +63,7 @@ public class ClienteServiceImpl implements ClienteService {
         int tamanoValido = tamano(tamano);
         PageRequest pageable = PageRequest.of(Math.max(0, pagina - 1), tamanoValido);
         if (!esBroker(actor)) {
-            // Catalogo compartido: admin y agente ven TODOS los del tenant.
+            // Catalogo compartido entre agentes; gobernar no concede cartera.
             return paginaDe(clientes.pagina(actor.idOrganizacion(), pageable));
         }
         List<Long> ids = idsDelEquipo(actor);
@@ -155,10 +155,15 @@ public class ClienteServiceImpl implements ClienteService {
     public FichaCliente obtener(long id, Actor actor) {
         return ficha(cargarConAcceso(id, actor));
     }
+    @Override @Transactional(readOnly=true)
+    public java.util.Optional<Long> personaLegible(long id,Actor actor){
+        Alcances.exigirOperador(actor);return clientes.personaContextual(actor.idOrganizacion(),id).filter(p->alcanza(id,actor));
+    }
 
     @Override
     @Transactional
     public FichaCliente registrar(DatosCliente datos, Actor actor) {
+        Alcances.exigirOperador(actor);
         if (datos == null) {
             throw new ReglaNegocioException("Los datos del cliente son obligatorios.");
         }
@@ -231,7 +236,8 @@ public class ClienteServiceImpl implements ClienteService {
         if (cliente == null) {
             return false;
         }
-        if (!alcanza(cliente, actor)) {
+        Alcances.exigirOperador(actor);
+        if (!alcanza(cliente.getId(), actor)) {
             throw new AccesoNoAutorizadoException();
         }
         Persona persona = cliente.getRol().getPersona();
@@ -255,19 +261,19 @@ public class ClienteServiceImpl implements ClienteService {
     // ------------------------------------------------------------------
 
     private DetalleCliente cargarConAcceso(long id, Actor actor) {
-        DetalleCliente cliente = clientes.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Cliente"));
-        if (!alcanza(cliente, actor)) {
+        clientes.personaContextual(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Cliente"));
+        Alcances.exigirOperador(actor);
+        if (!alcanza(id, actor)) {
             throw new AccesoNoAutorizadoException();
         }
-        return cliente;
+        return clientes.buscarFicha(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Cliente"));
     }
 
-    private boolean alcanza(DetalleCliente cliente, Actor actor) {
+    private boolean alcanza(long idCliente, Actor actor) {
         if (!esBroker(actor)) {
             return true;
         }
-        return idsDelEquipo(actor).contains(cliente.getId());
+        return idsDelEquipo(actor).contains(idCliente);
     }
 
     /** Clientes que el equipo del broker trabaja (via oportunidades), ids desc. */
@@ -280,7 +286,8 @@ public class ClienteServiceImpl implements ClienteService {
     }
 
     private static boolean esBroker(Actor actor) {
-        return !actor.esTenantAdmin() && !actor.esAgente();
+        Alcances.exigirOperador(actor);
+        return actor.esBroker();
     }
 
     private static int tamano(int tamano) {

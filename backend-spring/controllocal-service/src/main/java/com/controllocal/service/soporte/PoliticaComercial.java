@@ -84,18 +84,6 @@ public final class PoliticaComercial {
                         Alcance alcance, int version) {
     }
 
-    /**
-     * Cuanto aguanta una prospeccion sin que nadie la vuelva a contactar antes
-     * de darla por atrasada. Es el umbral mas importante del sistema: dispara la
-     * tarea de la bandeja, el indicador de recontactos vencidos y la alerta de
-     * la campana, y los tres tienen que decir lo mismo.
-     */
-    public static final Regla RECONTACTO = new Regla(
-            "recontacto.dias",
-            "Dias que puede pasar una prospeccion sin que nadie la vuelva a contactar "
-                    + "antes de considerarla atrasada.",
-            7, Unidad.DIAS, Alcance.GLOBAL, 1);
-
     /** Con cuanta anticipacion una visita agendada entra en la bandeja del agente. */
     public static final Regla VISITA_PROXIMA = new Regla(
             "visita.dias-de-aviso",
@@ -108,17 +96,6 @@ public final class PoliticaComercial {
             "Dias entre un informe al propietario y el siguiente mientras el encargo "
                     + "sigue activo.",
             15, Unidad.DIAS, Alcance.GLOBAL, 1);
-
-    /**
-     * A partir de que puntaje una coincidencia de cartera merece proponerse. Por
-     * debajo, la propuesta es ruido en la bandeja y ensena al agente a
-     * ignorarla.
-     */
-    public static final Regla COINCIDENCIA_PROPONIBLE = new Regla(
-            "coincidencia.puntaje-minimo",
-            "Puntaje de compatibilidad a partir del cual vale la pena proponerle un "
-                    + "local a un interesado.",
-            60, Unidad.PUNTOS, Alcance.GLOBAL, 1);
 
     /** Cuanto dura un encargo cuando nadie dice lo contrario. El agente puede cambiarlo. */
     public static final Regla ENCARGO = new Regla(
@@ -158,55 +135,6 @@ public final class PoliticaComercial {
     // habia divergido: el prototipo decia 10 dias de reporte al propietario
     // donde aqui dicen 15. Suben aqui, que es donde se decide que significa un
     // numero, y el prototipo deja de ser fuente ejecutable.
-
-    /**
-     * Proyeccion sobre meta a partir de la cual se va <b>en ritmo</b>.
-     *
-     * <p>Es 100 % y no 95 % a proposito: la pregunta que responde el semaforo no
-     * es «¿voy bien?» sino «¿con este ritmo llego?». Si la proyeccion no llega a
-     * la meta, no se va en ritmo aunque falte poco.
-     */
-    public static final Regla RITMO_LLEGA = new Regla(
-            "ritmo.proyeccion-en-ritmo",
-            "Proyeccion al cierre, en porcentaje de la meta, a partir de la cual el ritmo "
-                    + "es suficiente.",
-            100, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
-
-    /**
-     * Por debajo de esta proyeccion la desviacion deja de ser recuperable sola.
-     * Entre este valor y {@link #RITMO_LLEGA} el estado es de atencion.
-     */
-    public static final Regla RITMO_CERCA = new Regla(
-            "ritmo.proyeccion-atencion",
-            "Proyeccion al cierre, en porcentaje de la meta, por debajo de la cual la brecha "
-                    + "ya necesita intervencion.",
-            85, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
-
-    /**
-     * Mientras el periodo lleve menos recorrido que esto, el peor estado posible
-     * es «atencion».
-     *
-     * <p>El dia 2 de un mes de 31, el que lleva cero proyecta cero y saldria rojo
-     * todos los meses. Un rojo que aparece siempre al principio ensena a
-     * ignorarlo.
-     */
-    public static final Regla RITMO_ARRANQUE = new Regla(
-            "ritmo.periodo-minimo-para-proyectar",
-            "Porcentaje del periodo que tiene que haber transcurrido antes de que el ritmo "
-                    + "pueda declararse fuera de ritmo.",
-            15, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
-
-    /**
-     * Meta por debajo de la cual no se reparte por dias.
-     *
-     * <p>No todos los dias se firma un contrato. Con meta 2 en 31 dias, prorratear
-     * dice «hoy deberias llevar 1,2», que es una cadencia que el negocio no
-     * tiene. Se mira solo si ya se cumplio y cuanto periodo queda.
-     */
-    public static final Regla RITMO_VOLUMEN_MINIMO = new Regla(
-            "ritmo.volumen-minimo-para-cadencia",
-            "Meta minima del periodo para que tenga sentido repartirla por dias.",
-            3, Unidad.PUNTOS, Alcance.GLOBAL, 1);
 
     /**
      * Muestra minima para que un porcentaje concluya algo.
@@ -283,9 +211,8 @@ public final class PoliticaComercial {
 
     /** Catalogo completo. Su unico consumidor hoy es el test que vigila la politica. */
     public static final List<Regla> REGLAS = List.of(
-            RECONTACTO, VISITA_PROXIMA, REPORTE_PROPIETARIO, COINCIDENCIA_PROPONIBLE,
+            VISITA_PROXIMA, REPORTE_PROPIETARIO,
             ENCARGO, COMISION_MAXIMA, MOTIVO_REASIGNACION,
-            RITMO_LLEGA, RITMO_CERCA, RITMO_ARRANQUE, RITMO_VOLUMEN_MINIMO,
             MUESTRA_MINIMA, RANGO_MUESTRA_MINIMA, RENTA_SIN_AJUSTAR,
             BANDA_METRAJE_PEQUENO, BANDA_METRAJE_ESTANDAR, BANDA_METRAJE_GRANDE);
 
@@ -295,20 +222,6 @@ public final class PoliticaComercial {
     // ------------------------------------------------------------------
     // Las reglas, aplicadas
     // ------------------------------------------------------------------
-
-    /**
-     * Fecha a partir de la cual un recontacto pendiente esta atrasado: lo que
-     * quedo en o antes de este dia ya vencio. Los tres productores del sistema
-     * llaman aqui, asi que no pueden discrepar.
-     */
-    public static LocalDate limiteDeRecontacto(LocalDate hoy) {
-        return hoy.minusDays(RECONTACTO.valor());
-    }
-
-    /** Hasta que dia mira la bandeja para avisar de visitas que ya vienen. */
-    public static LocalDate horizonteDeVisitas(LocalDate hoy) {
-        return hoy.plusDays(VISITA_PROXIMA.valor());
-    }
 
     /** Cuando toca el siguiente informe al propietario contando desde el ultimo. */
     public static LocalDate proximoReporteAlPropietario(LocalDate desde) {
@@ -320,30 +233,9 @@ public final class PoliticaComercial {
         return inicio.plusMonths(ENCARGO.valor());
     }
 
-    /** Si esta coincidencia de cartera da para proponerle el local al interesado. */
-    public static boolean valeLaPenaProponer(int puntaje) {
-        return puntaje >= COINCIDENCIA_PROPONIBLE.valor();
-    }
-
     /** Tope de comision como importe comparable, para las validaciones economicas. */
     public static BigDecimal comisionMaxima() {
         return BigDecimal.valueOf(COMISION_MAXIMA.valor());
-    }
-
-    /**
-     * Si una meta da para repartirse por dias. Por debajo, prorratear inventa una
-     * cadencia diaria que el negocio no tiene.
-     */
-    public static boolean tieneCadencia(int metaPeriodo) {
-        return metaPeriodo >= RITMO_VOLUMEN_MINIMO.valor();
-    }
-
-    /**
-     * Si el periodo lleva tan poco recorrido que proyectar todavia no dice nada.
-     * Mientras sea cierto, el peor estado posible es «atencion».
-     */
-    public static boolean enArranque(PeriodoCalendario periodo) {
-        return periodo.diasTranscurridos() * 100 < RITMO_ARRANQUE.valor() * periodo.diasTotales();
     }
 
     /** Si una muestra da para que un porcentaje concluya algo. */
@@ -415,41 +307,32 @@ public final class PoliticaComercial {
     public enum Concepto {
 
         /** Un interesado entrego su expediente y espera que el broker decida. */
-        SOLICITUD_POR_EVALUAR(NivelAtencion.ALTO, 1, Medida.COSAS),
+        SOLICITUD_POR_EVALUAR(NivelAtencion.ALTO, 1),
 
         /** Prospecciones que debieron volver a contactarse y no se contactaron. */
-        RECONTACTO_VENCIDO(NivelAtencion.ALTO, 2, Medida.COSAS),
+        RECONTACTO_VENCIDO(NivelAtencion.ALTO, 2),
 
         /** Captaciones esperando la revision del broker para poder ofrecerse. */
-        CAPTACION_POR_REVISAR(NivelAtencion.MEDIO, 3, Medida.COSAS),
+        CAPTACION_POR_REVISAR(NivelAtencion.MEDIO, 3),
 
         /** Aprobadas que todavia no tienen contrato: la comision no esta ganada. */
-        SOLICITUD_APROBADA_SIN_CIERRE(NivelAtencion.MEDIO, 4, Medida.COSAS),
-
-        /**
-         * Demora promedio de lo que ya esta atrasado. No se mide por conteo sino
-         * contra {@link #RECONTACTO}: preocupa cuando el atraso medio supera el
-         * plazo entero que se daba para volver a llamar.
-         */
-        DEMORA_DE_SEGUIMIENTO(NivelAtencion.MEDIO, 5, Medida.MAGNITUD),
+        SOLICITUD_APROBADA_SIN_CIERRE(NivelAtencion.MEDIO, 4),
 
         /** Visitas agendadas o vencidas sin resultado. Agenda, no incendio. */
-        VISITA_PENDIENTE(NivelAtencion.INFORMATIVO, 6, Medida.COSAS),
+        VISITA_PENDIENTE(NivelAtencion.INFORMATIVO, 6),
 
         /** Alquileres ya firmados. Se informa; nunca es un pendiente. */
-        CIERRE_REGISTRADO(NivelAtencion.INFORMATIVO, 7, Medida.COSAS),
+        CIERRE_REGISTRADO(NivelAtencion.INFORMATIVO, 7),
 
         /** Cuanta gente hay operando. Se informa; nunca es un pendiente. */
-        COBERTURA_DE_AGENTES(NivelAtencion.INFORMATIVO, 8, Medida.COSAS);
+        COBERTURA_DE_AGENTES(NivelAtencion.INFORMATIVO, 8);
 
         private final NivelAtencion nivelCuandoHay;
         private final int prioridad;
-        private final Medida medida;
 
-        Concepto(NivelAtencion nivelCuandoHay, int prioridad, Medida medida) {
+        Concepto(NivelAtencion nivelCuandoHay, int prioridad) {
             this.nivelCuandoHay = nivelCuandoHay;
             this.prioridad = prioridad;
-            this.medida = medida;
         }
 
         /** Nivel que alcanza este concepto cuando efectivamente hay algo pendiente. */
@@ -462,25 +345,6 @@ public final class PoliticaComercial {
             return prioridad;
         }
 
-        /** Si su valor se puede sumar con el de otro concepto. */
-        public boolean cuentaCosas() {
-            return medida == Medida.COSAS;
-        }
-    }
-
-    /**
-     * Que tipo de numero es el valor de un concepto. Existe por una razon muy
-     * concreta: la cabecera del tablero dice <i>"N cosas necesitan tu
-     * atencion"</i>, y para eso hay que sumar. {@code DEMORA_DE_SEGUIMIENTO}
-     * vale <b>dias</b>, no cosas: sumarla daria un total sin sentido —"11 cosas"
-     * cuando son 2 pendientes y 9 dias de atraso—. Cual de los dos es cada
-     * concepto lo sabe el dominio, no la pantalla.
-     */
-    private enum Medida {
-        /** Cuenta unidades: 3 solicitudes, 2 captaciones. Sumable. */
-        COSAS,
-        /** Mide otra cosa: dias, porcentaje. No sumable con las anteriores. */
-        MAGNITUD
     }
 
     /**
@@ -491,13 +355,6 @@ public final class PoliticaComercial {
      * es <b>cuanto</b> urge, y eso lo declara el propio {@link Concepto}.
      */
     public static NivelAtencion clasificar(Concepto concepto, int valor) {
-        if (concepto == Concepto.DEMORA_DE_SEGUIMIENTO) {
-            // Un atraso medio mayor que el plazo completo de recontacto significa
-            // que la cartera no se esta trabajando, no que un caso se escapo.
-            return valor > RECONTACTO.valor()
-                    ? concepto.nivelCuandoHay()
-                    : NivelAtencion.INFORMATIVO;
-        }
         if (concepto.nivelCuandoHay() == NivelAtencion.INFORMATIVO) {
             // Cero visitas agendadas no es "todo al dia": es cero.
             return NivelAtencion.INFORMATIVO;

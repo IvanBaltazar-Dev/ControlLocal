@@ -25,14 +25,15 @@ class PerfilServiceImplTest {
 
     @Test
     void obtieneElPerfilDeLaPersonaDelToken() {
+        Persona persona = persona();
         when(personas.findByOrganizacionIdAndId(ORG, 7L))
-                .thenReturn(Optional.of(persona()));
+                .thenReturn(Optional.of(persona));
 
         var ficha = service.obtener(actor);
 
         assertEquals("Ricardo Salas", ficha.nombre());
         assertEquals("999888777", ficha.telefono());
-        assertEquals("perfil/actual.png", ficha.fotoClave());
+        assertEquals(persona.getFotoRef().toString(), ficha.fotoClave());
     }
 
     @Test
@@ -83,8 +84,8 @@ class PerfilServiceImplTest {
         when(personas.findByOrganizacionIdAndId(ORG, 7L))
                 .thenReturn(Optional.of(persona));
 
-        assertEquals("perfiles/nueva.png",
-                service.actualizarFoto("perfiles/nueva.png", actor));
+        String referencia = service.actualizarFoto("perfiles/nueva.png", actor);
+        assertEquals(persona.getFotoRef().toString(), referencia);
         assertEquals("perfiles/nueva.png", persona.getFotoClave());
         verify(personas).save(persona);
     }

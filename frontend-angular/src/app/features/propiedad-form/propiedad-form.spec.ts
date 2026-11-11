@@ -85,7 +85,8 @@ const DEPARTAMENTO_VENTA: DefinicionCaptura = {
       preguntas: [
         pregunta('importe:VENTA', 'Precio de venta', {
           familia: 'OPERACION',
-          control: 'MONEDA',
+          control: 'IMPORTE',
+          tipoDato: 'IMPORTE',
           obligatoria: true,
         }),
       ],
@@ -107,7 +108,8 @@ const LOCAL_VENTA_Y_ALQUILER: DefinicionCaptura = {
       preguntas: [
         pregunta('importe:VENTA', 'Precio de venta', {
           familia: 'OPERACION',
-          control: 'MONEDA',
+          control: 'IMPORTE',
+          tipoDato: 'IMPORTE',
           obligatoria: true,
         }),
       ],
@@ -118,11 +120,23 @@ const LOCAL_VENTA_Y_ALQUILER: DefinicionCaptura = {
       preguntas: [
         pregunta('importe:ALQUILER', 'Renta mensual', {
           familia: 'OPERACION',
-          control: 'MONEDA',
+          control: 'IMPORTE',
+          tipoDato: 'IMPORTE',
           obligatoria: true,
         }),
       ],
     },
+  ],
+};
+
+const DEPARTAMENTO_VENTA_Y_MANTENIMIENTO: DefinicionCaptura = {
+  ...DEPARTAMENTO_VENTA,
+  delTipo: [
+    ...DEPARTAMENTO_VENTA.delTipo,
+    pregunta('cuota_mantenimiento', 'Cuota de mantenimiento', {
+      control: 'IMPORTE',
+      tipoDato: 'IMPORTE',
+    }),
   ],
 };
 
@@ -190,15 +204,38 @@ describe('PropiedadForm', () => {
   beforeEach(() => {
     captura = jasmine.createSpyObj<CapturaService>('CapturaService', [
       'apertura',
+      'enCurso',
       'abrir',
+      'consultar',
       'definicion',
       'avanzar',
-      'ejecutar',
+      'prepararRevision',
+      'confirmarRevision',
+      'consultarActuacion',
+      'referenciaPendiente',
+      'olvidarReferencia',
+      'cargarContextoReferencias',
+      'referenciasPendientes',
       'descartar',
     ]);
     captura.apertura.and.resolveTo(APERTURA);
+    captura.enCurso.and.resolveTo([]);
     captura.abrir.and.resolveTo(BORRADOR);
+    captura.consultar.and.resolveTo(BORRADOR);
     captura.definicion.and.resolveTo(DEPARTAMENTO_VENTA);
+    captura.referenciaPendiente.and.returnValue(null);
+    captura.cargarContextoReferencias.and.resolveTo();
+    captura.referenciasPendientes.and.returnValue([]);
+    captura.prepararRevision.and.callFake(async (idBorrador) => {
+      const estado = await captura.avanzar.calls.mostRecent().returnValue;
+      const definicion = await captura.definicion.calls.mostRecent().returnValue;
+      return { propuesta: { referencia: 'actuacion-original', capacidad: 'confirmar_captura',
+        version: 1, huella: 'huella-1', caducaEnEpochSeconds: 9999999999,
+        contenido: { idBorrador, versionCaptura: 1, codigoCaptura: estado.codigo,
+          intencion: estado.intencion, efecto: 'REGISTRAR_PROPIEDAD',
+          datos: estado.conocido, definicionCore: definicion } }, pruebaRevision: 'prueba-opaca' };
+    });
+
 
     propietarios = jasmine.createSpyObj<PropietariosService>('PropietariosService', [
       'pagina',
@@ -258,6 +295,28 @@ describe('PropiedadForm', () => {
     fixture.detectChanges();
 
     expect(textoVisible()).toContain('no se ofrece');
+  });
+
+  it('guarda un avance sin operación ni titular elegido', async () => {
+    await montar();
+
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
+    select.value = 'DEPARTAMENTO';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    captura.avanzar.and.resolveTo({ ...BORRADOR, faltante: ['direccion'] });
+    const revisar = boton('Revisar');
+    expect(revisar.disabled).toBeFalse();
+    revisar.click();
+    await fixture.whenStable();
+
+    expect(captura.avanzar).toHaveBeenCalledWith(
+      7,
+      jasmine.objectContaining({ tipoPropiedad: 'DEPARTAMENTO' }),
+    );
   });
 
   it('no pide la definición mientras no haya tipo', async () => {
@@ -329,34 +388,179 @@ describe('PropiedadForm', () => {
     expect(enviado['rubro_permitido']).toBeUndefined();
   });
 
-  it('confirma con la MISMA clave de idempotencia si se reintenta', async () => {
+  it('conserva la referencia incierta y consulta sin reenviar la confirmación', async () => {
     await montar();
     await elegir('DEPARTAMENTO', ['VENTA']);
-
     captura.avanzar.and.resolveTo({ ...BORRADOR, faltante: [], listoParaEjecutar: true });
     boton('Revisar').click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    captura.ejecutar.and.rejectWith(new Error('se cayo la red'));
+    await fixture.whenStable(); fixture.detectChanges();
+    captura.confirmarRevision.and.resolveTo({ referencia: 'actuacion-original',
+      estado: 'EN_VERIFICACION', propuesta: null, resultado: null, motivo: null });
+    captura.consultarActuacion.and.resolveTo({ referencia: 'actuacion-original',
+      estado: 'EN_VERIFICACION', propuesta: null, resultado: null, motivo: null });
     boton('Confirmar').click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    boton('Confirmar').click();
-    await fixture.whenStable();
-
-    const claves = captura.ejecutar.calls.all().map((llamada) => llamada.args[1]);
-    expect(claves.length).toBe(2);
-    expect(claves[0]).toBe(claves[1]);
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(captura.confirmarRevision).toHaveBeenCalledTimes(1);
+    expect(captura.confirmarRevision.calls.mostRecent().args[0].pruebaRevision).toBe('prueba-opaca');
+    expect(captura.confirmarRevision.calls.mostRecent().args[1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    boton('Verificar resultado').click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(captura.consultarActuacion).toHaveBeenCalledOnceWith('actuacion-original');
+    expect(captura.confirmarRevision).toHaveBeenCalledTimes(1);
   });
 
-  it('descarta el borrador al salir: no deja una propiedad a medias', async () => {
+  it('una foto distinta de la mostrada exige revisar otra vez y no confirma', async () => {
+    await montar(); await elegir('DEPARTAMENTO', ['VENTA']);
+    const estado = { ...BORRADOR, conocido: { direccion: 'Dirección mostrada' },
+      faltante: [], listoParaEjecutar: true };
+    captura.avanzar.and.resolveTo(estado);
+    captura.prepararRevision.and.resolveTo({ propuesta: {
+      referencia: 'cambiada', capacidad: 'confirmar_captura', version: 1,
+      huella: 'otra-huella', caducaEnEpochSeconds: 9999999999,
+      contenido: { idBorrador: 7, versionCaptura: 2, codigoCaptura: estado.codigo,
+        intencion: estado.intencion, efecto: 'REGISTRAR_PROPIEDAD',
+        datos: { direccion: 'Cambio ajeno' }, definicionCore: DEPARTAMENTO_VENTA } },
+      pruebaRevision: 'otra-prueba' });
+    boton('Revisar').click(); await fixture.whenStable(); fixture.detectChanges();
+    expect(textoVisible()).toContain('El registro cambió');
+    expect(captura.confirmarRevision).not.toHaveBeenCalled();
+  });
+
+  it('recupera una referencia preparada sin presentarla como escritura incierta ni reenviar', async () => {
+    captura.referenciasPendientes.and.returnValue([{ idBorrador: 7, referencia: 'previa' }]);
+    captura.consultarActuacion.and.resolveTo({ referencia: 'previa', estado: 'PREPARADA',
+      propuesta: null, resultado: null, motivo: null });
     await montar();
-    captura.descartar.and.resolveTo({ ...BORRADOR, estado: 'D' });
+    boton('Consultar resultado').click(); await fixture.whenStable(); fixture.detectChanges();
+    expect(textoVisible()).toContain('no tiene confirmación registrada');
+    expect(captura.consultarActuacion).toHaveBeenCalledOnceWith('previa');
+    expect(captura.confirmarRevision).not.toHaveBeenCalled();
+    expect(captura.avanzar).not.toHaveBeenCalled();
+  });
+
+  it('volver conserva el borrador para poder retomarlo', async () => {
+    await montar();
 
     boton('Volver').click();
     await fixture.whenStable();
 
-    expect(captura.descartar).toHaveBeenCalledWith(7);
+    expect(captura.descartar).not.toHaveBeenCalled();
+  });
+
+  it('lista y consulta un borrador existente antes de abrir otro', async () => {
+    const existente: EstadoCaptura = {
+      ...BORRADOR,
+      conocido: { tipoPropiedad: 'DEPARTAMENTO', direccion: 'Av. Central 10' },
+      faltante: ['operaciones'],
+    };
+    captura.enCurso.and.resolveTo([existente]);
+    captura.consultar.and.resolveTo(existente);
+
+    await montar();
+
+    expect(captura.abrir).not.toHaveBeenCalled();
+    expect(textoVisible()).toContain('CAP-0007');
+    boton('Retomar').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(captura.consultar).toHaveBeenCalledWith(7);
+    expect(textoVisible()).toContain('Dormitorios');
+    const direccion = Array.from(raiz().querySelectorAll('input')).find(
+      (entrada) => entrada.value === 'Av. Central 10',
+    );
+    expect(direccion).toBeDefined();
+  });
+
+  it('al quitar el último titular de un borrador retomado envía el borrado explícito', async () => {
+    const existente: EstadoCaptura = {
+      ...BORRADOR,
+      conocido: {
+        tipoPropiedad: 'DEPARTAMENTO',
+        direccion: 'Av. Central 10',
+        titulares: '42',
+      },
+      faltante: ['operaciones'],
+    };
+    captura.enCurso.and.resolveTo([existente]);
+    captura.consultar.and.resolveTo(existente);
+
+    await montar();
+    boton('Retomar').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    boton('Quitar').click();
+    fixture.detectChanges();
+    captura.avanzar.and.resolveTo({ ...existente, faltante: ['direccion'] });
+    boton('Revisar').click();
+    await fixture.whenStable();
+
+    const enviado = captura.avanzar.calls.mostRecent().args[1];
+    expect(enviado['titulares']).toBe('');
+  });
+
+  it('envía importes y monedas independientes para venta y alquiler', async () => {
+    captura.definicion.and.resolveTo(LOCAL_VENTA_Y_ALQUILER);
+    await montar();
+    await elegir('LOCAL', ['VENTA', 'ALQUILER']);
+
+    const bloques: HTMLElement[] = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.bloque-economico'),
+    ) as HTMLElement[];
+    expect(bloques.length).toBe(2);
+    const datos = [
+      { importe: '180000', moneda: 'USD' },
+      { importe: '2800', moneda: 'PEN' },
+    ];
+    for (const [indice, bloque] of bloques.entries()) {
+      const input = bloque.querySelector('.importe input') as HTMLInputElement;
+      input.value = datos[indice].importe;
+      input.dispatchEvent(new Event('input'));
+      const moneda = bloque.querySelector('.importe select.moneda') as HTMLSelectElement;
+      moneda.value = datos[indice].moneda;
+      moneda.dispatchEvent(new Event('change'));
+    }
+    fixture.detectChanges();
+
+    captura.avanzar.and.resolveTo({ ...BORRADOR, faltante: [], listoParaEjecutar: true });
+    boton('Revisar').click();
+    await fixture.whenStable();
+
+    const enviado = captura.avanzar.calls.mostRecent().args[1];
+    expect(enviado['importe:VENTA']).toBe('180000');
+    expect(enviado['moneda:VENTA']).toBe('USD');
+    expect(enviado['importe:ALQUILER']).toBe('2800');
+    expect(enviado['moneda:ALQUILER']).toBe('PEN');
+  });
+
+  it('envía la moneda de un importe genérico con la clave de su atributo', async () => {
+    captura.definicion.and.resolveTo(DEPARTAMENTO_VENTA_Y_MANTENIMIENTO);
+    await montar();
+    await elegir('DEPARTAMENTO', ['VENTA']);
+
+    const campos: HTMLElement[] = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.campo.importe'),
+    ) as HTMLElement[];
+    const campo = campos.find(
+      (elemento) => (elemento.textContent ?? '').includes('Cuota de mantenimiento'),
+    ) as HTMLElement;
+    expect(campo).toBeDefined();
+    const importe = campo.querySelector('input') as HTMLInputElement;
+    importe.value = '350';
+    importe.dispatchEvent(new Event('input'));
+    const moneda = campo.querySelector('select.moneda') as HTMLSelectElement;
+    moneda.value = 'USD';
+    moneda.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    captura.avanzar.and.resolveTo({ ...BORRADOR, faltante: [], listoParaEjecutar: true });
+    boton('Revisar').click();
+    await fixture.whenStable();
+
+    const enviado = captura.avanzar.calls.mostRecent().args[1];
+    expect(enviado['cuota_mantenimiento']).toBe('350');
+    expect(enviado['moneda:cuota_mantenimiento']).toBe('USD');
   });
 });

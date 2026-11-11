@@ -1,0 +1,209 @@
+{
+  "contrato": "BROX-TAREAS-C6-ES-1",
+  "casos": [
+    {
+      "id": "C6-01",
+      "accion": "EVALUAR_PUBLICABILIDAD",
+      "texto": "evaluar publicabilidad {\"encargo\":21,\"canal\":\"WEB_PROPIA\"}",
+      "datos": {
+        "encargo": 21,
+        "canal": "WEB_PROPIA"
+      }
+    },
+    {
+      "id": "C6-02",
+      "accion": "CONSULTAR_PUBLICACIONES",
+      "texto": "consultar publicaciones {\"encargo\":21}",
+      "datos": {
+        "encargo": 21
+      }
+    },
+    {
+      "id": "C6-03",
+      "accion": "CONSULTAR_PUBLICACION",
+      "texto": "consultar publicación {\"encargo\":21,\"publicacion\":81}",
+      "datos": {
+        "encargo": 21,
+        "publicacion": 81
+      }
+    },
+    {
+      "id": "C6-04",
+      "accion": "CONSULTAR_HISTORIA_PUBLICACION",
+      "texto": "consultar historia publicación {\"encargo\":21,\"publicacion\":81}",
+      "datos": {
+        "encargo": 21,
+        "publicacion": 81
+      }
+    },
+    {
+      "id": "C6-05",
+      "accion": "CREAR_BORRADOR_ANUNCIO",
+      "texto": "crear borrador anuncio {\"encargo\":21,\"versionEncargo\":7,\"contenido\":{\"tituloAnuncio\":\"Departamento\"}}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "contenido": {
+          "tituloAnuncio": "Departamento"
+        }
+      }
+    },
+    {
+      "id": "C6-06",
+      "accion": "EDITAR_BORRADOR_ANUNCIO",
+      "texto": "editar borrador anuncio {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":2,\"contenido\":{\"canal\":\"WEB_PROPIA\"}}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 2,
+        "contenido": {
+          "canal": "WEB_PROPIA"
+        }
+      }
+    },
+    {
+      "id": "C6-07",
+      "accion": "PUBLICAR_ANUNCIO",
+      "texto": "publicar anuncio {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":3}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 3
+      }
+    },
+    {
+      "id": "C6-08",
+      "accion": "ACTUALIZAR_ANUNCIO_VISIBLE",
+      "texto": "actualizar anuncio visible {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":4,\"contenido\":{\"importePublicado\":180000,\"moneda\":\"USD\"}}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 4,
+        "contenido": {
+          "importePublicado": 180000,
+          "moneda": "USD"
+        }
+      }
+    },
+    {
+      "id": "C6-09",
+      "accion": "PAUSAR_ANUNCIO",
+      "texto": "pausar anuncio {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":5,\"motivo\":\"Indicación comercial documentada\"}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 5,
+        "motivo": "Indicación comercial documentada"
+      }
+    },
+    {
+      "id": "C6-10",
+      "accion": "REANUDAR_ANUNCIO",
+      "texto": "reanudar anuncio {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":6}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 6
+      }
+    },
+    {
+      "id": "C6-11",
+      "accion": "FINALIZAR_DIFUSION_ANUNCIO",
+      "texto": "finalizar difusión anuncio {\"encargo\":21,\"versionEncargo\":7,\"publicacion\":81,\"versionPublicacion\":7,\"motivo\":\"Indicación comercial documentada\"}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "publicacion": 81,
+        "versionPublicacion": 7,
+        "motivo": "Indicación comercial documentada"
+      }
+    },
+    {
+      "id": "C6-12",
+      "accion": "CONSULTAR_ESTADO_PIEZA",
+      "texto": "consultar estado pieza {\"pieza\":\"b288f0f5-f542-41f0-a493-4e3e1a750954\"}",
+      "datos": {
+        "pieza": "b288f0f5-f542-41f0-a493-4e3e1a750954"
+      }
+    },
+    {
+      "id": "C6-13",
+      "accion": "CONSULTAR_FOTOS_PERMITIDAS_PARA_PIEZA",
+      "texto": "consultar fotos permitidas para pieza {\"encargo\":21}",
+      "datos": {
+        "encargo": 21
+      }
+    },
+    {
+      "id": "C6-14",
+      "accion": "CONSULTAR_PLANTILLAS_Y_FORMATOS_PIEZA",
+      "texto": "consultar plantillas y formatos pieza {\"encargo\":21}",
+      "datos": {
+        "encargo": 21
+      }
+    },
+    {
+      "id": "C6-15",
+      "accion": "PREPARAR_PIEZA_COMERCIAL",
+      "texto": "preparar pieza comercial {\"encargo\":21,\"versionEncargo\":7,\"versionFisica\":0,\"fotos\":[],\"versionGaleria\":\"huella-galeria-test\",\"formato\":\"PDF_A4\"}",
+      "datos": {
+        "encargo": 21,
+        "versionEncargo": 7,
+        "versionFisica": 0,
+        "fotos": [],
+        "versionGaleria": "huella-galeria-test",
+        "formato": "PDF_A4"
+      }
+    },
+    {
+      "id": "C6-16",
+      "accion": "PREVISUALIZAR_PIEZA_COMERCIAL",
+      "texto": "previsualizar pieza comercial {\"pieza\":\"b288f0f5-f542-41f0-a493-4e3e1a750954\",\"versionContenido\":1}",
+      "datos": {
+        "pieza": "b288f0f5-f542-41f0-a493-4e3e1a750954",
+        "versionContenido": 1
+      }
+    },
+    {
+      "id": "C6-17",
+      "accion": "REGENERAR_PIEZA_COMERCIAL",
+      "texto": "regenerar pieza comercial {\"pieza\":\"b288f0f5-f542-41f0-a493-4e3e1a750954\",\"versionContenido\":1,\"preparacion\":{\"encargo\":21,\"versionEncargo\":7,\"versionFisica\":0,\"fotos\":[],\"versionGaleria\":\"huella-galeria-test\",\"formato\":\"PNG_VERTICAL\"}}",
+      "datos": {
+        "pieza": "b288f0f5-f542-41f0-a493-4e3e1a750954",
+        "versionContenido": 1,
+        "preparacion": {
+          "encargo": 21,
+          "versionEncargo": 7,
+          "versionFisica": 0,
+          "fotos": [],
+          "versionGaleria": "huella-galeria-test",
+          "formato": "PNG_VERTICAL"
+        }
+      }
+    },
+    {
+      "id": "C6-18",
+      "accion": "OBTENER_PIEZA_PARA_DIFUSION",
+      "texto": "obtener pieza para difusión {\"pieza\":\"b288f0f5-f542-41f0-a493-4e3e1a750954\",\"versionContenido\":1,\"huellaOrigen\":\"huella-test\"}",
+      "datos": {
+        "pieza": "b288f0f5-f542-41f0-a493-4e3e1a750954",
+        "versionContenido": 1,
+        "huellaOrigen": "huella-test"
+      }
+    },
+    {
+      "id": "C6-19",
+      "accion": "EVALUAR_FOTO_LOCAL",
+      "texto": "evaluar foto local {\"propiedad\":21,\"original\":\"b288f0f5-f542-41f0-a493-4e3e1a750954\"}",
+      "datos": {
+        "propiedad": 21,
+        "original": "b288f0f5-f542-41f0-a493-4e3e1a750954"
+      }
+    }
+  ]
+}

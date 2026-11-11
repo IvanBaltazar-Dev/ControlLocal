@@ -104,8 +104,10 @@
           <th scope="col">Agente</th>
           <th scope="col">Zona</th>
           <th scope="col">Contacto</th>
-          <th scope="col" class="num">Captaciones</th>
-          <th scope="col" class="num">Operaciones</th>
+          @if (actividadComercialVisible()) {
+            <th scope="col" class="num">Captaciones</th>
+            <th scope="col" class="num">Operaciones</th>
+          }
           <th scope="col">Situación</th>
           <th scope="col"><span class="sr-only">Acciones</span></th>
         </tr>
@@ -114,9 +116,13 @@
         @for (agente of filas(); track agente.id) {
           <tr>
             <td>
-              <button type="button" class="enlace" (click)="abrir(agente)">
-                {{ texto(agente.nombre) }}
-              </button>
+              @if (gobierna()) {
+                <span>{{ texto(agente.nombre) }}</span>
+              } @else {
+                <button type="button" class="enlace" (click)="abrir(agente)">
+                  {{ texto(agente.nombre) }}
+                </button>
+              }
               <span class="secundario">{{ texto(agente.codigoAgente) }}</span>
             </td>
             <td>{{ texto(agente.zona) }}</td>
@@ -124,8 +130,10 @@
               <span>{{ texto(agente.telefono) }}</span>
               <span class="secundario">{{ texto(agente.correo) }}</span>
             </td>
-            <td class="num">{{ agente.captacionesActivas ?? 0 }}</td>
-            <td class="num">{{ agente.operacionesActivas ?? 0 }}</td>
+            @if (actividadComercialVisible()) {
+              <td class="num">{{ agente.captacionesActivas ?? '—' }}</td>
+              <td class="num">{{ agente.operacionesActivas ?? '—' }}</td>
+            }
             <td>
               <span class="cl-pastilla" [class.activa]="activo(agente)">
                 {{ activo(agente) ? 'Activo' : 'Inactivo' }}
@@ -135,25 +143,7 @@
             <td class="acciones-fila">
               @if (puedeEditar()) {
                 <button type="button" class="cl-btn menor" (click)="editar(agente)">Editar</button>
-                @if (activo(agente)) {
-                  <button
-                    type="button"
-                    class="cl-btn menor peligro"
-                    [disabled]="guardando()"
-                    (click)="pedirBaja(agente)"
-                  >
-                    Dar de baja
-                  </button>
-                } @else {
-                  <button
-                    type="button"
-                    class="cl-btn menor"
-                    [disabled]="guardando()"
-                    (click)="reactivar(agente)"
-                  >
-                    Reactivar
-                  </button>
-                }
+                <button type="button" class="cl-btn menor" (click)="nuevo()">Nueva invitación</button>
               }
             </td>
           </tr>
@@ -172,18 +162,3 @@
   }
 }
 
-@if (aDarDeBaja(); as agente) {
-  <cl-confirmacion
-    [abierto]="true"
-    titulo="Dar de baja al agente"
-    [descripcion]="
-      texto(agente.nombre) +
-      ' quedará inactivo administrativamente. No se borra nada: sus captaciones, oportunidades e historia comercial se conservan, y puedes reactivarlo después.'
-    "
-    tono="rojo"
-    etiquetaConfirmar="Dar de baja"
-    [ocupado]="guardando()"
-    (confirmar)="confirmarBaja()"
-    (cerrar)="cancelarBaja()"
-  />
-}

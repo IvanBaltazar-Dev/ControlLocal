@@ -5,6 +5,7 @@ import com.controllocal.persistence.busqueda.OrdenDelListado;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 
 import java.util.Locale;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -49,10 +50,10 @@ public final class FiltrosDeListadoInmobiliario {
      * distingue a este criterio es lo que <b>no</b> lleva -tipo, distrito y
      * operaciones no existen en este contrato- y el sentido del orden.
      */
-    public static CriterioBusquedaInmobiliaria deLocales(long idOrganizacion, String texto,
+    public static CriterioBusquedaInmobiliaria deLocales(long idOrganizacion, List<Long> rolesLectura, String texto,
                                                          String estado, int pagina, int tamano,
                                                          int maximoPorPagina) {
-        return new CriterioBusquedaInmobiliaria(idOrganizacion, textoNormalizado(texto),
+        return new CriterioBusquedaInmobiliaria(idOrganizacion, rolesLectura, textoNormalizado(texto),
                 estadoValidado(estado), null, null, false, false,
                 OrdenDelListado.ASCENDENTE, paginaAcotada(pagina), tamanoAcotado(tamano, maximoPorPagina));
     }
@@ -73,12 +74,12 @@ public final class FiltrosDeListadoInmobiliario {
      * @param tipoPropiedad codigo de una letra YA validado por el vocabulario
      *        del dominio, o {@code null}.
      */
-    public static CriterioBusquedaInmobiliaria dePropiedades(long idOrganizacion, String texto,
+    public static CriterioBusquedaInmobiliaria dePropiedades(long idOrganizacion, List<Long> rolesLectura, String texto,
                                                              String estado, String tipoPropiedad,
                                                              String distrito, boolean conVenta,
                                                              boolean conAlquiler, int pagina,
                                                              int tamano, int maximoPorPagina) {
-        return new CriterioBusquedaInmobiliaria(idOrganizacion, textoNormalizado(texto),
+        return new CriterioBusquedaInmobiliaria(idOrganizacion, rolesLectura, textoNormalizado(texto),
                 estadoValidado(estado), tipoPropiedad, textoNormalizado(distrito),
                 conVenta, conAlquiler, OrdenDelListado.DESCENDENTE,
                 paginaAcotada(pagina), tamanoAcotado(tamano, maximoPorPagina));

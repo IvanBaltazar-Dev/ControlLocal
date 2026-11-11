@@ -2,6 +2,7 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.Sujeto;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
 import com.controllocal.service.Actor;
@@ -17,6 +18,7 @@ import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AtributosGobernados;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -47,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <ul>
  *   <li><b>Donde registrar quien esta dentro.</b> La condicion comercial
- *       {@code entrega_desocupado} se pacta en los siete tipos desde V77 y el
+ *       {@code entrega_desocupado} se pacta en los tipos fisicos desde V77 y el
  *       HECHO sobre el que se pacta no existia. Mientras no existe, el unico
  *       sitio donde cabe «hoy vive el propietario» es el pacto de un encargo —
  *       y un pacto muere con su encargo, mientras que el hecho sobrevive.</li>
@@ -80,8 +82,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class OcupacionYServiciosIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -93,21 +100,29 @@ class OcupacionYServiciosIntegrationTest {
     @Autowired MotorDeCaptura captura;
     @Autowired PublicacionService publicaciones;
     @Autowired CatalogoAtributoRepository catalogo;
+    @Autowired com.controllocal.service.encargo.EncargoService encargos;
+    @Autowired com.controllocal.service.ContextosService contextos;
+    @Autowired com.controllocal.service.CuentaService cuentas;
+    @Autowired com.controllocal.persistence.repositorio.FactorAutenticacionRepository factores;
+    @Autowired com.controllocal.service.soporte.CifradoSecretos cifrado;
+    @Autowired com.controllocal.service.GobiernoCatalogoCapturaService catalogos;
+    @Autowired org.springframework.transaction.PlatformTransactionManager gestor;
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacion;
 
     // ==================================================================
     // 1. La clave transversal: el hecho llega donde llega su condicion
     // ==================================================================
 
     /**
-     * <b>Los siete tipos, con filas explicitas y todas OPC</b> (D-C5-1, D-1).
+     * <b>Todos los tipos fisicos, con filas explicitas y todas OPC</b> (D-C5-1, D-1).
      *
-     * <p>Se compara el CONJUNTO y no el numero: seis tipos y uno repetido darian
-     * siete filas igual, y el tipo que faltara seria justo el que no puede
+     * <p>Se compara el CONJUNTO y no el numero: ocho tipos y uno repetido darian
+     * nueve filas igual, y el tipo que faltara seria justo el que no puede
      * registrar la ocupacion.
      */
     @Test
-    @DisplayName("V84: estado_ocupacion aplica a los SIETE tipos, y en los siete es OPC")
-    void laOcupacionAplicaALosSieteTipos() {
+    @DisplayName("V94: estado_ocupacion aplica a todos los tipos fisicos, y en todos es OPC")
+    void laOcupacionAplicaALosTiposFisicos() {
         List<Map<String, Object>> filas = jdbc.queryForList("""
                 select t.tipo_propiedad, t.exigencia, t.requerido
                   from catalogo_atributo c
@@ -116,7 +131,10 @@ class OcupacionYServiciosIntegrationTest {
                  order by t.tipo_propiedad
                 """);
 
-        assertEquals(List.of("A", "C", "D", "L", "O", "T", "X"),
+        assertEquals(AtributosGobernados.nombresDeTipos().stream()
+                        .map(AtributosGobernados::codigoDelTipo)
+                        .map(java.util.Optional::orElseThrow)
+                        .sorted().toList(),
                 filas.stream().map(f -> f.get("tipo_propiedad")).toList(),
                 "un tipo que falte es un tipo donde la ocupacion no se puede registrar");
         filas.forEach(fila -> {
@@ -138,8 +156,8 @@ class OcupacionYServiciosIntegrationTest {
      * <b>El par, con asercion propia</b> (D-C5-1 §7).
      *
      * <p>Que la clave exista no basta: el guard 2.2 de V78 compara CONJUNTOS de
-     * {@code tipo_propiedad}, y un hecho que llegue a seis tipos mientras su
-     * condicion se pacta en siete deja un tipo en el que <b>el pacto es el unico
+     * {@code tipo_propiedad}, y un hecho que llegue a menos tipos mientras su
+     * condicion se pacta en todos deja un tipo en el que <b>el pacto es el unico
      * sitio donde cabe el hecho</b>.
      *
      * <p>Se mide en las dos direcciones a proposito: los tipos DESCUBIERTOS y los
@@ -148,8 +166,8 @@ class OcupacionYServiciosIntegrationTest {
      * verde sobre el universo vacio.
      */
     @Test
-    @DisplayName("V84: el par estado_ocupacion / entrega_desocupado queda cubierto en los siete")
-    void elParQuedaCubiertoEnLosSiete() {
+    @DisplayName("V94: el par estado_ocupacion / entrega_desocupado queda cubierto en todos los tipos fisicos")
+    void elParQuedaCubiertoEnLosTiposFisicos() {
         List<String> sinHecho = jdbc.queryForList("""
                 select distinct o.tipo_propiedad
                   from catalogo_atributo cond
@@ -165,7 +183,8 @@ class OcupacionYServiciosIntegrationTest {
         assertEquals(List.of(), sinHecho,
                 "el pacto llega a estos tipos y el hecho no: " + sinHecho);
 
-        assertEquals(7, jdbc.queryForObject("""
+        assertEquals(jdbc.queryForObject("select count(*) from tipos_de_propiedad()", Integer.class),
+                jdbc.queryForObject("""
                 select count(distinct o.tipo_propiedad)
                   from catalogo_atributo cond
                   join catalogo_atributo_operacion o
@@ -210,7 +229,7 @@ class OcupacionYServiciosIntegrationTest {
     /**
      * <b>OPC significa que no bloquea, y se comprueba publicando.</b>
      *
-     * <p>Con una clave nueva en los siete tipos, el riesgo real no es que falte:
+     * <p>Con una clave nueva en todos los tipos fisicos, el riesgo real no es que falte:
      * es que alguien la suba a ALT o PUB «porque siempre se sabe». Un
      * departamento sin declarar la ocupacion tiene que anunciarse igual que antes
      * del corte.
@@ -219,13 +238,15 @@ class OcupacionYServiciosIntegrationTest {
     @DisplayName("V84: no declarar la ocupacion no impide registrar ni publicar")
     void laOcupacionNoBloqueaNada() {
         long id = registrarDepartamento();
+        preparacion().prepararDepartamento(id,actor());
+        preparacion().habilitar(encargoDe(id),actor());
 
         assertNull(valorDe(id, "estado_ocupacion"), "el alta no inventa quien vive dentro");
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
         assertTrue(ficha.faltanParaPublicar().stream()
                         .noneMatch(a -> "estado_ocupacion".equals(a.clave())),
                 "una OPC ausente no bloquea: " + ficha.faltanParaPublicar());
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+        assertNotNull(preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()),
                 "y el anuncio entra sin ella");
 
         // Y cuando si se declara, viaja y vuelve.
@@ -282,6 +303,7 @@ class OcupacionYServiciosIntegrationTest {
     @DisplayName("V84: un TERRENO sin agua ni luz se registra, se edita y NO se publica")
     void elTerrenoSinServiciosSeRegistraPeroNoSePublica() {
         long id = registrarTerreno();
+        preparacion().prepararTerreno(id,actor());
         assertNull(valorDe(id, "agua_desague"), "el alta no inventa el dato");
         assertNull(valorDe(id, "energia_electrica"), "ni el otro");
 
@@ -309,10 +331,11 @@ class OcupacionYServiciosIntegrationTest {
                 "`atributosQueFaltan` responde a que impide el ALTA, y PUB no lo impide");
 
         ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                () -> preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()),
                 "un terreno sin decir si tiene agua y luz no es una oferta");
-        assertTrue(rechazo.getMessage().contains("Agua y desagüe"),
-                "el rechazo dice QUE falta, con su rotulo: " + rechazo.getMessage());
+        assertNotNull(rechazo.getMessage());
+        assertFalse(encargos.consultar(encargoDe(id),actor()).vigencia().habilitado(),
+                "CAT18 exige esos datos al habilitar; la salida estructurada anterior conserva el rótulo PUB");
 
         // Declarados los dos hechos, el bloqueo desaparece. Uno solo no basta:
         // ese es el sentido de que sean DOS claves y no un campo agregado.
@@ -320,11 +343,12 @@ class OcupacionYServiciosIntegrationTest {
         assertEquals(List.of("energia_electrica"), bloqueantesDe(id),
                 "con agua declarada sigue faltando la luz: en la periferia se tiene una y no la otra");
         assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()));
+                () -> preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()));
 
         editar(id, new ValorAtributo("energia_electrica", "SIN_SERVICIO"));
         assertEquals(List.of(), bloqueantesDe(id));
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+        preparacion().habilitar(encargoDe(id),actor());
+        assertNotNull(preparacion().publicar(publicaciones,encargoDe(id), publicacionDePrueba(id), actor()),
                 "declarados los dos hechos, el anuncio entra");
     }
 
@@ -347,7 +371,9 @@ class OcupacionYServiciosIntegrationTest {
 
         assertFalse(bloqueantesDe(callado).isEmpty(), "callar no desbloquea");
         assertEquals(List.of(), bloqueantesDe(declarado), "declarar la ausencia si");
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(declarado), publicacionDePrueba(),
+        preparacion().prepararTerreno(declarado,actor());
+        preparacion().habilitar(encargoDe(declarado),actor());
+        assertNotNull(preparacion().publicar(publicaciones,encargoDe(declarado), publicacionDePrueba(declarado),
                 actor()));
     }
 
@@ -434,7 +460,7 @@ class OcupacionYServiciosIntegrationTest {
                 """, Integer.class));
 
         // Deja de preguntarse en el alta y en el editor.
-        assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", actor())
+        assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor())
                         .todas().stream()
                         .noneMatch(p -> "servicios_disponibles".equals(p.clave())),
                 "una clave retirada no se sigue preguntando");
@@ -467,8 +493,11 @@ class OcupacionYServiciosIntegrationTest {
         // INVARIANTE y nunca como cifra —una cifra caduca en cuanto corre una
         // suite—. Lo que se afirma es la consulta que la ficha usa
         // para completar las retiradas.
+        // Y con su SUJETO (`N7`, WP-C): `paraLeer` ya no responde «la clave que
+        // se llame asi», sino «la clave de ESTE sujeto». `servicios_disponibles`
+        // es un hecho del inmueble, asi que se pide como tal.
         List<CatalogoAtributo> paraLeer = catalogo.paraLeer(actor().idOrganizacion(),
-                List.of("servicios_disponibles"));
+                List.of("servicios_disponibles"), Sujeto.PROPIEDAD.codigo());
         assertEquals(1, paraLeer.size(),
                 "la definicion de una clave retirada tiene que seguir resolviendose para LEER");
         assertEquals("Servicios disponibles", paraLeer.get(0).getRotulo());
@@ -528,13 +557,12 @@ class OcupacionYServiciosIntegrationTest {
                                                aplica_todos, del_sistema, orden)
                 values (?, ?, 'Clave retirable', 'TEXTO', false, false, 990)
                 """, org, clave);
-        declararAplicabilidadEnLosSiete(clave, org);
+        declararAplicabilidadEnLosTipos(clave, org);
         try {
             long id = registrarTerreno();
             editar(id, new ValorAtributo(clave, "lo que se sabia"));
             assertEquals("lo que se sabia", valorDe(id, clave));
-            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
-                            actor()).todas().stream().anyMatch(p -> clave.equals(p.clave())),
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor()).todas().stream().anyMatch(p -> clave.equals(p.clave())),
                     "mientras esta activa, se pregunta: si no, el caso no mediria la retirada");
 
             jdbc.update("update catalogo_atributo set activo = false where clave = ? "
@@ -560,8 +588,7 @@ class OcupacionYServiciosIntegrationTest {
 
             // MITAD 2 — la CAPTURA no la ofrece. La conservacion de la lectura no
             // puede haber reabierto ninguna puerta de escritura.
-            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
-                            actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
                     "la clave retirada no se vuelve a preguntar en el alta ni en el editor");
         } finally {
             jdbc.update("update catalogo_atributo set activo = false where clave = ? "
@@ -599,16 +626,20 @@ class OcupacionYServiciosIntegrationTest {
                                                          tipo_operacion, exigencia)
                 select c.id_catalogo_atributo, t.tipo, 'V', 'OPC'
                   from catalogo_atributo c
-                  cross join (values ('L'),('O'),('D'),('C'),('T'),('A'),('X')) as t(tipo)
+                  cross join tipos_de_propiedad() as t(tipo)
                  where c.clave = ? and c.organizacion_id = ?
                 """, clave, org);
         try {
             long id = registrarTerreno();
             long encargo = encargoDe(id);
-            propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null,
-                    null, null,
-                    List.of(new PropiedadUniversalService.CondicionesDeEncargo(encargo,
-                            List.of(new ValorAtributo(clave, "lo que se pacto")), null))), actor());
+            Actor responsable=actor();
+            var observada=encargos.consultar(encargo,responsable);
+            var sesion=new com.controllocal.integracion.soporte.SesionesComercialesDePrueba(
+                    jdbc,contextos,cuentas,factores,cifrado).de(responsable);
+            encargos.editar(encargo,new com.controllocal.service.encargo.EncargoService.Edicion(
+                    observada.version(),null,null,null,null,null,"Declarar la condición de prueba antes de su retirada",
+                    List.of(new ValorAtributo(clave,"lo que se pacto")),List.of()),responsable,sesion,
+                    UUID.randomUUID().toString(),com.controllocal.service.soporte.Procedencia.deLaPantalla());
             assertEquals("lo que se pacto", condicionDe(id, encargo, clave).valor(),
                     "mientras la condicion esta activa se pacta: si no, el caso no mediria "
                             + "la retirada");
@@ -626,8 +657,7 @@ class OcupacionYServiciosIntegrationTest {
             assertEquals("TEXTO", pactado.tipoDato(),
                     "y con su tipo: sin el, el SPA no sabe como pintar lo pactado");
 
-            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
-                            actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA", null, actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
                     "la condicion retirada no se vuelve a pactar: conservar la lectura no "
                             + "reabre la escritura");
         } finally {
@@ -713,7 +743,7 @@ class OcupacionYServiciosIntegrationTest {
         propiedades.editar(conLegado, new ComandoEdicion(null, null, null, null, null,
                 List.of(new ValorAtributo("agua_desague", "CONECTADO", null, null,
                         "OBSERVADO", null, null, null)),
-                null, null), actor());
+                null, null).conVersion(propiedades.consultar(conLegado,actor()).versionFisica()), actor());
 
         // LA COBERTURA, declarada. No se exige una cifra concreta de residuo -
         // eso volveria a atar la prueba a una base concreta -, se exige que el
@@ -813,7 +843,7 @@ class OcupacionYServiciosIntegrationTest {
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
                 List.of(new ValorAtributo("agua_desague", "CONECTADO", null, null,
                         "OBSERVADO", null, null, null)),
-                null, null), actor());
+                null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()), actor());
 
         Map<String, Object> rastro = jdbc.queryForMap("""
                 select verbo, valor_texto, naturaleza, canal
@@ -879,7 +909,7 @@ class OcupacionYServiciosIntegrationTest {
                                                aplica_todos, del_sistema, orden)
                 values (?, ?, 'Lista muda de control', 'LISTA', false, false, 991)
                 """, org, clave);
-        declararAplicabilidadEnLosSiete(clave, org);
+        declararAplicabilidadEnLosTipos(clave, org);
         try {
             assertTrue(jdbc.queryForList("""
                     select c.sujeto || '/' || c.clave
@@ -1068,7 +1098,7 @@ class OcupacionYServiciosIntegrationTest {
     }
 
     private MotorDeCaptura.Pregunta preguntaDe(String tipo, String operacion, String clave) {
-        return captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, operacion, actor())
+        return captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, operacion, null, actor())
                 .todas().stream()
                 .filter(p -> clave.equals(p.clave()))
                 .findFirst()
@@ -1078,7 +1108,7 @@ class OcupacionYServiciosIntegrationTest {
 
     private void editar(long id, ValorAtributo valor) {
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                List.of(valor), null, null), actor());
+                List.of(valor), null, null).conVersion(propiedades.consultar(id,actor()).versionFisica()), actor());
     }
 
     private String valorDe(long id, String clave) {
@@ -1136,11 +1166,11 @@ class OcupacionYServiciosIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, tipo, null,
+        return propiedades.registrar(new ComandoRegistro(UUID.randomUUID().toString(), null, null, tipo, "VIVIENDA",
                 "Caso 5A " + tipo,
                 new Ubicacion("Av. Corte 5 " + UUID.randomUUID(), "Lurin",
-                        null, null, null, null, null, null, null),
-                List.of(new Titular(idPropietario, null, Boolean.TRUE)),
+                        null, null, null, "DEPARTAMENTO".equals(tipo)?"101":null, null, null, null),
+                List.of(new Titular(idPropietario, new BigDecimal("100"), Boolean.TRUE)),
                 atributos, List.of(operacion), null), actor).idPropiedad();
     }
 
@@ -1148,6 +1178,10 @@ class OcupacionYServiciosIntegrationTest {
         return jdbc.queryForObject(
                 "select min(id_captacion) from captacion where id_propiedad = ?",
                 Long.class, idPropiedad);
+    }
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba preparacion(){
+        if(preparacion==null)preparacion=new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba(jdbc,propiedades,encargos,catalogos,contextos,cuentas,factores,cifrado,gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);
+        return preparacion;
     }
 
     /**
@@ -1161,7 +1195,7 @@ class OcupacionYServiciosIntegrationTest {
      * habria dejado el caso midiendo la retirada de una pregunta que nunca se
      * hizo.
      */
-    private void declararAplicabilidadEnLosSiete(String clave, long org) {
+    private void declararAplicabilidadEnLosTipos(String clave, long org) {
         jdbc.update("""
                 insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
                                                     requerido, exigencia)
@@ -1172,9 +1206,10 @@ class OcupacionYServiciosIntegrationTest {
                 """, clave, org);
     }
 
-    private PublicacionService.DatosPublicacion publicacionDePrueba() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null, new BigDecimal("2500"),
-                "PEN", "Anuncio de prueba", null, null);
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio publicacionDePrueba(long idPropiedad) {
+        var pacto=encargos.consultar(encargoDe(idPropiedad),actor()).condiciones();
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio("WEB_PROPIA", null,pacto.precioPedido(),
+                pacto.monedaPrecio(), "Anuncio de prueba", null, null);
     }
 
     private Actor actor() {

@@ -34,7 +34,7 @@ import java.time.format.DateTimeParseException;
  *
  * <p>Un mes ya cerrado tiene {@code transcurridos == dias}: el ritmo de julio no
  * se sigue proyectando en agosto. Un mes futuro tiene cero, y con cero no se
- * proyecta nada —lo cubre {@link PoliticaDeRitmo}—.
+ * proyecta nada —lo cubre {@link AvanceDeMeta}—.
  */
 public record PeriodoCalendario(int anio, int mes, LocalDate desde, LocalDate hasta,
                                 int diasTranscurridos, int diasTotales) {

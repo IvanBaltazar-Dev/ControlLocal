@@ -32,35 +32,35 @@
     <div class="distribucion">
       <main>
         <section class="seccion">
-          <div class="seccion-titulo"><span>1</span><div><h2>Local comercial</h2><p>Inmueble asociado a la captación.</p></div></div>
+          <div class="seccion-titulo"><span>1</span><div><h2>Propiedad</h2><p>Inmueble asociado a la captación.</p></div></div>
           @if (!localFijo()) {
             <div class="busqueda-local">
               <label class="campo">
-                <span>Buscar local disponible</span>
+                <span>Buscar propiedad disponible</span>
                 <input type="search" [formControl]="busquedaLocal" placeholder="Código, dirección o distrito" (keydown.enter)="$event.preventDefault(); buscarLocales()" />
               </label>
               <button type="button" class="secundario" [disabled]="cargandoLocales()" (click)="buscarLocales()">{{ cargandoLocales() ? 'Buscando…' : 'Buscar' }}</button>
             </div>
             <label class="campo">
-              <span>Local <b>*</b></span>
+              <span>Propiedad <b>*</b></span>
               <select formControlName="idLocal" (change)="seleccionarLocal()">
-                <option [ngValue]="0">— Selecciona un local —</option>
+                <option [ngValue]="0">— Selecciona una propiedad —</option>
                 @for (local of locales(); track local.id) {
-                  <option [ngValue]="local.id">{{ valor(local.codigoLocal) }} · {{ valor(local.direccion) }} ({{ valor(local.distrito) }})</option>
+                  <option [ngValue]="local.id">{{ valor(local.codigo) }} · {{ valor(local.direccion) }} ({{ valor(local.distrito) }})</option>
                 }
               </select>
               <small>Mostrando {{ locales().length }} de {{ totalLocales() }}. Usa la búsqueda si no aparece.</small>
               @if (invalido('idLocal')) { <small class="mensaje-error">Selecciona un local.</small> }
             </label>
           } @else {
-            <label class="campo"><span>Local</span><input [value]="descripcionLocal()" disabled /></label>
+            <label class="campo"><span>Propiedad</span><input [value]="descripcionLocal()" disabled /></label>
           }
           <div class="grid tres resumen-local">
             <label class="campo"><span>Propietario</span><input [value]="valor(localActual()?.propietarioNombre)" disabled /></label>
             <label class="campo"><span>Área registrada</span><input [value]="areaLocal()" disabled /></label>
             <label class="campo"><span>Último precio registrado</span><input [value]="precioLocal()" disabled /></label>
             <label class="campo"><span>Distrito</span><input [value]="valor(localActual()?.distrito)" disabled /></label>
-            <label class="campo"><span>Rubro permitido</span><input [value]="valor(localActual()?.rubroPermitido)" disabled /></label>
+            <label class="campo"><span>Tipo de propiedad</span><input [value]="valor(localActual()?.tipoRotulo)" disabled /></label>
           </div>
         </section>
 
@@ -120,7 +120,7 @@
       <aside>
         <h3>Avance del formulario</h3>
         <ol>
-          <li [class.completo]="pasoLocal()"><span>1</span><div><strong>Local</strong><small>Inmueble asociado</small></div></li>
+          <li [class.completo]="pasoLocal()"><span>1</span><div><strong>Propiedad</strong><small>Inmueble asociado</small></div></li>
           <li [class.completo]="pasoCondiciones()"><span>2</span><div><strong>Condiciones</strong><small>Operación y urgencia</small></div></li>
           <li [class.completo]="pasoVigencia()"><span>3</span><div><strong>Encargo y comisión</strong><small>Periodo y condición económica</small></div></li>
           <li class="completo"><span>4</span><div><strong>Observaciones</strong><small>Notas para revisión</small></div></li>

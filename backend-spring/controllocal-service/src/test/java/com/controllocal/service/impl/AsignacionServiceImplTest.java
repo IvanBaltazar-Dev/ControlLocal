@@ -1,6 +1,6 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.persona.CredencialUsuario;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
@@ -20,6 +20,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.UsuariosInternos;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -35,10 +36,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 class AsignacionServiceImplTest {
 
@@ -61,6 +65,8 @@ class AsignacionServiceImplTest {
     private final Actor admin = new Actor(ORG, 1L, ADMIN, "TENANT_ADMIN");
     private final Actor brokerActor = new Actor(ORG, 2L, ANTERIOR, "BROKER");
 
+    @BeforeEach void membresiasVigentes() {when(usuarios.estadoLocalDelRol(anyLong(),anyLong(),anyString())).thenReturn("A");}
+
     @Test
     void todosLosCasosDeUsoExigenAdministrador() {
         assertThrows(AccesoNoAutorizadoException.class,
@@ -78,29 +84,28 @@ class AsignacionServiceImplTest {
         prepararAdmin();
         DetalleAgente agente = agente("D", "A");
         when(agentes.listarFichas(ORG)).thenReturn(List.of(agente));
-        when(usuarios.credencialesPorPersona(ORG, List.of(3L)))
-                .thenReturn(Map.of(3L,
-                        credencial(agente.getRol().getPersona(), "vmora", "A")));
+        when(usuarios.estadosLocalesDelRol(ORG,List.of(3L),Actor.AGENTE)).thenReturn(Map.of(3L,"A"));
         when(supervisiones.activasPorAgentes(ORG, List.of(AGENTE)))
                 .thenReturn(List.of(supervision(ANTERIOR)));
         when(brokers.listarFichas(ORG))
-                .thenReturn(List.of(broker(ANTERIOR, 2L, "Ricardo", false)));
+                .thenReturn(List.of(broker(ANTERIOR, 2L, "Ricardo")));
 
         var ficha = service.agentes(admin).getFirst();
 
         assertEquals("Valentina", ficha.nombre());
         assertEquals("Ricardo", ficha.brokerActual());
         assertEquals("A", ficha.estadoAdministrativo());
+        verify(usuarios).estadosLocalesDelRol(ORG,List.of(3L),Actor.AGENTE);
+        verify(usuarios,never()).cuentasPorPersona(anyLong(),any());
     }
 
     @Test
     void listaBrokersConConteoAgrupado() {
         prepararAdmin();
-        DetalleBroker destino = broker(DESTINO, 4L, "Patricia", false);
+        DetalleBroker destino = broker(DESTINO, 4L, "Patricia");
         when(brokers.listarFichas(ORG)).thenReturn(List.of(destino));
-        when(usuarios.credencialesPorPersona(ORG, List.of(4L)))
-                .thenReturn(Map.of(4L,
-                        credencial(destino.getRol().getPersona(), "psoto", "A")));
+        when(usuarios.estadosLocalesDelRol(ORG,List.of(4L),Actor.BROKER)).thenReturn(Map.of(4L,"A"));
+        when(usuarios.administracionesLocalesPorPersona(ORG,List.of(4L))).thenReturn(Map.of(4L,true));
         when(supervisiones.contarActivasPorBrokers(ORG, List.of(DESTINO)))
                 .thenReturn(List.of(conteo(DESTINO, 5)));
 
@@ -108,6 +113,8 @@ class AsignacionServiceImplTest {
 
         assertEquals(5, ficha.agentesACargo());
         assertEquals("Patricia", ficha.nombre());
+        assertTrue(ficha.esAdministrador());
+        verify(usuarios).administracionesLocalesPorPersona(ORG,List.of(4L));
     }
 
     @Test
@@ -116,9 +123,9 @@ class AsignacionServiceImplTest {
         ReasignacionAgenteBroker evento = evento();
         when(agentes.listarFichas(ORG)).thenReturn(List.of(agente("D", "A")));
         when(brokers.listarFichas(ORG)).thenReturn(List.of(
-                broker(ADMIN, 1L, "Administrador", true),
-                broker(ANTERIOR, 2L, "Ricardo", false),
-                broker(DESTINO, 4L, "Patricia", false)));
+                broker(ADMIN, 1L, "Administrador"),
+                broker(ANTERIOR, 2L, "Ricardo"),
+                broker(DESTINO, 4L, "Patricia")));
         when(reasignaciones.findByOrganizacionIdOrderByIdDesc(ORG))
                 .thenReturn(List.of(evento));
 
@@ -175,14 +182,11 @@ class AsignacionServiceImplTest {
     }
 
     @Test
-    void elAdministradorNoPuedeSerDestino() {
+    void brokerConGobiernoPuedeSerSupervisorConAsignacionExplicita() {
         prepararAdmin();
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(datos(ADMIN), admin));
-
-        assertEquals("El broker administrador no requiere asignacion "
-                + "de agentes para supervisar.", error.getMessage());
+        prepararAgenteDisponible();
+        when(brokers.listarFichas(ORG)).thenReturn(List.of(broker(ADMIN,1L,"Administrador")));
+        assertEquals(ADMIN,service.reasignar(datos(ADMIN),admin).idBrokerNuevo());
     }
 
     @Test
@@ -191,7 +195,7 @@ class AsignacionServiceImplTest {
         DetalleAgente inactivo = agente("D", "I");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(inactivo));
         bloqueoDelAgente(inactivo);
-        when(usuarios.credencial(ORG, 3L))
+        when(usuarios.cuenta(ORG, 3L))
                 .thenReturn(credencial(inactivo.getRol().getPersona(), "vmora", "I"));
 
         assertEquals("El agente debe estar ACTIVO.",
@@ -201,12 +205,25 @@ class AsignacionServiceImplTest {
         DetalleAgente licencia = agente("L", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(licencia));
         bloqueoDelAgente(licencia);
-        when(usuarios.credencial(ORG, 3L))
+        when(usuarios.cuenta(ORG, 3L))
                 .thenReturn(credencial(licencia.getRol().getPersona(), "vmora", "A"));
 
         assertEquals("El agente debe estar DISPONIBLE.",
                 assertThrows(ReglaNegocioException.class,
                         () -> service.reasignar(datos(DESTINO), admin)).getMessage());
+    }
+
+    @Test void cuentaGlobalActivaNoReemplazaPertenenciaLocalDelAgente() {
+        prepararDestino();prepararAgenteDisponible();when(usuarios.estadoLocalDelRol(ORG,3L,Actor.AGENTE)).thenReturn("I");
+        assertEquals("El agente debe estar ACTIVO.",assertThrows(ReglaNegocioException.class,
+                ()->service.reasignar(datos(DESTINO),admin)).getMessage());
+        verify(supervisiones,never()).save(any());
+    }
+    @Test void brokerDestinoNecesitaPertenenciaLocalActiva() {
+        prepararDestino();when(usuarios.estadoLocalDelRol(ORG,4L,Actor.BROKER)).thenReturn("I");
+        assertEquals("El broker no esta activo.",assertThrows(ReglaNegocioException.class,
+                ()->service.reasignar(datos(DESTINO),admin)).getMessage());
+        verify(supervisiones,never()).save(any());
     }
 
     @Test
@@ -231,9 +248,9 @@ class AsignacionServiceImplTest {
         when(supervisiones.buscarActivaPorAgente(ORG, AGENTE))
                 .thenReturn(Optional.of(anterior));
         when(brokers.listarFichas(ORG)).thenReturn(List.of(
-                broker(ADMIN, 1L, "Administrador", true),
-                broker(ANTERIOR, 2L, "Ricardo", false),
-                broker(DESTINO, 4L, "Patricia", false)));
+                broker(ADMIN, 1L, "Administrador"),
+                broker(ANTERIOR, 2L, "Ricardo"),
+                broker(DESTINO, 4L, "Patricia")));
         when(reasignaciones.save(any(ReasignacionAgenteBroker.class)))
                 .thenAnswer(inv -> {
                     ReasignacionAgenteBroker guardado = inv.getArgument(0);
@@ -276,18 +293,18 @@ class AsignacionServiceImplTest {
     }
 
     private void prepararAdmin() {
-        DetalleBroker admin = broker(ADMIN, 1L, "Administrador", true);
+        DetalleBroker admin = broker(ADMIN, 1L, "Administrador");
         when(brokers.buscarFicha(ORG, ADMIN)).thenReturn(Optional.of(admin));
-        when(usuarios.credencial(ORG, 1L))
+        when(usuarios.cuenta(ORG, 1L))
                 .thenReturn(credencial(admin.getRol().getPersona(),
                         "admin@controllocal.test", "A"));
     }
 
     private void prepararDestino() {
         prepararAdmin();
-        DetalleBroker destino = broker(DESTINO, 4L, "Patricia", false);
+        DetalleBroker destino = broker(DESTINO, 4L, "Patricia");
         when(brokers.buscarFicha(ORG, DESTINO)).thenReturn(Optional.of(destino));
-        when(usuarios.credencial(ORG, 4L))
+        when(usuarios.cuenta(ORG, 4L))
                 .thenReturn(credencial(destino.getRol().getPersona(), "psoto", "A"));
     }
 
@@ -295,7 +312,7 @@ class AsignacionServiceImplTest {
         DetalleAgente agente = agente("D", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(agente));
         bloqueoDelAgente(agente);
-        when(usuarios.credencial(ORG, 3L))
+        when(usuarios.cuenta(ORG, 3L))
                 .thenReturn(credencial(agente.getRol().getPersona(), "vmora", "A"));
         return agente;
     }
@@ -330,14 +347,14 @@ class AsignacionServiceImplTest {
     }
 
     private static DetalleBroker broker(long id, long idPersona,
-                                        String nombre, boolean admin) {
+                                        String nombre) {
         DetalleBroker broker = new DetalleBroker();
         broker.setOrganizacionId(ORG);
         broker.setRol(rol(id, persona(idPersona, nombre), TipoRol.BROKER));
-        broker.setCodigoBroker(admin ? "BRK-ADM-001" : "BRK-" + id);
+        broker.setCodigoBroker("BRK-" + id);
         broker.setZona("Lima");
         broker.setFechaDesignacion(LocalDate.of(2024, 1, 1));
-        broker.setEsAdministrador(admin);
+
         ReflectionTestUtils.setField(broker, "id", id);
         return broker;
     }
@@ -387,14 +404,15 @@ class AsignacionServiceImplTest {
         return rol;
     }
 
-    private static CredencialUsuario credencial(
+    private static CuentaAcceso credencial(
             Persona persona, String usuario, String estado) {
-        CredencialUsuario credencial = new CredencialUsuario();
-        credencial.setOrganizacionId(ORG);
-        credencial.setRol(rol(90L, persona, TipoRol.USUARIO_INTERNO));
+        CuentaAcceso credencial = new CuentaAcceso();
+        credencial.setId(90L);
+        credencial.setCorreoPropio("asignacion@brox.test");
+        credencial.setCorreoConfirmadoEn(java.time.Instant.parse("2026-01-01T00:00:00Z"));
         credencial.setNombreUsuario(usuario);
         credencial.setContrasenaHash("pbkdf2$100000$x$x");
-        credencial.setEstadoAdministrativo(estado);
+        credencial.setEstado(estado);
         return credencial;
     }
 

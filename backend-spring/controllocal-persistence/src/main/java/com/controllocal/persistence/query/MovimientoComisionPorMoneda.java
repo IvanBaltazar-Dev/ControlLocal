@@ -7,4 +7,5 @@ public interface MovimientoComisionPorMoneda {
     String getMoneda();
     BigDecimal getMontoCobrado();
     BigDecimal getMontoPagadoAgente();
+    Boolean getAnomalia();
 }

@@ -15,6 +15,11 @@ spring:
     default: dev
   application:
     name: controllocal-api-v2
+  datasource:
+    hikari:
+      # El día comercial de Core es America/Lima; no depende de la zona del host/JVM.
+      # Las comprobaciones críticas tras esperar un candado reciben además su fecha explícita.
+      connection-init-sql: "SET TIME ZONE 'America/Lima'"
   jpa:
     # Flyway es el dueno del esquema; Hibernate solo valida el mapeo.
     hibernate:
@@ -23,8 +28,7 @@ spring:
   flyway:
     enabled: true
     # Las locations por perfil se declaran en cada application-<perfil>.yml.
-    # REGLA (D-29): las tres locations comparten UNA sola linea de versiones,
-    # por eso migration-prod usa el rango reservado V900+.
+    # Todas las superficies comparten una sola línea versionada de esquema.
     locations: classpath:db/migration
   jackson:
     # Paridad con Yasson (JSON-B) del backend Jakarta: las propiedades
@@ -32,6 +36,9 @@ spring:
     default-property-inclusion: non_null
 
 controllocal:
+  compras:
+    # Titular03/11/2026: canal manual Web; Core no envía mensajes ni prueba pagos.
+    whatsapp-numero: "51920744084"
   login:
     # D-S0-21: bloqueo progresivo en ventana deslizante de 15 min, contado en
     # PostgreSQL. Sustituye al limitador en memoria de 10/min por IP, que un

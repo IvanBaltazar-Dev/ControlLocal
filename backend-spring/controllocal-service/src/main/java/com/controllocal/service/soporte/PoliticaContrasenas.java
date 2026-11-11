@@ -2,12 +2,11 @@ package com.controllocal.service.soporte;
 
 import com.controllocal.service.excepcion.ReglaNegocioException;
 
-import java.security.SecureRandom;
 import java.util.Locale;
 import java.util.Set;
 
 /**
- * Politica de contrasenas (Plan S0 §4.5) y generador de las temporales.
+ * Politica de contrasenas personales (Plan S0 §4.5).
  *
  * <h2>Lo que exige, y lo que deliberadamente NO exige</h2>
  * <ul>
@@ -39,17 +38,6 @@ public final class PoliticaContrasenas {
             "qwerty", "qwertyuiop", "administrador", "administrator", "bienvenido",
             "controllocal", "brox", "cambiar123", "temporal123", "clave12345");
 
-    /**
-     * Alfabeto de las contrasenas temporales. Sin {@code I l 1 O 0}: la clave
-     * se dicta por telefono o se copia de una pantalla, y una ambiguedad ahi se
-     * convierte en un intento fallido que ademas consume cupo del bloqueo.
-     */
-    private static final char[] ALFABETO =
-            "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
-
-    private static final int LARGO_TEMPORAL = 14;
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     private PoliticaContrasenas() {
     }
 
@@ -77,17 +65,4 @@ public final class PoliticaContrasenas {
         }
     }
 
-    /**
-     * Contrasena temporal generada por el SISTEMA. El administrador no la
-     * elige: si pudiera elegirla, volveriamos al patron "el jefe conoce la
-     * clave del empleado", que es justo lo que hace inevitable el seed
-     * compartido.
-     */
-    public static char[] generarTemporal() {
-        char[] clave = new char[LARGO_TEMPORAL];
-        for (int i = 0; i < clave.length; i++) {
-            clave[i] = ALFABETO[RANDOM.nextInt(ALFABETO.length)];
-        }
-        return clave;
-    }
 }

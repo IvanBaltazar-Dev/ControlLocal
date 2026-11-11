@@ -34,8 +34,8 @@ import static org.mockito.Mockito.when;
  *
  * <p>Lo que se vigila aqui <b>no</b> es que el SDK funcione —eso es cosa de
  * Amazon— sino las tres decisiones propias que hacen que el disco y el bucket
- * sean intercambiables mientras el contrato siga congelado: <b>la misma forma
- * de clave</b>, <b>el mismo content-type servido</b> y <b>la misma respuesta
+ * sean intercambiables: <b>la clave exacta preasignada</b>,
+ * <b>el mismo content-type servido</b> y <b>la misma respuesta
  * cuando el archivo no esta</b>. La prueba de que hablan con un servidor de
  * verdad la da el E2E contra MinIO; esta fija el comportamiento.
  */
@@ -52,20 +52,24 @@ class AlmacenS3Test {
     }
 
     @Test
-    @DisplayName("la clave tiene la MISMA forma que en disco: migrar es copiar, no traducir")
-    void laClaveMantieneLaFormaCompartida() {
+    @DisplayName("el proveedor conserva clave, tipo y bytes del montaje TEST")
+    void conservaLaClavePreasignadaYLosBytes() throws Exception {
         when(s3.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
+        String clave = "tenant/7/fotos/TEST-fachada_principal.JPG";
+        byte[] contenido = new byte[]{1, 2, 3};
 
-        var guardado = almacen.guardar(AlmacenDocumentos.carpetaDeTenant(7, "fotos"),
-                "fachada principal.JPG", new byte[]{1, 2, 3}, "image/jpeg");
+        almacen.guardarEnClave(clave, contenido, "image/jpeg");
 
-        // tenant/7/fotos/xxxxxxxx-fachada_principal.JPG
-        assertTrue(guardado.clave().startsWith("tenant/7/fotos/"), guardado.clave());
-        assertTrue(guardado.clave().endsWith("-fachada_principal.JPG"), guardado.clave());
-        // El nombre que se devuelve es el ORIGINAL, no el saneado: es lo que
-        // ve el usuario, y el saneo solo protege la clave.
-        assertEquals("fachada principal.JPG", guardado.nombre());
+        var solicitud = org.mockito.ArgumentCaptor.forClass(PutObjectRequest.class);
+        var cuerpo = org.mockito.ArgumentCaptor.forClass(RequestBody.class);
+        verify(s3).putObject(solicitud.capture(), cuerpo.capture());
+        assertEquals(BUCKET, solicitud.getValue().bucket());
+        assertEquals(clave, solicitud.getValue().key());
+        assertEquals("image/jpeg", solicitud.getValue().contentType());
+        try (var entrada = cuerpo.getValue().contentStreamProvider().newStream()) {
+            assertArrayEquals(contenido, entrada.readAllBytes());
+        }
     }
 
     @Test
@@ -95,8 +99,8 @@ class AlmacenS3Test {
     }
 
     @Test
-    @DisplayName("tambien vale el 404 generico: algunos compatibles lo usan si falta el bucket")
-    void el404GenericoTambienEsAusencia() {
+    @DisplayName("un bucket ausente es fallo técnico, no prueba de retiro de un objeto")
+    void bucketAusenteNoAcreditaAusenciaDelObjeto() {
         when(s3.getObjectAsBytes(any(GetObjectRequest.class)))
                 .thenThrow((S3Exception) S3Exception.builder()
                         .statusCode(404)
@@ -104,8 +108,19 @@ class AlmacenS3Test {
                         .message("no such bucket")
                         .build());
 
-        assertFalse(almacen.abrir("tenant/7/fotos/x.pdf").isPresent());
+        assertThrows(AlmacenException.class,()->almacen.abrir("tenant/7/fotos/x.pdf"));
     }
+
+    @Test void un404SinCodigoEsFalloTecnico(){when(s3.getObjectAsBytes(any(GetObjectRequest.class))).thenThrow((S3Exception)S3Exception.builder().statusCode(404).build());assertThrows(AlmacenException.class,()->almacen.abrir("tenant/7/fotos/x.pdf"));}
+    @Test void noSuchKeyGenericoSiEsAusencia(){when(s3.getObjectAsBytes(any(GetObjectRequest.class))).thenThrow((S3Exception)S3Exception.builder().statusCode(404).awsErrorDetails(AwsErrorDetails.builder().errorCode("NoSuchKey").build()).build());assertTrue(almacen.abrir("tenant/7/fotos/x.pdf").isEmpty());}
+    void endpoint(String valor){var b=software.amazon.awssdk.services.s3.S3ServiceClientConfiguration.builder().region(software.amazon.awssdk.regions.Region.US_EAST_1);if(valor!=null)b.endpointOverride(java.net.URI.create(valor));when(s3.serviceClientConfiguration()).thenReturn(b.build());}
+    @Test void namespaceS3UsaEndpointRealYBucketSinRed(){endpoint("https://almacen-test.example.invalid");String id=almacen.identidadTecnica();assertEquals(id,new AlmacenS3(s3,BUCKET).identidadTecnica());assertFalse(id.equals(new AlmacenS3(s3,"otro-bucket-test").identidadTecnica()));endpoint("https://otro-test.example.invalid");assertFalse(id.equals(almacen.identidadTecnica()));verify(s3,never()).getObjectAsBytes(any(GetObjectRequest.class));}
+    @Test void awsSinOverrideTieneNamespaceEstable(){endpoint(null);String id=almacen.identidadTecnica();assertTrue(id.matches("[0-9a-f]{64}"));endpoint(null);assertEquals(id,almacen.identidadTecnica());}
+    @Test void namespaceNoAceptaCredencialesNiQueryDeEndpoint(){for(String uri:java.util.List.of("https://user:secret@example.invalid","https://example.invalid?token=secret","https://example.invalid#fragment")){endpoint(uri);var fallo=assertThrows(AlmacenException.class,almacen::identidadTecnica);assertFalse(fallo.getMessage().contains("secret"));assertEquals(null,fallo.getCause());}}
+    @Test void clienteSinMetadataNoInventaNamespace(){assertThrows(AlmacenException.class,almacen::identidadTecnica);}
+    @Test void awsDistingueRegionRealYNoInventaUnaAusente(){endpoint(null);String id=almacen.identidadTecnica();when(s3.serviceClientConfiguration()).thenReturn(software.amazon.awssdk.services.s3.S3ServiceClientConfiguration.builder().region(software.amazon.awssdk.regions.Region.CN_NORTH_1).build());assertFalse(id.equals(almacen.identidadTecnica()));when(s3.serviceClientConfiguration()).thenReturn(software.amazon.awssdk.services.s3.S3ServiceClientConfiguration.builder().build());assertThrows(AlmacenException.class,almacen::identidadTecnica);}
+    @Test void cambiarCredencialNoCambiaElNamespace(){endpoint("https://almacen-test.example.invalid");String id=almacen.identidadTecnica();when(s3.serviceClientConfiguration()).thenReturn(software.amazon.awssdk.services.s3.S3ServiceClientConfiguration.builder().region(software.amazon.awssdk.regions.Region.EU_WEST_1).endpointOverride(java.net.URI.create("https://almacen-test.example.invalid")).credentialsProvider(software.amazon.awssdk.auth.credentials.StaticCredentialsProvider.create(software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create("TEST_ACCESS","TEST_SECRET_FICTICIO"))).build());assertEquals(id,almacen.identidadTecnica());}
+    @Test void pathEscapadoNoColisionaConUnSegmentoDistinto(){endpoint("https://almacen-test.example.invalid/a%2Fb");String id=almacen.identidadTecnica();endpoint("https://almacen-test.example.invalid/a/b");assertFalse(id.equals(almacen.identidadTecnica()));}
 
     @Test
     @DisplayName("un fallo real SI revienta: quedarse callado convertiria una caida en 'no hay foto'")

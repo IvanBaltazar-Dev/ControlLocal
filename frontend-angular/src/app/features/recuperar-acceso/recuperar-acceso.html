@@ -83,30 +83,27 @@
              existe", el formulario sería un padrón de cuentas. -->
         <div class="exito" role="status">
           <p><strong>Solicitud registrada.</strong></p>
-          <p>Si el usuario existe, se generó un enlace de un solo uso válido 30 minutos.</p>
-          <p class="nota">
-            Todavía no hay envío automático de correo: pide el enlace al administrador de tu
-            organización, que es quien puede entregártelo.
-          </p>
+          <p>Si el correo corresponde a una cuenta habilitada, recibirás instrucciones para recuperar tu acceso.</p>
+          <p class="nota">Revisa el correo personal de tu cuenta BROX.</p>
         </div>
         <button type="button" (click)="irAlCanje()">Ya tengo el código</button>
         <p class="pie"><a routerLink="/login">Volver a iniciar sesión</a></p>
       }
 
       @default {
-        <p class="intro">Escribe tu usuario y te generamos un enlace de un solo uso.</p>
+        <p class="intro">Escribe el correo personal de tu cuenta BROX para solicitar la recuperación.</p>
 
         <form [formGroup]="formularioSolicitud" (ngSubmit)="solicitar()" novalidate>
-          <label for="usuario">Usuario</label>
+          <label for="correo">Correo BROX</label>
           <input
-            id="usuario"
-            type="text"
-            formControlName="usuario"
+            id="correo"
+            type="email"
+            formControlName="correo"
             autocomplete="username"
-            placeholder="tu usuario"
+            placeholder="tu correo personal"
             [class.invalido]="
-              formularioSolicitud.controls.usuario.touched &&
-              formularioSolicitud.controls.usuario.invalid
+              formularioSolicitud.controls.correo.touched &&
+              formularioSolicitud.controls.correo.invalid
             "
           />
 

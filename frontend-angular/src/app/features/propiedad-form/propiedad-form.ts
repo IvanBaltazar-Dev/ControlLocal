@@ -17,6 +17,9 @@ import {
   EstadoCaptura,
   PreguntaCaptura,
   preguntasDe,
+  RevisionCaptura,
+  ResultadoActuacionCaptura,
+  ReferenciaCapturaPendiente,
 } from '../../core/api/captura.service';
 import {
   DatosPropietario,
@@ -71,12 +74,13 @@ interface TitularElegido {
  * Al confirmar sale **una propiedad con dos encargos**, cada uno con su precio
  * y su histórico. No existe `AMBAS`.
  *
- * ## Nada se escribe hasta confirmar
+ * ## Nada se ejecuta hasta confirmar
  *
  * Abrir la pantalla abre un *borrador*, que anota lo que se va sabiendo y no
- * crea nada. Si se abandona, no queda una propiedad a medias. La confirmación
- * lleva `Idempotency-Key`: un doble clic devuelve la propiedad del primer
- * intento en vez de crear una segunda.
+ * crea nada del negocio. Cada avance queda disponible para retomarlo; volver
+ * sólo sale de la pantalla. La confirmación identifica propuesta, contenido y
+ * prueba de revisión con un evento humano estable. Si la respuesta se pierde,
+ * la recuperación consulta esa actuación sin emitir otra confirmación.
  */
 @Component({
   selector: 'app-propiedad-form',
@@ -99,6 +103,7 @@ export class PropiedadForm implements OnInit {
   private static readonly CLAVE_OPERACIONES = 'operaciones';
 
   private paginaPropietarios = 0;
+  private secuenciaDefinicion = 0;
   /** Se genera una vez por alta: si se reintenta, tiene que ser LA MISMA. */
   private claveIdempotencia = crearClave();
 
@@ -111,9 +116,17 @@ export class PropiedadForm implements OnInit {
   protected readonly apertura = signal<readonly PreguntaCaptura[]>([]);
   protected readonly definicion = signal<DefinicionCaptura | null>(null);
   protected readonly borrador = signal<EstadoCaptura | null>(null);
+  protected readonly capturasEnCurso = signal<readonly EstadoCaptura[]>([]);
   protected readonly valores = signal<Record<string, string>>({});
   protected readonly titulares = signal<readonly TitularElegido[]>([]);
   protected readonly revisando = signal(false);
+  protected readonly revisionActuacion = signal<RevisionCaptura | null>(null);
+  protected readonly resultadoActuacion = signal<ResultadoActuacionCaptura | null>(null);
+  protected readonly referenciasPendientes = signal<ReferenciaCapturaPendiente[]>([]);
+  protected readonly enVerificacion = computed(() => {
+    const resultado = this.resultadoActuacion();
+    return resultado?.estado === 'EN_VERIFICACION';
+  });
 
   protected readonly propietarios = signal<readonly Propietario[]>([]);
   protected readonly totalPropietarios = signal(0);
@@ -173,7 +186,8 @@ export class PropiedadForm implements OnInit {
   protected readonly faltante = computed(() => this.borrador()?.faltante ?? []);
 
   protected readonly listoParaConfirmar = computed(
-    () => this.borrador()?.listoParaEjecutar ?? false,
+    () => !!this.borrador()?.listoParaEjecutar && this.revisando()
+      && !!this.revisionActuacion() && !this.enVerificacion(),
   );
 
   protected readonly propietariosVisibles = computed(() => {
@@ -217,8 +231,9 @@ export class PropiedadForm implements OnInit {
 
   /** Lo anotado, para el resumen. Se lee del borrador: es lo que BROX guardó. */
   protected readonly resumen = computed(() => {
-    const anotado = this.borrador()?.conocido ?? {};
-    const definicion = this.definicion();
+    const propuesta = this.revisionActuacion()?.propuesta;
+    const anotado = propuesta?.contenido.datos ?? this.borrador()?.conocido ?? {};
+    const definicion = propuesta?.contenido.definicionCore ?? this.definicion();
     const rotulos = new Map<string, string>();
     for (const pregunta of this.apertura()) {
       rotulos.set(pregunta.clave, pregunta.rotulo);
@@ -258,18 +273,95 @@ export class PropiedadForm implements OnInit {
     this.cargando.set(true);
     this.errorCarga.set(null);
     try {
-      const [preguntas, estado] = await Promise.all([
+      await this.captura.cargarContextoReferencias();
+      this.referenciasPendientes.set(this.captura.referenciasPendientes());
+      const [preguntas, existentes] = await Promise.all([
         this.captura.apertura(),
-        this.captura.abrir(),
+        this.listarCapturasEnCurso(),
       ]);
       this.apertura.set(preguntas);
-      this.borrador.set(estado);
+      this.capturasEnCurso.set(existentes);
+      if (existentes.length === 0) {
+        await this.iniciarNuevoBorrador();
+      } else {
+        this.borrador.set(null);
+        this.definicion.set(null);
+        this.valores.set({});
+        this.titulares.set([]);
+      }
+      if (this.borrador()) {
+        await this.cargarPropietarios(true);
+      }
+    } catch (error) {
+      this.errorCarga.set(mensajeDe(error, 'No se pudo abrir el registro de la propiedad.'));
+    } finally {
+      this.cargando.set(false);
+    }
+  }
+
+  /**
+   * La version del servicio que existia antes de que el contrato publicara
+   * `GET /captura` no tenia este metodo. El fallback mantiene testeables los
+   * consumidores antiguos, pero el servicio real siempre lista antes de abrir
+   * otro borrador para no esconder un avance que ya se puede retomar.
+   */
+  private async listarCapturasEnCurso(): Promise<EstadoCaptura[]> {
+    const enCurso = this.captura.enCurso;
+    return typeof enCurso === 'function' ? await enCurso.call(this.captura) : [];
+  }
+
+  protected async iniciarNuevo(): Promise<void> {
+    this.cargando.set(true);
+    this.errorCarga.set(null);
+    try {
+      await this.iniciarNuevoBorrador();
       await this.cargarPropietarios(true);
     } catch (error) {
       this.errorCarga.set(mensajeDe(error, 'No se pudo abrir el registro de la propiedad.'));
     } finally {
       this.cargando.set(false);
     }
+  }
+
+  private async iniciarNuevoBorrador(): Promise<void> {
+    const estado = await this.captura.abrir();
+    this.capturasEnCurso.set([]);
+    this.aplicarEstado(estado);
+    this.definicion.set(null);
+    this.claveIdempotencia = crearClave();
+  }
+
+  protected async retomar(entrada: EstadoCaptura): Promise<void> {
+    this.cargando.set(true);
+    this.errorCarga.set(null);
+    try {
+      const estado = await this.captura.consultar(entrada.idBorrador);
+      this.aplicarEstado(estado);
+      this.capturasEnCurso.set([]);
+      await this.cargarPropietarios(true);
+      await this.rehacerElPlan();
+      const referencia = this.captura.referenciaPendiente(estado.idBorrador);
+      if (referencia) {
+        this.resultadoActuacion.set({ referencia, estado: 'EN_VERIFICACION', propuesta: null,
+          resultado: null, motivo: null });
+        this.revisando.set(true);
+        await this.verificarActuacion();
+      }
+    } catch (error) {
+      this.errorCarga.set(mensajeDe(error, 'No se pudo retomar el borrador.'));
+    } finally {
+      this.cargando.set(false);
+    }
+  }
+
+  private aplicarEstado(estado: EstadoCaptura): void {
+    const conocido = Object.fromEntries(
+      Object.entries(estado.conocido ?? {}).map(([clave, valor]) => [clave, textoDe(valor)]),
+    );
+    this.borrador.set(estado);
+    this.valores.set(conocido);
+    this.titularesDesde(conocido[TITULARES]);
+    this.revisando.set(false);
   }
 
   // ------------------------------------------------------------------
@@ -302,33 +394,52 @@ export class PropiedadForm implements OnInit {
   private async rehacerElPlan(): Promise<void> {
     const tipo = this.tipoElegido();
     const operaciones = this.operacionesElegidas();
+    const secuencia = ++this.secuenciaDefinicion;
     if (!tipo) {
       this.definicion.set(null);
+      this.cargandoDefinicion.set(false);
       return;
     }
     this.cargandoDefinicion.set(true);
     this.errorCarga.set(null);
     try {
       const definicion = await this.captura.definicion(tipo, operaciones);
+      if (secuencia !== this.secuenciaDefinicion) {
+        return;
+      }
       this.definicion.set(definicion);
       this.descartarLoQueYaNoAplica(definicion);
     } catch (error) {
+      if (secuencia !== this.secuenciaDefinicion) {
+        return;
+      }
       this.definicion.set(null);
       this.errorCarga.set(
         mensajeDe(error, 'No se pudo saber qué hay que preguntar para esta propiedad.'),
       );
     } finally {
-      this.cargandoDefinicion.set(false);
+      if (secuencia === this.secuenciaDefinicion) {
+        this.cargandoDefinicion.set(false);
+      }
     }
   }
 
   /** Se quedan las respuestas que el plan nuevo sigue admitiendo; el resto se va. */
   private descartarLoQueYaNoAplica(definicion: DefinicionCaptura): void {
+    const preguntas = preguntasDe(definicion);
     const admitidas = new Set<string>([
       PropiedadForm.CLAVE_TIPO,
       PropiedadForm.CLAVE_OPERACIONES,
-      ...preguntasDe(definicion).map((pregunta) => pregunta.clave),
+      ...preguntas.map((pregunta) => pregunta.clave),
     ]);
+    for (const pregunta of preguntas) {
+      if (pregunta.control === 'IMPORTE') {
+        const claveMoneda = claveMonedaDe(pregunta.clave);
+        if (claveMoneda != null) {
+          admitidas.add(claveMoneda);
+        }
+      }
+    }
     this.valores.update((actuales) =>
       Object.fromEntries(Object.entries(actuales).filter(([clave]) => admitidas.has(clave))),
     );
@@ -357,18 +468,26 @@ export class PropiedadForm implements OnInit {
   }
 
   protected quitarTitular(id: number): void {
-    this.titulares.update((actuales) => {
-      const quedan = actuales.filter((titular) => titular.id !== id);
-      // Siempre tiene que haber un representante: si se fue el que lo era, lo
-      // hereda el primero que queda. Sin esto, la copropiedad se queda sin
-      // interlocutor y la base lo rechaza al final del alta.
-      if (quedan.length > 0 && !quedan.some((titular) => titular.representante)) {
-        return quedan.map((titular, indice) =>
-          indice === 0 ? { ...titular, representante: true } : titular,
-        );
-      }
-      return quedan;
-    });
+    const quedan = this.titulares().filter((titular) => titular.id !== id);
+    // Siempre tiene que haber un representante: si se fue el que lo era, lo
+    // hereda el primero que queda. Sin esto, la copropiedad se queda sin
+    // interlocutor y la base lo rechaza al final del alta.
+    const siguientes =
+      quedan.length > 0 && !quedan.some((titular) => titular.representante)
+        ? quedan.map((titular, indice) =>
+            indice === 0 ? { ...titular, representante: true } : titular,
+          )
+        : quedan;
+    this.titulares.set(siguientes);
+    if (siguientes.length === 0) {
+      // Al retomar, `valores` contiene la relación que Core devolvió. Dejarla
+      // intacta haría que `cargaUtil` la reenviase aunque la persona quitara
+      // al último titular en pantalla.
+      this.valores.update((actuales) => {
+        const { [TITULARES]: _titulares, ...sinTitulares } = actuales;
+        return sinTitulares;
+      });
+    }
     this.revisando.set(false);
   }
 
@@ -411,6 +530,9 @@ export class PropiedadForm implements OnInit {
       this.propietarios.update((actuales) =>
         primera ? pagina.items : [...actuales, ...pagina.items],
       );
+      if (TITULARES in this.valores()) {
+        this.titularesDesde(this.valores()[TITULARES]);
+      }
     } catch (error) {
       this.errorPropietario.set(mensajeDe(error, 'No se pudieron cargar los propietarios.'));
     } finally {
@@ -468,14 +590,23 @@ export class PropiedadForm implements OnInit {
    */
   protected async revisar(): Promise<void> {
     const estado = this.borrador();
-    if (!estado) {
+    if (!estado || this.guardando() || this.enVerificacion()) {
       return;
     }
     this.guardando.set(true);
     this.errorGuardado.set(null);
+    this.revisionActuacion.set(null);
+    this.resultadoActuacion.set(null);
     try {
       const actualizado = await this.captura.avanzar(estado.idBorrador, this.cargaUtil(estado));
-      this.borrador.set(actualizado);
+      this.aplicarEstado(actualizado);
+      if (actualizado.listoParaEjecutar) {
+        const revision = await this.captura.prepararRevision(actualizado.idBorrador);
+        if (!this.mismaFoto(revision, actualizado)) {
+          throw new ApiError(409, 'El registro cambió. Revisa de nuevo antes de confirmar.');
+        }
+        this.revisionActuacion.set(revision);
+      }
       this.revisando.set(true);
     } catch (error) {
       this.errorGuardado.set(mensajeDe(error, 'No se pudo anotar lo respondido.'));
@@ -502,38 +633,124 @@ export class PropiedadForm implements OnInit {
   }
 
   protected volverAEditar(): void {
+    if (this.enVerificacion()) return;
+    this.revisionActuacion.set(null);
     this.revisando.set(false);
   }
 
   /** Aquí, y sólo aquí, se escribe la propiedad. */
   protected async confirmar(): Promise<void> {
     const estado = this.borrador();
-    if (!estado || !estado.listoParaEjecutar) {
+    const revision = this.revisionActuacion();
+    if (!estado || !revision || !this.listoParaConfirmar() || this.guardando()
+        || !this.mismaFoto(revision, estado)) {
       return;
     }
     this.guardando.set(true);
     this.errorGuardado.set(null);
     try {
-      const creada = await this.captura.ejecutar(estado.idBorrador, this.claveIdempotencia);
-      await this.router.navigate(['/propiedades', creada.idPropiedad]);
+      const resultado = await this.captura.confirmarRevision(revision, this.claveIdempotencia);
+      await this.recibirResultado(resultado);
     } catch (error) {
+      this.revisionActuacion.set(null);
+      this.revisando.set(false);
       this.errorGuardado.set(mensajeDe(error, 'No se pudo registrar la propiedad.'));
     } finally {
       this.guardando.set(false);
     }
   }
 
-  protected async cancelar(): Promise<void> {
-    const estado = this.borrador();
-    if (estado && estado.estado === 'E') {
-      try {
-        await this.captura.descartar(estado.idBorrador);
-      } catch {
-        // Que el borrador quede abierto no impide salir: no hay nada escrito
-        // del negocio y la organización lo verá en sus capturas en curso.
-      }
+  /** Tras una respuesta perdida sólo se consulta la misma referencia; nunca se repite el POST. */
+  protected async verificarActuacion(): Promise<void> {
+    const operacion = this.resultadoActuacion();
+    if (!operacion) return;
+    this.guardando.set(true);
+    try {
+      await this.recibirResultado(await this.captura.consultarActuacion(operacion.referencia));
+    } catch {
+      this.errorGuardado.set('El resultado sigue en verificación. Puedes consultarlo nuevamente.');
+    } finally {
+      this.guardando.set(false);
     }
+  }
+
+  /** Entrada explícita a recuperación; no consulta todos los registros ni recrea la captura. */
+  protected async consultarReferencia(entrada: ReferenciaCapturaPendiente): Promise<void> {
+    this.guardando.set(true);
+    try {
+      const resultado = await this.captura.consultarActuacion(entrada.referencia);
+      if (resultado.estado === 'EXITO' && resultado.resultado) {
+        this.captura.olvidarReferencia(entrada.idBorrador);
+        this.referenciasPendientes.set(this.captura.referenciasPendientes());
+        await this.router.navigate(['/propiedades', resultado.resultado.idPropiedad]);
+      } else if (resultado.estado === 'RECHAZADO') {
+        this.captura.olvidarReferencia(entrada.idBorrador);
+        this.referenciasPendientes.set(this.captura.referenciasPendientes());
+        this.errorGuardado.set('La actuación fue rechazada. Puedes retomar su registro para revisarlo.');
+      } else if (resultado.estado === 'PREPARADA') {
+        this.captura.olvidarReferencia(entrada.idBorrador);
+        this.referenciasPendientes.set(this.captura.referenciasPendientes());
+        this.errorGuardado.set('La propuesta está preparada y no tiene confirmación registrada. Retoma el borrador para revisarlo.');
+      } else {
+        this.errorGuardado.set('Ese registro continúa en verificación. Puedes consultarlo nuevamente.');
+      }
+    } catch (error) {
+      this.errorGuardado.set(mensajeDe(error, 'No se pudo verificar el resultado.'));
+    } finally { this.guardando.set(false); }
+  }
+
+  private async recibirResultado(resultado: ResultadoActuacionCaptura): Promise<void> {
+    this.resultadoActuacion.set(resultado);
+    if (resultado.estado !== 'EN_VERIFICACION') {
+      const idBorrador = resultado.resultado?.idBorrador ?? resultado.propuesta?.contenido.idBorrador;
+      if (idBorrador != null) this.captura.olvidarReferencia(idBorrador);
+    }
+    this.referenciasPendientes.set(this.captura.referenciasPendientes());
+    if (resultado.estado === 'EXITO' && resultado.resultado) {
+      await this.router.navigate(['/propiedades', resultado.resultado.idPropiedad]);
+    } else if (resultado.estado === 'RECHAZADO') {
+      this.revisionActuacion.set(null);
+      this.revisando.set(false);
+      this.errorGuardado.set('La actuación fue rechazada. Revisa los datos antes de prepararla nuevamente.');
+    } else if (resultado.estado === 'PREPARADA') {
+      this.revisionActuacion.set(null);
+      this.revisando.set(false);
+      this.errorGuardado.set('La propuesta está preparada y no tiene confirmación registrada. Revisa el borrador antes de continuar.');
+    } else {
+      this.revisando.set(true);
+      this.errorGuardado.set('El resultado está en verificación. No vuelvas a registrar la propiedad.');
+    }
+  }
+
+  private mismaFoto(revision: RevisionCaptura, estado: EstadoCaptura): boolean {
+    return revision.propuesta.contenido.idBorrador === estado.idBorrador &&
+      canonico(revision.propuesta.contenido.datos) === canonico(estado.conocido);
+  }
+
+  protected async cancelar(): Promise<void> {
+    // Volver no es descartar. El borrador queda en curso para que la
+    // organización lo vea en `GET /captura` y se pueda retomar más tarde.
     await this.router.navigate(['/propiedades']);
+  }
+
+  /** Descartar es explícito y conserva el hecho histórico en Core. */
+  protected async descartarBorrador(): Promise<void> {
+    if (this.enVerificacion()) return;
+    const estado = this.borrador();
+    if (!estado || estado.estado !== 'E') {
+      await this.router.navigate(['/propiedades']);
+      return;
+    }
+    this.guardando.set(true);
+    this.errorGuardado.set(null);
+    try {
+      await this.captura.descartar(estado.idBorrador);
+      await this.router.navigate(['/propiedades']);
+    } catch (error) {
+      this.errorGuardado.set(mensajeDe(error, 'No se pudo descartar el borrador.'));
+    } finally {
+      this.guardando.set(false);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -555,6 +772,45 @@ export class PropiedadForm implements OnInit {
   protected rotuloDelBloque(bloque: BloqueOperacion): string {
     return bloque.rotulo;
   }
+
+  /** Valor de moneda que acompaña a un importe, calificado por operación o atributo. */
+  protected monedaDe(pregunta: PreguntaCaptura): string {
+    const clave = pregunta.control === 'IMPORTE' ? claveMonedaDe(pregunta.clave) : null;
+    return clave == null ? '' : this.valores()[clave] ?? '';
+  }
+
+  protected anotarMoneda(pregunta: PreguntaCaptura, moneda: string): void {
+    const clave = claveMonedaDe(pregunta.clave);
+    if (clave != null) {
+      this.anotar(clave, moneda);
+    }
+  }
+
+  private titularesDesde(valor: string | undefined): void {
+    if (!valor) {
+      this.titulares.set([]);
+      return;
+    }
+    const conocidos = new Map(this.propietarios().map((propietario) => [propietario.id, propietario]));
+    const titulares: TitularElegido[] = [];
+    for (const parte of valor.split(',')) {
+      const [idTexto, cuotaTexto] = parte.trim().split(':', 2);
+      const id = Number(idTexto);
+      if (!Number.isInteger(id) || id <= 0) {
+        continue;
+      }
+      const propietario = conocidos.get(id);
+      const cuota = cuotaTexto == null || cuotaTexto.trim() === '' ? null : Number(cuotaTexto);
+      titulares.push({
+        id,
+        nombre: propietario?.nombre ?? `Titular #${id}`,
+        documento: propietario?.numeroDocumento ?? '',
+        cuota: Number.isFinite(cuota) ? cuota : null,
+        representante: titulares.length === 0,
+      });
+    }
+    this.titulares.set(titulares);
+  }
 }
 
 /** La clave del titular en el contrato del motor. */
@@ -562,9 +818,26 @@ const TITULARES = 'titulares';
 
 function crearClave(): string {
   const cripto = globalThis.crypto;
-  return cripto && 'randomUUID' in cripto
-    ? cripto.randomUUID()
-    : `alta-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (typeof cripto.randomUUID === 'function') return cripto.randomUUID();
+  const bytes = new Uint8Array(16);
+  cripto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** Compara JSON semántico sin convertir números, monedas o desconocidos. */
+function canonico(valor: unknown): string {
+  const ordenar = (dato: unknown): unknown => {
+    if (Array.isArray(dato)) return dato.map(ordenar);
+    if (dato && typeof dato === 'object') {
+      return Object.fromEntries(Object.entries(dato).sort(([a], [b]) => a.localeCompare(b))
+        .map(([clave, contenido]) => [clave, ordenar(contenido)]));
+    }
+    return dato;
+  };
+  return JSON.stringify(ordenar(valor)) ?? '';
 }
 
 function normalizar(texto: string): string {
@@ -573,6 +846,27 @@ function normalizar(texto: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim();
+}
+
+function textoDe(valor: unknown): string {
+  if (Array.isArray(valor)) {
+    return valor.join(',');
+  }
+  return valor == null ? '' : `${valor}`;
+}
+
+function claveMonedaDe(clave: string): string | null {
+  if (!clave) {
+    return null;
+  }
+  const separador = clave.indexOf(':');
+  if (separador >= 0) {
+    if (clave.slice(0, separador) !== 'importe' || separador === clave.length - 1) {
+      return null;
+    }
+    return `moneda:${clave.slice(separador + 1)}`;
+  }
+  return `moneda:${clave}`;
 }
 
 function mensajeDe(error: unknown, porDefecto: string): string {

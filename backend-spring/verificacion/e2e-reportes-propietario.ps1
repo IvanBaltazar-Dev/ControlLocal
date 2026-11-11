@@ -5,7 +5,9 @@
 # derivados desde actividad real, los gates por rol/equipo/tenant y el efecto
 # observable sobre la cadencia de 15 dias de /tareas.
 #
-# Contrato: docs/ai/contrato-congelado-e2-reportes-propietario.md
+# Autoridad: docs/1INF50/BROX-diseno-software.md (RF078/RF079) y
+# docs/1INF50/BROX-KAIROS-catalogo-operativo.md (CAT-E31).
+# C4: work/c4-c5-20261030/BROX-ESPECIFICACION-IMPLEMENTACION-C4-C5-2026-10-30.md, secciones1/4/10.
 # Uso: powershell -File backend-spring/verificacion/Invoke-E2E.ps1 -Suite reportes-propietario
 #             (compatible con Windows PowerShell 5.1 y con pwsh 7)
 # =====================================================================
@@ -13,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0; $fail = 0
 
 function Check($nombre, $condicion, $detalle) {
@@ -42,7 +45,7 @@ function ParametrosApi($metodo, $ruta, $token, $cuerpo) {
 
 function Api($metodo, $ruta, $token, $cuerpo) {
     $parametros = ParametrosApi $metodo $ruta $token $cuerpo
-    Invoke-RestMethod @parametros
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @parametros) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
 function ApiConEstado($metodo, $ruta, $token, $cuerpo) {
@@ -65,20 +68,11 @@ function ApiError($metodo, $ruta, $token, $cuerpo) {
             return @{ codigo = -1; error = $PSItem.Exception.Message }
         }
         $codigo = [int]$respuesta.StatusCode
-        $texto = ''
-        try {
-            $lector = New-Object IO.StreamReader($respuesta.GetResponseStream())
-            $texto = $lector.ReadToEnd()
-            $lector.Close()
-        } catch { $texto = '' }
-        $mensaje = $texto
-        try { $mensaje = ($texto | ConvertFrom-Json).error } catch { }
+        $texto = LeerErrorHttpDeFixture $PSItem
+        $mensaje = 'Respuesta HTTP sin mensaje JSON legible.'
+        try { $jsonError = $texto | ConvertFrom-Json; if($jsonError.error -is [string]){$mensaje=$jsonError.error} } catch { }
         return @{ codigo = $codigo; error = $mensaje }
     }
-}
-
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
 }
 
 $sufijo = Get-Random -Minimum 100000 -Maximum 999999
@@ -90,41 +84,25 @@ $fuera = $hoyFecha.AddDays(-2).ToString('yyyy-MM-dd')
 $fechaCaptacion = $hoyFecha.AddDays(-20).ToString('yyyy-MM-dd')
 
 Write-Host "`n== 1. Login y actores ==" -ForegroundColor Cyan
-$agente = Api POST '/auth/login' $null @{
-    usuario = 'vmora'; contrasena = 'Agente2026'
-}
-$otroAgente = Api POST '/auth/login' $null @{
-    usuario = 'ltorres'; contrasena = 'Agente2026'
-}
-$broker = Api POST '/auth/login' $null @{
-    usuario = 'rsalas'; contrasena = 'Broker2026'
-}
-$brokerAjeno = Api POST '/auth/login' $null @{
-    usuario = 'psoto'; contrasena = 'Broker2026'
-}
+$agente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$otroAgente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.ltorres.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$broker = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$brokerAjeno = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.psoto.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
 # V37: la sesion del TENANT_ADMIN nace CAPADA hasta enrolar su segundo factor.
 # El helper vive en e2e-context.ps1 y lo comparten todas las suites que actuan
 # como administrador.
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
+$admin = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $fixtureE2E.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
 Check 'login del agente propietario de la captacion' ($agente.rol -eq 'AGENTE') $agente.rol
 Check 'login del agente de otro equipo' ($otroAgente.rol -eq 'AGENTE') $otroAgente.rol
 Check 'login del broker supervisor' ($broker.rol -eq 'BROKER') $broker.rol
 Check 'login del broker ajeno' ($brokerAjeno.rol -eq 'BROKER') $brokerAjeno.rol
-Check 'login del administrador' ($admin.rol -eq 'ADMIN') $admin.rol
+Check 'login del administrador' ($admin.rol -eq 'TENANT_ADMIN') $admin.rol
 
 Write-Host "`n== 2. Fixture E2 aislado y actividad real ==" -ForegroundColor Cyan
-$idPropietario = [long](Sql @"
-select pr.id_persona_rol
-from persona_rol pr
-where pr.organizacion_id=(
-        select id_organizacion from organizacion where codigo='BROX_LEGACY')
-  and pr.tipo_rol='PROPIETARIO'
-  and pr.vigencia_hasta is null
-order by pr.id_persona_rol
-limit 1
-"@)
+$propietarioE2E = NuevoPropietarioC2DePrueba -Token $agente.token -Nombre "Propietario TEST E2 $sufijo"
+$idPropietario = [long]$propietarioE2E.id
 
-$local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. Reporte E2 $sufijo" -Codigo "LOC-E2-$sufijo" `
+$local = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agente.token -Direccion "Av. Reporte E2 $sufijo" -Codigo "LOC-E2-$sufijo" `
     -IdPropietario $idPropietario -Metraje 125 -Rubro 'Comercio E2' `
     -Importe 6800 -Moneda 'PEN' -TipoComision 'P' -BaseCalculo 'R' -ValorComision 1.00 `
     -TratamientoIgv 'N' -InicioEncargo $fechaCaptacion `
@@ -136,97 +114,59 @@ $idCaptacion = [long]$local.idEncargo
 # de hace veinte dias para que la tarea de reporte ya este vencida, asi que se
 # retrasa aqui -en el fixture y a la vista- en vez de pedirle al caso de uso que
 # acepte una fecha de captacion inventada.
-Sql "update captacion set fecha_captacion = date '$fechaCaptacion' where id_captacion=$idCaptacion" | Out-Null
+Invoke-ControlLocalE2ESql "update captacion set fecha_captacion = date '$fechaCaptacion' where id_captacion=$idCaptacion" | Out-Null
 $captacion = Api GET "/captaciones/$idCaptacion" $agente.token
 Check 'se crea un local aislado para E2' ($local.id -gt 0) "local=$($local.id)"
 Check 'se crea una captacion propia con reloj vencido' `
     ($idCaptacion -gt 0 -and $captacion.idAgente -eq $agente.idDominio) `
     "captacion=$idCaptacion agente=$($captacion.idAgente)"
 
-$aprobada = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{
-    accion = 'A'; observacion = 'Aprobada para verificar E2.'
-}
+$null = HabilitarEncargoC2DePrueba -IdEncargo $idCaptacion -TokenResponsable $agente.token -TokenDecisor $broker.token -FechaFirma $hoy `
+    -MonedaComision 'PEN' -Exclusividad $true -HitoDevengo 'Firma del contrato' `
+    -ParteObligada 'Propietario TEST' -Beneficiario 'Agencia TEST' -Exigibilidad 'A la firma del contrato'
+
+$aprobada = Api GET "/captaciones/$idCaptacion" $agente.token $null
 Check 'el broker supervisor activa la captacion E2' ($aprobada.estado -eq 'A') $aprobada.estado
 
-$idOportunidad = [long](Sql @"
-with nueva_oportunidad as (
-    insert into oportunidad_comercial (
-        organizacion_id, codigo_oportunidad, estado, id_rol_cliente,
-        id_captacion, id_rol_agente, observaciones,
-        fecha_registro, fecha_primera_consulta
-    )
-    select o.id_organizacion, 'OP-E2-$sufijo', 'A', dc.id_persona_rol,
-           $idCaptacion, $($agente.idDominio), 'Fixture de resumen E2 $sufijo',
-           timestamptz '$desde 09:00:00-05', timestamptz '$desde 09:00:00-05'
-    from organizacion o
-    join detalle_cliente dc on dc.organizacion_id=o.id_organizacion
-    where o.codigo='BROX_LEGACY'
-    order by dc.id_persona_rol
-    limit 1
-    returning id_oportunidad
-)
-select id_oportunidad from nueva_oportunidad
-"@)
+$clienteDeReporte = Api POST '/clientes' $agente.token @{
+    tipoPersona = 'N'; tipoDocumento = 'P'; numeroDocumento = ('E2-' + [guid]::NewGuid().ToString('N').Substring(0,20))
+    nombre = "Cliente TEST reporte E2 $sufijo"; consentimientoUsoDato = $true; consentimientoContacto = $true
+}
+$oportunidadDeReporte = NuevaOportunidadC4DePrueba -IdEncargo $idCaptacion -IdCliente $clienteDeReporte.id `
+    -Token $agente.token -Codigo "OP-E2-$sufijo" -Observaciones "Fixture de resumen TEST E2 $sufijo" `
+    -EvidenciaInteres 'Manifestacion FICTICIA explicita de interes del cliente TEST de reporte.'
+$idOportunidad = [long]$oportunidadDeReporte.id
 
-Sql @"
-insert into interaccion_comercial (
-    organizacion_id, contexto, id_captacion, id_rol_agente,
-    canal_contacto, resultado, observaciones, fecha_hora
-)
-select id_organizacion, 'CAPTACION', $idCaptacion, $($agente.idDominio),
-       'E', 'DOCS_SOLICITADOS', 'Consulta directa E2 $sufijo',
-       timestamptz '$desde 12:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+# Tres comunicaciones declaradas de TEST, con la fecha real del caso y
+# resultado desconocido. No se convierten DOCS_SOLICITADOS/INTERESADO.
+$directa = NuevaInteraccionC4DePrueba -Vinculos @(@{ tipo = 'ENCARGO'; referencia = $idCaptacion }) `
+    -Resumen "Consulta directa E2 $sufijo" -Fuente "Fixture TEST E2 $sufijo" -Fecha $desde
+$porOportunidad = NuevaInteraccionC4DePrueba -Vinculos @(@{ tipo = 'OPORTUNIDAD'; referencia = $idOportunidad }) `
+    -Resumen "Consulta de oportunidad E2 $sufijo" -Fuente "Fixture TEST E2 $sufijo" -Fecha $hoy
+$anterior = NuevaInteraccionC4DePrueba -Vinculos @(@{ tipo = 'ENCARGO'; referencia = $idCaptacion }) `
+    -Resumen "Fuera del periodo E2 $sufijo" -Fuente "Fixture TEST E2 $sufijo" -Fecha $fuera
+$comunicacionDirecta = Invoke-InteraccionC4DePrueba -BaseUrl $base -Token $agente.token -Datos $directa -Clave "e2-directa-$sufijo"
+$comunicacionOportunidad = Invoke-InteraccionC4DePrueba -BaseUrl $base -Token $agente.token -Datos $porOportunidad -Clave "e2-oportunidad-$sufijo"
+$comunicacionAnterior = Invoke-InteraccionC4DePrueba -BaseUrl $base -Token $agente.token -Datos $anterior -Clave "e2-anterior-$sufijo"
+Check 'tres comunicaciones tienen tres identidades y sus fechas declaradas' `
+    (@($comunicacionDirecta.resultado.id, $comunicacionOportunidad.resultado.id, $comunicacionAnterior.resultado.id | Select-Object -Unique).Count -eq 3 `
+        -and $comunicacionDirecta.resultado.fechaHecho -eq $desde -and $comunicacionAnterior.resultado.fechaHecho -eq $fuera) `
+    'identidades y fechas'
 
-insert into interaccion_comercial (
-    organizacion_id, contexto, id_oportunidad, id_rol_agente,
-    canal_contacto, resultado, observaciones, fecha_hora
-)
-select id_organizacion, 'OPORTUNIDAD', $idOportunidad, $($agente.idDominio),
-       'W', 'INTERESADO', 'Consulta de oportunidad E2 $sufijo',
-       timestamptz '$hoy 12:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+$visitaDesde = NuevaVisitaC4DePrueba -IdOportunidad $idOportunidad -Fecha $desde -Hora '15:00' -Token $agente.token -Observaciones "Visita realizada TEST E2 $sufijo"
+$null = ResultadoVisitaC4DePrueba -IdVisita $visitaDesde.id -Token $agente.token -Ocurrencia 'REALIZADA' -FechaHecho $desde -Desenlace @{ resultado = 'INTERESADO' }
+$visitaPendiente = NuevaVisitaC4DePrueba -IdOportunidad $idOportunidad -Fecha $hoy -Hora '17:00' -Token $agente.token -Observaciones "Visita no realizada todavia TEST E2 $sufijo"
+$visitaAnterior = NuevaVisitaC4DePrueba -IdOportunidad $idOportunidad -Fecha $fuera -Hora '11:00' -Token $agente.token -Observaciones "Visita fuera del periodo TEST E2 $sufijo"
+$null = ResultadoVisitaC4DePrueba -IdVisita $visitaAnterior.id -Token $agente.token -Ocurrencia 'REALIZADA' -FechaHecho $fuera -Desenlace @{ resultado = 'INTERESADO' }
 
-insert into interaccion_comercial (
-    organizacion_id, contexto, id_captacion, id_rol_agente,
-    canal_contacto, resultado, observaciones, fecha_hora
-)
-select id_organizacion, 'CAPTACION', $idCaptacion, $($agente.idDominio),
-       'L', 'DOCS_SOLICITADOS', 'Fuera del periodo E2 $sufijo',
-       timestamptz '$fuera 12:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
-
-insert into visita (
-    organizacion_id, id_oportunidad, id_rol_agente, fecha_visita,
-    hora_visita, estado, resultado, observaciones
-)
-select id_organizacion, $idOportunidad, $($agente.idDominio), date '$desde',
-       time '15:00', 'R', 'INTERESADO', 'Visita realizada E2 $sufijo'
-from organizacion where codigo='BROX_LEGACY';
-
-insert into visita (
-    organizacion_id, id_oportunidad, id_rol_agente, fecha_visita,
-    hora_visita, estado, observaciones
-)
-select id_organizacion, $idOportunidad, $($agente.idDominio), date '$hoy',
-       time '17:00', 'P', 'Visita no realizada todavia E2 $sufijo'
-from organizacion where codigo='BROX_LEGACY';
-
-insert into visita (
-    organizacion_id, id_oportunidad, id_rol_agente, fecha_visita,
-    hora_visita, estado, resultado, observaciones
-)
-select id_organizacion, $idOportunidad, $($agente.idDominio), date '$fuera',
-       time '11:00', 'R', 'INTERESADO', 'Visita fuera del periodo E2 $sufijo'
-from organizacion where codigo='BROX_LEGACY';
-
+Invoke-ControlLocalE2ESql @"
 insert into motivo_no_continuidad (
     organizacion_id, id_oportunidad, razon_principal, observaciones,
     id_rol_agente, fecha_registro
 )
 select id_organizacion, $idOportunidad, 'P', 'Precio E2 uno',
        $($agente.idDominio), timestamptz '$desde 13:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+from organizacion where codigo='$($fixtureE2E.codigo)';
 
 insert into motivo_no_continuidad (
     organizacion_id, id_oportunidad, razon_principal, observaciones,
@@ -234,7 +174,7 @@ insert into motivo_no_continuidad (
 )
 select id_organizacion, $idOportunidad, 'P', 'Precio E2 dos',
        $($agente.idDominio), timestamptz '$hoy 13:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+from organizacion where codigo='$($fixtureE2E.codigo)';
 
 insert into motivo_no_continuidad (
     organizacion_id, id_oportunidad, razon_principal, observaciones,
@@ -242,7 +182,7 @@ insert into motivo_no_continuidad (
 )
 select id_organizacion, $idOportunidad, 'U', 'Ubicacion E2',
        $($agente.idDominio), timestamptz '$hoy 14:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+from organizacion where codigo='$($fixtureE2E.codigo)';
 
 insert into motivo_no_continuidad (
     organizacion_id, id_oportunidad, razon_principal, observaciones,
@@ -250,7 +190,7 @@ insert into motivo_no_continuidad (
 )
 select id_organizacion, $idOportunidad, 'C', 'Fuera del periodo E2',
        $($agente.idDominio), timestamptz '$fuera 14:00:00-05'
-from organizacion where codigo='BROX_LEGACY';
+from organizacion where codigo='$($fixtureE2E.codigo)';
 "@ | Out-Null
 Check 'se prepara una oportunidad aislada para los agregados' ($idOportunidad -gt 0) "op=$idOportunidad"
 
@@ -259,8 +199,8 @@ $listaInicial = Api GET "/captaciones/$idCaptacion/reportes-propietario" $agente
 Check 'la captacion nueva empieza sin reportes' ($listaInicial.Count -eq 0) "items=$($listaInicial.Count)"
 Check 'el broker supervisor puede listar' `
     ((Api GET "/captaciones/$idCaptacion/reportes-propietario" $broker.token).Count -eq 0) 'broker'
-Check 'el administrador puede listar' `
-    ((Api GET "/captaciones/$idCaptacion/reportes-propietario" $admin.token).Count -eq 0) 'admin'
+Check 'gobernar no permite listar el reporte comercial' `
+    ((ApiError GET "/captaciones/$idCaptacion/reportes-propietario" $admin.token).codigo -eq 403) 'gobierno'
 Check 'un agente ajeno recibe 403' `
     ((ApiError GET "/captaciones/$idCaptacion/reportes-propietario" $otroAgente.token).codigo -eq 403) `
     'agente ajeno'
@@ -268,7 +208,7 @@ Check 'un broker ajeno recibe 403' `
     ((ApiError GET "/captaciones/$idCaptacion/reportes-propietario" $brokerAjeno.token).codigo -eq 403) `
     'broker ajeno'
 Check 'una captacion inexistente responde 404' `
-    ((ApiError GET '/captaciones/999999999/reportes-propietario' $admin.token).codigo -eq 404) `
+    ((ApiError GET '/captaciones/999999999/reportes-propietario' $agente.token).codigo -eq 404) `
     'inexistente'
 Check 'sin token responde 401' `
     ((ApiError GET "/captaciones/$idCaptacion/reportes-propietario" $null).codigo -eq 401) `
@@ -294,8 +234,8 @@ Check 'el rango incluye ambos extremos y excluye la actividad anterior' `
     "$($preview.consultas)/$($preview.visitas)"
 Check 'el broker supervisor obtiene el mismo preview' `
     ((Api GET $rutaPreview $broker.token).objeciones -eq $preview.objeciones) 'broker'
-Check 'el administrador obtiene el mismo preview' `
-    ((Api GET $rutaPreview $admin.token).consultas -eq 2) 'admin'
+Check 'gobernar no permite el preview comercial' `
+    ((ApiError GET $rutaPreview $admin.token).codigo -eq 403) 'gobierno'
 $previewAbierto = Api GET `
     "/captaciones/$idCaptacion/reportes-propietario/preview" $agente.token
 Check 'sin limites, el preview conserva el rango abierto del cable' `
@@ -312,11 +252,11 @@ Check 'una fecha de query invalida responde 400 con el valor recibido' `
 
 Write-Host "`n== 5. Integracion previa con la tarea periodica F7 ==" -ForegroundColor Cyan
 Api GET '/tareas' $agente.token | Out-Null
-$tareaAntes = Sql @"
+$tareaAntes = Invoke-ControlLocalE2ESql @"
 select estado
 from tarea
 where organizacion_id=(
-        select id_organizacion from organizacion where codigo='BROX_LEGACY')
+        select id_organizacion from organizacion where codigo='$($fixtureE2E.codigo)')
   and tipo='REPORTE_PROPIETARIO'
   and entidad_tipo='CAPTACION'
   and entidad_id=$idCaptacion
@@ -389,13 +329,13 @@ Check 'canal nulo aplica EMAIL por defecto' ($reporte.canalEnvio -eq 'E') $repor
 Check 'fechaReporte es hoy y fechaCreacion viaja en el 201' `
     ($reporte.fechaReporte -eq $hoy -and $null -ne $reporte.fechaCreacion) `
     "$($reporte.fechaReporte)/$($reporte.fechaCreacion)"
-$filaGuardada = Sql @"
+$filaGuardada = Invoke-ControlLocalE2ESql @"
 select consultas_reportadas || '|' || visitas_reportadas || '|' ||
        objeciones_frecuentes || '|' || canal_envio
 from reporte_propietario
 where id_reporte_propietario=$($reporte.id)
   and organizacion_id=(
-      select id_organizacion from organizacion where codigo='BROX_LEGACY')
+      select id_organizacion from organizacion where codigo='$($fixtureE2E.codigo)')
 "@
 Check 'la fila PostgreSQL conserva los derivados y el tenant' `
     ($filaGuardada -eq '2|1|Precio (2), Ubicacion (1)|E') $filaGuardada
@@ -432,11 +372,11 @@ for ($i = 1; $i -lt $listaCompleta.Count; $i++) {
 Check 'el listado conserva fechaReporte descendente' $ordenada 'orden'
 
 Api GET '/tareas' $agente.token | Out-Null
-$tareaDespues = Sql @"
+$tareaDespues = Invoke-ControlLocalE2ESql @"
 select estado
 from tarea
 where organizacion_id=(
-        select id_organizacion from organizacion where codigo='BROX_LEGACY')
+        select id_organizacion from organizacion where codigo='$($fixtureE2E.codigo)')
   and tipo='REPORTE_PROPIETARIO'
   and entidad_tipo='CAPTACION'
   and entidad_id=$idCaptacion
@@ -445,144 +385,39 @@ limit 1
 "@
 Check 'registrar el reporte reinicia la cadencia y completa la tarea F7' `
     ($tareaDespues -eq 'C') "estado=$tareaDespues"
-$ultimoReporte = Sql @"
+$ultimoReporte = Invoke-ControlLocalE2ESql @"
 select max(fecha_reporte)
 from reporte_propietario
 where organizacion_id=(
-        select id_organizacion from organizacion where codigo='BROX_LEGACY')
+        select id_organizacion from organizacion where codigo='$($fixtureE2E.codigo)')
   and id_captacion=$idCaptacion
 "@
 Check 'F7 puede leer el ultimo reporte de la captacion' `
     ($ultimoReporte -eq $hoy) "fecha=$ultimoReporte"
 
 Write-Host "`n== 9. Aislamiento real de tenant y cleanup temporal ==" -ForegroundColor Cyan
-$codigoOrg2 = "E2_$sufijo"
-$org2Creada = $false
-try {
-    $idCaptacionOrg2 = [long](Sql @"
-with nueva_org as (
-    insert into organizacion (codigo, nombre)
-    values ('$codigoOrg2', 'Organizacion temporal E2')
-    returning id_organizacion
-), persona_propietario as (
-    insert into persona (
-        tipo_persona, tipo_documento, numero_documento,
-        nombres_o_razon_social, estado, organizacion_id
-    )
-    select 'N', 'D', '81$sufijo', 'Propietario temporal E2', 'A', id_organizacion
-    from nueva_org
-    returning id_persona, organizacion_id
-), rol_propietario as (
-    insert into persona_rol (
-        id_persona, tipo_rol, vigencia_desde, organizacion_id
-    )
-    select id_persona, 'PROPIETARIO', current_date, organizacion_id
-    from persona_propietario
-    returning id_persona_rol, organizacion_id
-), propiedad_org2 as (
-    insert into propiedad (
-        codigo, direccion, distrito, metraje, precio_referencial, moneda_referencial,
-        estado_registro, disponibilidad_comercial, tipo_inmueble, uso, id_rol_propietario,
-        tipo_rol_propietario, organizacion_id
-    )
-    select 'LOC-E2-ORG2', 'Direccion temporal E2', 'Miraflores',
-           100, 5000, 'PEN', 'A', 'D', 'L', 'C', id_persona_rol,
-           'PROPIETARIO', organizacion_id
-    from rol_propietario
-    returning id_propiedad, organizacion_id
-), atributo_local as (
-    insert into atributo_propiedad (
-        organizacion_id, id_propiedad, clave, valor_texto
-    )
-    select organizacion_id, id_propiedad, 'rubro_permitido', 'Temporal E2' from propiedad_org2
-), persona_agente as (
-    insert into persona (
-        tipo_persona, tipo_documento, numero_documento,
-        nombres_o_razon_social, estado, organizacion_id
-    )
-    select 'N', 'D', '82$sufijo', 'Agente temporal E2', 'A', id_organizacion
-    from nueva_org
-    returning id_persona, organizacion_id
-), rol_agente as (
-    insert into persona_rol (
-        id_persona, tipo_rol, vigencia_desde, organizacion_id
-    )
-    select id_persona, 'AGENTE', current_date, organizacion_id
-    from persona_agente
-    returning id_persona_rol, organizacion_id
-), detalle_agente_org2 as (
-    insert into detalle_agente (
-        id_persona_rol, tipo_rol, codigo_agente, zona_asignada,
-        fecha_ingreso, estado_operativo, organizacion_id
-    )
-    select id_persona_rol, 'AGENTE', 'AGE-E2-ORG2', 'Org2',
-           current_date, 'D', organizacion_id
-    from rol_agente
-    returning id_persona_rol, organizacion_id
-), captacion_org2 as (
-    insert into captacion (
-        codigo_captacion, fecha_captacion,
-        fecha_inicio_encargo, fecha_fin_encargo,
-        observaciones, estado, id_propiedad, id_rol_agente,
-        motivo_operacion, organizacion_id
-    )
-    select 'CAP-E2-ORG2', current_date,
-           current_date, current_date + 180,
-           'Captacion temporal E2', 'P', p.id_propiedad, a.id_persona_rol,
-           'A', p.organizacion_id
-    from propiedad_org2 p, detalle_agente_org2 a
-    returning id_captacion, id_rol_agente, organizacion_id
-), reporte_org2 as (
-    insert into reporte_propietario (
-        organizacion_id, id_captacion, id_rol_agente,
-        fecha_reporte, consultas_reportadas, visitas_reportadas, canal_envio
-    )
-    select organizacion_id, id_captacion, id_rol_agente,
-           current_date, 0, 0, 'E'
-    from captacion_org2
-)
-select id_captacion from captacion_org2
-"@)
-    $org2Creada = $true
-    Check 'se crea el fixture E2 de una segunda organizacion' `
-        ($idCaptacionOrg2 -gt 0) "captacion=$idCaptacionOrg2"
-    $ajenaTenant = ApiError GET `
-        "/captaciones/$idCaptacionOrg2/reportes-propietario" $admin.token
-    Check 'el ADMIN legado recibe 404 para una captacion de otro tenant' `
-        ($ajenaTenant.codigo -eq 404) `
-        "codigo=$($ajenaTenant.codigo) captacion=$idCaptacionOrg2"
-} finally {
-    if ($org2Creada) {
-        Sql @"
-delete from reporte_propietario
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from captacion
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from atributo_propiedad
-where id_propiedad in (
-    select id_propiedad from propiedad
-    where organizacion_id=(
-        select id_organizacion from organizacion where codigo='$codigoOrg2'));
--- V88: toda alta por la API deja su fila de responsable, y la FK compuesta
--- bloquea el borrado de la propiedad. Es idempotente si no hay ninguna.
-delete from asignacion_responsable_propiedad
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from propiedad
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from detalle_agente
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from persona_rol
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from persona
-where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from organizacion where codigo='$codigoOrg2';
-"@ | Out-Null
-    }
+$otroTenant = Initialize-ControlLocalE2EActors -Etiqueta 'contrario'
+$gobiernoOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $otroTenant.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
+$agenteOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $otroTenant.organizacion -Rol 'AGENTE'
+$brokerOtroTenant = Connect-ControlLocalE2E -BaseUrl $base -Correo $otroTenant.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $otroTenant.organizacion -Rol 'BROKER' -EnrolarSiempre
+$propietarioOtroTenant = NuevoPropietarioC2DePrueba -Token $agenteOtroTenant.token -Nombre 'Propietario ficticio del otro tenant E2'
+$localOtroTenant = NuevoInmuebleConEncargo -LocalIndependienteTest -Token $agenteOtroTenant.token -IdPropietario $propietarioOtroTenant.id `
+    -Direccion 'Predio ficticio E2-ORG2' -Distrito 'Ate' -Metraje 100 -Rubro 'Retail TEST' `
+    -Importe 1000 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1 -TratamientoIgv 'N' `
+    -InicioEncargo $hoy -FinEncargo (Get-Date).AddDays(90).ToString('yyyy-MM-dd') -Exclusividad $true
+$habilitadoOtro = HabilitarEncargoC2DePrueba -IdEncargo $localOtroTenant.idEncargo -TokenResponsable $agenteOtroTenant.token -TokenDecisor $brokerOtroTenant.token -FechaFirma $hoy `
+    -MonedaComision 'PEN' -Exclusividad $true -HitoDevengo 'Firma del contrato' `
+    -ParteObligada 'Propietario TEST extranjero' -Beneficiario 'Agencia TEST extranjera' -Exigibilidad 'A la firma del contrato'
+$reporteOtro = Api POST "/captaciones/$($localOtroTenant.idEncargo)/reportes-propietario" $agenteOtroTenant.token @{
+    periodoInicio = $hoy; periodoFin = $hoy; canalEnvio = 'E'; ajustesRecomendados = 'Reporte ficticio TEST de otro tenant.'
 }
-Check 'el fixture de segunda organizacion se retira al terminar' `
-    ((Sql "select count(*) from organizacion where codigo='$codigoOrg2'") -eq '0') `
-    'cleanup'
-
+Check 'el propio agente extranjero consulta su reporte persistido' `
+    (@(Api GET "/captaciones/$($localOtroTenant.idEncargo)/reportes-propietario" $agenteOtroTenant.token $null).Count -eq 1) 'positivo extranjero'
+$ajenaTenant = ApiError GET "/captaciones/$($localOtroTenant.idEncargo)/reportes-propietario" $agente.token $null
+Check 'poseer el id del Encargo extranjero no divulga su reporte' ($ajenaTenant.codigo -eq 404) 'tenant'
+# No borrar el reporte/historia para limpiar: el runner retira la base propia.
+$contextoFinal = Assert-ControlLocalE2EContext
+Check 'el teardown conserva la frontera de la base exclusiva' ($contextoFinal.Database -eq $e2e.Database) 'teardown'
 Write-Host "`n===== $ok OK / $fail FALLAS =====" `
     -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 if ($fail -gt 0) { exit 1 }

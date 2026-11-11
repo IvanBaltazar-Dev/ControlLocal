@@ -71,12 +71,6 @@
     </table>
   </div>
 
-  @if (yaHayAdministrador() && esAdmin()) {
-    <p class="nota-admin">
-      Ya existe un broker administrador. Solo puede haber uno por organización, así que un alta
-      nueva con esa marca será rechazada.
-    </p>
-  }
 
   @if (total() > 0) {
     <cl-paginacion

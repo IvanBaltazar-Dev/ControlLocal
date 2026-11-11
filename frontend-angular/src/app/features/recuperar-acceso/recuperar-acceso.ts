@@ -21,9 +21,8 @@ type Paso = 'solicitar' | 'solicitada' | 'canje' | 'listo';
  * - **Nunca se dice si la cuenta existe.** El backend responde 202 siempre y
  *   aquí se muestra el mismo mensaje pase lo que pase — incluso si la llamada
  *   falla. Un "ese usuario no existe" convertiría el formulario en un padrón.
- * - **Hoy el enlace no llega solo.** No hay transporte configurado (D-S0-11),
- *   así que la solicitud deja constancia y el enlace lo entrega el
- *   administrador. Se dice en pantalla en vez de prometer un correo que no sale.
+ * - El correo de cuenta pertenece al titular; el gobierno organizacional no
+ *   entrega credenciales ni cambia el canal de recuperación de otra persona.
  */
 @Component({
   selector: 'app-recuperar-acceso',
@@ -47,7 +46,7 @@ export class RecuperarAcceso {
   protected readonly tokenEnLaUrl = !!this.tokenDeLaUrl;
 
   protected readonly formularioSolicitud = this.fb.nonNullable.group({
-    usuario: ['', Validators.required],
+    correo: ['', [Validators.required, Validators.email]],
   });
 
   protected readonly formularioCanje = this.fb.nonNullable.group({
@@ -64,7 +63,7 @@ export class RecuperarAcceso {
     this.cargando.set(true);
     this.error.set(null);
     try {
-      await this.contrasenas.solicitarRecuperacion(this.formularioSolicitud.getRawValue().usuario);
+      await this.contrasenas.solicitarRecuperacion(this.formularioSolicitud.getRawValue().correo);
     } catch (e) {
       const http = e as HttpErrorResponse;
       // El 429 del bloqueo sí se muestra: no revela nada que el usuario no

@@ -36,9 +36,10 @@ import java.util.Objects;
  *
  * <p>Tres cosas del cable que hay que respetar durante la convivencia:
  * <ol>
- *   <li><b>El catalogo es compartido para ADMIN y AGENTE</b> —cualquier agente
+ *   <li><b>El catalogo es compartido entre AGENTES</b> —cualquier agente
  *       ve y edita cualquier propietario—; el unico rol acotado es el BROKER, y
- *       lo acota por sus PROPIEDADES, no por sus oportunidades;</li>
+ *       lo acota por sus PROPIEDADES, no por sus oportunidades. CAT-R19/C1
+ *       excluye al gobierno de este catalogo comercial;</li>
  *   <li>quien registra, edita y da de baja es el <b>AGENTE</b> (el gate vive en
  *       el controlador, igual que en la v1);</li>
  *   <li>{@code cantidadLocales} se calcula SOLO para los propietarios de la
@@ -140,10 +141,15 @@ public class PropietarioServiceImpl implements PropietarioService {
         PersonaRol propietario = cargarConAcceso(id, actor);
         return ficha(propietario, conteos(List.of(id), actor).getOrDefault(id, 0));
     }
+    @Override @Transactional(readOnly=true)
+    public java.util.Optional<Long> personaLegible(long id,Actor actor){
+        Alcances.exigirOperador(actor);return roles.personaDePropietario(actor.idOrganizacion(),id).filter(p->alcanza(id,actor));
+    }
 
     @Override
     @Transactional
     public FichaPropietario registrar(DatosPropietario datos, Actor actor) {
+        Alcances.exigirOperador(actor);
         if (datos == null) {
             throw new ReglaNegocioException("Los datos del propietario son obligatorios.");
         }
@@ -204,6 +210,7 @@ public class PropietarioServiceImpl implements PropietarioService {
         if (propietario == null) {
             return false;
         }
+        Alcances.exigirOperador(actor);
         if (!alcanza(id, actor)) {
             throw new AccesoNoAutorizadoException();
         }
@@ -227,12 +234,12 @@ public class PropietarioServiceImpl implements PropietarioService {
     // ------------------------------------------------------------------
 
     private PersonaRol cargarConAcceso(long id, Actor actor) {
-        PersonaRol propietario = roles.buscarPropietario(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Propietario"));
+        roles.personaDePropietario(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Propietario"));
+        Alcances.exigirOperador(actor);
         if (!alcanza(id, actor)) {
             throw new AccesoNoAutorizadoException();
         }
-        return propietario;
+        return roles.buscarPropietario(actor.idOrganizacion(),id).orElseThrow(()->new NoEncontradoException("Propietario"));
     }
 
     private boolean alcanza(long idPropietario, Actor actor) {
@@ -275,7 +282,8 @@ public class PropietarioServiceImpl implements PropietarioService {
     }
 
     private static boolean esBroker(Actor actor) {
-        return !actor.esTenantAdmin() && !actor.esAgente();
+        Alcances.exigirOperador(actor);
+        return actor.esBroker();
     }
 
     private static FichaPropietario ficha(PersonaRol rol, int cantidadLocales) {

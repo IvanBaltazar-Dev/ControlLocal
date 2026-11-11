@@ -19,8 +19,8 @@
     <div acciones class="acciones">
       <button type="button" class="cl-btn" (click)="volver()">Volver</button>
       @if (c.idLocal) {
-        <button type="button" class="cl-btn primario" (click)="verLocal()">
-          Datos del local
+        <button type="button" class="cl-btn primario" (click)="verPropiedad()">
+          Datos de la propiedad
         </button>
       }
     </div>
@@ -44,8 +44,8 @@
       <article class="cl-tarjeta">
         <header>
           <div>
-            <h2>Galería del local</h2>
-            <p>Hasta {{ maximoFotos }} fotos por local</p>
+          <h2>Galería de la propiedad</h2>
+            <p>Hasta {{ maximoFotos }} fotos por propiedad</p>
           </div>
           <span class="cl-badge" [class]="galeriaLlena() ? 'bien' : ''">
             {{ totalFotos() }} / {{ maximoFotos }} fotos
@@ -58,12 +58,12 @@
 
         @if (fotos().datos.length > 0) {
           <ul class="galeria">
-            @for (foto of fotos().datos; track foto.idFoto) {
+            @for (foto of fotos().datos; track foto.id) {
               <li>
                 <!-- La imagen se pide con el token, no por la URL pública. -->
                 <cl-imagen-segura
                   [clave]="foto.clave"
-                  [alt]="'Foto del local: ' + valor(foto.nombre)"
+                  [alt]="'Foto de la propiedad: ' + valor(foto.nombreArchivo)"
                 />
                 @if (foto.proveedor) {
                   <span class="proveedor">{{ foto.proveedor }}</span>
@@ -73,16 +73,16 @@
                     type="button"
                     class="cl-btn pequeno quitar"
                     [disabled]="fotoOcupada()"
-                    (click)="eliminarFoto(foto.idFoto)"
+                    (click)="eliminarFoto(foto.id)"
                   >
-                    {{ eliminandoFoto() === foto.idFoto ? 'Eliminando…' : 'Eliminar' }}
+                    {{ eliminandoFoto() === foto.id ? 'Eliminando…' : 'Eliminar' }}
                   </button>
                 }
               </li>
             }
           </ul>
         } @else if (!fotos().error) {
-          <p class="cl-vacio">Aún no hay fotos cargadas para este local.</p>
+          <p class="cl-vacio">Aún no hay fotos cargadas para esta propiedad.</p>
         }
 
         @if (puedeEditarFotos() && c.idLocal) {
@@ -135,47 +135,19 @@
       <article class="cl-tarjeta">
         <header>
           <div>
-            <h2>Características de la propiedad</h2>
-            <p>Ficha técnica del local captado</p>
+          <h2>Características de la propiedad</h2>
+            <p>Ficha técnica del inmueble captado</p>
           </div>
         </header>
 
-        @if (local().error; as fallo) {
+        @if (propiedad().error; as fallo) {
           <p class="cl-aviso" role="alert">{{ fallo }}</p>
-        } @else if (local().datos; as l) {
+        } @else if (propiedad().datos; as p) {
           <div class="cl-pares">
-            <div><span>Área</span><strong>{{ unidad(area() ?? undefined, 'm²') }}</strong></div>
-            <div><span>Rubro sugerido</span><strong>{{ rubro() }}</strong></div>
-            <div><span>Tipo</span><strong>{{ etiquetaTipoInmueble(l.tipoInmueble) }}</strong></div>
-            <div><span>Ambientes</span><strong>{{ cifra(l.ambientes, 0) }}</strong></div>
-            <div>
-              <span>Antigüedad</span>
-              <strong>{{ unidad(l.antiguedadAnios, 'años', 0) }}</strong>
-            </div>
-            <div><span>Distrito</span><strong>{{ valor(c.distritoLocal) }}</strong></div>
-            <div><span>Referencia</span><strong>{{ valor(l.zonaUrbanizacion) }}</strong></div>
-            <div><span>Frente</span><strong>{{ unidad(l.frente, 'm') }}</strong></div>
-            <div>
-              <span>Estacionamientos</span>
-              <strong>{{ cifra(l.numeroEstacionamientos, 0) }}</strong>
-            </div>
-            <div>
-              <span>Carga eléctrica</span>
-              <strong>{{ unidad(l.cargaElectricaKw, 'kW') }}</strong>
-            </div>
-            <div><span>Zonificación</span><strong>{{ valor(l.zonificacion) }}</strong></div>
-            <div>
-              <span>Apto licencia</span>
-              <strong>{{ booleano(l.aptoLicenciaFuncionamiento) }}</strong>
-            </div>
-            <div>
-              <span>Cuota mantenimiento</span>
-              <strong>{{ importe(l.cuotaMantenimiento, l.monedaReferencial) }}</strong>
-            </div>
-            <div>
-              <span>Estado del local</span>
-              <strong>{{ etiquetaEstadoLocal(l.estado) }}</strong>
-            </div>
+            <div><span>Tipo</span><strong>{{ p.tipoRotulo }}</strong></div>
+            @for (atributo of p.atributos; track atributo.clave) {
+              <div><span>{{ atributo.rotulo }}</span><strong>{{ caracteristica(atributo) }}</strong></div>
+            }
           </div>
         }
       </article>
@@ -184,13 +156,13 @@
         <header>
           <div>
             <h2>Descripción</h2>
-            <p>La que registró el agente para este local</p>
+            <p>La que registró el agente para esta propiedad</p>
           </div>
         </header>
-        @if (local().datos?.descripcion; as descripcion) {
+        @if (propiedad().datos?.descripcion; as descripcion) {
           <p class="parrafo">{{ descripcion }}</p>
         } @else {
-          <p class="cl-vacio">Este local todavía no tiene descripción registrada.</p>
+          <p class="cl-vacio">Esta propiedad todavía no tiene descripción registrada.</p>
         }
       </article>
 
@@ -202,12 +174,12 @@
           </div>
         </header>
         <div class="cl-pares">
-          <div><span>Dirección</span><strong>{{ valor(c.direccionLocal) }}</strong></div>
-          <div><span>Distrito</span><strong>{{ valor(c.distritoLocal) }}</strong></div>
-          @if (local().datos?.geoLat !== undefined && local().datos?.geoLong !== undefined) {
+          <div><span>Dirección</span><strong>{{ valor(propiedad().datos?.ubicacion?.direccion) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(propiedad().datos?.ubicacion?.distrito) }}</strong></div>
+          @if (propiedad().datos?.ubicacion?.latitud !== undefined && propiedad().datos?.ubicacion?.longitud !== undefined) {
             <div>
               <span>Coordenadas</span>
-              <strong>{{ cifra(local().datos?.geoLat, 5) }}, {{ cifra(local().datos?.geoLong, 5) }}</strong>
+              <strong>{{ cifra(propiedad().datos?.ubicacion?.latitud, 5) }}, {{ cifra(propiedad().datos?.ubicacion?.longitud, 5) }}</strong>
             </div>
           }
         </div>
@@ -273,34 +245,30 @@
         </div>
       </article>
 
-      @if (precios().error || precios().datos.length > 0) {
+      @if (precios().datos.length > 0) {
         <article class="cl-tarjeta">
           <header>
             <div>
-              <h2>Histórico de precios</h2>
-              <p>Evolución por hito comercial</p>
+              <h2>Histórico económico</h2>
+              <p>Evolución por hito y operación</p>
             </div>
           </header>
-          @if (precios().error; as fallo) {
-            <p class="cl-aviso" role="alert">{{ fallo }}</p>
-          } @else {
-            <div class="cl-pares apiladas">
-              @for (precio of precios().datos; track precio.id) {
-                <div>
-                  <span>{{ fecha(precio.fecha) }} · {{ etiquetaHito(precio.hito) }}</span>
-                  <strong>{{ importe(precio.monto, precio.moneda) }}</strong>
-                </div>
-              }
-            </div>
-          }
+          <div class="cl-pares apiladas">
+            @for (precio of precios().datos; track $index) {
+              <div>
+                <span>{{ fecha(precio.fecha) }} · {{ precio.hitoRotulo }}</span>
+                <strong>{{ importe(precio.monto, precio.moneda) }}</strong>
+              </div>
+            }
+          </div>
         </article>
       }
 
       <article class="cl-tarjeta">
         <header>
           <div>
-            <h2>Propietario</h2>
-            <p>Titular del encargo</p>
+            <h2>Titularidad</h2>
+            <p>Personas registradas como titulares</p>
           </div>
         </header>
 

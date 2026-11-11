@@ -50,14 +50,16 @@ public final class OfertaDtos {
                                  String condiciones, LocalDate fecha,
                                  Long idRolRegistra, String origen,
                                  ReferenciaResponse referencia,
-                                 LocalDateTime fechaRegistro) {
+                                 LocalDateTime fechaRegistro,long version,long versionMesa,
+                                 OfertaService.ParteReal parteProponente,OfertaService.ObjetoExacto objeto,
+                                 OfertaService.Dinero importeDeclarado,Long ofertaAnterior) {
 
         public static OfertaResponse desde(OfertaService.FichaOferta f) {
             return new OfertaResponse(f.id(), f.idOportunidad(), f.idCaptacion(), f.ronda(),
                     f.presentadaPor(), f.presentadaPorRotulo(), f.monto(), f.moneda(),
                     f.estado(), f.estadoRotulo(), f.condiciones(), f.fecha(),
                     f.idRolRegistra(), f.origen(), ReferenciaResponse.desde(f.referencia()),
-                    f.fechaRegistro());
+                    f.fechaRegistro(),f.version(),f.versionMesa(),f.parteProponente(),f.objeto(),f.importeDeclarado(),f.ofertaAnterior());
         }
 
         public static List<OfertaResponse> desde(List<OfertaService.FichaOferta> fichas) {
@@ -74,53 +76,13 @@ public final class OfertaDtos {
      */
     public record CapacidadesMesaResponse(boolean puedeOfertar, boolean puedeContraofertar,
                                           boolean puedeAceptar, boolean puedeRechazar,
-                                          boolean puedeRetirar, boolean puedeCerrarVenta,
-                                          boolean puedeRegistrarCaida) {
+                                          boolean puedeRetirar,
+                                          boolean puedeRegistrarCaida,long versionMesa) {
 
         public static CapacidadesMesaResponse desde(OfertaService.CapacidadesDeLaMesa c) {
             return c == null ? null : new CapacidadesMesaResponse(c.puedeOfertar(),
                     c.puedeContraofertar(), c.puedeAceptar(), c.puedeRechazar(), c.puedeRetirar(),
-                    c.puedeCerrarVenta(), c.puedeRegistrarCaida());
-        }
-    }
-
-    /**
-     * Presentar o contraofertar.
-     *
-     * <p>{@code presentadaPor} solo se lee al PRESENTAR: en una contraoferta el
-     * lado lo dicta la anterior —responde el otro— y dejarlo al cliente
-     * permitiria una cadena en la que el interesado se contraoferta a si mismo.
-     *
-     * <p>{@code moneda} es obligatoria y no tiene defecto: un importe sin moneda
-     * no se puede comparar con la referencia ni con el cierre.
-     */
-    public record OfertaRequest(BigDecimal monto, String moneda, String presentadaPor,
-                                String condiciones, LocalDate fecha) {
-
-        public OfertaService.DatosOferta aDatos() {
-            return new OfertaService.DatosOferta(monto, moneda, presentadaPor, condiciones, fecha);
-        }
-    }
-
-    /** Motivo opcional de aceptar, rechazar o retirar. Queda en historial_estado. */
-    public record RespuestaOfertaRequest(String motivo) {
-    }
-
-    /**
-     * El cierre de venta.
-     *
-     * <p>{@code montoPactado} y {@code moneda} son opcionales: por defecto los
-     * de la oferta aceptada, que es lo que se acordo. {@code montoDeclarado} es
-     * opcional y <b>nace FALTANTE</b>; si se envia, {@code monedaDeclarada} es
-     * obligatoria — no se supone que coincida con la del pactado.
-     */
-    public record CierreVentaRequest(Long idOferta, BigDecimal montoPactado, String moneda,
-                                     BigDecimal montoDeclarado, String monedaDeclarada,
-                                     LocalDate fechaFirma, String observaciones) {
-
-        public CierreVentaService.DatosCierreVenta aDatos() {
-            return new CierreVentaService.DatosCierreVenta(idOferta, montoPactado, moneda,
-                    montoDeclarado, monedaDeclarada, fechaFirma, observaciones);
+                    c.puedeRegistrarCaida(),c.versionMesa());
         }
     }
 

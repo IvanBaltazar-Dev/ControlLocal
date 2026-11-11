@@ -1,6 +1,6 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.persona.CredencialUsuario;
+import com.controllocal.domain.seguridad.CuentaAcceso;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
@@ -60,8 +60,7 @@ public class AsignacionServiceImpl implements AsignacionService {
                 .map(a -> a.getRol().getPersona().getId())
                 .filter(Objects::nonNull)
                 .toList();
-        Map<Long, CredencialUsuario> credenciales =
-                usuarios.credencialesPorPersona(actor.idOrganizacion(), idsPersona);
+        var estados=usuarios.estadosLocalesDelRol(actor.idOrganizacion(),idsPersona,Actor.AGENTE);
         List<Long> idsAgente = filas.stream().map(DetalleAgente::getId).toList();
         Map<Long, Long> supervisor = supervisiones.activasPorAgentes(
                         actor.idOrganizacion(), idsAgente).stream()
@@ -70,13 +69,11 @@ public class AsignacionServiceImpl implements AsignacionService {
         Map<Long, String> nombresBroker = nombresBroker(actor.idOrganizacion());
         return filas.stream().map(a -> {
             Persona persona = a.getRol().getPersona();
-            CredencialUsuario credencial = credenciales.get(persona.getId());
             Long idBroker = supervisor.get(a.getId());
             return new AsignacionAgente(a.getId(),
                     persona.getNombresORazonSocial(),
                     persona.getNumeroDocumento(),
-                    credencial != null
-                            ? credencial.getEstadoAdministrativo() : null,
+                    estados.get(persona.getId()),
                     a.getEstadoOperativo(),
                     idBroker != null ? nombresBroker.get(idBroker) : null);
         }).toList();
@@ -91,19 +88,17 @@ public class AsignacionServiceImpl implements AsignacionService {
                 .map(b -> b.getRol().getPersona().getId())
                 .filter(Objects::nonNull)
                 .toList();
-        Map<Long, CredencialUsuario> credenciales =
-                usuarios.credencialesPorPersona(actor.idOrganizacion(), idsPersona);
+        var estados=usuarios.estadosLocalesDelRol(actor.idOrganizacion(),idsPersona,Actor.BROKER);
+        var administraciones=usuarios.administracionesLocalesPorPersona(actor.idOrganizacion(),idsPersona);
         Map<Long, Integer> conteos = conteosBroker(
                 filas.stream().map(DetalleBroker::getId).toList(),
                 actor.idOrganizacion());
         return filas.stream().map(b -> {
             Persona persona = b.getRol().getPersona();
-            CredencialUsuario credencial = credenciales.get(persona.getId());
             return new AsignacionBroker(b.getId(),
                     persona.getNombresORazonSocial(), b.getZona(),
-                    credencial != null
-                            ? credencial.getEstadoAdministrativo() : null,
-                    b.isEsAdministrador(), conteos.getOrDefault(b.getId(), 0));
+                    estados.get(persona.getId()),
+                    Boolean.TRUE.equals(administraciones.get(persona.getId())), conteos.getOrDefault(b.getId(), 0));
         }).toList();
     }
 
@@ -135,11 +130,6 @@ public class AsignacionServiceImpl implements AsignacionService {
         String motivo = PoliticaComercial.exigirMotivoDeReasignacion(datos.motivo());
         DetalleBroker destino = validarBrokerActivo(
                 datos.idBrokerDestino(), actor.idOrganizacion());
-        if (destino.isEsAdministrador()) {
-            throw new ReglaNegocioException(
-                    "El broker administrador no requiere asignacion "
-                            + "de agentes para supervisar.");
-        }
         DetalleAgente agente = agentes.buscarFicha(
                         actor.idOrganizacion(), datos.idAgente())
                 .orElseThrow(() -> new ReglaNegocioException(
@@ -152,9 +142,10 @@ public class AsignacionServiceImpl implements AsignacionService {
         // escribir las supervisiones.
         agentes.bloquearParaGobierno(actor.idOrganizacion(), agente.getId())
                 .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado."));
-        CredencialUsuario credencialAgente = usuarios.credencial(
+        CuentaAcceso credencialAgente = usuarios.cuenta(
                 actor.idOrganizacion(), agente.getRol().getPersona().getId());
-        if (!"A".equals(credencialAgente.getEstadoAdministrativo())) {
+        if (!"A".equals(credencialAgente.getEstado())
+                || !"A".equals(usuarios.estadoLocalDelRol(actor.idOrganizacion(),agente.getRol().getPersona().getId(),Actor.AGENTE))) {
             throw new ReglaNegocioException("El agente debe estar ACTIVO.");
         }
         if (!"D".equals(agente.getEstadoOperativo())) {
@@ -226,9 +217,10 @@ public class AsignacionServiceImpl implements AsignacionService {
     private DetalleBroker validarBrokerActivo(long id, long idOrganizacion) {
         DetalleBroker broker = brokers.buscarFicha(idOrganizacion, id)
                 .orElseThrow(() -> new ReglaNegocioException("Broker no encontrado."));
-        CredencialUsuario credencial = usuarios.credencial(
+        CuentaAcceso credencial = usuarios.cuenta(
                 idOrganizacion, broker.getRol().getPersona().getId());
-        if (!"A".equals(credencial.getEstadoAdministrativo())) {
+        if (!"A".equals(credencial.getEstado())
+                || !"A".equals(usuarios.estadoLocalDelRol(idOrganizacion,broker.getRol().getPersona().getId(),Actor.BROKER))) {
             throw new ReglaNegocioException("El broker no esta activo.");
         }
         return broker;

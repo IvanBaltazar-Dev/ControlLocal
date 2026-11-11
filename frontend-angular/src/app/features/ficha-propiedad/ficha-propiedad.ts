@@ -28,18 +28,15 @@ import { Captacion, CaptacionesService } from '../../core/api/captaciones.servic
 import {
   describir,
   ESTADO_CAPTACION,
-  ESTADO_LOCAL,
-  HITO_PRECIO,
   TIPO_DOCUMENTO,
-  TIPO_INMUEBLE,
   TIPO_PERSONA,
 } from '../../core/api/codigos';
 import {
-  FotoLocal,
-  Local,
-  LocalesService,
-  PrecioLocal,
-} from '../../core/api/locales.service';
+  FichaPropiedad as PropiedadFicha,
+  FotoPropiedad,
+  HitoDeLaHistoria,
+  PropiedadesService,
+} from '../../core/api/propiedades.service';
 import { motivoDeBloqueo, puedeEscribir } from '../../core/api/propiedades.service';
 import { Propietario, PropietariosService } from '../../core/api/propietarios.service';
 import { ArchivoPreparado, ArchivosService } from '../../core/archivos/archivos.service';
@@ -65,13 +62,12 @@ import { ImagenSegura } from '../../shared/imagen-segura/imagen-segura';
 import { SubidaArchivo } from '../../shared/subida-archivo/subida-archivo';
 import { BroxPageHeader } from '../../shared/page-header/page-header';
 
-/** Tope de fotos por local; lo impone el backend y aquí solo se anticipa. */
-export const MAXIMO_FOTOS = 6;
+/** Tope de fotos por propiedad; lo impone el contrato universal. */
+export const MAXIMO_FOTOS = 12;
 
 interface Complementos {
-  local: Bloque<Local | null>;
-  precios: Bloque<readonly PrecioLocal[]>;
-  fotos: Bloque<readonly FotoLocal[]>;
+  propiedad: Bloque<PropiedadFicha | null>;
+  fotos: Bloque<readonly FotoPropiedad[]>;
 }
 
 /**
@@ -80,14 +76,14 @@ interface Complementos {
  *
  * Porta `FichaPropiedad.razor`. **La diferencia grande está en cómo se arma el
  * modelo**, no en lo que se ve: el Blazor descargaba la bandeja de captaciones,
- * la de locales y la de propietarios enteras, y luego emparejaba el local por
+ * la de propiedades y la de propietarios enteras, y luego emparejaba la propiedad por
  * *coincidencia difusa de dirección* y el propietario por *coincidencia difusa
  * de nombre* (`Loose()`: igualdad, o que una cadena contenga a la otra). Eso es
  * carga masiva, filtrado en memoria y una identificación que puede acertarle al
  * registro equivocado —dos locales en la misma avenida bastan—.
  *
  * Aquí la ficha se resuelve **encadenando identificadores**, que es lo que el
- * contrato ya permitía: la captación trae `idLocal`, el local trae
+ * contrato ya permitía: la captación trae `idLocal` como identificador de propiedad, y la ficha trae
  * `idPropietario`. Son tres saltos, todos por id, con el alcance resuelto en el
  * backend.
  *
@@ -95,7 +91,7 @@ interface Complementos {
  * - **No hay "Exportar PDF"** (D-F5-1): los cinco endpoints Jasper quedaron
  *   fuera del alcance de la migración. Tampoco el aviso que invitaba a
  *   exportar.
- * - **La descripción es la del local**, no un párrafo generado. El Blazor
+ * - **La descripción es la de la propiedad**, no un párrafo generado. El Blazor
  *   fabricaba prosa comercial ("excelente afluencia peatonal…") idéntica para
  *   cualquier propiedad e ignoraba el campo `descripcion` que el usuario había
  *   escrito. Inventar contenido en una ficha que se comparte con el cliente es
@@ -113,7 +109,7 @@ interface Complementos {
 })
 export class FichaPropiedad implements OnInit {
   private readonly captaciones = inject(CaptacionesService);
-  private readonly locales = inject(LocalesService);
+  private readonly propiedades = inject(PropiedadesService);
   private readonly propietarios = inject(PropietariosService);
   private readonly archivos = inject(ArchivosService);
   private readonly route = inject(ActivatedRoute);
@@ -124,9 +120,9 @@ export class FichaPropiedad implements OnInit {
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly captacion = signal<Captacion | null>(null);
-  protected readonly local = signal<Bloque<Local | null>>(bloque(null));
-  protected readonly precios = signal<Bloque<readonly PrecioLocal[]>>(bloque([]));
-  protected readonly fotos = signal<Bloque<readonly FotoLocal[]>>(bloque([]));
+  protected readonly propiedad = signal<Bloque<PropiedadFicha | null>>(bloque(null));
+  protected readonly precios = signal<Bloque<readonly HitoDeLaHistoria[]>>(bloque([]));
+  protected readonly fotos = signal<Bloque<readonly FotoPropiedad[]>>(bloque([]));
   protected readonly propietario = signal<Bloque<Propietario | null>>(bloque(null));
 
   protected readonly subiendo = signal(false);
@@ -141,7 +137,7 @@ export class FichaPropiedad implements OnInit {
   /**
    * **Si esta persona puede escribir las fotos de este inmueble** (P0).
    *
-   * Lo dice el backend en la ficha del local. Antes lo decidía esta línea:
+   * Lo dice el backend en la ficha de la propiedad. Antes lo decidía esta línea:
    *
    * ```
    * this.auth.sesion()?.rol === 'AGENTE'
@@ -161,12 +157,12 @@ export class FichaPropiedad implements OnInit {
    * no se sabe si existe.
    */
   protected readonly puedeEditarFotos = computed(() =>
-    puedeEscribir(this.local().datos?.responsabilidad),
+    puedeEscribir(this.propiedad().datos?.responsabilidad),
   );
 
   /** Quién responde por el inmueble hoy, o `null` si está FALTANTE. */
   protected readonly responsableFotos = computed(
-    () => this.local().datos?.responsabilidad?.nombre ?? null,
+    () => this.propiedad().datos?.responsabilidad?.nombre ?? null,
   );
 
   /**
@@ -177,7 +173,7 @@ export class FichaPropiedad implements OnInit {
    * evita en el backend, y sería incoherente que la pantalla lo deshiciera.
    */
   protected readonly motivoSinFotos = computed(() =>
-    motivoDeBloqueo(this.local().datos?.responsabilidad),
+    motivoDeBloqueo(this.propiedad().datos?.responsabilidad),
   );
 
   protected readonly totalFotos = computed(() => this.fotos().datos.length);
@@ -189,21 +185,23 @@ export class FichaPropiedad implements OnInit {
     () => this.subiendo() || this.eliminandoFoto() !== null,
   );
 
-  /** Área de la captación; si no la trae, la del local (igual que el Blazor). */
+  /** Área de la captación; si no la trae, la de la propiedad. */
   protected readonly area = computed(
-    () => this.captacion()?.areaM2 ?? this.local().datos?.metraje ?? null,
+    () => this.captacion()?.areaM2 ?? valorNumerico(this.propiedad().datos, 'metraje_total'),
   );
 
   protected readonly rubro = computed(
-    () => this.local().datos?.rubroPermitido || this.captacion()?.rubro || 'Por definir',
+    () => this.atributo('rubro_permitido')?.valor || this.captacion()?.rubro || 'Por definir',
   );
 
   /** Renta mensual de referencia, con su moneda pegada al valor. */
   protected readonly renta = computed<Importe | null>(() => {
-    const valor = this.local().datos?.precioReferencial;
+    const captacion = this.captacion();
+    const encargo = this.propiedad().datos?.encargos.find((item) => item.idEncargo === captacion?.id);
+    const valor = captacion?.importeReferencia ?? encargo?.importe;
     return valor === null || valor === undefined
       ? null
-      : { valor, moneda: this.local().datos?.monedaReferencial ?? '' };
+      : { valor, moneda: captacion?.monedaReferencia ?? encargo?.moneda ?? '' };
   });
 
   /**
@@ -264,9 +262,9 @@ export class FichaPropiedad implements OnInit {
   /** Buscador de mapas, abierto por el usuario y no incrustado. Ver la clase. */
   protected readonly enlaceMapa = computed(() => {
     const c = this.captacion();
-    const l = this.local().datos;
-    const lat = l?.geoLat;
-    const lon = l?.geoLong;
+    const l = this.propiedad().datos?.ubicacion;
+    const lat = l?.latitud;
+    const lon = l?.longitud;
     const consulta =
       lat !== undefined && lat !== null && lon !== undefined && lon !== null
         ? `${lat},${lon}`
@@ -306,10 +304,10 @@ export class FichaPropiedad implements OnInit {
     this.recargar$.next();
   }
 
-  protected verLocal(): void {
-    const idLocal = this.captacion()?.idLocal;
-    if (idLocal) {
-      void this.router.navigate(['/propiedades', idLocal]);
+  protected verPropiedad(): void {
+    const idPropiedad = this.captacion()?.idLocal;
+    if (idPropiedad) {
+      void this.router.navigate(['/propiedades', idPropiedad]);
     }
   }
 
@@ -326,18 +324,6 @@ export class FichaPropiedad implements OnInit {
     return codigo === 'P' || codigo === 'O' ? 'aviso' : codigo === 'R' ? 'mal' : '';
   }
 
-  protected etiquetaEstadoLocal(codigo: string | undefined): string {
-    return describir(ESTADO_LOCAL, codigo) || SIN_DATO;
-  }
-
-  protected etiquetaHito(codigo: string | undefined): string {
-    return describir(HITO_PRECIO, codigo);
-  }
-
-  protected etiquetaTipoInmueble(codigo: string | undefined): string {
-    return describir(TIPO_INMUEBLE, codigo) || SIN_DATO;
-  }
-
   protected etiquetaTipoPersona(codigo: string | undefined): string {
     return describir(TIPO_PERSONA, codigo) || SIN_DATO;
   }
@@ -349,11 +335,11 @@ export class FichaPropiedad implements OnInit {
     return tipo ? `${tipo} ${numero}` : numero;
   }
 
-  protected fecha(valor: string | undefined): string {
+  protected fecha(valor: string | null | undefined): string {
     return fechaCorta(valor);
   }
 
-  protected importe(valor: number | undefined, moneda?: string): string {
+  protected importe(valor: number | null | undefined, moneda?: string | null): string {
     return monto(valor, moneda);
   }
 
@@ -370,8 +356,20 @@ export class FichaPropiedad implements OnInit {
     return siNo(valor);
   }
 
-  protected valor(valor: string | undefined): string {
+  protected valor(valor: string | null | undefined): string {
     return texto(valor);
+  }
+
+  /** El catálogo ya entregó el texto del atributo; esta pantalla solo lo muestra. */
+  protected caracteristica(atributo: { valor?: string | null; moneda?: string | null; unidad?: string | null; tipoDato?: string | null }): string {
+    const valor = atributo.valor?.trim();
+    if (!valor) return SIN_DATO;
+    if (atributo.moneda) return `${atributo.moneda} ${valor}`;
+    return atributo.unidad ? `${valor} ${atributo.unidad}` : valor;
+  }
+
+  protected atributo(clave: string): { valor?: string | null } | undefined {
+    return this.propiedad().datos?.atributos.find((item) => item.clave === clave);
   }
 
   protected unidad(valor: number | undefined, sufijo: string, decimales = 2): string {
@@ -400,14 +398,14 @@ export class FichaPropiedad implements OnInit {
     if (!this.puedeEditarFotos() || this.fotoOcupada() || elegidas.length === 0) {
       return;
     }
-    const idLocal = this.captacion()?.idLocal;
-    if (!idLocal) {
-      this.errorFoto.set('La captación no tiene un local asociado.');
+    const idPropiedad = this.captacion()?.idLocal;
+    if (!idPropiedad) {
+      this.errorFoto.set('La captación no tiene una propiedad asociada.');
       return;
     }
     if (elegidas.length > this.quedanFotos()) {
       this.errorFoto.set(
-        `Solo caben ${this.quedanFotos()} foto(s) más: el máximo por local es ${MAXIMO_FOTOS}.`,
+        `Solo caben ${this.quedanFotos()} foto(s) más: el máximo por propiedad es ${MAXIMO_FOTOS}.`,
       );
       return;
     }
@@ -416,12 +414,12 @@ export class FichaPropiedad implements OnInit {
     this.limpiarAvisosFoto();
     let subidas = 0;
     try {
-      // En serie a propósito: el tope de 6 lo comprueba el backend por
+      // En serie a propósito: el tope lo comprueba el backend por
       // petición, así que en paralelo dos altas podrían pasar la validación a
       // la vez y una fallaría a mitad de tanda.
       for (const elegida of elegidas) {
         const contenido = await this.archivos.base64(elegida.archivo);
-        await this.locales.subirFoto(idLocal, elegida.nombreSeguro, contenido);
+        await this.propiedades.subirFoto(idPropiedad, elegida.nombreSeguro, contenido);
         subidas += 1;
       }
       this.mensajeFoto.set(
@@ -435,7 +433,7 @@ export class FichaPropiedad implements OnInit {
       this.subiendo.set(false);
       // Se relee siempre: si falló a mitad, la galería debe reflejar lo que
       // de verdad quedó guardado, no lo que se intentó.
-      await this.refrescarFotos(idLocal);
+      await this.refrescarFotos(idPropiedad);
     }
   }
 
@@ -448,17 +446,17 @@ export class FichaPropiedad implements OnInit {
     if (!this.puedeEditarFotos() || this.fotoOcupada()) {
       return;
     }
-    const idLocal = this.captacion()?.idLocal;
-    if (!idLocal) {
+    const idPropiedad = this.captacion()?.idLocal;
+    if (!idPropiedad) {
       return;
     }
 
     this.eliminandoFoto.set(idFoto);
     this.limpiarAvisosFoto();
     try {
-      await this.locales.eliminarFoto(idLocal, idFoto);
+      await this.propiedades.eliminarFoto(idPropiedad, idFoto);
       this.mensajeFoto.set('Foto eliminada del registro y del almacén.');
-      await this.refrescarFotos(idLocal);
+      await this.refrescarFotos(idPropiedad);
     } catch (error) {
       this.errorFoto.set(
         error instanceof ApiError ? error.message : 'No se pudo eliminar la foto.',
@@ -468,9 +466,9 @@ export class FichaPropiedad implements OnInit {
     }
   }
 
-  private async refrescarFotos(idLocal: number): Promise<void> {
+  private async refrescarFotos(idPropiedad: number): Promise<void> {
     try {
-      this.fotos.set(bloque(await this.locales.fotos(idLocal)));
+      this.fotos.set(bloque(await this.propiedades.fotos(idPropiedad)));
     } catch (error) {
       this.fotos.set(
         bloque(
@@ -487,12 +485,12 @@ export class FichaPropiedad implements OnInit {
   }
 
   // =====================================================================
-  // Carga: captación (fatal) -> local/precios/fotos -> propietario
+  // Carga: captación (fatal) -> propiedad universal (incluye la galería) -> propietario
   // =====================================================================
 
   private cargar(codigo: string): Observable<unknown> {
     if (!codigo) {
-      this.publicar(null, bloque(null), bloque([]), bloque([]), bloque(null));
+      this.publicar(null, bloque(null), bloque([]), bloque(null));
       this.error.set('No se indicó el código de la captación.');
       return of(null);
     }
@@ -501,12 +499,11 @@ export class FichaPropiedad implements OnInit {
       switchMap((captacion) =>
         this.complementosDe(captacion).pipe(
           switchMap((complementos) =>
-            this.propietarioDe(complementos.local.datos).pipe(
+            this.propietarioDe(complementos.propiedad.datos).pipe(
               tap((propietario) =>
                 this.publicar(
                   captacion,
-                  complementos.local,
-                  complementos.precios,
+                  complementos.propiedad,
                   complementos.fotos,
                   propietario,
                 ),
@@ -516,48 +513,44 @@ export class FichaPropiedad implements OnInit {
         ),
       ),
       catchError((error) => {
-        this.publicar(null, bloque(null), bloque([]), bloque([]), bloque(null));
+        this.publicar(null, bloque(null), bloque([]), bloque(null));
         this.error.set(mensajeDeCarga(error, codigo));
         return of(null);
       }),
     );
   }
 
-  /** Las tres lecturas que cuelgan del local, en paralelo y degradando solas. */
+  /** La ficha universal ya trae la propiedad y su galería en una sola lectura. */
   private complementosDe(captacion: Captacion): Observable<Complementos> {
-    const idLocal = captacion.idLocal;
-    if (!idLocal) {
+    const idPropiedad = captacion.idLocal;
+    if (!idPropiedad) {
       return of({
-        local: bloque<Local | null>(
+        propiedad: bloque<PropiedadFicha | null>(
           null,
-          'La captación no tiene un local asociado, así que no hay ficha técnica.',
+          'La captación no tiene una propiedad asociada, así que no hay ficha técnica.',
         ),
-        precios: bloque<readonly PrecioLocal[]>([]),
-        fotos: bloque<readonly FotoLocal[]>([]),
+        fotos: bloque<readonly FotoPropiedad[]>([]),
       });
     }
     return forkJoin({
-      local: complementario<Local | null>(
-        this.locales.obtener$(idLocal),
+      propiedad: complementario<PropiedadFicha | null>(
+        this.propiedades.consultar$(idPropiedad),
         null,
-        'No se pudo leer la ficha técnica del local.',
+        'No se pudo leer la ficha técnica de la propiedad.',
       ),
-      precios: complementario<readonly PrecioLocal[]>(
-        this.locales.precios$(idLocal),
-        [],
-        'No se pudo leer el histórico de precios.',
-      ),
-      fotos: complementario<readonly FotoLocal[]>(
-        this.locales.fotos$(idLocal),
+      fotos: complementario<readonly FotoPropiedad[]>(
+        this.propiedades.fotos$(idPropiedad),
         [],
         'No se pudo leer la galería.',
       ),
     });
   }
 
-  /** El propietario cuelga del local; sin local no hay a quién pedir. */
-  private propietarioDe(local: Local | null): Observable<Bloque<Propietario | null>> {
-    const idPropietario = local?.idPropietario;
+  /** El contacto titular sale de la relación universal, no de un registro legado. */
+  private propietarioDe(propiedad: PropiedadFicha | null): Observable<Bloque<Propietario | null>> {
+    const titular = propiedad?.titulares.find((item) => item.representante)
+      ?? propiedad?.titulares[0];
+    const idPropietario = titular?.idPropietario;
     if (!idPropietario) {
       return of(bloque<Propietario | null>(null));
     }
@@ -570,14 +563,13 @@ export class FichaPropiedad implements OnInit {
 
   private publicar(
     captacion: Captacion | null,
-    local: Bloque<Local | null>,
-    precios: Bloque<readonly PrecioLocal[]>,
-    fotos: Bloque<readonly FotoLocal[]>,
+    propiedad: Bloque<PropiedadFicha | null>,
+    fotos: Bloque<readonly FotoPropiedad[]>,
     propietario: Bloque<Propietario | null>,
   ): void {
     this.captacion.set(captacion);
-    this.local.set(local);
-    this.precios.set(precios);
+    this.propiedad.set(propiedad);
+    this.precios.set(bloque(propiedad.datos?.historia?.linea ?? []));
     this.fotos.set(fotos);
     this.propietario.set(propietario);
     this.cargando.set(false);
@@ -613,4 +605,11 @@ function mensajeDeCarga(error: unknown, codigo: string): string {
       : error.message;
   }
   return `No se pudo cargar la ficha de ${codigo}.`;
+}
+
+function valorNumerico(ficha: PropiedadFicha | null | undefined, clave: string): number | null {
+  const valor = ficha?.atributos.find((atributo) => atributo.clave === clave)?.valor;
+  if (valor == null || valor.trim() === '') return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
 }

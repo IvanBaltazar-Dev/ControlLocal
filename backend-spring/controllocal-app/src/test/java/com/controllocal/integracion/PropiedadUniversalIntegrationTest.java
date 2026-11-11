@@ -4,7 +4,13 @@ import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.captura.BorradorCaptura;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.GobiernoCatalogoCapturaService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
@@ -17,15 +23,21 @@ import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
+import com.controllocal.service.PropiedadUniversalService.MetadatosDeCaptura;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PublicacionService;
-import com.controllocal.service.PublicacionService.DatosPublicacion;
+import com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio;
 import com.controllocal.service.PublicacionService.FichaPublicacion;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura;
+import com.controllocal.service.captura.SuficienciaInmueble;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.excepcion.ConflictoException;
+import com.controllocal.service.encargo.EncargoService;
+import com.controllocal.service.soporte.CifradoSecretos;
 import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.service.soporte.AtributosGobernados;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +49,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -53,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <b>Propiedad Universal Operativa + Captura v1, contra PostgreSQL real</b>
+ * <b>Propiedad Universal Operativa y captura C2, contra PostgreSQL real</b>
  * (D-E4-1, D-E4-2).
  *
  * <h2>Por que estas pruebas COMETEN de verdad</h2>
@@ -73,20 +87,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * </ul>
  *
  * <h2>Por eso: tenant propio</h2>
- * {@link #prepararTenants()} construye —o reutiliza— dos organizaciones de
- * prueba y borra lo que la corrida anterior dejo. Nada de esto toca el tenant de
- * desarrollo, y la corrida es repetible: es la misma leccion que costo el
- * simulacro de recuperacion, que fallaba en la segunda ejecucion porque leia el
- * estado de una base compartida en vez de construir el suyo.
+ * {@link #prepararTenants()} construye dos organizaciones TEST nuevas por caso,
+ * con cuenta/pertenencia C1 y sin borrar hechos append-only. Los contextos se
+ * obtienen por el soporte compartido y no se simulan permisos o aprobaciones.
  *
  * <p>El <b>segundo</b> tenant no es decorativo: sin el, "el aislamiento
  * funciona" es una afirmacion sin prueba.
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PropiedadUniversalIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
 
     private static final String CODIGO_TENANT_A = "E2E-UNIVERSAL-A";
     private static final String CODIGO_TENANT_B = "E2E-UNIVERSAL-B";
@@ -111,9 +128,19 @@ class PropiedadUniversalIntegrationTest {
     @Autowired PropiedadUniversalService propiedades;
     @Autowired MotorDeCaptura captura;
     @Autowired PublicacionService publicaciones;
+    @Autowired EncargoService ciclo;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentas;
+    @Autowired GobiernoCatalogoCapturaService catalogos;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
+    private SesionesComercialesDePrueba sesiones;
+    private PreparacionPublicacionDePrueba preparacionPublicacion;
 
     private Actor agenteA;
     private Actor agenteB;
+    private Actor gobiernoA;
     private long propietarioAna;
     private long propietarioCarlos;
     private long propietarioB;
@@ -124,24 +151,42 @@ class PropiedadUniversalIntegrationTest {
 
     @BeforeEach
     void prepararTenants() {
-        long organizacionA = tenant(CODIGO_TENANT_A);
-        long organizacionB = tenant(CODIGO_TENANT_B);
-
-        limpiar(organizacionA);
-        limpiar(organizacionB);
-
-        agenteA = new Actor(organizacionA, personaDe(organizacionA, "agente"),
-                agente(organizacionA, "Agente Universal", "40000001"), Actor.AGENTE);
-        agenteB = new Actor(organizacionB, personaDe(organizacionB, "agente"),
-                agente(organizacionB, "Agente del otro tenant", "40000002"), Actor.AGENTE);
-
-        propietarioAna = propietario(organizacionA, "Ana Torres", "41000001");
-        propietarioCarlos = propietario(organizacionA, "Carlos Torres", "41000002");
-        propietarioB = propietario(organizacionB, "Titular del otro tenant", "41000003");
+        sesiones = new SesionesComercialesDePrueba(jdbc, contextos, cuentas, factores, cifrado);
+        new TransactionTemplate(gestor).executeWithoutResult(tx -> {
+            String marca = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+            long organizacionA = tenant(CODIGO_TENANT_A + "-" + marca);
+            long organizacionB = tenant(CODIGO_TENANT_B + "-" + marca);
+            agenteA = new Actor(organizacionA, personaDe(organizacionA, "agente"),
+                    agente(organizacionA, "Agente Universal TEST", "40000001"), Actor.AGENTE);
+            agenteB = new Actor(organizacionB, personaDe(organizacionB, "agente"),
+                    agente(organizacionB, "Agente TEST del otro tenant", "40000002"), Actor.AGENTE);
+            propietarioAna = propietario(organizacionA, "Ana Torres TEST", "41000001");
+            propietarioCarlos = propietario(organizacionA, "Carlos Torres TEST", "41000002");
+            propietarioB = propietario(organizacionB, "Titular TEST del otro tenant", "41000003");
+            long administrador = jdbc.queryForObject("""
+                    insert into persona_rol(organizacion_id,id_persona,tipo_rol,vigencia_desde)
+                    values(?,?,'ADMIN',(clock_timestamp() at time zone 'America/Lima')::date) returning id_persona_rol
+                    """, Long.class, organizacionA, agenteA.idPersona());
+            long cuenta = jdbc.queryForObject("""
+                    insert into cuenta_acceso(nombre_usuario,correo_propio,correo_confirmado_en,contrasena_hash)
+                    values(?,?,clock_timestamp(),'fixture-sin-credencial-autenticable') returning id_cuenta_acceso
+                    """, Long.class, "universal-" + organizacionA, "universal-" + organizacionA + "@example.invalid");
+            jdbc.update("""
+                    insert into usuario_organizacion(organizacion_id,id_usuario,id_persona,rol,administrar,estado)
+                    values(?,?,?,'AGENTE',true,'A')
+                    """, organizacionA, cuenta, agenteA.idPersona());
+            gobiernoA = new Actor(organizacionA, agenteA.idPersona(), administrador, Actor.TENANT_ADMIN);
+        });
+        // El gobierno del perfil TEST se enrola antes de capturar los SID comerciales.
+        sesiones.de(gobiernoA);
+        sesiones.de(agenteA);
+        sesiones.de(agenteB);
+        preparacionPublicacion = new PreparacionPublicacionDePrueba(jdbc, propiedades, ciclo,
+                catalogos, contextos, cuentas, factores, cifrado, gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);
     }
 
     // ==================================================================
-    // Los siete tipos y las dos operaciones
+    // Todos los tipos fisicos y las dos operaciones
     // ==================================================================
 
     @Test
@@ -182,11 +227,12 @@ class PropiedadUniversalIntegrationTest {
         assertEquals("VENTA", ficha.encargos().get(0).operacion());
         assertEquals(0, new BigDecimal("180000").compareTo(ficha.encargos().get(0).importe()));
 
-        // Y en la BD el hito quedo en la serie de VENTA, no en la de alquiler.
+        // El episodio conserva VENTA; guardar el borrador no acredita un precio U.
         assertEquals("V", jdbc.queryForObject(
-                "select operacion from precio_propiedad where id_propiedad = ? order by id_precio limit 1",
-                String.class, alta.idPropiedad()),
-                "el defecto de alquiler ya no existe: la operacion viaja hasta el hito");
+                "select motivo_operacion from captacion where id_captacion=?",
+                String.class, alta.idsEncargos().get(0)));
+        assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_propiedad=?",
+                Integer.class, alta.idPropiedad()), "Sin aceptación y revisión no se fabrica historia autorizada.");
     }
 
     @Test
@@ -200,13 +246,13 @@ class PropiedadUniversalIntegrationTest {
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertEquals("CASA", ficha.tipoPropiedad());
-        assertEquals("V", ficha.uso(), "una casa es vivienda: el uso se deduce del tipo, no es comercial");
+        assertNull(ficha.uso());
     }
 
     @Test
-    @DisplayName("terreno + venta: pide zonificacion y NO pide dormitorios")
+    @DisplayName("terreno: conserva zona cerrada con fuente y NO pregunta dormitorios")
     void terrenoEnVenta() {
-        ResultadoRegistro alta = propiedades.registrar(comando("TERRENO", "VENTA",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("TERRENO", "VENTA",
                 new BigDecimal("95000"), "USD",
                 List.of(new Titular(propietarioAna, null, null)),
                 // `area_terreno` SALE de esta alta con `V85` (D-7): para un
@@ -214,16 +260,18 @@ class PropiedadUniversalIntegrationTest {
                 // esta aqui arriba con el mismo 300-- y el catalogo ya no la
                 // admite sobre `T`. Dejarla haria que esta alta se rechazara con
                 // `check_violation`, que es el efecto buscado y no un fallo.
-                List.of(new ValorAtributo("metraje_total", "300"),
-                        new ValorAtributo("zonificacion", "RDM"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "300"))), "VIVIENDA"), agenteA);
+        assertNull(atributo(propiedades.consultar(alta.idPropiedad(), agenteA), "zonificacion"));
+        preparacionPublicacion.prepararTerreno(alta.idPropiedad(), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertTrue(ficha.atributos().stream().anyMatch(a -> "zonificacion".equals(a.clave())));
+        assertEquals("ZONA-PUB-TEST", atributo(ficha, "zonificacion"));
 
         // La definicion sale del motor, que desde 0B es el UNICO productor de
         // "que se pregunta para este tipo". Sin operaciones: la cosa fisica.
         List<String> preguntas = captura
-                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", null, agenteA)
+                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", null, null, agenteA)
                 .delTipo().stream().map(MotorDeCaptura.Pregunta::clave).toList();
         assertTrue(preguntas.contains("zonificacion"), "el catalogo pregunta la zonificacion de un terreno");
         assertFalse(preguntas.contains("dormitorios"), "y no le pregunta dormitorios");
@@ -273,9 +321,9 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("venta y alquiler simultaneos: dos encargos, dos precios, dos historicos")
     void ventaYAlquilerALaVez() {
-        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", null,
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", "VIVIENDA",
                 "Disponible para venta o alquiler",
-                new Ubicacion("Av. Larco 1234", "Miraflores", null, null, null, null, null, null, null),
+                new Ubicacion("Av. Larco 1234", "Miraflores", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "118"),
                         new ValorAtributo("dormitorios", "3")),
@@ -287,6 +335,7 @@ class PropiedadUniversalIntegrationTest {
 
         ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
         assertEquals(2, alta.idsEncargos().size(), "una operacion, un encargo");
+        prepararYHabilitar(alta.idPropiedad());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertEquals(2, ficha.encargos().size());
@@ -319,10 +368,11 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("tres alquileres sucesivos son TRES encargos con TRES historicos, no uno agrupado")
     void variosEncargosHistoricosDeLaMismaOperacion() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
 
         // El encargo vivo pasa a cerrado y entran dos anteriores, ya cerrados:
         // es la historia que una propiedad de verdad acumula.
@@ -367,10 +417,11 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el encargo cerrado sigue en la ficha, y fuera del listado")
     void elEncargoCerradoNoSeEsconde() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
         // Cerrar exige fecha y motivo: lo impone ck_captacion_cierre, y es
         // correcto -- un encargo cerrado sin decir cuando ni por que no es un
         // cierre, es un estado perdido.
@@ -404,29 +455,31 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("la ficha publica los rotulos: el cliente no traduce ningun codigo")
     void laFichaLlegaListaParaLeerse() {
-        ResultadoRegistro alta = propiedades.registrar(comando("DEPARTAMENTO", "VENTA",
-                new BigDecimal("320000"), "USD",
+        ResultadoRegistro alta = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null,
+                "DEPARTAMENTO", null, null,
+                new Ubicacion("Direccion de rotulos TEST", "Distrito TEST", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "118"),
-                        new ValorAtributo("dormitorios", "3"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "118"), new ValorAtributo("dormitorios", "3")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
+                        null, null, null, null, Boolean.TRUE, null, null)), null), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
 
         assertEquals("DEPARTAMENTO", ficha.tipoPropiedad());
         assertEquals("Departamento", ficha.tipoRotulo());
-        assertEquals("Vivienda", ficha.usoRotulo(), "un departamento es vivienda, no comercial");
+        assertNull(ficha.usoRotulo());
         assertNotNull(ficha.estadoRegistroRotulo());
-        assertNotNull(ficha.disponibilidadRotulo());
+        assertNull(ficha.disponibilidadRotulo());
 
         EncargoFicha venta = encargo(ficha, "VENTA");
         assertEquals("Venta", venta.operacionRotulo());
-        assertEquals("Pendiente de revision", venta.estadoRotulo(),
-                "el encargo nace pendiente: el agente registra, el broker decide");
+        assertEquals("En preparación", venta.estadoRotulo(),
+                "el borrador permite elaborar antes de presentar la petición");
         // El nombre del importe lo decide la operacion, no la pantalla: "renta"
         // en una ficha de venta es un error de bulto.
         assertEquals("precio de venta", venta.importeRotulo());
         assertNotNull(venta.agenteNombre(), "la ficha dice quien lleva el encargo");
-        assertNotNull(venta.exclusividad(), "se escribia y no se devolvia");
+        assertEquals(Boolean.TRUE, venta.exclusividad(), "Se devuelve la exclusividad expresamente declarada.");
     }
 
     /**
@@ -461,24 +514,34 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("lo que falta se dice con la palabra del catalogo, no con la clave")
     void loQueFaltaLlegaConSuRotulo() {
-        ResultadoRegistro alta = propiedades.registrar(comando("TERRENO", "VENTA",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("TERRENO", "VENTA",
                 new BigDecimal("95000"), "USD",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "300"),
-                        new ValorAtributo("zonificacion", "CZ"))), agenteA);
-
-        // El alta no deja registrar sin lo obligatorio, asi que la unica forma
-        // de observar una ficha incompleta es borrar el valor despues -- que es
-        // lo que pasa de verdad cuando el catalogo declara obligatoria una
-        // clave que las propiedades antiguas no tenian.
-        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'zonificacion'",
-                alta.idPropiedad());
+                List.of(new ValorAtributo("metraje_total", "300"))), "VIVIENDA"), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
 
-        assertFalse(ficha.atributosQueFaltan().isEmpty(),
-                "sin zonificacion, un terreno esta incompleto");
-        ficha.atributosQueFaltan().forEach(falta -> {
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(f -> "zonificacion".equals(f.clave())),
+                "MAT-02 permite identificar y guardar el predio sin zonificación");
+        // La suficiencia de CAT18 se consulta por acción; OPC no se convierte otra vez en ALT/PUB.
+        EncargoService.Ficha borrador = ciclo.consultar(alta.idsEncargos().get(0), agenteA);
+        var documento = ciclo.prepararDocumento(new EncargoService.Preparacion(borrador.id(), borrador.version(),
+                alta.idPropiedad(), null, List.of(), OperacionInmobiliaria.VENTA, List.of(), null,
+                null, null, null, null, null), agenteA, sesiones.de(agenteA), UUID.randomUUID().toString(), PANTALLA);
+        assertTrue(documento.faltantes().contains("zonificacion"), documento.faltantes().toString());
+        assertFalse(ciclo.consultar(borrador.id(), agenteA).vigencia().habilitado());
+
+        // Una PUB vigente del catálogo prueba el rótulo en la superficie que lo publica.
+        ResultadoRegistro local = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null,
+                "LOCAL", "COMERCIAL", "Caso de rotulo PUB TEST",
+                new Ubicacion("Direccion de rotulo PUB TEST", "Distrito TEST", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)), List.of(new ValorAtributo("metraje_total", "90")),
+                List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
+                        null, null, null, null, null, null, null)), null), agenteA);
+        var faltantes = propiedades.consultar(local.idPropiedad(), agenteA).faltanParaPublicar();
+        var acceso = faltantes.stream().filter(f -> "tipo_acceso".equals(f.clave())).findFirst().orElseThrow();
+        assertEquals("Tipo de acceso", acceso.rotulo());
+        faltantes.forEach(falta -> {
             assertNotNull(falta.clave());
             assertNotNull(falta.rotulo(), "la clave " + falta.clave() + " llego sin rotulo");
             assertFalse(falta.rotulo().equals(falta.clave()),
@@ -503,7 +566,7 @@ class PropiedadUniversalIntegrationTest {
     void laActividadConservaSuProcedencia() {
         ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", null,
                 "Disponible para venta o alquiler",
-                new Ubicacion("Av. Larco 4321", "Miraflores", null, null, null, null, null, null, null),
+                new Ubicacion("Av. Larco 4321", "Miraflores", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "118"),
                         new ValorAtributo("dormitorios", "3")),
@@ -560,10 +623,11 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("la historia cuenta cuantas veces estuvo en alquiler, sin fusionar los historicos")
     void laHistoriaCuentaLosEpisodiosSinFusionarlos() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
         long vigente = alta.idsEncargos().get(0);
         long anterior2025 = encargoCerrado(alta.idPropiedad(), "2025-01-15",
                 new BigDecimal("2400"), "PEN");
@@ -612,10 +676,11 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el ultimo cierre no se confunde con el ultimo precio pedido")
     void elCierreNoSeConfundeConLoPedido() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
         long anterior = encargoCerrado(alta.idPropiedad(), "2025-01-15",
                 new BigDecimal("2400"), "PEN");
 
@@ -653,9 +718,9 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("la historia separa venta de alquiler, tambien al agregar")
     void laHistoriaSeparaLasDosOperaciones() {
-        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", null,
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", "VIVIENDA",
                 null,
-                new Ubicacion("Av. Larco 9876", "Miraflores", null, null, null, null, null, null, null),
+                new Ubicacion("Av. Larco 9876", "Miraflores", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "118"),
                         new ValorAtributo("dormitorios", "3")),
@@ -666,6 +731,7 @@ class PropiedadUniversalIntegrationTest {
                 null);
         ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
 
+        prepararYHabilitar(alta.idPropiedad());
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
 
         assertEquals(2, ficha.historia().porOperacion().size());
@@ -711,8 +777,8 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("venta y alquiler: cada encargo publica lo suyo, y no se ven entre si")
     void cadaEncargoPublicaLoSuyo() {
-        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "OFICINA", null, null,
-                new Ubicacion("Av. La Marina 2450", "San Miguel", null, null, null, null, null, null, null),
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "OFICINA", "COMERCIAL", null,
+                new Ubicacion("Av. La Marina 2450", "San Miguel", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "160")),
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
@@ -722,12 +788,13 @@ class PropiedadUniversalIntegrationTest {
                 null);
         ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
 
+        prepararYHabilitar(alta.idPropiedad());
         FichaPropiedadUniversal antes = propiedades.consultar(alta.idPropiedad(), agenteA);
         long deVenta = encargo(antes, "VENTA").idEncargo();
         long deAlquiler = encargo(antes, "ALQUILER").idEncargo();
 
-        publicaciones.crearEnEncargo(deVenta, anuncio("URBANIA", new BigDecimal("320000"), "USD"), agenteA);
-        publicaciones.crearEnEncargo(deAlquiler, anuncio("FACEBOOK", new BigDecimal("4800"), "USD"), agenteA);
+        preparacionPublicacion.publicar(publicaciones,deVenta, anuncio("URBANIA", new BigDecimal("320000"), "USD"), agenteA);
+        preparacionPublicacion.publicar(publicaciones,deAlquiler, anuncio("FACEBOOK", new BigDecimal("4800"), "USD"), agenteA);
 
         List<FichaPublicacion> anunciosVenta = publicaciones.listarDeEncargo(deVenta, agenteA);
         List<FichaPublicacion> anunciosAlquiler = publicaciones.listarDeEncargo(deAlquiler, agenteA);
@@ -771,15 +838,16 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("dos alquileres sucesivos conservan cada uno SUS anuncios")
     void losAnunciosNoSeAgrupanPorOperacion() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
         long vigente = alta.idsEncargos().get(0);
         long anterior = encargoCerrado(alta.idPropiedad(), "2025-01-15",
                 new BigDecimal("2400"), "PEN");
 
-        publicaciones.crearEnEncargo(vigente, anuncio("URBANIA", new BigDecimal("2600"), "PEN"), agenteA);
+        preparacionPublicacion.publicar(publicaciones,vigente, anuncio("URBANIA", new BigDecimal("2600"), "PEN"), agenteA);
         // El anterior esta cerrado: se le inserta el anuncio como historia, que
         // es como llego a existir en su dia.
         jdbc.update("""
@@ -882,7 +950,7 @@ class PropiedadUniversalIntegrationTest {
                 new BigDecimal("2400"), "PEN");
 
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(cerrado,
+                () -> preparacionPublicacion.publicar(publicaciones,cerrado,
                         anuncio("URBANIA", new BigDecimal("2400"), "PEN"), agenteA));
 
         assertTrue(error.getMessage().contains("no esta vigente"), error.getMessage());
@@ -892,10 +960,11 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("la capacidad de publicar la decide el Core, no la pantalla")
     void laCapacidadDePublicarLaDecideElCore() {
-        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("LOCAL", "ALQUILER",
                 new BigDecimal("2600"), "PEN",
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+                List.of(new ValorAtributo("metraje_total", "90"))), "COMERCIAL"), agenteA);
+        prepararYHabilitar(alta.idPropiedad());
         long cerrado = encargoCerrado(alta.idPropiedad(), "2025-01-15",
                 new BigDecimal("2400"), "PEN");
 
@@ -921,8 +990,8 @@ class PropiedadUniversalIntegrationTest {
                 () -> publicaciones.listarDeEncargo(encargo, agenteB));
     }
 
-    private static DatosPublicacion anuncio(String canal, BigDecimal importe, String moneda) {
-        return new DatosPublicacion(canal, null, importe, moneda, null, null, "P");
+    private static DatosAnuncio anuncio(String canal, BigDecimal importe, String moneda) {
+        return new DatosAnuncio(canal, null, importe, moneda, null, null, "P");
     }
 
     @Test
@@ -979,15 +1048,20 @@ class PropiedadUniversalIntegrationTest {
     }
 
     @Test
-    @DisplayName("un atributo obligatorio ausente se declara faltante, con su nombre")
+    @DisplayName("dormitorios ausentes no bloquean guardar y sí aparecen al preparar el Encargo")
     void atributoObligatorioAusente() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () ->
-                propiedades.registrar(comando("DEPARTAMENTO", "VENTA", new BigDecimal("180000"), "USD",
+        ResultadoRegistro alta = propiedades.registrar(conUso(comando("DEPARTAMENTO", "VENTA", new BigDecimal("180000"), "USD",
                         List.of(new Titular(propietarioAna, null, null)),
-                        List.of(new ValorAtributo("metraje_total", "118"))), agenteA));
-
-        assertTrue(error.getMessage().contains("dormitorios"),
-                "tiene que decir QUE falta: " + error.getMessage());
+                        List.of(new ValorAtributo("metraje_total", "118"))), "VIVIENDA"), agenteA);
+        assertNull(atributo(propiedades.consultar(alta.idPropiedad(), agenteA), "dormitorios"));
+        EncargoService.Ficha borrador = ciclo.consultar(alta.idsEncargos().get(0), agenteA);
+        var documento = ciclo.prepararDocumento(new EncargoService.Preparacion(borrador.id(), borrador.version(),
+                alta.idPropiedad(), null, List.of(), OperacionInmobiliaria.VENTA, List.of(), null,
+                null, null, null, null, null), agenteA, sesiones.de(agenteA), UUID.randomUUID().toString(), PANTALLA);
+        assertTrue(documento.faltantes().contains("dormitorios"), documento.faltantes().toString());
+        assertFalse(ciclo.consultar(borrador.id(), agenteA).vigencia().habilitado());
+        assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_propiedad=?",
+                Integer.class, alta.idPropiedad()));
     }
 
     @Test
@@ -1052,7 +1126,7 @@ class PropiedadUniversalIntegrationTest {
 
         // Y el tenant de al lado no lo ve.
         assertFalse(captura
-                        .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, agenteB)
+                        .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, null, agenteB)
                         .delTipo().stream()
                         .anyMatch(p -> "vista_al_mar".equals(p.clave())),
                 "un atributo privado no cruza la frontera del tenant");
@@ -1074,9 +1148,11 @@ class PropiedadUniversalIntegrationTest {
         // cartera del vecino.
         assertThrows(NoEncontradoException.class,
                 () -> propiedades.consultar(alta.idPropiedad(), agenteB));
+        long versionObservada = propiedades.consultar(alta.idPropiedad(), agenteA).versionFisica();
         assertThrows(NoEncontradoException.class,
                 () -> propiedades.editar(alta.idPropiedad(),
-                        new ComandoEdicion(null, PANTALLA, "intento del vecino", null, null, null, null, null),
+                        new ComandoEdicion(null, PANTALLA, "intento del vecino", null, null, null, null, null)
+                                .conVersion(versionObservada),
                         agenteB));
 
         // Y un titular de otro tenant tampoco sirve dentro del propio.
@@ -1135,6 +1211,23 @@ class PropiedadUniversalIntegrationTest {
         assertTrue(error.getMessage().contains("clave nueva"), error.getMessage());
     }
 
+    @Test
+    @DisplayName("la moneda de cada importe tambien distingue una clave reutilizada")
+    void monedaFormaParteDeLaHuellaDeAlta() {
+        String clave = UUID.randomUUID().toString();
+        propiedades.registrar(conClave(clave, comando("LOCAL", "ALQUILER", new BigDecimal("2000"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "80")))), agenteA);
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class, () ->
+                propiedades.registrar(conClave(clave, comando("LOCAL", "ALQUILER",
+                        new BigDecimal("2000"), "USD",
+                        List.of(new Titular(propietarioAna, null, null)),
+                        List.of(new ValorAtributo("metraje_total", "80")))), agenteA));
+
+        assertTrue(error.getMessage().contains("clave nueva"), error.getMessage());
+    }
+
     // ==================================================================
     // Todo o nada
     // ==================================================================
@@ -1174,7 +1267,7 @@ class PropiedadUniversalIntegrationTest {
     // ==================================================================
 
     @Test
-    @DisplayName("el ejemplo de aceptacion completo, con el historico intacto")
+    @DisplayName("editar el precio pedido del borrador usa Encargo y conserva las condiciones anteriores")
     void crearLeerEditarLeer() {
         ResultadoRegistro alta = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null,
                 "DEPARTAMENTO", null, null,
@@ -1195,21 +1288,51 @@ class PropiedadUniversalIntegrationTest {
         assertEquals("118", atributo(antes, "metraje_total"));
         assertEquals(0, new BigDecimal("180000").compareTo(antes.encargos().get(0).importe()));
 
-        // --- editar el precio: 180 000 -> 175 000
-        propiedades.editar(alta.idPropiedad(), new ComandoEdicion(null, PANTALLA, null, null, null, null,
-                List.of(new OperacionSolicitada("VENTA", new BigDecimal("175000"), "USD",
-                        null, null, null, null, null, null, null)), null), agenteA);
+        long idEncargo = alta.idsEncargos().getFirst();
+        var borradorObservado = ciclo.consultar(idEncargo, agenteA);
+        long condicionAnterior = jdbc.queryForObject("select id_condicion_economica from captacion where id_captacion=?",
+                Long.class, idEncargo);
+        var historiaAnterior = encargo(antes, "VENTA").historico();
+        var edicion = new EncargoService.Edicion(borradorObservado.version(), null, null, null, null,
+                precioPedido(new BigDecimal("175000"), "USD"), "Corrección del precio pedido TEST", null, null);
+        var recibo = ciclo.editar(idEncargo, edicion, agenteA, sesiones.de(agenteA),
+                UUID.randomUUID().toString(), PANTALLA);
 
-        // --- leer: el precio nuevo manda y el anterior SIGUE AHI
+        // El precio solicitado cambia en el borrador; la revisión competente conserva la autoridad de U.
         FichaPropiedadUniversal despues = propiedades.consultar(alta.idPropiedad(), agenteA);
         EncargoFicha venta = encargo(despues, "VENTA");
         assertEquals(0, new BigDecimal("175000").compareTo(venta.importe()));
-        assertEquals(2, venta.historico().size(), "el historico es append-only: dos hitos, no uno");
-        assertEquals(0, new BigDecimal("180000").compareTo(venta.historico().get(0).monto()),
-                "el precio de salida es el que mide cuanto cedio el titular; no se sobrescribe");
-        assertEquals(0, new BigDecimal("175000").compareTo(venta.historico().get(1).monto()));
-        assertEquals("U", venta.historico().get(0).hito());
-        assertEquals("U", venta.historico().get(1).hito());
+        assertTrue(recibo.version() > borradorObservado.version());
+        assertEquals(antes.versionFisica(), despues.versionFisica(), "editar Encargo no edita el físico");
+        assertEquals(historiaAnterior, venta.historico(), "no sobrescribe ni inventa hitos autorizados");
+        assertTrue(venta.historico().isEmpty(), "no hubo aprobación para registrar U");
+        assertEquals(0, new BigDecimal("180000").compareTo(jdbc.queryForObject(
+                "select importe_referencia from condicion_economica_captacion where id_condicion_economica=?",
+                BigDecimal.class, condicionAnterior)), "la condición anterior no se sobrescribe");
+        assertEquals(1L, (long) jdbc.queryForObject("select count(*) from evento_dominio where organizacion_id=? and entidad_id=? and tipo='CONDICIONES_ENCARGO_EDITADAS'",
+                Long.class, agenteA.idOrganizacion(), idEncargo));
+    }
+
+    @Test
+    @DisplayName("la huella de edición canónica del Encargo incluye la moneda propia del importe")
+    void monedaFormaParteDeLaHuellaDeEdicion() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2000"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "80"))), agenteA);
+        String clave = UUID.randomUUID().toString();
+        long idEncargo = alta.idsEncargos().getFirst();
+        var borradorObservado = ciclo.consultar(idEncargo, agenteA);
+        var original = new EncargoService.Edicion(borradorObservado.version(), null, null, null, null,
+                precioPedido(new BigDecimal("2100"), "PEN"), "Precio pedido TEST", null, null);
+        var primerResultado = ciclo.editar(idEncargo, original, agenteA, sesiones.de(agenteA), clave, PANTALLA);
+
+        assertThrows(ConflictoException.class, () -> ciclo.editar(idEncargo,
+                new EncargoService.Edicion(borradorObservado.version(), null, null, null, null,
+                        precioPedido(new BigDecimal("2100"), "USD"), "Precio pedido TEST", null, null),
+                agenteA, sesiones.de(agenteA), clave, PANTALLA));
+        assertEquals(primerResultado, ciclo.editar(idEncargo, original, agenteA, sesiones.de(agenteA), clave, PANTALLA));
+        assertEquals("PEN", ciclo.consultar(idEncargo, agenteA).condiciones().monedaPrecio());
     }
 
     @Test
@@ -1220,8 +1343,14 @@ class PropiedadUniversalIntegrationTest {
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "80"))), agenteA);
 
-        propiedades.editar(alta.idPropiedad(), new ComandoEdicion(null, PANTALLA, null, null,
-                List.of(new Titular(propietarioCarlos, null, true)), null, null, null), agenteA);
+        var observada = propiedades.consultar(alta.idPropiedad(), agenteA);
+        var resultado = propiedades.editar(alta.idPropiedad(), new ComandoEdicion(null, PANTALLA, null, null,
+                List.of(new Titular(propietarioCarlos, null, true)), null, null, null)
+                .conVersion(observada.versionFisica()), agenteA);
+        assertEquals(alta.idPropiedad(), resultado.idPropiedad());
+        assertEquals(observada.versionFisica() + 1, resultado.versionFisica());
+        assertEquals(1, resultado.titulares().size());
+        assertEquals(propietarioCarlos, resultado.titulares().getFirst().idRolPropietario());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertEquals(1, ficha.titulares().size());
@@ -1276,7 +1405,8 @@ class PropiedadUniversalIntegrationTest {
         // 1. Empiezo. Todavia no se nada, asi que lo primero es el tipo: es lo
         //    que decide todo lo demas.
         MotorDeCaptura.EstadoCaptura vacio =
-                captura.avanzar(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, Map.of(), CONVERSANDO, agenteA);
+                captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of()), null), CONVERSANDO, agenteA);
         assertNotNull(vacio.idBorrador());
         assertEquals(GuionRegistroPropiedad.TIPO_PROPIEDAD, vacio.siguiente().clave());
         assertFalse(vacio.listoParaEjecutar());
@@ -1284,20 +1414,22 @@ class PropiedadUniversalIntegrationTest {
         // 2. Departamento + venta + Miraflores + 180 000. BROX consulta el
         //    catalogo y ya sabe que le falta -- incluidos los dormitorios, que
         //    no habria pedido para un terreno.
-        MotorDeCaptura.EstadoCaptura parcial = captura.avanzar(null, vacio.idBorrador(), Map.of(
+        MotorDeCaptura.EstadoCaptura parcial = captura.avanzar(new MotorDeCaptura.Avance(null, vacio.idBorrador(), vacio.version(),
+                respuestasConocidas(Map.of(
                 GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
                 GuionRegistroPropiedad.OPERACIONES, "VENTA",
                 GuionRegistroPropiedad.DISTRITO, "Miraflores",
                 GuionRegistroPropiedad.para(GuionRegistroPropiedad.IMPORTE,
                         OperacionInmobiliaria.VENTA), "180000",
                 GuionRegistroPropiedad.para(GuionRegistroPropiedad.MONEDA,
-                        OperacionInmobiliaria.VENTA), "USD"), CONVERSANDO, agenteA);
+                        OperacionInmobiliaria.VENTA), "USD")), null), CONVERSANDO, agenteA);
 
-        assertTrue(parcial.faltante().contains(GuionRegistroPropiedad.TITULARES));
         assertTrue(parcial.faltante().contains(GuionRegistroPropiedad.DIRECCION));
-        assertTrue(parcial.faltante().contains("dormitorios"),
-                "el catalogo decide que falta, no una lista escrita en el cliente");
-        assertTrue(parcial.faltante().contains("metraje_total"));
+        assertTrue(parcial.faltante().contains(GuionRegistroPropiedad.INTERIOR));
+        assertFalse(parcial.faltante().contains(GuionRegistroPropiedad.TITULARES));
+        assertFalse(parcial.faltante().contains("dormitorios"));
+        assertFalse(parcial.suficienciasEncargo().getFirst().suficiente(),
+                "La suficiencia del Encargo conserva sus mínimos separados de identificar.");
         assertFalse(parcial.listoParaEjecutar());
 
         // 3. Se pierde el contexto del modelo. BROX conserva donde se quedo:
@@ -1308,11 +1440,13 @@ class PropiedadUniversalIntegrationTest {
         assertEquals(parcial.faltante(), recuperado.faltante());
 
         // 4. Se completa lo que falta, ahora desde la pantalla.
-        MotorDeCaptura.EstadoCaptura completo = captura.avanzar(null, vacio.idBorrador(), Map.of(
+        MotorDeCaptura.EstadoCaptura completo = captura.avanzar(new MotorDeCaptura.Avance(null, vacio.idBorrador(), recuperado.version(),
+                respuestasConocidas(Map.of(
                 GuionRegistroPropiedad.TITULARES, propietarioAna + ":60," + propietarioCarlos + ":40",
                 GuionRegistroPropiedad.DIRECCION, "Av. Pardo 620",
+                GuionRegistroPropiedad.INTERIOR, "501",
                 "metraje_total", "118",
-                "dormitorios", "3"), PANTALLA, agenteA);
+                "dormitorios", "3")), null), PANTALLA, agenteA);
 
         assertTrue(completo.faltante().isEmpty());
         assertTrue(completo.listoParaEjecutar(), "ya hay suficiente para ejecutar el caso de uso");
@@ -1320,14 +1454,20 @@ class PropiedadUniversalIntegrationTest {
 
         // 5. Ejecuta.
         MotorDeCaptura.Ejecucion ejecucion =
-                captura.ejecutar(vacio.idBorrador(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+                captura.ejecutar(vacio.idBorrador(), completo.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
         assertNotNull(ejecucion.idPropiedad());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
         assertEquals("DEPARTAMENTO", ficha.tipoPropiedad());
         assertEquals(2, ficha.titulares().size());
-        assertEquals("VENTA", ficha.encargos().get(0).operacion());
-        assertEquals(0, new BigDecimal("180000").compareTo(ficha.encargos().get(0).importe()));
+        assertTrue(ficha.encargos().isEmpty(), "La operación observada no acredita un mandato.");
+        assertTrue(ejecucion.idsEncargos().isEmpty());
+        assertEquals("conv-universal", jdbc.queryForObject("""
+                select conversacion_id from evento_dominio
+                 where tipo = 'PROPIEDAD_REGISTRADA' and entidad_tipo = 'PROPIEDAD'
+                   and entidad_id = ?
+                """, String.class, ejecucion.idPropiedad()),
+                "la pantalla B confirma, pero el alta conserva la conversacion A que dicto los datos");
 
         // 6. El borrador queda cerrado y dice que produjo, con su canal.
         MotorDeCaptura.EstadoCaptura cerrado = captura.consultar(vacio.idBorrador(), agenteA);
@@ -1340,35 +1480,89 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el motor no deja ejecutar a medias, y dice exactamente que falta")
     void noSeEjecutaAMedias() {
-        MotorDeCaptura.EstadoCaptura parcial = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "TERRENO"), CONVERSANDO, agenteA);
+        MotorDeCaptura.EstadoCaptura parcial = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "TERRENO")), null), CONVERSANDO, agenteA);
 
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> captura.ejecutar(parcial.idBorrador(), null, PANTALLA, agenteA));
+                () -> captura.ejecutar(parcial.idBorrador(), parcial.version(), java.util.UUID.randomUUID().toString(), PANTALLA, agenteA));
 
-        assertTrue(error.getMessage().contains("zonificacion"),
-                "un terreno exige zonificacion, y el motor lo sabe por el catalogo: "
+        assertTrue(error.getMessage().contains("distrito"),
+                "Identificar el terreno necesita distrito y referencia: "
                         + error.getMessage());
+        assertFalse(error.getMessage().contains("zonificacion"),
+                "La zonificación se exige al confirmar Encargo, no al registrar el físico.");
         assertFalse(error.getMessage().contains("dormitorios"),
                 "y no pide dormitorios de un terreno: " + error.getMessage());
     }
 
     @Test
+    @DisplayName("registrar sin operacion ni titular conserva una propiedad identificable")
+    void registraSinOperacionNiTitular() {
+        MotorDeCaptura.EstadoCaptura capturaSinRelacion = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
+                        GuionRegistroPropiedad.DIRECCION, "Av. Observada 123",
+                        GuionRegistroPropiedad.INTERIOR, "501",
+                        GuionRegistroPropiedad.DISTRITO, "Miraflores",
+                        "metraje_total", "90",
+                        "dormitorios", "3")), null), PANTALLA, agenteA);
+
+        assertTrue(capturaSinRelacion.faltante().isEmpty(),
+                "sin operacion ni titular solo se exigen los minimos de la propiedad: "
+                        + capturaSinRelacion.faltante());
+        assertTrue(capturaSinRelacion.listoParaEjecutar());
+
+        MotorDeCaptura.Ejecucion ejecucion = captura.ejecutar(capturaSinRelacion.idBorrador(), capturaSinRelacion.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+        FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
+
+        assertTrue(ficha.titulares().isEmpty(), "no se inventa titularidad");
+        assertTrue(ficha.encargos().isEmpty(), "no se inventa encargo");
+        assertNull(ficha.disponibilidadComercial());
+    }
+
+    @Test
+    @DisplayName("cada operacion observada conserva cifra y moneda sin crear mandatos al registrar el fisico")
+    void cadaOperacionConservaSuMoneda() {
+        Map<String, String> datos = new LinkedHashMap<>();
+        datos.put(GuionRegistroPropiedad.TIPO_PROPIEDAD, "OFICINA");
+        datos.put(GuionRegistroPropiedad.OPERACIONES, "VENTA,ALQUILER");
+        datos.put(importeDe(OperacionInmobiliaria.VENTA), "540000");
+        datos.put(monedaDe(OperacionInmobiliaria.VENTA), "USD");
+        datos.put(importeDe(OperacionInmobiliaria.ALQUILER), "6800");
+        datos.put(monedaDe(OperacionInmobiliaria.ALQUILER), "PEN");
+        datos.put(GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna));
+        datos.put(GuionRegistroPropiedad.DIRECCION, "Av. Moneda 456");
+        datos.put(GuionRegistroPropiedad.INTERIOR, "501");
+        datos.put(GuionRegistroPropiedad.DISTRITO, "San Isidro");
+        datos.put("metraje_total", "210");
+
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(datos), null), PANTALLA, agenteA);
+
+        assertTrue(borrador.faltante().isEmpty());
+        MotorDeCaptura.Ejecucion ejecucion = captura.ejecutar(borrador.idBorrador(), borrador.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+        FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
+        assertTrue(ficha.encargos().isEmpty());
+        var conocido = captura.consultar(borrador.idBorrador(), agenteA).conocido();
+        assertEquals("USD", conocido.get(monedaDe(OperacionInmobiliaria.VENTA)));
+        assertEquals("PEN", conocido.get(monedaDe(OperacionInmobiliaria.ALQUILER)));
+        assertEquals(0, new BigDecimal("540000").compareTo(new BigDecimal(conocido.get(importeDe(OperacionInmobiliaria.VENTA)).toString())));
+        assertEquals(0, new BigDecimal("6800").compareTo(new BigDecimal(conocido.get(importeDe(OperacionInmobiliaria.ALQUILER)).toString())));
+    }
+
+    @Test
     @DisplayName("un valor invalido se rechaza al ANOTARLO, no al final del recorrido")
     void seValidaAlEntrar() {
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO"), PANTALLA, agenteA);
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO")), null), PANTALLA, agenteA);
 
-        assertThrows(ReglaNegocioException.class, () -> captura.avanzar(null, borrador.idBorrador(),
-                Map.of("dormitorios", "unos cuantos"), PANTALLA, agenteA));
-        assertThrows(ReglaNegocioException.class, () -> captura.avanzar(null, borrador.idBorrador(),
-                Map.of(GuionRegistroPropiedad.OPERACIONES, "AMBAS"), PANTALLA, agenteA));
+        assertThrows(ReglaNegocioException.class, () -> captura.avanzar(new MotorDeCaptura.Avance(null, borrador.idBorrador(), borrador.version(),
+                respuestasConocidas(Map.of("dormitorios", "unos cuantos")), null), PANTALLA, agenteA));
+        assertThrows(ReglaNegocioException.class, () -> captura.avanzar(new MotorDeCaptura.Avance(null, borrador.idBorrador(), borrador.version(),
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.OPERACIONES, "AMBAS")), null), PANTALLA, agenteA));
     }
 
     // ==================================================================
-    // Captura universal: un motor, siete tipos, dos operaciones
+    // Captura universal: un motor, todos los tipos fisicos, dos operaciones
     //
     // Lo de arriba prueba el CASO DE USO. Esto prueba el camino por el que
     // entran de verdad la pantalla y KAIROS, que es donde estaba el
@@ -1378,10 +1572,10 @@ class PropiedadUniversalIntegrationTest {
     // ==================================================================
 
     @Test
-    @DisplayName("oficina en venta Y alquiler por el motor: una propiedad, dos encargos")
+    @DisplayName("oficina observada en venta y alquiler: una propiedad y dos suficiencias separadas")
     void ventaYAlquilerPorElMotor() {
-        MotorDeCaptura.EstadoCaptura abierto = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null, Map.of(), PANTALLA, agenteA);
+        MotorDeCaptura.EstadoCaptura abierto = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of()), null), PANTALLA, agenteA);
 
         Map<String, String> todo = new LinkedHashMap<>();
         todo.put(GuionRegistroPropiedad.TIPO_PROPIEDAD, "OFICINA");
@@ -1392,40 +1586,36 @@ class PropiedadUniversalIntegrationTest {
         todo.put(monedaDe(OperacionInmobiliaria.ALQUILER), "USD");
         todo.put(GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna));
         todo.put(GuionRegistroPropiedad.DIRECCION, "Av. Rivera Navarrete 501");
+        todo.put(GuionRegistroPropiedad.INTERIOR, "501");
         todo.put(GuionRegistroPropiedad.DISTRITO, "San Isidro");
         todo.put("metraje_total", "210");
 
         MotorDeCaptura.EstadoCaptura completo =
-                captura.avanzar(null, abierto.idBorrador(), todo, PANTALLA, agenteA);
+                captura.avanzar(new MotorDeCaptura.Avance(null, abierto.idBorrador(), abierto.version(),
+                respuestasConocidas(todo), null), PANTALLA, agenteA);
         assertTrue(completo.faltante().isEmpty(),
                 "con las dos condiciones economicas puestas no falta nada: " + completo.faltante());
         assertTrue(completo.listoParaEjecutar());
 
         MotorDeCaptura.Ejecucion ejecucion =
-                captura.ejecutar(abierto.idBorrador(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+                captura.ejecutar(abierto.idBorrador(), completo.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
 
-        assertEquals(2, ejecucion.idsEncargos().size(), "dos operaciones, dos encargos");
+        assertTrue(ejecucion.idsEncargos().isEmpty(), "Registrar el físico no recibe autorización de Encargo.");
 
         FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
         assertEquals("OFICINA", ficha.tipoPropiedad());
-        assertEquals(2, ficha.encargos().size(), "y UNA sola propiedad, no dos");
-
-        EncargoFicha venta = encargoDe(ficha, "VENTA");
-        EncargoFicha alquiler = encargoDe(ficha, "ALQUILER");
-        assertEquals(0, new BigDecimal("540000").compareTo(venta.importe()),
-                "el precio de venta no se mezcla con la renta");
-        assertEquals(0, new BigDecimal("6800").compareTo(alquiler.importe()));
-        assertEquals(1, venta.historico().size(), "cada encargo estrena SU serie economica");
-        assertEquals(1, alquiler.historico().size());
-        assertEquals(0, new BigDecimal("540000").compareTo(venta.historico().get(0).monto()));
-        assertEquals(0, new BigDecimal("6800").compareTo(alquiler.historico().get(0).monto()));
+        assertTrue(ficha.encargos().isEmpty());
+        assertEquals(2, completo.suficienciasEncargo().size());
+        assertEquals(Set.of("VENTA", "ALQUILER"), completo.suficienciasEncargo().stream()
+                .map(evaluacion -> evaluacion.contexto().operacion()).collect(java.util.stream.Collectors.toSet()));
+        assertTrue(completo.suficienciasEncargo().stream().noneMatch(evaluacion -> evaluacion.suficiente()));
+        assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_propiedad=?", Integer.class, ejecucion.idPropiedad()));
     }
 
     @Test
     @DisplayName("la definicion de dos operaciones trae dos bloques economicos y una sola ficha fisica")
     void definicionConDosOperaciones() {
-        MotorDeCaptura.DefinicionCaptura dos = captura.definicion(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA,ALQUILER", agenteA);
+        MotorDeCaptura.DefinicionCaptura dos = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA,ALQUILER", null, agenteA);
 
         assertEquals(List.of("VENTA", "ALQUILER"), dos.operaciones());
         assertEquals(2, dos.deLaOperacion().size());
@@ -1445,13 +1635,124 @@ class PropiedadUniversalIntegrationTest {
                 "rotulo del importe de venta: " + precio.rotulo());
         assertTrue(renta.rotulo().toLowerCase(java.util.Locale.ROOT).contains("renta"),
                 "rotulo del importe de alquiler: " + renta.rotulo());
+        assertEquals("IMPORTE", precio.tipoDato(),
+                "el importe es un dato monetario, no un DECIMAL con unidad global");
+        assertEquals("IMPORTE", precio.control(),
+                "el control compuesto separa el monto de su moneda");
+        org.junit.jupiter.api.Assertions.assertNull(precio.unidad(),
+                "la moneda acompaña al monto por clave y no se inventa como unidad");
+        assertTrue(dos.deLaOperacion().get(0).preguntas().stream()
+                        .noneMatch(pregunta -> pregunta.clave().equals(
+                                monedaDe(OperacionInmobiliaria.VENTA))),
+                "la moneda viaja como compañera de importe, no como segunda pregunta del bloque");
 
         // La ficha fisica se pregunta UNA vez: la propiedad no se duplica
         // porque se encargue dos veces.
-        MotorDeCaptura.DefinicionCaptura una = captura.definicion(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA", agenteA);
+        MotorDeCaptura.DefinicionCaptura una = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA", null, agenteA);
         assertEquals(una.comunes().size(), dos.comunes().size());
         assertEquals(una.delTipo().size(), dos.delTipo().size());
+    }
+
+    @Test
+    @DisplayName("un importe de propiedad conserva monto y moneda como par de claves")
+    void importeDePropiedadConservaSuMoneda() {
+        Map<String, String> datos = new LinkedHashMap<>();
+        datos.put(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO");
+        datos.put(GuionRegistroPropiedad.DIRECCION, "Av. Independiente 789");
+        datos.put(GuionRegistroPropiedad.INTERIOR, "501");
+        datos.put(GuionRegistroPropiedad.DISTRITO, "Miraflores");
+        datos.put("metraje_total", "90");
+        datos.put("dormitorios", "3");
+        datos.put("cuota_mantenimiento", "350");
+
+        MotorDeCaptura.EstadoCaptura sinMoneda = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(datos), null), PANTALLA, agenteA);
+
+        assertFalse(sinMoneda.listoParaEjecutar());
+        assertTrue(sinMoneda.faltante().contains("moneda:cuota_mantenimiento"),
+                "el monto se conserva y solo la moneda queda FALTANTE");
+        assertEquals("moneda:cuota_mantenimiento", sinMoneda.siguiente().clave());
+
+        MotorDeCaptura.EstadoCaptura completo = captura.avanzar(new MotorDeCaptura.Avance(null, sinMoneda.idBorrador(), sinMoneda.version(),
+                respuestasConocidas(Map.of("moneda:cuota_mantenimiento", "USD")), null), PANTALLA, agenteA);
+        assertTrue(completo.faltante().isEmpty());
+
+        MotorDeCaptura.Ejecucion ejecucion = captura.ejecutar(completo.idBorrador(), completo.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+        FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
+        PropiedadUniversalService.AtributoFicha cuota = ficha.atributos().stream()
+                .filter(a -> "cuota_mantenimiento".equals(a.clave()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no se guardo cuota_mantenimiento"));
+        // Propiedad y encargo comparten fichaDeAtributo: valor es texto
+        // legible con moneda; no es el monto crudo del EncargoFicha.
+        assertEquals("USD 350", cuota.valor());
+        assertEquals("USD", cuota.moneda());
+    }
+
+    @Test
+    @DisplayName("un importe de condicion del encargo conserva monto y moneda calificados")
+    void importeDeCondicionConservaSuMonedaCalificada() {
+        String importe = GuionRegistroPropiedad.para("precio_estacionamiento_adicional",
+                OperacionInmobiliaria.ALQUILER);
+        String moneda = GuionRegistroPropiedad.claveMonedaDeAtributo(importe);
+
+        MotorDeCaptura.DefinicionCaptura definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", "ALQUILER", null, agenteA);
+        MotorDeCaptura.Pregunta pregunta = definicion.deLaOperacion().get(0).preguntas().stream()
+                .filter(p -> importe.equals(p.clave()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no se publico " + importe));
+        assertEquals("IMPORTE", pregunta.tipoDato());
+        assertEquals("IMPORTE", pregunta.control());
+        org.junit.jupiter.api.Assertions.assertNull(pregunta.unidad());
+        assertEquals(importe, GuionRegistroPropiedad.atributoDeMoneda(moneda));
+        org.junit.jupiter.api.Assertions.assertNull(
+                GuionRegistroPropiedad.atributoDeMoneda(monedaDe(OperacionInmobiliaria.ALQUILER)));
+
+        Map<String, String> datos = new LinkedHashMap<>();
+        datos.put(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO");
+        datos.put(GuionRegistroPropiedad.OPERACIONES, "ALQUILER");
+        datos.put(GuionRegistroPropiedad.para(GuionRegistroPropiedad.IMPORTE,
+                OperacionInmobiliaria.ALQUILER), "6800");
+        datos.put(monedaDe(OperacionInmobiliaria.ALQUILER), "PEN");
+        datos.put(GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna));
+        datos.put(GuionRegistroPropiedad.DIRECCION, "Av. Cochera 246");
+        datos.put(GuionRegistroPropiedad.INTERIOR, "501");
+        datos.put(GuionRegistroPropiedad.DISTRITO, "Miraflores");
+        datos.put("metraje_total", "90");
+        datos.put("dormitorios", "3");
+        datos.put(importe, "250");
+
+        MotorDeCaptura.EstadoCaptura sinMoneda = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(datos), null), PANTALLA, agenteA);
+        assertTrue(sinMoneda.listoParaEjecutar(), "La condición observada no impide identificar el físico.");
+        assertEquals("250", sinMoneda.conocido().get(importe));
+        assertFalse(sinMoneda.conocido().containsKey(moneda));
+        assertFalse(sinMoneda.suficienciasEncargo().getFirst().suficiente());
+
+        Map<String, String> monedaPrimero = new LinkedHashMap<>(datos);
+        monedaPrimero.remove(importe);
+        monedaPrimero.put(moneda, "USD");
+        MotorDeCaptura.EstadoCaptura sinImporte = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(monedaPrimero), null), PANTALLA, agenteA);
+        assertTrue(sinImporte.listoParaEjecutar());
+        assertEquals("USD", sinImporte.conocido().get(moneda));
+        assertFalse(sinImporte.conocido().containsKey(importe));
+        assertFalse(sinImporte.suficienciasEncargo().getFirst().suficiente());
+
+        assertThrows(ReglaNegocioException.class, () -> captura.avanzar(new MotorDeCaptura.Avance(null, sinMoneda.idBorrador(), sinMoneda.version(),
+                respuestasConocidas(Map.of(moneda, "EUR")), null), PANTALLA, agenteA));
+
+        MotorDeCaptura.EstadoCaptura completo = captura.avanzar(new MotorDeCaptura.Avance(null, sinMoneda.idBorrador(), sinMoneda.version(),
+                respuestasConocidas(Map.of(moneda, "USD")), null), PANTALLA, agenteA);
+        assertTrue(completo.faltante().isEmpty());
+
+        MotorDeCaptura.Ejecucion ejecucion = captura.ejecutar(completo.idBorrador(), completo.version(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+        FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
+        assertTrue(ficha.encargos().isEmpty(), "La captura física no crea una condición pactada.");
+        var conservado = captura.consultar(completo.idBorrador(), agenteA);
+        assertEquals("250", conservado.conocido().get(importe));
+        assertEquals("USD", conservado.conocido().get(moneda));
+        assertFalse(ficha.atributos().stream().anyMatch(atributo -> "precio_estacionamiento_adicional".equals(atributo.clave())));
     }
 
     /**
@@ -1469,11 +1770,19 @@ class PropiedadUniversalIntegrationTest {
         Map<String, MotorDeCaptura.Pregunta> casa = porClave("CASA");
 
         assertTrue(departamento.containsKey("dormitorios"), "un departamento pide dormitorios");
-        assertTrue(departamento.get("dormitorios").obligatoria());
+        assertFalse(departamento.get("dormitorios").obligatoria(),
+                "La definición de captura no convierte los mínimos del Encargo en mínimos de guardado.");
+        MotorDeCaptura.Pregunta cuota = departamento.get("cuota_mantenimiento");
+        assertNotNull(cuota, "la cuota de mantenimiento sigue siendo una pregunta del catálogo");
+        assertEquals("IMPORTE", cuota.tipoDato());
+        assertEquals("IMPORTE", cuota.control(),
+                "el catálogo gobierna el par monto + moneda sin unidad global");
+        org.junit.jupiter.api.Assertions.assertNull(cuota.unidad(),
+                "la unidad no sustituye a la moneda del importe");
 
         assertFalse(terreno.containsKey("dormitorios"), "un terreno no tiene dormitorios");
         assertTrue(terreno.containsKey("zonificacion"), "y si tiene zonificacion");
-        assertTrue(terreno.get("zonificacion").obligatoria());
+        assertFalse(terreno.get("zonificacion").obligatoria(), "MAT-02 retira ALT del registro físico.");
 
         assertFalse(departamento.containsKey("rubro_permitido"),
                 "a una vivienda no se le pregunta el rubro comercial");
@@ -1490,6 +1799,23 @@ class PropiedadUniversalIntegrationTest {
         assertTrue(departamento.containsKey("piso"));
         assertFalse(terreno.containsKey(GuionRegistroPropiedad.EDIFICIO),
                 "ni en un edificio o galeria");
+    }
+
+    @Test
+    @DisplayName("el estacionamiento es propiedad fisica y recibe identidad registral del catalogo")
+    void estacionamientoEsPropiedadFisicaDelCatalogo() {
+        Map<String, MotorDeCaptura.Pregunta> estacionamiento = porClave("ESTACIONAMIENTO");
+
+        assertTrue(estacionamiento.containsKey("metraje_total"),
+                "el tipo fisico usa el minimo universal del catalogo");
+        assertTrue(estacionamiento.containsKey("partida_registral"),
+                "una cochera independiente puede declarar su propia partida");
+        assertTrue(estacionamiento.containsKey("oficina_registral"),
+                "la partida conserva su oficina registral");
+        assertTrue(estacionamiento.containsKey("estado_ocupacion"),
+                "la ocupacion es un hecho de la propiedad, tambien para una cochera");
+        assertFalse(estacionamiento.containsKey("dormitorios"),
+                "una cochera no recibe atributos propios de vivienda");
     }
 
     /**
@@ -1509,20 +1835,16 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el motor no publica dos preguntas con el mismo rotulo para un mismo tipo")
     void ningunDatoSePreguntaDosVeces() {
-        for (String tipo : List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO",
-                "ALMACEN", "OTRO")) {
-            MotorDeCaptura.DefinicionCaptura definicion = captura.definicion(
-                    MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA,ALQUILER", agenteA);
+        for (String tipo : AtributosGobernados.nombresDeTipos()) {
+            MotorDeCaptura.DefinicionCaptura definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA,ALQUILER", null, agenteA);
 
             // La ficha FISICA se pregunta una vez: es una sola propiedad.
             sinRotulosRepetidos(tipo + " (ficha fisica)",
                     java.util.stream.Stream.concat(definicion.comunes().stream(),
                             definicion.delTipo().stream()).toList());
 
-            // Y cada condicion economica por separado. Que «Moneda» aparezca en
-            // los dos bloques NO es una repeticion: son dos encargos, y cada uno
-            // tiene la suya. Comprobarlo sobre la lista entera diria justo lo
-            // contrario de lo que el modelo universal afirma.
+             // Cada condicion economica vive en su bloque. La moneda acompaña al
+             // importe compuesto y no se publica como un segundo campo.
             for (MotorDeCaptura.BloqueOperacion bloque : definicion.deLaOperacion()) {
                 sinRotulosRepetidos(tipo + " / " + bloque.operacion(), bloque.preguntas());
             }
@@ -1545,21 +1867,20 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el piso se pregunta una vez y aterriza en su unica autoridad")
     void elPisoTieneUnSoloDueno() {
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
                         GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
                         importeDe(OperacionInmobiliaria.ALQUILER), "2400",
                         monedaDe(OperacionInmobiliaria.ALQUILER), "USD",
-                        GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna),
+                        GuionRegistroPropiedad.INTERIOR, "701",
                         GuionRegistroPropiedad.DIRECCION, "Av. Larco 1200",
                         GuionRegistroPropiedad.DISTRITO, "Miraflores",
                         "metraje_total", "96",
                         "dormitorios", "3",
-                        "piso", "7"), PANTALLA, agenteA);
+                        "piso", "7")), null), PANTALLA, agenteA);
 
         MotorDeCaptura.Ejecucion alta =
-                captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA);
+                captura.ejecutar(borrador.idBorrador(), borrador.version(), java.util.UUID.randomUUID().toString(), PANTALLA, agenteA);
 
         assertEquals("7", jdbc.queryForObject("select piso from propiedad where id_propiedad = ?",
                 String.class, alta.idPropiedad()),
@@ -1581,22 +1902,21 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("un importe que no dice de que encargo es se rechaza, y el error ensena como")
     void elImporteDiceDeQueEncargoEs() {
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
-                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER"), PANTALLA, agenteA);
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
+                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER")), null), PANTALLA, agenteA);
 
         ReglaNegocioException suelto = assertThrows(ReglaNegocioException.class,
-                () -> captura.avanzar(null, borrador.idBorrador(),
-                        Map.of(GuionRegistroPropiedad.IMPORTE, "2900"), PANTALLA, agenteA));
+                () -> captura.avanzar(new MotorDeCaptura.Avance(null, borrador.idBorrador(), borrador.version(),
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.IMPORTE, "2900")), null), PANTALLA, agenteA));
         assertTrue(suelto.getMessage().contains("importe:ALQUILER"),
                 "el mensaje tiene que decir como se escribe: " + suelto.getMessage());
 
         // Y un importe de una operacion que no se declaro tampoco cuela: seria
         // un precio de venta guardado en una propiedad que solo se alquila.
         ReglaNegocioException ajeno = assertThrows(ReglaNegocioException.class,
-                () -> captura.avanzar(null, borrador.idBorrador(),
-                        Map.of(importeDe(OperacionInmobiliaria.VENTA), "180000"), PANTALLA, agenteA));
+                () -> captura.avanzar(new MotorDeCaptura.Avance(null, borrador.idBorrador(), borrador.version(),
+                respuestasConocidas(Map.of(importeDe(OperacionInmobiliaria.VENTA), "180000")), null), PANTALLA, agenteA));
         assertTrue(ajeno.getMessage().contains("VENTA"), ajeno.getMessage());
     }
 
@@ -1605,15 +1925,14 @@ class PropiedadUniversalIntegrationTest {
     void abandonarNoDejaPropiedad() {
         long propiedadesAntes = cuantasPropiedades(agenteA);
 
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
                         GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
                         importeDe(OperacionInmobiliaria.ALQUILER), "3500",
-                        monedaDe(OperacionInmobiliaria.ALQUILER), "PEN"), PANTALLA, agenteA);
+                        monedaDe(OperacionInmobiliaria.ALQUILER), "PEN")), null), PANTALLA, agenteA);
 
         MotorDeCaptura.EstadoCaptura descartado =
-                captura.descartar(borrador.idBorrador(), agenteA);
+                captura.descartar(borrador.idBorrador(), borrador.version(), PANTALLA, agenteA);
 
         assertEquals(BorradorCaptura.DESCARTADO, descartado.estado(),
                 "descartado, no borrado: que alguien lo empezara tambien es un hecho");
@@ -1621,15 +1940,14 @@ class PropiedadUniversalIntegrationTest {
         assertEquals(propiedadesAntes, cuantasPropiedades(agenteA),
                 "nada se escribe hasta confirmar");
         assertThrows(ReglaNegocioException.class,
-                () -> captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA));
+                () -> captura.ejecutar(borrador.idBorrador(), borrador.version(), java.util.UUID.randomUUID().toString(), PANTALLA, agenteA));
     }
 
     @Test
     @DisplayName("confirmar dos veces la misma captura devuelve la misma propiedad, no una segunda")
     void confirmarDosVecesNoDuplica() {
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "TERRENO",
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "TERRENO",
                         GuionRegistroPropiedad.OPERACIONES, "VENTA",
                         importeDe(OperacionInmobiliaria.VENTA), "95000",
                         monedaDe(OperacionInmobiliaria.VENTA), "USD",
@@ -1637,13 +1955,13 @@ class PropiedadUniversalIntegrationTest {
                         GuionRegistroPropiedad.DIRECCION, "Fundo Los Cipreses s/n",
                         GuionRegistroPropiedad.DISTRITO, "Pachacamac",
                         "metraje_total", "1200",
-                        "zonificacion", "RDM"), PANTALLA, agenteA);
+                        "zonificacion", "RDM")), null), PANTALLA, agenteA);
 
         String clave = UUID.randomUUID().toString();
         MotorDeCaptura.Ejecucion primera =
-                captura.ejecutar(borrador.idBorrador(), clave, PANTALLA, agenteA);
+                captura.ejecutar(borrador.idBorrador(), borrador.version(), clave, PANTALLA, agenteA);
         MotorDeCaptura.Ejecucion segunda =
-                captura.ejecutar(borrador.idBorrador(), clave, PANTALLA, agenteA);
+                captura.ejecutar(borrador.idBorrador(), borrador.version(), clave, PANTALLA, agenteA);
 
         assertEquals(primera.idPropiedad(), segunda.idPropiedad());
         assertEquals(primera.codigoPropiedad(), segunda.codigoPropiedad());
@@ -1663,19 +1981,18 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("el codigo de la propiedad lo pone BROX cuando el alta no lo trae")
     void elCodigoLoPoneBrox() {
-        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
-                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "ALMACEN",
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(new MotorDeCaptura.Avance(MotorDeCaptura.REGISTRAR_PROPIEDAD, null, null,
+                respuestasConocidas(Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "ALMACEN",
                         GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
                         importeDe(OperacionInmobiliaria.ALQUILER), "4200",
                         monedaDe(OperacionInmobiliaria.ALQUILER), "PEN",
                         GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna),
                         GuionRegistroPropiedad.DIRECCION, "Av. Argentina 2100",
                         GuionRegistroPropiedad.DISTRITO, "Callao",
-                        "metraje_total", "800"), PANTALLA, agenteA);
+                        "metraje_total", "800")), null), PANTALLA, agenteA);
 
         MotorDeCaptura.Ejecucion alta =
-                captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA);
+                captura.ejecutar(borrador.idBorrador(), borrador.version(), java.util.UUID.randomUUID().toString(), PANTALLA, agenteA);
 
         assertNotNull(alta.codigoPropiedad());
         assertFalse(alta.codigoPropiedad().isBlank());
@@ -1708,7 +2025,7 @@ class PropiedadUniversalIntegrationTest {
 
         long lasDos = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null, "OFICINA",
                 null, null,
-                new Ubicacion("Av. Canaval 350", "San Isidro", null, null, null, null, null, null, null),
+                new Ubicacion("Av. Canaval 350", "San Isidro", null, null, null, "501", null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
                 List.of(new ValorAtributo("metraje_total", "210")),
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("540000"), "USD",
@@ -1813,11 +2130,10 @@ class PropiedadUniversalIntegrationTest {
         return GuionRegistroPropiedad.para(GuionRegistroPropiedad.MONEDA, operacion);
     }
 
-    private static EncargoFicha encargoDe(FichaPropiedadUniversal ficha, String operacion) {
-        return ficha.encargos().stream()
-                .filter(encargo -> operacion.equals(encargo.operacion()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("no hay encargo de " + operacion));
+    private static Map<String, MotorDeCaptura.Respuesta> respuestasConocidas(Map<String, String> datos) {
+        Map<String, MotorDeCaptura.Respuesta> respuestas = new LinkedHashMap<>();
+        datos.forEach((clave, valor) -> respuestas.put(clave, MotorDeCaptura.Respuesta.conocida(valor)));
+        return respuestas;
     }
 
     private static MotorDeCaptura.Pregunta preguntaDe(MotorDeCaptura.BloqueOperacion bloque,
@@ -1832,7 +2148,7 @@ class PropiedadUniversalIntegrationTest {
     /** Todo lo que el motor publica para un tipo, por clave. La operacion no altera esto. */
     private Map<String, MotorDeCaptura.Pregunta> porClave(String tipo) {
         Map<String, MotorDeCaptura.Pregunta> preguntas = new LinkedHashMap<>();
-        captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "ALQUILER", agenteA)
+        captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "ALQUILER", null, agenteA)
                 .todas().forEach(pregunta -> preguntas.put(pregunta.clave(), pregunta));
         return preguntas;
     }
@@ -1847,22 +2163,64 @@ class PropiedadUniversalIntegrationTest {
     // Utilidades del fixture
     // ==================================================================
 
+    /** Edición parcial de condiciones por su dueño canónico; conserva los demás campos. */
+    private static EncargoService.Condiciones precioPedido(BigDecimal importe, String moneda) {
+        return new EncargoService.Condiciones(importe, moneda, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,null);
+    }
+
+    /** Uso expresamente declarado sólo por los escenarios que preparan un Encargo suficiente. */
+    private static ComandoRegistro conUso(ComandoRegistro base, String uso) {
+        return new ComandoRegistro(base.claveIdempotencia(), base.procedencia(), base.codigo(),
+                base.tipoPropiedad(), uso, base.descripcion(), base.ubicacion(), base.titulares(),
+                base.atributos(), base.operaciones(), base.idBorrador(), base.origen());
+    }
+
+    /** Montaje de historia/publicación: el U nace de la revisión real, nunca del alta del borrador. */
+    private void prepararYHabilitar(long idPropiedad) {
+        FichaPropiedadUniversal fisico = propiedades.consultar(idPropiedad, agenteA);
+        assertNotNull(fisico.uso(), "El positivo declara el uso antes de preparar el físico.");
+        switch (fisico.tipoPropiedad()) {
+            case "DEPARTAMENTO" -> preparacionPublicacion.prepararDepartamento(idPropiedad, agenteA);
+            case "LOCAL" -> preparacionPublicacion.prepararLocal(idPropiedad, agenteA,
+                    List.of(new ValorAtributo("rubro_permitido", "Comercio minorista TEST"),
+                            new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE")));
+            case "OFICINA" -> {
+                var contexto = new SuficienciaInmueble.Contexto("OFICINA", "COMERCIAL", "Oficina TEST 501", null,
+                        Map.of(SuficienciaInmueble.UNIDAD_DE_EDIFICIO, SuficienciaInmueble.Aplicabilidad.APLICA,
+                                SuficienciaInmueble.MANTENIMIENTO, SuficienciaInmueble.Aplicabilidad.NO_APLICA,
+                                SuficienciaInmueble.POTENCIAL_O_CAMBIO_USO, SuficienciaInmueble.Aplicabilidad.NO_APLICA), Set.of());
+                var area = new ValorAtributo("metraje_total", "160", null, null, "DECLARADO", null,
+                        java.time.LocalDate.now(java.time.ZoneId.of("America/Lima")), "AREA-OFICINA-FICTICIA-TEST",
+                        new MetadatosDeCaptura(SuficienciaInmueble.EstadoDato.CONOCIDO,
+                                SuficienciaInmueble.AREA_TOTAL, null, null, false));
+                propiedades.editar(idPropiedad, new ComandoEdicion(UUID.randomUUID().toString(), PANTALLA,
+                        null, null, null, List.of(area, new ValorAtributo("piso", "5"),
+                        new ValorAtributo("ascensores", "1"), noAplicaDeLaOficina(SuficienciaInmueble.MANTENIMIENTO),
+                        noAplicaDeLaOficina(SuficienciaInmueble.POTENCIAL_O_CAMBIO_USO)), null, null, null,
+                        contexto).conVersion(fisico.versionFisica()), agenteA);
+            }
+            default -> throw new AssertionError("El montaje no declara un caso para " + fisico.tipoPropiedad());
+        }
+        for (EncargoFicha encargo : propiedades.consultar(idPropiedad, agenteA).encargos()) {
+            assertEquals("EN_PREPARACION", ciclo.consultar(encargo.idEncargo(), agenteA).estado());
+            assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_captacion=? and hito='U'",
+                    Integer.class, encargo.idEncargo()));
+            preparacionPublicacion.habilitar(encargo.idEncargo(), agenteA);
+            ciclo.exigirHabilitado(encargo.idEncargo(), agenteA);
+        }
+    }
+
+    private static ValorAtributo noAplicaDeLaOficina(String coordenada) {
+        return new ValorAtributo("contexto." + coordenada, null, null, null, "DECLARADO", null,
+                java.time.LocalDate.now(java.time.ZoneId.of("America/Lima")), "NO-APLICA-DECLARADO-OFICINA-TEST",
+                new MetadatosDeCaptura(SuficienciaInmueble.EstadoDato.NO_APLICABLE, null, null, null, false));
+    }
+
     /**
-     * <b>`tipo_acceso` se anade solo cuando el tipo es LOCAL</b> (V81).
-     *
-     * <p>Desde V81 es `ALT` en `L`, y en este proyecto `ALT` significa
-     * <b>obligatorio en el ALTA</b>: `exigirObligatorios` corta el registro, no
-     * solo la publicacion. Sin esto, treinta casos de esta clase y de
-     * {@code PropiedadSinEncargoIntegrationTest} fallaban con "Faltan atributos
-     * obligatorios de LOCAL: tipo_acceso" antes de llegar a lo que probaban.
-     *
-     * <p>Se registra el dato, que es lo que haria un agente que ha estado en el
-     * local. Lo que NO se hace es bajar la exigencia a OPC ni cambiar el tipo a
-     * OFICINA para esquivarla: lo primero relaja la regla que decidio el
-     * titular, lo segundo cambia lo que el caso dice probar.
-     *
-     * <p>Solo se anade si el caso no lo trae ya, para que un test que quiera
-     * ejercitar la ausencia pueda seguir haciendolo pasando su propia lista.
+     * Datos TEST conocidos del caso ordinario: local con acceso a pie de calle;
+     * departamento/oficina con unidad501. El uso sigue desconocido cuando no
+     * se declara. Estos datos no añaden mínimos al registro físico (CAT18).
      */
     private ComandoRegistro comando(String tipo, String operacion, BigDecimal importe, String moneda,
                                     List<Titular> titulares, List<ValorAtributo> atributos) {
@@ -1873,7 +2231,8 @@ class PropiedadUniversalIntegrationTest {
             atributos = List.copyOf(conAcceso);
         }
         return new ComandoRegistro(null, PANTALLA, null, tipo, null, null,
-                new Ubicacion("Av. de prueba 123", "Miraflores", null, null, null, null, null, null, null),
+                new Ubicacion("Av. de prueba 123", "Miraflores", null, null, null,
+                        Set.of("DEPARTAMENTO", "OFICINA").contains(tipo) ? "501" : null, null, null, null),
                 titulares, atributos,
                 List.of(new OperacionSolicitada(operacion, importe, moneda,
                         null, null, null, null, null, null, null)),
@@ -1975,52 +2334,10 @@ class PropiedadUniversalIntegrationTest {
     // ------------------------------------------------------------------
 
     private long tenant(String codigo) {
-        List<Map<String, Object>> filas = jdbc.queryForList(
-                "select id_organizacion from organizacion where codigo = ?", codigo);
-        if (!filas.isEmpty()) {
-            return ((Number) filas.get(0).get("id_organizacion")).longValue();
-        }
         return jdbc.queryForObject("""
-                insert into organizacion (codigo, nombre, estado) values (?, ?, 'A')
+                insert into organizacion (codigo, nombre, modalidad, estado) values (?, ?, 'INDIVIDUAL', 'A')
                 returning id_organizacion
-                """, Long.class, codigo, "Tenant de pruebas " + codigo);
-    }
-
-    /**
-     * Borra lo que la corrida anterior dejo, en orden de dependencia. <b>Se
-     * limpia ANTES y no despues</b>: si una corrida murio a mitad —que es
-     * justo cuando esto importa— su limpieza final nunca llego a ejecutarse.
-     *
-     * <p>Solo toca los dos tenants de prueba. El de desarrollo no se roza.
-     */
-    private void limpiar(long idOrganizacion) {
-        jdbc.update("delete from evento_dominio where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from comando_idempotente where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from borrador_captura where organizacion_id = ?", idOrganizacion);
-        // Antes que captacion y que propiedad: desde V70 la publicacion
-        // referencia las dos, y el borrado en orden equivocado choca contra el FK.
-        jdbc.update("delete from publicacion where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from precio_propiedad where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from atributo_propiedad where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from titularidad_propiedad where organizacion_id = ?", idOrganizacion);
-        // Antes que propiedad: desde V88 TODA alta escribe su fila de
-        // responsable, asi que la FK compuesta bloquea el borrado. La FK esta
-        // bien y hace su trabajo -- en produccion una propiedad NUNCA se borra,
-        // se desactiva (estado I); el DELETE duro solo existe en esta limpieza.
-        jdbc.update("delete from asignacion_responsable_propiedad where organizacion_id = ?",
-                idOrganizacion);
-        jdbc.update("""
-                delete from historial_estado where organizacion_id = ?
-                """, idOrganizacion);
-        // La condicion economica cuelga de la captacion por FK: primero se
-        // sueltan las referencias, luego se borran las dos.
-        jdbc.update("update captacion set id_condicion_economica = null where organizacion_id = ?",
-                idOrganizacion);
-        jdbc.update("delete from captacion where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from condicion_economica_captacion where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from prospeccion where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from propiedad where organizacion_id = ?", idOrganizacion);
-        jdbc.update("delete from catalogo_atributo where organizacion_id = ?", idOrganizacion);
+                """, Long.class, codigo, "TEST Propiedad universal " + codigo);
     }
 
     /** Persona + rol; devuelve el id de PERSONA. */
@@ -2033,12 +2350,10 @@ class PropiedadUniversalIntegrationTest {
             return ((Number) filas.get(0).get("id_persona")).longValue();
         }
         return jdbc.queryForObject("""
-                insert into persona (organizacion_id, tipo_persona, tipo_documento, numero_documento,
-                                     nombres_o_razon_social, correo, estado)
-                values (?, 'N', 'D', ?, ?, ?, 'A')
+                insert into persona (organizacion_id, nombres_o_razon_social, correo, estado)
+                values (?, ?, ?, 'A')
                 returning id_persona
-                """, Long.class, idOrganizacion, "99" + idOrganizacion + sufijo.hashCode() % 100000,
-                "Persona " + sufijo, sufijo + "-" + idOrganizacion + "@e2e.test");
+                """, Long.class, idOrganizacion, "Persona TEST " + sufijo, sufijo + "-" + idOrganizacion + "@e2e.test");
     }
 
     /**
@@ -2070,7 +2385,7 @@ class PropiedadUniversalIntegrationTest {
         Long idRol = soloRol.isEmpty()
                 ? jdbc.queryForObject("""
                         insert into persona_rol (organizacion_id, id_persona, tipo_rol, vigencia_desde)
-                        values (?, ?, 'AGENTE', current_date)
+                        values (?, ?, 'AGENTE', (clock_timestamp() at time zone 'America/Lima')::date)
                         returning id_persona_rol
                         """, Long.class, idOrganizacion, idPersona)
                 : ((Number) soloRol.get(0).get("id_persona_rol")).longValue();
@@ -2081,7 +2396,7 @@ class PropiedadUniversalIntegrationTest {
         jdbc.update("""
                 insert into detalle_agente (id_persona_rol, organizacion_id, codigo_agente,
                                             fecha_ingreso, estado_operativo)
-                values (?, ?, ?, current_date, 'D')
+                values (?, ?, ?, (clock_timestamp() at time zone 'America/Lima')::date, 'D')
                 """, idRol, idOrganizacion, "AG-" + idRol);
         return idRol;
     }
@@ -2111,7 +2426,7 @@ class PropiedadUniversalIntegrationTest {
                 : ((Number) personas.get(0).get("id_persona")).longValue();
         return jdbc.queryForObject("""
                 insert into persona_rol (organizacion_id, id_persona, tipo_rol, vigencia_desde)
-                values (?, ?, 'PROPIETARIO', current_date)
+                values (?, ?, 'PROPIETARIO', (clock_timestamp() at time zone 'America/Lima')::date)
                 returning id_persona_rol
                 """, Long.class, idOrganizacion, idPersona);
     }

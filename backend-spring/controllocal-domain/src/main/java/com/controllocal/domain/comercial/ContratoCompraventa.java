@@ -60,7 +60,7 @@ public class ContratoCompraventa extends EntidadDeOrganizacion {
     private Long idPropiedad;
 
     /** La oferta ACEPTADA que se firma. Una oferta se firma una sola vez. */
-    @Column(name = "id_oferta", nullable = false)
+    @Column(name = "id_oferta")
     private Long idOferta;
 
     /**
@@ -69,7 +69,7 @@ public class ContratoCompraventa extends EntidadDeOrganizacion {
      * congelo la atribucion del alquiler: un cierre es un hecho consumado y su
      * atribucion no debe seguir cambiando detras.
      */
-    @Column(name = "id_rol_cliente", nullable = false)
+    @Column(name = "id_rol_cliente")
     private Long idRolCliente;
 
     @Column(name = "id_rol_agente_cierre", nullable = false)

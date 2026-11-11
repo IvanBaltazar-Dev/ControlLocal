@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from './auth.service';
-import { moduloDeRuta, puedeEntrar } from './acceso';
+import { MODULOS, moduloDeRuta, puedeEntrar } from './acceso';
 import { RolSesion } from './sesion.model';
 
 /**
@@ -12,14 +12,14 @@ import { RolSesion } from './sesion.model';
  * <b>No sustituye a la autorización</b>, que la impone el backend en cada
  * request (RC-001); esto solo evita el viaje y el 403 en pantalla.
  *
- * Se aplica por ruta y lee su `path` de la propia configuración, de modo que
- * añadir una pantalla es añadir su fila en `MODULOS` y nada más.
+ * Las acciones con `data.roles` explícito conservan su entrada propia.
+ * Gobierno sólo hereda la navegación de un módulo de gobierno autorizado.
  */
 export const rolGuard: CanActivateFn = (ruta, estado) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  if (!auth.autenticado()) {
+  if (!auth.autenticado() || auth.sesion()?.contextoRequerido !== false || auth.sesion()?.rol === 'IDENTIDAD') {
     return router.createUrlTree(['/login']);
   }
 
@@ -33,8 +33,28 @@ export const rolGuard: CanActivateFn = (ruta, estado) => {
 
   // `estado.url` trae la ruta completa resuelta (con la barra inicial y, si
   // los hubiera, los query params): se limpia para casar con `MODULOS`.
-  const modulo = moduloDeRuta(estado.url.split('?')[0]);
+  const camino = estado.url.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
+  if (rol === 'TENANT_ADMIN') {
+    // El tablero inicial consume información comercial; gobierno entra a su
+    // superficie existente antes de crear el componente o pedir esos datos.
+    if (!camino) {
+      return router.createUrlTree(['/seguridad']);
+    }
+    if (rolesRuta?.includes(rol)) {
+      return true;
+    }
+  }
+
+  const modulo = moduloDeRuta(camino);
   if (!modulo) {
+    if (rol === 'TENANT_ADMIN') {
+      const padre = MODULOS
+        .filter((m) => !!m.ruta && camino.startsWith(`${m.ruta}/`))
+        .sort((a, b) => b.ruta.length - a.ruta.length)[0];
+      return padre && puedeEntrar(padre, rol)
+        ? true
+        : router.createUrlTree(['/acceso-denegado']);
+    }
     return true; // sin data explícita: la autorización definitiva sigue en el backend
   }
 

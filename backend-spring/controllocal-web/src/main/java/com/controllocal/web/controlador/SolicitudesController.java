@@ -1,10 +1,12 @@
 package com.controllocal.web.controlador;
 
 import com.controllocal.service.DocumentoSolicitudService;
+import com.controllocal.service.Actor;
 import com.controllocal.service.EvaluacionService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.SolicitudService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.web.almacen.AlmacenDocumentos;
 import com.controllocal.web.almacen.AlmacenException;
 import com.controllocal.web.almacen.NombresArchivo;
@@ -17,6 +19,12 @@ import com.controllocal.web.dto.SolicitudResponse;
 import com.controllocal.web.http.ErrorAlmacenException;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.seguridad.SesionActual;
+import com.controllocal.web.seguridad.RevalidacionDeSesion;
+import com.controllocal.web.seguridad.ContextoDeActuacion;
+import com.controllocal.web.almacen.CuotaArchivosB0;
+import com.controllocal.web.almacen.SalidaBinariaPersistente;
+import com.controllocal.service.planes.ClasificadorArchivosExistentesB0;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -63,14 +71,17 @@ public class SolicitudesController {
     private final SolicitudService solicitudes;
     private final DocumentoSolicitudService documentos;
     private final EvaluacionService evaluaciones;
-    private final AlmacenDocumentos almacen;
+    private final RevalidacionDeSesion sesiones;
+    private final SalidaBinariaPersistente salidas;private final CuotaArchivosB0 cuota;private final ClasificadorArchivosExistentesB0 clasificador;
 
     public SolicitudesController(SolicitudService solicitudes, DocumentoSolicitudService documentos,
-                                 EvaluacionService evaluaciones, AlmacenDocumentos almacen) {
+                                 EvaluacionService evaluaciones,RevalidacionDeSesion sesiones,SalidaBinariaPersistente salidas,
+                                 CuotaArchivosB0 cuota,ClasificadorArchivosExistentesB0 clasificador) {
         this.solicitudes = solicitudes;
         this.documentos = documentos;
         this.evaluaciones = evaluaciones;
-        this.almacen = almacen;
+        this.sesiones = sesiones;
+        this.salidas=salidas;this.cuota=cuota;this.clasificador=clasificador;
     }
 
     /**
@@ -150,7 +161,7 @@ public class SolicitudesController {
 
     // =========================================================
     // Expediente documental. El binario va al almacen y se sirve
-    // por GET /documentos/contenido?clave= (URL tipo capability).
+    // por referencia Core y lectura contextual revalidada; la clave del proveedor es privada.
     // =========================================================
 
     @GetMapping("{id}/documentos")
@@ -174,12 +185,14 @@ public class SolicitudesController {
     /** Alta con el binario crudo en el cuerpo; tipo y nombre van como query params. */
     @PostMapping(value = "{id}/documentos/archivo", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     @PreAuthorize("hasRole('AGENTE')")
+    @Transactional
     public ResponseEntity<DocumentoSolicitudResponse> subirDocumento(
             @PathVariable long id,
             @RequestParam(required = false) String tipoDocumento,
             @RequestParam(required = false) String nombreArchivo,
             @RequestBody(required = false) byte[] cuerpo) {
-        SolicitudService.FichaSolicitud solicitud = solicitudes.obtener(id, SesionActual.actor());
+        var actor = sesiones.exigirVigente();
+        SolicitudService.FichaSolicitud solicitud = solicitudes.obtener(id, actor);
         if (enBlanco(tipoDocumento)) {
             throw new ReglaNegocioException("El tipo de documento es obligatorio.");
         }
@@ -190,7 +203,7 @@ public class SolicitudesController {
         if (cuerpo == null) {
             throw new ReglaNegocioException("No se recibio ningun archivo.");
         }
-        return guardarYRegistrar(id, solicitud, tipoDocumento, nombreArchivo, null, cuerpo);
+        return guardarYRegistrar(id, solicitud, tipoDocumento, nombreArchivo, null, cuerpo, actor);
     }
 
     /** Revision individual: Conforme valida, Observado exige el porque. */
@@ -217,55 +230,23 @@ public class SolicitudesController {
 
     // ------------------------------------------------------------------
 
-    /**
-     * Guarda el binario en el almacen y registra el metadato. Compartido por
-     * las tres vias de subida.
-     *
-     * <p>Un apunte de ORDEN: la v1 validaba el codigo del tipo en el REST,
-     * antes de escribir en el almacen. En la v2 el vocabulario vive en el
-     * service (la web no ve el dominio — regla de capas), asi que el tipo se
-     * valida al registrar y, si falla, se BORRA el binario recien subido. El
-     * cable es el mismo (400 con el mismo mensaje) y no quedan huerfanos; es
-     * el patron que ya usan las fotos de F2.
-     */
+    /** Preflight Core, cuota e I/O durable; registro y confirmación comparten su transacción. */
     private ResponseEntity<DocumentoSolicitudResponse> guardarYRegistrar(
             long id, SolicitudService.FichaSolicitud solicitud, String tipoDocumento,
-            String nombreArchivo, String observaciones, byte[] contenido) {
+            String nombreArchivo, String observaciones, byte[] contenido, Actor actor) {
         if (contenido.length == 0) {
             throw new ReglaNegocioException("El archivo esta vacio.");
         }
         if (contenido.length > TAMANO_MAXIMO) {
             throw new ReglaNegocioException(maximoSuperado());
         }
-        AlmacenDocumentos.ArchivoGuardado guardado;
-        try {
-            guardado = almacen.guardar(carpetaDe(id, solicitud), nombreArchivo, contenido,
-                    NombresArchivo.contentType(nombreArchivo));
-        } catch (AlmacenException error) {
-            throw new ErrorAlmacenException(
-                    "No se pudo guardar el documento en el almacen: " + error.getMessage());
-        }
-        try {
-            return creado(documentos.registrar(id, new DocumentoSolicitudService.DatosDocumento(
-                    tipoDocumento, guardado.nombre(), guardado.clave(), observaciones),
-                    SesionActual.actor()));
-        } catch (RuntimeException error) {
-            almacen.eliminar(guardado.clave());
-            throw error;
-        }
-    }
-
-    /** La carpeta del expediente es el codigo de la solicitud, o SOL-{id} si no lo tuviera. */
-    /**
-     * Carpeta del expediente, ya prefijada por organizacion. El prefijo es la
-     * preparacion para S3 (un prefijo por tenant en un bucket privado); en
-     * disco es simplemente un subdirectorio mas.
-     */
-    private static String carpetaDe(long id, SolicitudService.FichaSolicitud solicitud) {
-        String codigo = solicitud.codigoSolicitud();
-        String expediente = enBlanco(codigo) ? "SOL-" + id : codigo;
-        return AlmacenDocumentos.carpetaDeTenant(
-                SesionActual.actor().idOrganizacion(), expediente);
+        var sid=ContextoDeActuacion.de(SesionActual.sesion());
+        var c=new CuotaArchivosB0.Contexto(clasificador.preparar(ClasificadorArchivosExistentesB0.SOLICITUD,Long.toString(id),"TIPO:"+tipoDocumento,actor,sid),actor,sid);
+        var guardado=salidas.guardar(new com.controllocal.service.archivo.PropietarioBinario.Organizacion(actor.idOrganizacion()),java.util.UUID.randomUUID(),"DOCUMENTO-SOLICITUD:"+id+":"+tipoDocumento,
+                NombresArchivo.extension(nombreArchivo).substring(1),NombresArchivo.contentType(nombreArchivo),contenido,cuota.admision(c));
+        if(!actor.equals(sesiones.exigirVigente()))throw new AccesoNoAutorizadoException();
+        var registrado=documentos.registrar(id,new DocumentoSolicitudService.DatosDocumento(tipoDocumento,nombreArchivo,guardado.clave(),observaciones),actor);
+        cuota.confirmar(c,guardado);return creado(registrado);
     }
 
     private static void exigirExtensionPermitida(String nombreArchivo) {

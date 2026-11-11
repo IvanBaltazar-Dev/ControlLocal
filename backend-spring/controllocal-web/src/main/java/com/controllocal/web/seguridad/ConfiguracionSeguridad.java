@@ -52,6 +52,10 @@ public class ConfiguracionSeguridad {
                 .sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/salud", "/auth/login").permitAll()
+                        // CAT-E41 / UC-K-16: protocolo determinista y creación
+                        // acotada antes de conocer al actor. Completar/consumir
+                        // siguen autenticados; no se abre /acceso/**.
+                        .requestMatchers("/acceso/protocolo", "/acceso/flujos").permitAll()
                         // Recuperacion de acceso (§4.3): quien la usa NO tiene
                         // sesion — es exactamente lo que viene a recuperar.
                         // Las dos consumen cupo del bloqueo por IP: un endpoint
@@ -63,6 +67,8 @@ public class ConfiguracionSeguridad {
                         // PRE-sesion por definicion. El desafio no autoriza
                         // nada por si mismo y consume el mismo cupo por IP.
                         .requestMatchers("/auth/mfa/desafio", "/auth/mfa/verificar").permitAll()
+                        // Alta y correo personal: enlace seguro de un uso; sin sesión automática ni datos de cuenta.
+                        .requestMatchers("/auth/alta", "/auth/alta/confirmar", "/auth/correo/confirmar").permitAll()
                         // Aviso de privacidad (D-27): el titular debe poder
                         // leerlo SIN cuenta. Sin parametros, sin datos
                         // personales y misma respuesta para todos.
@@ -117,7 +123,7 @@ public class ConfiguracionSeguridad {
         response.setStatus(estado);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write(json.writeValueAsString(new ErrorResponse(mensaje)));
+        response.getWriter().write(json.writeValueAsString(ErrorResponse.deEstado(estado, mensaje)));
     }
 
     /** CORS para el SPA Angular en desarrollo (configurable por propiedad). */
@@ -137,14 +143,8 @@ public class ConfiguracionSeguridad {
         //
         // `CabecerasDelSpaPermitidasTest` lo vigila: si el SPA empieza a mandar
         // otra, el build lo dice antes que un usuario.
-        //
-        // `X-Elevacion` (D-S0-34) estaba en la misma situacion y es peor: la
-        // revocacion del factor ajeno es una recuperacion de gobierno, y desde
-        // el navegador nunca llego a ejecutarse. Permitirla NO relaja nada --el
-        // token de elevacion lo sigue validando el servidor--: lo que hacia
-        // omitirla era impedir que un flujo autorizado funcionara.
         config.setAllowedHeaders(List.of(
-                "Authorization", "Content-Type", "Idempotency-Key", "X-Elevacion"));
+                "Authorization", "Content-Type", "Idempotency-Key"));
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

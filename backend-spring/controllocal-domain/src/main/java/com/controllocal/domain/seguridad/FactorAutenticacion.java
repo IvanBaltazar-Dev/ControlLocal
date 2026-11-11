@@ -1,6 +1,6 @@
 package com.controllocal.domain.seguridad;
 
-import com.controllocal.domain.comun.EntidadDeOrganizacion;
+
 import com.controllocal.domain.comun.EstadosDominio.Codigos;
 import com.controllocal.domain.comun.EstadosDominio.EstadoFactorAutenticacion;
 import jakarta.persistence.Column;
@@ -14,7 +14,7 @@ import jakarta.persistence.Transient;
 import java.time.OffsetDateTime;
 
 /**
- * Segundo factor de una credencial (Bloque 6, V37).
+ * Segundo factor de la cuenta personal global (D-S0/V37 y cierre C1).
  *
  * <p>El secreto se guarda <b>cifrado y reversible</b>, no hasheado: un TOTP hay
  * que poder recalcularlo. Esa es la diferencia con una contrasena, y por eso la
@@ -27,7 +27,7 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "factor_autenticacion")
-public class FactorAutenticacion extends EntidadDeOrganizacion {
+public class FactorAutenticacion {
 
     public static final String TIPO_TOTP = "TOTP";
 
@@ -43,8 +43,8 @@ public class FactorAutenticacion extends EntidadDeOrganizacion {
     @Column(name = "id_factor")
     private Long id;
 
-    @Column(name = "id_credencial", nullable = false)
-    private Long idCredencial;
+    @Column(name = "id_cuenta_acceso", nullable = false)
+    private Long idCuenta;
 
     @Column(name = "tipo", nullable = false, length = 10)
     private String tipo = TIPO_TOTP;
@@ -102,12 +102,12 @@ public class FactorAutenticacion extends EntidadDeOrganizacion {
         return id;
     }
 
-    public Long getIdCredencial() {
-        return idCredencial;
+    public Long getIdCuenta() {
+        return idCuenta;
     }
 
-    public void setIdCredencial(Long idCredencial) {
-        this.idCredencial = idCredencial;
+    public void setIdCuenta(Long idCuenta) {
+        this.idCuenta = idCuenta;
     }
 
     public String getTipo() {

@@ -1,5 +1,5 @@
 package com.controllocal.web.dto;
 
-/** Contrato congelado: identico a Dtos.LoginRequest del backend Jakarta. */
-public record LoginRequest(String usuario, String contrasena) {
+/** Acceso por correo propio verificado; no acepta tenant, rol ni alias alternativo. */
+public record LoginRequest(String correo, String contrasena) {
 }

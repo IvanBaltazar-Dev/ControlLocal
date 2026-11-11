@@ -35,7 +35,7 @@
           <div><span>Operación</span><strong>Alquiler comercial</strong></div>
           <div><span>Urgencia</span><strong>{{ c.urgencia ? c.urgencia + ' / 5' : '—' }}</strong></div>
           <div><span>Exclusividad</span><strong>{{ exclusivo(c.exclusividad) }}</strong></div>
-          <div><span>Renta referencial</span><strong>{{ precio(local()?.precioReferencial, local()?.monedaReferencial) }}</strong></div>
+          <div><span>Importe del encargo</span><strong>{{ precio(c.importeReferencia, c.monedaReferencia) }}</strong></div>
           <div><span>Comisión calculada</span><strong>{{ importeComision() }}</strong></div>
           <div><span>Tratamiento del IGV</span><strong>{{ c.tratamientoIgv === 'I' ? 'Incluido' : c.tratamientoIgv === 'A' ? 'Adicional' : 'No aplica' }}</strong></div>
         </div>
@@ -46,7 +46,7 @@
       <section class="cl-tarjeta">
         <header><div><h2>Origen de la gestión</h2><p>Local y prospección que sustentan el expediente.</p></div></header>
         <div class="origenes">
-          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verLocal()"><strong>Datos del local</strong><span>{{ valor(local()?.codigoLocal) }} · {{ valor(local()?.direccion) }}</span></button>
+          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verPropiedad()"><strong>Datos de la propiedad</strong><span>{{ valor(propiedad()?.codigo) }} · {{ valor(propiedad()?.ubicacion?.direccion) }}</span></button>
           <button type="button" class="origen" [disabled]="!prospeccion()" (click)="verProspeccion()"><strong>Seguimiento de prospección</strong><span>{{ valor(prospeccion()?.codigoProspeccion) }} · {{ resultadoPropuesta(prospeccion()?.resultadoPropuesta) }}</span></button>
         </div>
       </section>

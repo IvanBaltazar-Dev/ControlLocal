@@ -188,16 +188,14 @@ class ContrasteTest {
     }
 
     @Test
-    @DisplayName("las tres medias degradan por separado")
+    @DisplayName("las medias vigentes degradan por separado")
     void cadaMediaDegradaPorSuCuenta() {
         MediasPropias medias = new MediasPropias(
                 MediasPropias.proporcion(0, 0, "solicitudes", "visitas realizadas"),
-                MediasPropias.magnitud(BigDecimal.valueOf(9), 20, "dias", "contratos firmados"),
-                MediasPropias.proporcion(0, 0, "contactos", "recontactos registrados"));
+                MediasPropias.magnitud(BigDecimal.valueOf(9), 20, "dias", "contratos firmados"));
 
         assertFalse(medias.propuestasPorVisita().concluye());
         assertTrue(medias.diasHastaContrato().concluye(),
-                "Que falten las otras dos no invalida esta.");
-        assertFalse(medias.plazoRealDeRecontacto().concluye());
+                "Que falte la otra no invalida esta.");
     }
 }

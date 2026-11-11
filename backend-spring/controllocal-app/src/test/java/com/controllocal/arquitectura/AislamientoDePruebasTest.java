@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AislamientoDePruebasTest {
 
     private static final Path RAIZ =
-            Path.of("src", "test", "java", "com", "controllocal", "integracion");
+            Path.of("src", "test", "java", "com", "controllocal");
 
     // ------------------------------------------------------------------
     // Que nadie rodee la guarda

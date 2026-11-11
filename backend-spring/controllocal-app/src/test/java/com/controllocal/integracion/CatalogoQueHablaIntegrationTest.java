@@ -3,9 +3,16 @@ package com.controllocal.integracion;
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.inmueble.Publicacion;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba;
+import com.controllocal.integracion.soporte.SesionesComercialesDePrueba;
+import com.controllocal.persistence.repositorio.FactorAutenticacionRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.CuentaService;
+import com.controllocal.service.GobiernoCatalogoCapturaService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.AtributoQueFalta;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
@@ -18,8 +25,11 @@ import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.captura.MotorDeCaptura;
+import com.controllocal.service.encargo.EncargoService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.EscritorEstructural;
+import com.controllocal.service.soporte.CifradoSecretos;
+import com.controllocal.service.soporte.Procedencia;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -28,6 +38,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -66,8 +77,13 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class CatalogoQueHablaIntegrationTest {
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.archivo.AccesoArchivoService archivosFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.web.almacen.AlmacenDocumentos almacenFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.actuacion.ActuacionesService actuacionesFirmaTest;
+    @org.springframework.beans.factory.annotation.Autowired com.controllocal.service.soporte.Documentos documentosFirmaTest;
+
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -75,10 +91,28 @@ class CatalogoQueHablaIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void prepararPertenenciaTecnicaDePrueba(){
+        com.controllocal.integracion.soporte.SemillaDeIdentidadPruebas.aplicar(jdbc);
+        preparacionPublicacion = new PreparacionPublicacionDePrueba(jdbc, propiedades, encargos,
+                catalogos, contextos, cuentas, factores, cifrado, gestor, archivosFirmaTest, almacenFirmaTest, actuacionesFirmaTest, documentosFirmaTest);
+        sesiones = new SesionesComercialesDePrueba(jdbc, contextos, cuentas, factores, cifrado);
+    }
+
     @Autowired PropiedadUniversalService propiedades;
     @Autowired MotorDeCaptura captura;
     @Autowired PublicacionService publicaciones;
+    @Autowired EncargoService encargos;
+    @Autowired GobiernoCatalogoCapturaService catalogos;
+    @Autowired ContextosService contextos;
+    @Autowired CuentaService cuentas;
+    @Autowired FactorAutenticacionRepository factores;
+    @Autowired CifradoSecretos cifrado;
+    @Autowired PlatformTransactionManager gestor;
     @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
+    private PreparacionPublicacionDePrueba preparacionPublicacion;
+    private SesionesComercialesDePrueba sesiones;
     /**
      * Se escribe por el agregado a proposito en un solo caso: para llegar al
      * trigger hay que saltarse la comprobacion de la capa de servicio, y eso es
@@ -89,7 +123,7 @@ class CatalogoQueHablaIntegrationTest {
     /**
      * Cada caso arranca sin claves de prueba vivas.
      *
-     * <p>Las que siembra aplican a los SIETE tipos, asi que una marcada PUB que
+     * <p>Las que siembra aplican a los ocho tipos, asi que una marcada PUB que
      * sobreviva bloquea la publicacion de TODOS los casos siguientes -- y el
      * fallo aparece en el caso equivocado, que es peor que no tenerlo. Se
      * desactivan en vez de borrarse porque una clave con valores escritos no se
@@ -97,8 +131,25 @@ class CatalogoQueHablaIntegrationTest {
      */
     @org.junit.jupiter.api.BeforeEach
     void sinClavesDePruebaVivas() {
+        // RCA T2-25: estas dos claves TEST se confirmaron con ALT/requerido=false.
+        // Sólo se reconcilia su propia fixture; el gate global de coherencia no cambia.
+        var residuosDe25 = jdbc.queryForList("""
+                select c.id_catalogo_atributo,c.del_sistema,c.sujeto,c.tipo_dato
+                  from catalogo_atributo c join organizacion o on o.id_organizacion=c.organizacion_id
+                 where o.codigo='BROX_LEGACY' and c.organizacion_id=?
+                   and c.clave in ('zz_condicion_alt_d8756978','zz_material_alt_5bf470a6')
+                """, actor().idOrganizacion());
+        for (var residuo : residuosDe25) {
+            assertEquals(Boolean.FALSE, residuo.get("del_sistema"), "El residuo tiene que ser una extensión TEST.");
+            assertEquals("PROPIEDAD", residuo.get("sujeto"));
+            assertEquals("ENTERO", residuo.get("tipo_dato"));
+            jdbc.update("""
+                    update catalogo_atributo_tipo set requerido=true
+                     where id_catalogo_atributo=? and exigencia='ALT' and not requerido
+                    """, ((Number) residuo.get("id_catalogo_atributo")).longValue());
+        }
         jdbc.update("update catalogo_atributo set activo = false "
-                + " where clave like 'zz%' and organizacion_id is not null");
+                + " where clave like 'zz%' and organizacion_id = ?", actor().idOrganizacion());
     }
 
     // ==================================================================
@@ -186,8 +237,10 @@ class CatalogoQueHablaIntegrationTest {
         long id = registrarDepartamento();
         editar(id, ValorAtributo.multiple(clave, List.of("AGUA", "GAS")));
 
+        long versionObservada = propiedades.consultar(id, actor()).versionFisica();
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null,
-                List.of(clave)), actor());
+                List.of(clave)).conVersion(versionObservada)
+                .conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
 
         assertEquals(0, jdbc.queryForObject("""
                 select count(*) from atributo_propiedad_opcion o
@@ -297,8 +350,7 @@ class CatalogoQueHablaIntegrationTest {
     @Test
     @DisplayName("definicion sin operacion: la cosa fisica y CERO bloques de encargo")
     void laDefinicionSinOperacionNoTraeEncargos() {
-        var definicion = captura.definicion(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, actor());
+        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, null, actor());
 
         assertTrue(definicion.deLaOperacion().isEmpty(),
                 "sin operacion no puede haber bloque economico: la operacion es del Encargo");
@@ -309,8 +361,7 @@ class CatalogoQueHablaIntegrationTest {
     @Test
     @DisplayName("definicion con VENTA+ALQUILER: la fisica una vez, dos bloques")
     void laDefinicionConDosOperacionesNoDuplicaLaFisica() {
-        var definicion = captura.definicion(
-                MotorDeCaptura.REGISTRAR_PROPIEDAD, "LOCAL", "VENTA,ALQUILER", actor());
+        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "LOCAL", "VENTA,ALQUILER", null, actor());
 
         assertEquals(2, definicion.deLaOperacion().size());
         assertEquals(definicion.delTipo().stream().map(MotorDeCaptura.Pregunta::clave).distinct().count(),
@@ -324,7 +375,7 @@ class CatalogoQueHablaIntegrationTest {
         String clave = sembrarClave("zz_tipologia", "LISTA", List.of("FLAT", "DUPLEX"));
 
         MotorDeCaptura.Pregunta pregunta = captura
-                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, actor())
+                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, null, actor())
                 .delTipo().stream().filter(p -> clave.equals(p.clave())).findFirst()
                 .orElseGet(() -> fail("la clave sembrada no llego a la definicion"));
 
@@ -342,7 +393,7 @@ class CatalogoQueHablaIntegrationTest {
         jdbc.update("update catalogo_atributo set orden = 777 where clave = ?", clave);
 
         MotorDeCaptura.Pregunta pregunta = captura
-                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, actor())
+                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, null, actor())
                 .delTipo().stream().filter(p -> clave.equals(p.clave())).findFirst()
                 .orElseGet(() -> fail("la clave sembrada no llego a la definicion"));
 
@@ -356,19 +407,21 @@ class CatalogoQueHablaIntegrationTest {
     // ==================================================================
 
     @Test
-    @DisplayName("exigencia: ALT bloquea el alta; PUB no")
-    void altBloqueaElAltaYPubNo() {
+    @DisplayName("C2: guardar conserva faltantes ALT y PUB sin exigir completitud comercial")
+    void guardarAdmiteFaltantesAltYPub() {
         String pub = sembrarClave("zz_ascensores", "ENTERO", null);
-        jdbc.update("update catalogo_atributo_tipo set exigencia = 'PUB' "
-                + " where id_catalogo_atributo = (select id_catalogo_atributo from catalogo_atributo "
-                + "  where clave = ?)", pub);
+        String alt = sembrarClave("zz_condicion_alt", "ENTERO", null);
+        marcar(pub, "PUB");
+        marcar(alt, "ALT");
 
         try {
-            // El alta pasa aunque falte una clave PUB: el corredor no lo sabe
-            // todo en la primera conversacion, y no tiene por que.
-            assertTrue(registrarDepartamento() > 0);
+            long id = registrarDepartamento();
+            assertTrue(id > 0);
+            assertNull(valorDe(id, pub));
+            assertNull(valorDe(id, alt));
         } finally {
             retirar(pub);
+            retirar(alt);
         }
     }
 
@@ -381,8 +434,9 @@ class CatalogoQueHablaIntegrationTest {
         long encargo = encargoDe(id);
 
         try {
+            habilitarPublicacion(id);
             ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                    () -> publicaciones.crearEnEncargo(encargo, publicacionDePrueba(), actor()));
+                    () -> preparacionPublicacion.publicar(publicaciones,encargo, publicacionDePrueba(), actor()));
             assertTrue(error.getMessage().contains("no se puede publicar"), error.getMessage());
         } finally {
             retirar(pub);
@@ -399,7 +453,8 @@ class CatalogoQueHablaIntegrationTest {
 
         try {
             editar(id, new ValorAtributo(pub, "2"));
-            assertNotNull(publicaciones.crearEnEncargo(encargo, publicacionDePrueba(), actor()));
+            habilitarPublicacion(id);
+            assertNotNull(preparacionPublicacion.publicar(publicaciones,encargo, publicacionDePrueba(), actor()));
         } finally {
             retirar(pub);
         }
@@ -411,7 +466,8 @@ class CatalogoQueHablaIntegrationTest {
         sembrarClave("zz_opcional", "TEXTO", null);
         long id = registrarDepartamento();
 
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()));
+        habilitarPublicacion(id);
+        assertNotNull(preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()));
     }
 
     @Test
@@ -419,7 +475,8 @@ class CatalogoQueHablaIntegrationTest {
     void laTransicionAPublicadoTambienPregunta() {
         long id = registrarDepartamento();
         long encargo = encargoDe(id);
-        var publicacion = publicaciones.crearEnEncargo(encargo, publicacionDePrueba(), actor());
+        habilitarPublicacion(id);
+        var publicacion = preparacionPublicacion.publicar(publicaciones,encargo, publicacionDePrueba(), actor());
 
         // La clave PUB aparece DESPUES de crear el borrador del anuncio: si la
         // regla viviera solo en la puerta de creacion, esta transicion la
@@ -428,8 +485,10 @@ class CatalogoQueHablaIntegrationTest {
         marcar(pub, "PUB");
 
         try {
-            assertThrows(ReglaNegocioException.class, () -> publicaciones.cambiarEstado(
+            habilitarPublicacion(id);
+            ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class, () -> preparacionPublicacion.cambiarEstado(publicaciones,
                     publicacion.id(), "P", actor()));
+            assertTrue(rechazo.getMessage().contains("Prueba zz_altura_edificio"), rechazo.getMessage());
         } finally {
             retirar(pub);
         }
@@ -552,8 +611,7 @@ class CatalogoQueHablaIntegrationTest {
                  order by o.orden
                 """, String.class);
 
-        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD,
-                "DEPARTAMENTO", "ALQUILER", actor());
+        var definicion = captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", "ALQUILER", null, actor());
         var pregunta = definicion.todas().stream()
                 .filter(p -> "oficina_registral".equals(p.clave()))
                 .findFirst()
@@ -708,7 +766,8 @@ class CatalogoQueHablaIntegrationTest {
         assertTrue(bloqueantes.isEmpty(), "estas filas de V79 no entraron OPC: " + bloqueantes);
 
         long id = registrarDepartamento();
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+        habilitarPublicacion(id);
+        assertNotNull(preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()),
                 "una propiedad sin identidad registral se tiene que poder anunciar igual que "
                         + "antes de V79: el corte no introduce ningun rechazo nuevo");
     }
@@ -801,11 +860,13 @@ class CatalogoQueHablaIntegrationTest {
     void laIdentidadRegistralRespetaElTenant() {
         long id = registrarDepartamento();
         Actor intruso = new Actor(actor().idOrganizacion() + 1000, 1L, 1L, Actor.AGENTE);
+        long versionObservada = propiedades.consultar(id, actor()).versionFisica();
 
         assertThrows(Exception.class, () -> propiedades.editar(id,
                 new ComandoEdicion(null, null, null, null, null,
                         List.of(new ValorAtributo("partida_registral", "00000001")),
-                        null, null), intruso),
+                        null, null).conVersion(versionObservada)
+                        .conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), intruso),
                 "el discriminador de tenant se aplica antes que el enrutado por autoridad");
 
         assertNull(jdbc.queryForMap(
@@ -867,7 +928,7 @@ class CatalogoQueHablaIntegrationTest {
     // ==================================================================
 
     /**
-     * Una clave del tenant, con su aplicabilidad a los siete tipos y su
+     * Una clave del tenant, con su aplicabilidad a los ocho tipos y su
      * vocabulario.
      *
      * <p>La aplicabilidad la declaran las FILAS, y `aplica_todos` se queda en
@@ -908,7 +969,7 @@ class CatalogoQueHablaIntegrationTest {
     /**
      * Retira la clave al terminar el caso.
      *
-     * <p>Hace falta porque estas claves aplican a los siete tipos: una marcada
+     * <p>Hace falta porque estas claves aplican a los ocho tipos: una marcada
      * PUB en un caso bloquearia la publicacion de TODOS los demas, y el fallo
      * aparecia en el caso equivocado.
      */
@@ -935,7 +996,7 @@ class CatalogoQueHablaIntegrationTest {
      * nivel, y una prueba que se lo asigna ella misma no lo protegeria.
      */
     @Test
-    @DisplayName("V82: un LOCAL sin tipo_acceso se registra, se edita y NO se publica")
+    @DisplayName("C2: un LOCAL sin acceso se guarda; completarlo permite habilitar y publicar")
     void tipoAccesoImpidePublicarNoRegistrar() {
         Map<String, Object> nivel = jdbc.queryForMap("""
                 select t.exigencia, t.requerido
@@ -964,6 +1025,18 @@ class CatalogoQueHablaIntegrationTest {
                 "editar un atributo no puede mover la ubicacion");
         assertEquals(antes.titulares().size(), despues.titulares().size(),
                 "editar un atributo no puede mover la titularidad");
+        // CAT18: acceso también es material para habilitar Encargo, aunque su
+        // nivel de catálogo sea PUB y no impida identificar/guardar el físico.
+        long encargo = encargoDe(id);
+        EncargoService.Ficha elaboracion = encargos.consultar(encargo, actor());
+        var documento = encargos.prepararDocumento(new EncargoService.Preparacion(
+                encargo, elaboracion.version(), id, null, List.of(), OperacionInmobiliaria.ALQUILER,
+                List.of(), elaboracion.condiciones(), null, null, null, null, null),
+                actor(), sesiones.de(actor()), java.util.UUID.randomUUID().toString(), Procedencia.deLaPantalla());
+        assertTrue(documento.faltantes().contains("tipo_acceso"), documento.faltantes().toString());
+        assertFalse(encargos.consultar(encargo, actor()).vigencia().habilitado());
+        assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_captacion=? and hito='U'",
+                Integer.class, encargo));
 
         // 3. NO se publica. La causa se averigua agregando TODAS las claves
         //    ALT/PUB que faltan -- sin nombrar ninguna. Filtrar por la clave y
@@ -988,15 +1061,16 @@ class CatalogoQueHablaIntegrationTest {
                         + "todas las claves ALT/PUB faltantes, no preguntando por una");
 
         ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                () -> preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()),
                 "un local sin tipo_acceso no se puede anunciar");
-        assertTrue(rechazo.getMessage().contains("Tipo de acceso"),
-                "el rechazo tiene que decir QUE falta, con su rotulo: " + rechazo.getMessage());
+        assertTrue(rechazo.getMessage().contains("no está habilitado"),
+                "sin los mínimos de CAT18 el Encargo sigue en elaboración: " + rechazo.getMessage());
 
         // 4. Declarado el dato, ese bloqueo desaparece y se publica.
         editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
         assertEquals("A_PIE_DE_CALLE", valorDe(id, "tipo_acceso"));
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+        habilitarPublicacion(id);
+        assertNotNull(preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()),
                 "con el dato declarado, el unico bloqueo que habia deja de estar");
     }
 
@@ -1018,41 +1092,51 @@ class CatalogoQueHablaIntegrationTest {
     @Test
     @DisplayName("la PROPIEDAD reporta su deuda de publicacion, y cada sujeto sigue con la suya")
     void laPropiedadReportaSuDeudaDePublicacion() {
-        long id = registrarLocalSinTipoAcceso();
-        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+        String pub = sembrarClave("zz_visibilidad_propiedad", "ENTERO", null);
+        marcar(pub, "PUB");
+        try {
+            long id = registrarLocalSinTipoAcceso();
+            editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+            habilitarPublicacion(id);
+            FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
 
-        // 1. Sigue SIN estar en la lista del alta: `tipo_acceso` es PUB, no ALT.
-        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
-                "atributosQueFaltan responde a que impide el ALTA, y PUB no lo impide");
+            // La PUB privada permite aislar difusión de los mínimos materiales del Encargo.
+            assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> pub.equals(a.clave())),
+                    "atributosQueFaltan responde a que impide el ALTA, y PUB no lo impide");
 
-        // 2. Sigue SIN estar en la del encargo: es una clave de la PROPIEDAD.
-        assertTrue(ficha.encargos().stream()
-                        .flatMap(e -> e.faltanParaPublicar().stream())
-                        .noneMatch(a -> "tipo_acceso".equals(a.clave())),
-                "la deuda del ENCARGO no lleva claves de la PROPIEDAD (guard 2.5 de V78)");
+            // 2. Sigue SIN estar en la del encargo: es una clave de la PROPIEDAD.
+            assertTrue(ficha.encargos().stream()
+                            .flatMap(e -> e.faltanParaPublicar().stream())
+                            .noneMatch(a -> pub.equals(a.clave())),
+                    "la deuda del ENCARGO no lleva claves de la PROPIEDAD (guard 2.5 de V78)");
 
-        // 3. Y AHORA SI esta donde le toca, con su rotulo y no con la clave.
-        AtributoQueFalta falta = ficha.faltanParaPublicar().stream()
-                .filter(a -> "tipo_acceso".equals(a.clave()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "la propiedad tiene que decir que le falta tipo_acceso para publicar; "
-                                + "lleva " + ficha.faltanParaPublicar()));
-        assertEquals("Tipo de acceso", falta.rotulo(),
-                "el rotulo lo trae el catalogo: con la clave desnuda no es una frase para nadie");
+            // 3. Y AHORA SI esta donde le toca, con su rotulo y no con la clave.
+            AtributoQueFalta falta = ficha.faltanParaPublicar().stream()
+                    .filter(a -> pub.equals(a.clave()))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            "la propiedad tiene que decir qué PUB le falta para publicar; "
+                                    + "lleva " + ficha.faltanParaPublicar()));
+            assertEquals("Prueba zz_visibilidad_propiedad", falta.rotulo(),
+                    "el rotulo lo trae el catalogo: con la clave desnuda no es una frase para nadie");
 
-        // 4. La barrera no se movio.
-        assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
-                "este corte anade explicabilidad, no relaja la regla");
+            // 4. La barrera no se movio.
+            ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
+                    () -> preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()),
+                    "este corte anade explicabilidad, no relaja la regla");
+            assertTrue(rechazo.getMessage().contains(falta.rotulo()), rechazo.getMessage());
 
-        // 5. Y al completar el dato, el faltante desaparece y se publica.
-        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
-        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
-        assertTrue(despues.faltanParaPublicar().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
-                "completado el dato, deja de faltar: " + despues.faltanParaPublicar());
-        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
-                "y la publicacion deja de estar bloqueada por esa clave");
+            // 5. Y al completar el dato, el faltante desaparece y se publica.
+            editar(id, new ValorAtributo(pub, "1"));
+            habilitarPublicacion(id);
+            FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+            assertTrue(despues.faltanParaPublicar().stream().noneMatch(a -> pub.equals(a.clave())),
+                    "completado el dato, deja de faltar: " + despues.faltanParaPublicar());
+            assertNotNull(preparacionPublicacion.publicar(publicaciones,encargoDe(id), publicacionDePrueba(), actor()),
+                    "y la publicacion deja de estar bloqueada por esa clave");
+        } finally {
+            retirar(pub);
+        }
     }
 
     /**
@@ -1064,25 +1148,25 @@ class CatalogoQueHablaIntegrationTest {
      * que cuenta-- y ademas mentiria, porque una {@code ALT} ausente TAMBIEN
      * impide publicar.
      *
-     * <p>Se comprueba sobre un TERRENO al que se le quita {@code zonificacion},
-     * que es {@code ALT} en T: tiene que salir <b>en las dos listas</b>.
+     * <p>Se comprueba mediante una extensión privada ALT de TEST. MAT-02 retiró
+     * zonificación como bloqueo del registro de TERRENO; no se reutiliza esa
+     * expectativa retirada para representar la mecánica de las dos listas.
      */
     @Test
     @DisplayName("una clave ALT ausente sale en las DOS listas, y ninguna OPC sale en ninguna")
     void lasDosListasNoSeMezclan() {
+        String alt = sembrarClave("zz_material_alt", "ENTERO", null);
+        marcar(alt, "ALT");
         long id = registrarTerreno();
-        // El alta no deja registrar sin lo obligatorio, asi que la unica forma de
-        // observar una ficha incompleta es retirar el valor despues -- que es lo
-        // que pasa de verdad cuando el catalogo declara obligatoria una clave que
-        // las propiedades antiguas no tenian.
-        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'zonificacion'", id);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
 
-        assertTrue(ficha.atributosQueFaltan().stream().anyMatch(a -> "zonificacion".equals(a.clave())),
-                "una ALT ausente impide el alta y tiene que decirlo");
-        assertTrue(ficha.faltanParaPublicar().stream().anyMatch(a -> "zonificacion".equals(a.clave())),
+        assertTrue(ficha.atributosQueFaltan().stream().anyMatch(a -> alt.equals(a.clave())),
+                "el faltante ALT se declara sin impedir guardar el registro físico C2");
+        assertTrue(ficha.faltanParaPublicar().stream().anyMatch(a -> alt.equals(a.clave())),
                 "y tambien impide publicar: omitirla aqui prometeria que basta con completar las PUB");
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "zonificacion".equals(a.clave())),
+                "MAT-02 no vuelve a convertir zonificación en mínimo del registro");
 
         // Y ninguna OPC se cuela en ninguna de las dos. `frente` aplica a T y es
         // OPC; el terreno de prueba no la trae.
@@ -1107,6 +1191,7 @@ class CatalogoQueHablaIntegrationTest {
                         && ficha.faltanParaPublicar().stream()
                                 .noneMatch(a -> "frente".equals(a.clave())),
                 "una OPC ausente no bloquea nada y no aparece como faltante en ninguna lista");
+        retirar(alt);
     }
 
     /**
@@ -1139,32 +1224,42 @@ class CatalogoQueHablaIntegrationTest {
     @Test
     @DisplayName("permitida sigue a la deuda de la PROPIEDAD, y el comando dice lo mismo")
     void permitidaSigueALaDeudaDeLaPropiedad() {
-        long id = registrarLocalSinTipoAcceso();
-        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
-        EncargoFicha bloque = ficha.encargos().get(0);
-        assertTrue(bloque.vivo(), "el caso necesita un encargo vivo: si no, el motivo seria otro");
+        String pub = sembrarClave("zz_deuda_publicacion", "ENTERO", null);
+        marcar(pub, "PUB");
+        try {
+            long id = registrarLocalSinTipoAcceso();
+            editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+            habilitarPublicacion(id);
+            FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+            EncargoFicha bloque = ficha.encargos().get(0);
+            assertTrue(bloque.vivo(), "el caso necesita un encargo vivo: si no, el motivo seria otro");
 
-        assertFalse(ficha.faltanParaPublicar().isEmpty(), "la propiedad tiene deuda de publicacion");
-        assertFalse(bloque.publicacionGestionable().permitida(),
-                "con deuda de la ficha, la capacidad no puede prometer que se puede publicar");
-        assertEquals("Faltan datos de la ficha del inmueble.",
-                bloque.publicacionGestionable().motivo(),
-                "el motivo dice CUAL de los tres impedimentos es, sin repetir la lista");
-        assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(bloque.idEncargo(), publicacionDePrueba(), actor()),
-                "y el comando rechaza por la misma causa");
+            assertFalse(ficha.faltanParaPublicar().isEmpty(), "la propiedad tiene deuda de publicacion");
+            assertFalse(bloque.publicacionGestionable().permitida(),
+                    "con deuda de la ficha, la capacidad no puede prometer que se puede publicar");
+            assertEquals("Faltan datos de la ficha del inmueble.",
+                    bloque.publicacionGestionable().motivo(),
+                    "el motivo dice CUAL de los tres impedimentos es, sin repetir la lista");
+            ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
+                    () -> preparacionPublicacion.publicar(publicaciones,bloque.idEncargo(), publicacionDePrueba(), actor()),
+                    "y el comando rechaza por la misma causa");
+            assertTrue(rechazo.getMessage().contains("Prueba zz_deuda_publicacion"), rechazo.getMessage());
 
-        // Completado el dato, los tres cambian a la vez.
-        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
-        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
-        EncargoFicha bloqueDespues = despues.encargos().get(0);
-        assertTrue(despues.faltanParaPublicar().isEmpty(), "ya no falta nada de la ficha");
-        assertTrue(bloqueDespues.publicacionGestionable().permitida(),
-                "sin impedimento conocido, la capacidad lo dice");
-        assertNull(bloqueDespues.publicacionGestionable().motivo(),
-                "y sin impedimento no hay motivo que dar");
-        assertNotNull(publicaciones.crearEnEncargo(bloqueDespues.idEncargo(),
-                publicacionDePrueba(), actor()), "y publicar continua");
+            // Completado el dato, los tres cambian a la vez.
+            editar(id, new ValorAtributo(pub, "1"));
+            habilitarPublicacion(id);
+            FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+            EncargoFicha bloqueDespues = despues.encargos().get(0);
+            assertTrue(despues.faltanParaPublicar().isEmpty(), "ya no falta nada de la ficha");
+            assertTrue(bloqueDespues.publicacionGestionable().permitida(),
+                    "sin impedimento conocido, la capacidad lo dice");
+            assertNull(bloqueDespues.publicacionGestionable().motivo(),
+                    "y sin impedimento no hay motivo que dar");
+            assertNotNull(preparacionPublicacion.publicar(publicaciones,bloqueDespues.idEncargo(),
+                    publicacionDePrueba(), actor()), "y publicar continua");
+        } finally {
+            retirar(pub);
+        }
     }
 
     /**
@@ -1180,6 +1275,7 @@ class CatalogoQueHablaIntegrationTest {
     void laOpcAusenteNoBloquea() {
         long id = registrarLocalSinTipoAcceso();
         editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        habilitarPublicacion(id);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
         // A este LOCAL le falta casi todo el catalogo, y todo eso es OPC.
@@ -1213,56 +1309,71 @@ class CatalogoQueHablaIntegrationTest {
     @Test
     @DisplayName("ningun camino de publicacion elude el bloqueo del catalogo")
     void ningunCaminoEludeElBloqueo() {
-        long id = registrarLocalSinTipoAcceso();
-        long encargo = encargoDe(id);
-        assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
-                "el caso necesita una propiedad bloqueada por catalogo");
+        String pub = sembrarClave("zz_puertas_publicacion", "ENTERO", null);
+        marcar(pub, "PUB");
+        try {
+            long id = registrarLocalSinTipoAcceso();
+            editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+            long encargo = encargoDe(id);
+            habilitarPublicacion(id);
+            assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
+                    "el caso necesita una propiedad bloqueada por catalogo");
 
-        // CAMINO 1 - crear el anuncio ya publicado: rechazado.
-        assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargo, publicacionDePrueba(), actor()),
-                "crearEnEncargo no puede anunciar algo que no se puede anunciar");
+            // CAMINO 1 - crear el anuncio ya publicado: rechazado.
+            ReglaNegocioException rechazoCreacion = assertThrows(ReglaNegocioException.class,
+                    () -> preparacionPublicacion.publicar(publicaciones,encargo, publicacionDePrueba(), actor()),
+                    "crearEnEncargo no puede anunciar algo que no se puede anunciar");
+            assertTrue(rechazoCreacion.getMessage().contains("Prueba zz_puertas_publicacion"), rechazoCreacion.getMessage());
 
-        // CAMINO 1 bis - y ni siquiera como BORRADOR. La guarda no depende del
-        // estado pedido, asi que no hay forma de "colar" el anuncio y promoverlo
-        // luego.
-        assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crearEnEncargo(encargo, datosEnEstado(Publicacion.ESTADO_BORRADOR), actor()),
-                "de una propiedad bloqueada no entra ni un borrador");
+            // RF022/C6: el borrador incompleto se conserva; su promocion vuelve a exigir PUB.
+            var pendiente=preparacionPublicacion.publicar(publicaciones,encargo,datosEnEstado(Publicacion.ESTADO_BORRADOR),actor());
+            assertEquals(Publicacion.ESTADO_BORRADOR,pendiente.estado());
+            assertNull(pendiente.fechaPublicacion(),"guardar no acredita exposicion");
+            ReglaNegocioException rechazoPromocion=assertThrows(ReglaNegocioException.class,
+                    ()->preparacionPublicacion.cambiarEstado(publicaciones,pendiente.id(),Publicacion.ESTADO_PUBLICADO,actor()));
+            assertTrue(rechazoPromocion.getMessage().contains("Prueba zz_puertas_publicacion"),rechazoPromocion.getMessage());
 
-        // CAMINO 2 - el unico anuncio posible sobre una propiedad bloqueada es uno
-        // que nacio cuando NO lo estaba. Se reproduce: se completa el dato, se
-        // guarda el borrador y se retira el dato despues.
-        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
-        var borrador = publicaciones.crearEnEncargo(encargo,
-                datosEnEstado(Publicacion.ESTADO_BORRADOR), actor());
-        assertNotNull(borrador, "con la ficha completa, el borrador si entra");
+            // CAMINO 2: una revision antes suficiente no autoriza publicar tras retirar el dato.
+            editar(id, new ValorAtributo(pub, "1"));
+            habilitarPublicacion(id);
+            var borrador = preparacionPublicacion.publicar(publicaciones,encargo,
+                    datosEnEstado(Publicacion.ESTADO_BORRADOR), actor());
+            assertNotNull(borrador, "con la ficha completa, el borrador si entra");
 
-        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'tipo_acceso'", id);
-        assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
-                "retirado el dato, la propiedad vuelve a estar bloqueada");
+            FichaPropiedadUniversal antesDelRetiro = propiedades.consultar(id, actor());
+            propiedades.editar(id, new ComandoEdicion(null, Procedencia.deLaPantalla(), null, null,
+                    null, null, null, List.of(pub)).conVersion(antesDelRetiro.versionFisica())
+                    .conMotivoRetiro("Retiro explícito de la PUB privada en el escenario TEST"), actor());
+            habilitarPublicacion(id);
+            assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
+                    "retirado el dato, la propiedad vuelve a estar bloqueada");
 
-        assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.cambiarEstado(borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
-                "cambiarEstado es la ventana, y esta cerrada igual que la puerta");
+            ReglaNegocioException rechazoTransicion = assertThrows(ReglaNegocioException.class,
+                    () -> preparacionPublicacion.cambiarEstado(publicaciones,borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
+                    "cambiarEstado es la ventana, y esta cerrada igual que la puerta");
+            assertTrue(rechazoTransicion.getMessage().contains("Prueba zz_puertas_publicacion"), rechazoTransicion.getMessage());
 
-        // CAMINO 3 - editar no publica: `actualizar` no toca el estado.
-        publicaciones.actualizar(borrador.id(),
-                datosEnEstado(Publicacion.ESTADO_PUBLICADO), actor());
-        assertEquals(Publicacion.ESTADO_BORRADOR,
-                jdbc.queryForObject("select estado from publicacion where id_publicacion = ?",
-                        String.class, borrador.id()),
-                "ni pidiendoselo: actualizar ignora el estado, y por eso no es una puerta");
+            // CAMINO 3 - editar no publica: `actualizar` no toca el estado.
+            preparacionPublicacion.editar(publicaciones,borrador.id(),
+                    datosEnEstado(Publicacion.ESTADO_PUBLICADO), actor());
+            assertEquals(Publicacion.ESTADO_BORRADOR,
+                    jdbc.queryForObject("select estado from publicacion where id_publicacion = ?",
+                            String.class, borrador.id()),
+                    "ni pidiendoselo: actualizar ignora el estado, y por eso no es una puerta");
 
-        // Y con el dato de vuelta, el camino canonico vuelve a funcionar.
-        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
-        assertNotNull(publicaciones.cambiarEstado(borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
-                "completado el dato, publicar deja de estar bloqueado");
+            // Y con el dato de vuelta, el camino canonico vuelve a funcionar.
+            editar(id, new ValorAtributo(pub, "1"));
+            habilitarPublicacion(id);
+            assertNotNull(preparacionPublicacion.cambiarEstado(publicaciones,borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
+                    "completado el dato, publicar deja de estar bloqueado");
+        } finally {
+            retirar(pub);
+        }
     }
 
     /** Los mismos datos de prueba, en el estado que pida el caso. */
-    private PublicacionService.DatosPublicacion datosEnEstado(String estado) {
-        return new PublicacionService.DatosPublicacion(Publicacion.CANAL_WEB_PROPIA, null,
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio datosEnEstado(String estado) {
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio(Publicacion.CANAL_WEB_PROPIA, null,
                 new BigDecimal("2500"), "PEN", "Anuncio de prueba", null, estado);
     }
 
@@ -1275,7 +1386,7 @@ class CatalogoQueHablaIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "LOCAL", null,
+        var registro = propiedades.registrar(new ComandoRegistro(null, null, null, "LOCAL", "COMERCIAL",
                 "Local conocido, todavia sin visitar (V82)",
                 new Ubicacion("Av. Sin Visitar " + java.util.UUID.randomUUID(), "Miraflores",
                         null, null, null, null, null, null, null),
@@ -1283,20 +1394,25 @@ class CatalogoQueHablaIntegrationTest {
                 List.of(new ValorAtributo("metraje_total", "70")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
                         null, null, null, null, null, null, null)),
-                null), actor).idPropiedad();
+                null), actor);
+        preparacionPublicacion.prepararLocal(registro.idPropiedad(), actor,
+                List.of(new ValorAtributo("rubro_permitido", "Comercio minorista TEST")));
+        return registro.idPropiedad();
     }
 
     private void marcar(String clave, String exigencia) {
         jdbc.update("""
-                update catalogo_atributo_tipo set exigencia = ?
+                update catalogo_atributo_tipo set exigencia = ?, requerido = (? = 'ALT')
                  where id_catalogo_atributo = (select id_catalogo_atributo from catalogo_atributo
                                                 where clave = ? and organizacion_id = ?)
-                """, exigencia, clave, actor().idOrganizacion());
+                """, exigencia, exigencia, clave, actor().idOrganizacion());
     }
 
     private void editar(long id, ValorAtributo valor) {
+        FichaPropiedadUniversal observada = propiedades.consultar(id, actor());
         propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
-                List.of(valor), null, null), actor());
+                List.of(valor), null, null).conVersion(observada.versionFisica())
+                .conMotivoRetiro("Rectificación expresa del dato de este fixture, conservando su antecedente"), actor());
     }
 
     private String valorDe(long id, String clave) {
@@ -1313,16 +1429,18 @@ class CatalogoQueHablaIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", null,
+        var registro = propiedades.registrar(new ComandoRegistro(null, null, null, "DEPARTAMENTO", "VIVIENDA",
                 "Caso 0B",
                 new Ubicacion("Av. Catalogo " + System.nanoTime() % 1000000, "Miraflores",
-                        null, null, null, null, null, null, null),
+                        null, null, null, "Unidad TEST 101", null, null, null),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
                 List.of(new ValorAtributo("metraje_total", "90"),
                         new ValorAtributo("dormitorios", "3")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
                         null, null, null, null, null, null, null)),
-                null), actor).idPropiedad();
+                null), actor);
+        preparacionPublicacion.prepararDepartamento(registro.idPropiedad(), actor);
+        return registro.idPropiedad();
     }
 
     /**
@@ -1331,9 +1449,9 @@ class CatalogoQueHablaIntegrationTest {
      * no aplican a un departamento, y probarlas donde no aplican mediria otra
      * cosa.
      *
-     * <p>Lleva {@code zonificacion} porque en un terreno es ALT: sin ella el
-     * alta se rechaza, y ese es justamente el nivel de exigencia que 0B
-     * estreno.
+     * <p>MAT-02 permite guardar sin zonificación. Después se aporta una opción
+     * ficticia con fuente y referencia cerrada, por el helper físico canónico,
+     * sin inventar un catálogo territorial ni habilitar el Encargo automáticamente.
      */
     private long registrarTerreno() {
         Actor actor = actor();
@@ -1342,16 +1460,34 @@ class CatalogoQueHablaIntegrationTest {
                  where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
                    and r.organizacion_id = ?
                 """, Long.class, actor.idOrganizacion());
-        return propiedades.registrar(new ComandoRegistro(null, null, null, "TERRENO", null,
+        var registro = propiedades.registrar(new ComandoRegistro(null, null, null, "TERRENO", "VIVIENDA",
                 "Terreno del caso 0B",
                 new Ubicacion("Av. Terreno " + java.util.UUID.randomUUID(), "Lurin",
                         null, null, null, null, null, null, null),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
-                List.of(new ValorAtributo("metraje_total", "500"),
-                        new ValorAtributo("zonificacion", "RDM")),
+                List.of(new ValorAtributo("metraje_total", "500")),
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("300000"), "USD",
                         null, null, null, null, null, null, null)),
-                null), actor).idPropiedad();
+                null), actor);
+        assertNull(valorDe(registro.idPropiedad(), "zonificacion"),
+                "guardar no inventa zonificación ni exige esa completitud comercial");
+        preparacionPublicacion.prepararTerreno(registro.idPropiedad(), actor);
+        return registro.idPropiedad();
+    }
+
+    private void habilitarPublicacion(long idPropiedad) {
+        long encargo = encargoDe(idPropiedad);
+        EncargoService.Ficha observada = encargos.consultar(encargo, actor());
+        if (observada.vigencia().habilitado()) {
+            encargos.exigirHabilitado(encargo, actor());
+            return; // No recrear ni editar un pacto aceptado por una comprobación PUB ordinaria.
+        }
+        if ("EN_PREPARACION".equals(observada.estado())) {
+            assertEquals(0, jdbc.queryForObject("select count(*) from precio_propiedad where id_captacion=? and hito='U'",
+                    Integer.class, encargo), "El borrador no acredita precio autorizado.");
+        }
+        preparacionPublicacion.habilitar(encargo, actor());
+        encargos.exigirHabilitado(encargo, actor());
     }
 
     private long encargoDe(long idPropiedad) {
@@ -1360,8 +1496,8 @@ class CatalogoQueHablaIntegrationTest {
                 Long.class, idPropiedad);
     }
 
-    private PublicacionService.DatosPublicacion publicacionDePrueba() {
-        return new PublicacionService.DatosPublicacion("WEB_PROPIA", null, new BigDecimal("2500"),
+    private com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio publicacionDePrueba() {
+        return new com.controllocal.integracion.soporte.PreparacionPublicacionDePrueba.DatosAnuncio("WEB_PROPIA", null, new BigDecimal("2500"),
                 "PEN", "Anuncio de prueba", null, null);
     }
 
@@ -1369,6 +1505,8 @@ class CatalogoQueHablaIntegrationTest {
         Map<String, Object> fila = jdbc.queryForList("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
+                  join organizacion o on o.id_organizacion=r.organizacion_id
+                 where o.codigo='BROX_LEGACY' and r.vigencia_hasta is null
                  order by a.id_persona_rol limit 1
                 """).stream().findFirst().orElseThrow();
         return new Actor(((Number) fila.get("organizacion_id")).longValue(),

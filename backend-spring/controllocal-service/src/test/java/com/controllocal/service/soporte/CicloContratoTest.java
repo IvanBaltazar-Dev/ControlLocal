@@ -44,7 +44,7 @@ class CicloContratoTest {
                 "D, A",   // firmado -> anulado
                 "V, F",   // vigente -> finalizado
                 "V, S",   // vigente -> rescindido
-                "V, R",   // vigente -> renovado (lo produce la renovacion)
+                "V, R",   // vigente -> renovado al confirmar el sucesor preparado; prepararlo no cambia V
         })
         void seAdmiten(String origen, String destino) {
             assertDoesNotThrow(() -> MaquinasEstado.validarTransicion(CONTRATO, origen, destino));

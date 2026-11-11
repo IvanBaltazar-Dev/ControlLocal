@@ -12,6 +12,7 @@ import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -118,6 +119,17 @@ public class BorradorCaptura extends EntidadDeOrganizacion {
     /** {@code ["titular","direccion"]}, en el orden en que se van a preguntar. */
     @Column(name = "datos_faltantes", nullable = false)
     private String datosFaltantes = "[]";
+
+    @Column(name = "contexto_captura", nullable = false, columnDefinition = "text")
+    private String contextoCaptura = "{}";
+
+    @Column(name = "metadatos_respuestas", nullable = false, columnDefinition = "text")
+    private String metadatosRespuestas = "{}";
+
+    @Column(name = "revision_pospuesta_hasta")
+    private LocalDate revisionPospuestaHasta;
+    @Column(name = "motivo_posposicion", length = 500)
+    private String motivoPosposicion;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -275,6 +287,20 @@ public class BorradorCaptura extends EntidadDeOrganizacion {
 
     public int getVersion() {
         return version;
+    }
+
+    public String getContextoCaptura() { return contextoCaptura; }
+    public LocalDate getRevisionPospuestaHasta() { return revisionPospuestaHasta; }
+    public String getMotivoPosposicion() { return motivoPosposicion; }
+    public void posponerRevision(LocalDate hasta, String motivo) {
+        exigirEnCurso(); this.revisionPospuestaHasta = hasta; this.motivoPosposicion = motivo;
+    }
+    public void setContextoCaptura(String contextoCaptura) {
+        this.contextoCaptura = contextoCaptura == null ? "{}" : contextoCaptura;
+    }
+    public String getMetadatosRespuestas() { return metadatosRespuestas; }
+    public void setMetadatosRespuestas(String metadatosRespuestas) {
+        this.metadatosRespuestas = metadatosRespuestas == null ? "{}" : metadatosRespuestas;
     }
 
     public OffsetDateTime getCreadoEn() {

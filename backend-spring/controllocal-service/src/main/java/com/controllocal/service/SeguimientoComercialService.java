@@ -80,6 +80,6 @@ public interface SeguimientoComercialService {
             String icono,
             String tono,
             LocalDateTime fechaOrden,
-            String monto) {
+            String monto, String moneda) {
     }
 }

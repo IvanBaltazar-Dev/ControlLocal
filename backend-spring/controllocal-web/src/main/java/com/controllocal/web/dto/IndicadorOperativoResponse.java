@@ -4,23 +4,19 @@ import com.controllocal.service.IndicadorService;
 
 /**
  * Indicadores operativos del seguimiento. {@code recontactosAlDia} son los
- * recontactos cuyo proximo contacto todavia no vence (atendidos a tiempo).
+ * recontactos cuyo próximo contacto todavía no vence; no acreditan una actuación cumplida.
  */
 public record IndicadorOperativoResponse(
         int recontactosVencidos,
         int recontactosAlDia,
-        int diasPromedioSinSeguimiento,
         int visitasPendientes,
-        int solicitudesSinCierre,
-        int conversionProspeccionCaptacion) {
+        int solicitudesSinCierre) {
 
     public static IndicadorOperativoResponse desde(IndicadorService.Operativo operativo) {
         return new IndicadorOperativoResponse(
                 operativo.recontactosVencidos(),
                 operativo.recontactosAlDia(),
-                operativo.diasPromedioSinSeguimiento(),
                 operativo.visitasPendientes(),
-                operativo.solicitudesSinCierre(),
-                operativo.conversionProspeccionCaptacion());
+                operativo.solicitudesSinCierre());
     }
 }

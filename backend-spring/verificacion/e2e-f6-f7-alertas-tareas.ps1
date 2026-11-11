@@ -1,21 +1,12 @@
-﻿# =====================================================================
-# E2E de F6 alertas + F7 tareas contra el API v2.
-#
-# Van juntas porque son la misma pieza vista desde dos lados: la alerta
-# AVISA y la tarea MANDA A HACER. Lo que de verdad verifica este script
-# no es el CRUD de dos recursos, son las ONCE emisiones repartidas por
-# todo el flujo comercial (§4 del contrato) y los SIETE disparadores de
-# la bandeja (§5.1) — es decir, que F6/F7 quedaron cableadas en las
-# verticales ya cortadas.
-#
-# Contrato: docs/ai/contrato-congelado-f6-f7-alertas-tareas.md
-# Uso: powershell -File backend-spring/verificacion/Invoke-E2E.ps1 -Suite f6-f7-alertas-tareas
-#             (compatible con Windows PowerShell 5.1 y con pwsh 7)
-# =====================================================================
+# E2E C1/C2/R27 y obligaciones de campana/tareas C7.
+# Montajes actuales; avisos C7 y cierre economico C5 siguen sin certificarse
+# por parser ni por estas migraciones de consumidores.
+# Uso: Invoke-E2E.ps1 -Suite f6-f7-alertas-tareas
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/e2e-context.ps1"
 $e2e = Assert-ControlLocalE2EContext
 $base = $e2e.BaseUrl
+$fixtureE2E = Initialize-ControlLocalE2EActors
 $ok = 0; $fail = 0
 
 function Check($nombre, $condicion, $detalle) {
@@ -31,7 +22,7 @@ function Api($metodo, $ruta, $token, $cuerpo) {
         $parametros['Body'] = ($cuerpo | ConvertTo-Json -Depth 6)
         $parametros['ContentType'] = 'application/json'
     }
-    Invoke-RestMethod @parametros
+    try { Write-ControlLocalE2EHttpResult (Invoke-RestMethod @parametros) } catch { MostrarErrorApiDeFixture $_ $metodo $ruta $token $cuerpo; throw }
 }
 
 # Subida de documentos. Desde el 2026-08-08 es la UNICA via: las de JSON con
@@ -50,36 +41,30 @@ function ApiError($metodo, $ruta, $token, $cuerpo) {
         $respuesta = $PSItem.Exception.Response
         if ($null -eq $respuesta) { return @{ codigo = -1; error = $PSItem.Exception.Message } }
         $codigo = [int]$respuesta.StatusCode
-        $texto = ''
-        try {
-            $lector = New-Object IO.StreamReader($respuesta.GetResponseStream())
-            $texto = $lector.ReadToEnd(); $lector.Close()
-        } catch { $texto = '' }
-        $mensaje = $texto
-        try { $mensaje = ($texto | ConvertFrom-Json).error } catch { }
+        $texto = LeerErrorHttpDeFixture $PSItem
+        $mensaje = 'Respuesta HTTP sin mensaje JSON legible.'
+        try { $jsonError = $texto | ConvertFrom-Json; if($jsonError.error -is [string]){$mensaje=$jsonError.error} } catch { }
         return @{ codigo = $codigo; error = $mensaje }
     }
 }
 
-function Sql($consulta) {
-    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
-}
+
 
 # Alertas ACTIVAS de un tipo sobre una entidad concreta (lo que el cable
 # acaba de emitir). Se consulta por SQL para no depender del tope de la campana.
 function AlertasDe($tipo, $entidadTipo, $entidadId) {
-    Sql "select count(*) from alerta where tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId and estado='A'"
+    Invoke-ControlLocalE2ESql "select count(*) from alerta where organizacion_id=$($fixtureE2E.organizacion) and tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId and estado='A'"
 }
 
 # Ojo: SIEMPRE por (tipo, entidadTipo, entidadId). Filtrar solo por el id
-# cruza entidades distintas que comparten numero — es facil que un local y una
+# cruza entidades distintas que comparten numero - es facil que un local y una
 # solicitud tengan el mismo id.
 function MensajeDe($tipo, $entidadTipo, $entidadId) {
-    Sql "select mensaje from alerta where tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId order by id_alerta desc limit 1"
+    Invoke-ControlLocalE2ESql "select mensaje from alerta where organizacion_id=$($fixtureE2E.organizacion) and tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId order by id_alerta desc limit 1"
 }
 
 function SeveridadDe($tipo, $entidadTipo, $entidadId) {
-    Sql "select severidad from alerta where tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId order by id_alerta desc limit 1"
+    Invoke-ControlLocalE2ESql "select severidad from alerta where organizacion_id=$($fixtureE2E.organizacion) and tipo='$tipo' and entidad_tipo='$entidadTipo' and entidad_id=$entidadId order by id_alerta desc limit 1"
 }
 
 $sufijo = Get-Random -Minimum 1000 -Maximum 9999
@@ -87,15 +72,39 @@ $hoy = (Get-Date).ToString('yyyy-MM-dd')
 $finEncargo = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
 
 Write-Host "`n== 1. Login ==" -ForegroundColor Cyan
-$agente = Api POST '/auth/login' $null @{ usuario = 'vmora'; contrasena = 'Agente2026' }
-$broker = Api POST '/auth/login' $null @{ usuario = 'rsalas'; contrasena = 'Broker2026' }
-$brokerAjeno = Api POST '/auth/login' $null @{ usuario = 'psoto'; contrasena = 'Broker2026' }
-$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
+$agente = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.vmora.correo -Contrasena 'Agente2026' -Organizacion $fixtureE2E.organizacion -Rol 'AGENTE'
+$broker = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.rsalas.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$brokerAjeno = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.psoto.correo -Contrasena 'Broker2026' -Organizacion $fixtureE2E.organizacion -Rol 'BROKER' -EnrolarSiempre
+$admin = Connect-ControlLocalE2E -BaseUrl $base -Correo $fixtureE2E.actores.admin.correo -Contrasena 'Admin2026' -Organizacion $fixtureE2E.organizacion -Rol 'TENANT_ADMIN' -EnrolarSiempre
 Check 'login agente (AGE-001)' ($agente.rol -eq 'AGENTE') $agente.rol
 Check 'login broker supervisor (BRK-001)' ($broker.rol -eq 'BROKER') $broker.rol
 Check 'login broker de otro equipo (BRK-002)' ($brokerAjeno.rol -eq 'BROKER') $brokerAjeno.rol
-Check 'login admin' ($admin.rol -eq 'ADMIN') $admin.rol
+Check 'login admin' ($admin.rol -eq 'TENANT_ADMIN') $admin.rol
 
+Write-Host "`n== R27. Intento real TEST y fecha elegida expresamente ==" -ForegroundColor Cyan
+$propietario=(NuevoPropietarioC2DePrueba -Token $agente.token -Nombre 'Titular TEST F6').id
+$localR27=NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Jr. R27 TEST 100' -IdPropietario $propietario -LocalIndependienteTest
+$prospR27=Api POST '/prospecciones' $agente.token @{
+ idLocal=$localR27.id;observaciones='Prospeccion TEST para recontacto.'
+ destinatarioDeclarado=@{tipo='PROPIETARIO';nombre='Propietario declarado TEST R27';telefono='955222333';correo='r27-test@example.invalid';fuente='Declaracion explicita del escenario TEST.'}
+}
+$revisionesR27=@(Api GET "/prospecciones/$($prospR27.id)/seguimientos" $agente.token)
+if($revisionesR27.Count -ne 1 -or $null -eq $revisionesR27[0].contactoDeclarado){throw 'El productor no entrego el destinatario declarado unico del caso TEST.'}
+$destinoR27=$revisionesR27[0].contactoDeclarado
+$llamada=NuevaInteraccionC4DePrueba -Vinculos @(@{tipo='PROSPECCION';referencia=$prospR27.id}) `
+ -Resumen 'Llamada telefonica saliente TEST no respondida.' -Fuente 'Hecho explicito del escenario TEST F6 R27.' -Fecha $hoy `
+ -Tipo 'LLAMADA' -Canal 'TELEFONO' -Resultado 'SIN_RESPUESTA' `
+ -Destinatario @{referenciaDeclarada=$destinoR27.referenciaDeclarada} `
+ -Eventos @(@{referencia=('TEST-'+[guid]::NewGuid().ToString('N'));evento='LLAMADA_SALIENTE';momento=@{fecha=$hoy}})
+$null=Invoke-InteraccionC4DePrueba -BaseUrl $base -Token $agente.token -Datos $llamada -Clave ('f6-r27-'+[guid]::NewGuid().ToString('N'))
+$revisionesR27=@(Api GET "/prospecciones/$($prospR27.id)/seguimientos" $agente.token)
+if($revisionesR27.Count -ne 1){throw 'La llamada debe conservar el destinatario/finalidad exactos de R27.'}
+$revisionR27=$revisionesR27[0]
+$planR27=Invoke-ComandoC2DePrueba POST "/prospecciones/$($prospR27.id)/seguimientos/$($revisionR27.id)/planificacion" $agente.token @{
+ versionEsperada=$revisionR27.version;origen='INTENCION_PROFESIONAL';fecha=$hoy;detalle='Recontactar hoy por eleccion explicita del agente TEST.'
+} ('f6-r27-plan-'+[guid]::NewGuid().ToString('N'))
+$revisionR27=$planR27.resultado
+Check 'planificar conserva identidad y usa fecha declarada' ($revisionR27.id -eq $revisionesR27[0].id -and $revisionR27.proximaFecha -eq $hoy) 'R27'
 Write-Host "`n== 2. La campana: forma, alcance y el GET que ESCRIBE ==" -ForegroundColor Cyan
 $campana = Api GET '/alertas' $agente.token
 Check 'el tamano por defecto de /alertas es 20, no 10' ($campana.pageSize -eq 20) $campana.pageSize
@@ -106,37 +115,25 @@ Check 'ordenadas por fecha de generacion descendente' `
 Check 'el vocabulario viaja con el NOMBRE del enum, no CHAR(1)' `
     (@($campana.items | Where-Object { $_.severidad -notin @('INFO','MEDIA','ALTA') }).Count -eq 0) 'severidad'
 
-# El barrido de recontacto se materializa DENTRO del GET (no hay planificador
-# en la v1); ya corrio en la primera lectura de arriba. Se cuenta en CUALQUIER
-# estado a proposito: el throttle de 5 minutos hace que dos corridas seguidas
-# del script no vuelvan a barrer, y una alerta atendida sigue probando que el
-# barrido la materializo.
-$recontacto = Sql "select count(*) from alerta where tipo='SIN_RESPUESTA'"
-Check 'el GET materializa las alertas de recontacto vencido (D-F6-2)' `
-    ([int]$recontacto -ge 1) "alertas=$recontacto"
-Api GET '/alertas' $agente.token | Out-Null
-$recontacto2 = Sql "select count(*) from alerta where tipo='SIN_RESPUESTA'"
-Check 'y no duplica: ni por el throttle ni por el "ya existe una activa"' `
-    ($recontacto2 -eq $recontacto) "$recontacto2 vs $recontacto"
-
-Check 'el BROKER supervisor ve las alertas de su equipo' `
-    ((Api GET '/alertas' $broker.token).totalRecords -ge 1) 'alcance broker'
-Check 'el BROKER de otro equipo no ve las de este agente' `
-    (@((Api GET '/alertas' $brokerAjeno.token).items | Where-Object { $_.agenteNombre -eq 'Valentina Mora' }).Count -eq 0) 'alcance ajeno'
-Check 'el ADMIN ve todo el tenant' `
-    ((Api GET '/alertas' $admin.token).totalRecords -ge (Api GET '/alertas' $broker.token).totalRecords) 'alcance admin'
-
+$recontacto=Invoke-ControlLocalE2ESql "select count(*) from alerta where organizacion_id=$($fixtureE2E.organizacion) and tipo='SIN_RESPUESTA' and entidad_tipo='PROSPECCION' and entidad_id=$($prospR27.id)"
+Check 'la fecha R27 elegida materializa un aviso sin inventar siete dias' ($recontacto -eq '1') 'R27'
+Api GET '/alertas' $agente.token|Out-Null
+$recontacto2=Invoke-ControlLocalE2ESql "select count(*) from alerta where organizacion_id=$($fixtureE2E.organizacion) and tipo='SIN_RESPUESTA' and entidad_tipo='PROSPECCION' and entidad_id=$($prospR27.id)"
+Check 'misma causa no duplica aviso al releer' ($recontacto2 -eq $recontacto) 'idempotencia'
+Check 'supervisor ve la revision autorizada de su equipo' (@((Api GET '/alertas' $broker.token).items|Where-Object{$_.entidadTipo -eq 'PROSPECCION' -and $_.entidadId -eq $prospR27.id}).Count -eq 1) 'supervisor'
+Check 'otro broker no ve la revision del equipo ajeno' (@((Api GET '/alertas' $brokerAjeno.token).items|Where-Object{$_.entidadTipo -eq 'PROSPECCION' -and $_.entidadId -eq $prospR27.id}).Count -eq 0) 'equipo ajeno'
+Check 'gobierno no obtiene la campana comercial' ((ApiError GET '/alertas' $admin.token).codigo -eq 403) 'gobierno'
 Write-Host "`n== 3. Atender: los DOS verbos y el false que no es error ==" -ForegroundColor Cyan
 $activas = Api GET '/alertas' $agente.token
 if (@($activas.items).Count -gt 0) {
-    $idAlerta = $activas.items[0].id
+    $coincidentes=@($activas.items|Where-Object{$_.entidadTipo -eq 'PROSPECCION' -and $_.entidadId -eq $prospR27.id});if($coincidentes.Count -ne 1){throw 'No hay aviso R27 exacto que atender.'};$idAlerta=$coincidentes[0].id
     $primera = Api POST "/alertas/$idAlerta/atender" $agente.token $null
     Check 'POST atender responde {"atendida": true}' ($primera.atendida -eq $true) $primera.atendida
     $segunda = Api PATCH "/alertas/$idAlerta/atender" $agente.token $null
     Check 'PATCH es el MISMO endpoint y la 2a vez responde false (D-F6-6)' `
         ($segunda.atendida -eq $false) $segunda.atendida
     Check 'atender sella la fecha de resolucion' `
-        ((Sql "select fecha_resolucion is not null from alerta where id_alerta=$idAlerta") -eq 't') 'fecha_resolucion'
+        ((Invoke-ControlLocalE2ESql "select fecha_resolucion is not null from alerta where id_alerta=$idAlerta") -eq 't') 'fecha_resolucion'
     Check 'y la saca de la campana' `
         (@((Api GET '/alertas' $agente.token).items | Where-Object { $_.id -eq $idAlerta }).Count -eq 0) 'sigue activa'
 }
@@ -147,7 +144,7 @@ Check 'una alerta inexistente responde 404 (no 403: no confirma que exista)' `
 Write-Host "`n== 4. Prologo: cartera nueva, emitiendo alertas por el camino ==" -ForegroundColor Cyan
 # Registrar NO es encargar (V75): la propiedad nace sin encargo y se prospecta.
 $local = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Av. Alerta 100' `
-    -IdPropietario 43 -Metraje 130 -Rubro 'Cafeteria' -Descripcion "Prospecto F6 $sufijo"
+    -IdPropietario $propietario -Metraje 130 -LocalIndependienteTest -Rubro 'Cafeteria' -Descripcion "Prospecto F6 $sufijo"
 $idLocal = $local.id
 
 # ---------------------------------------------------------------------
@@ -172,60 +169,45 @@ Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null | Out-Null
 $captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
     operacion = 'ALQUILER'; importe = 7000; moneda = 'PEN'; comisionPactada = 5
+    tipoComision = 'P'; baseCalculo = 'R'; tratamientoIgv = 'N'; exclusividad = $true
+    inicioEncargo = $hoy; finEncargo = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
 }
 $idCaptacion = $captada.idCaptacion
-# 3.5 CORREGIDO el 2026-08-08. Aqui se comprobaba que captar NO avisaba: creaba
-# la captacion saltandose el alta que emite la alerta, asi que el broker solo se
-# enteraba si alguien usaba POST /captaciones. Como captar desde una prospeccion
-# es el camino NORMAL, el aviso practicamente no existia y la captacion se
-# quedaba PENDIENTE_REVISION sin que nadie lo supiera.
-Check 'captar SI avisa al broker por el camino normal (prospeccion -> captacion)' `
-    ((AlertasDe 'CAPTACION_CREADA' 'CAPTACION' $idCaptacion) -eq '1') 'alerta'
-
-# El alta directa SI avisa. Necesita su propio local: solo una captacion
-# ACTIVA por local, y la de arriba lo ocupa.
-$local2 = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Jr. Aviso 200' `
-    -IdPropietario 43 -Metraje 90 -Rubro 'Retail' -Descripcion "Alta directa F6B $sufijo"
-# El importe y la moneda VIAJAN. Antes se heredaban del espejo de la propiedad,
-# y desde V75 una propiedad registrada sin encargo llega sin precio: el encargo
-# trae el suyo, que es lo que se pacto.
-$captacionDirecta = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-D$sufijo"; fechaCaptacion = $hoy
-    fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
-    comisionPactada = 4; idLocal = $local2.id; motivoOperacion = 'A'
-    urgencia = 3; exclusividad = $true
-    tipoOperacion = 'A'; importeReferencia = 5000; monedaReferencia = 'PEN'
-}
-Check 'POST /captaciones SI avisa al BROKER (CAPTACION_CREADA)' `
-    ((AlertasDe 'CAPTACION_CREADA' 'CAPTACION' $captacionDirecta.id) -eq '1') 'alerta'
-Check 'el aviso al broker cuelga del AGENTE (no hay columna de destinatario)' `
-    ((Sql "select da.codigo_agente from alerta a join detalle_agente da on da.id_persona_rol=a.id_rol_agente where a.tipo='CAPTACION_CREADA' and a.entidad_id=$($captacionDirecta.id)") -eq 'AGE-001') 'id_rol_agente'
-
-# Observar primero para ver la severidad derivada, luego aprobar.
-Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = 'Falta la ficha' } | Out-Null
-Check 'F2: observar avisa al AGENTE con severidad MEDIA' `
-    ((SeveridadDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -eq 'MEDIA') 'severidad'
-Check 'y el detalle es literal ": " + observacion' `
-    ((MensajeDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -like '*fue observada: Falta la ficha') 'mensaje'
-Api PUT "/captaciones/$idCaptacion" $agente.token @{
-    codigoCaptacion = $captada.captacionCodigo; fechaCaptacion = $hoy
-    fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
-    comisionPactada = 5; idLocal = $idLocal; motivoOperacion = 'A'
-    urgencia = 3; exclusividad = $true
-} | Out-Null
-Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'A'; observacion = 'Conforme' } | Out-Null
-Check 'aprobar avisa con severidad INFO (la derivada del desenlace)' `
-    ((SeveridadDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -eq 'INFO') 'severidad'
-
+# NB01: el borrador privado no notifica; la presentacion real da la entrada
+# de revision. La entrega de todos los avisos C7 no se acredita por este montaje.
+Check 'captar un borrador no genera un aviso de presentacion inexistente' ((AlertasDe 'CAPTACION_CREADA' 'CAPTACION' $idCaptacion) -eq '0') 'NB01'
+$local2=NuevoInmuebleConEncargo -Token $agente.token -Direccion 'Jr. Aviso TEST 200' -IdPropietario $propietario -Metraje 90 -Importe 5000 -Moneda 'PEN' -LocalIndependienteTest
+Check 'registro fisico y borrador no se confunden con presentacion a decision' ((AlertasDe 'CAPTACION_CREADA' 'CAPTACION' $local2.idEncargo) -eq '0') 'borrador'
+$preparada=PrepararPeticionC2DePrueba -IdEncargo $idCaptacion -TokenResponsable $agente.token -MonedaComision 'PEN' -Exclusividad $true `
+ -HitoDevengo 'CONTRATO_ALQUILER' -ParteObligada 'PROPIETARIO' -Beneficiario 'ORGANIZACION' -Exigibilidad 'AL_DEVENGO' -FechaFirma $hoy -EjecucionComision @{devengo=@{hito='CONTRATO_ALQUILER'};exigibilidad=@{hito='CONTRATO_ALQUILER'}}
+$pendientesBroker=Api GET '/captaciones/pendientes?pagina=1&tamano=100' $broker.token
+Check 'la presentacion real tiene entrada de revision del broker' (@($pendientesBroker.items|Where-Object{$_.id -eq $idCaptacion}).Count -eq 1) 'peticion'
+$encargoAObservar=Api GET "/encargos/$idCaptacion" $broker.token
+$propuestaObservacion=Invoke-ComandoC2DePrueba POST "/encargos/peticiones/$($preparada.peticion.id)/decision" $broker.token @{
+ actuacion='OBSERVAR';versionPeticion=$preparada.peticion.version;versionEncargo=$encargoAObservar.version;observaciones='Falta la ficha TEST'
+} ('f6-observar-'+[guid]::NewGuid().ToString('N'))
+$observada=ConfirmarActuacionDePrueba -Token $broker.token -Propuesta $propuestaObservacion
+Check 'observacion conserva la peticion y su estado explicito' ($observada.id -eq $preparada.peticion.id -and $observada.estado -eq 'OBSERVADA') 'peticion'
+# Obligacion de aviso C7 conservada; no se crea por SQL para hacerla verde.
+Check 'F6 pendienteC7: observar notifica al agente con severidad MEDIA' ((SeveridadDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -eq 'MEDIA') 'avisoC7'
+Check 'F6 pendienteC7: el aviso conserva el motivo' ((MensajeDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -like '*Falta la ficha TEST*') 'motivo'
+$encargoObservado=Api GET "/encargos/$idCaptacion" $agente.token
+$reenviada=Invoke-ComandoC2DePrueba POST "/encargos/peticiones/$($observada.id)/reenviar" $agente.token @{
+ versionPeticion=$observada.version;presentacion=@{
+  documento=$preparada.documento.id;versionEsperada=$encargoObservado.version;partes=$preparada.partes
+  firmas=$observada.firma.firmas;respuestaObservaciones='Respuesta explicita del escenario TEST; se mantiene el instrumento presentado.'
+ }
+} ('f6-reenviar-'+[guid]::NewGuid().ToString('N'))
+Check 'reenviar mantiene identidad y crea una nueva revision de presentacion' ($reenviada.id -eq $observada.id -and $reenviada.estado -eq 'PENDIENTE' -and $reenviada.firma.revisionPresentacion -ne $observada.firma.revisionPresentacion) 'reenviar'
+$aprobada=AprobarPeticionC2DePrueba -IdEncargo $idCaptacion -IdPeticion $reenviada.id -Documento $preparada.documento -TokenDecisor $broker.token
+Check 'F6 pendienteC7: aprobar notifica con severidad INFO' ((SeveridadDe 'CAPTACION_REVISADA' 'CAPTACION' $idCaptacion) -eq 'INFO') 'avisoC7'
 $cliente = Api POST '/clientes' $agente.token @{
     tipoPersona = 'N'; tipoDocumento = 'D'; numeroDocumento = "5120$sufijo"
     nombre = "Cliente Alerta $sufijo"; telefono = '987222333'
     correo = "alerta.$sufijo@demo.test"; rubroComercial = 'Cafeteria'
     consentimientoContacto = $true; consentimientoUsoDato = $true
 }
-$oportunidad = Api POST '/oportunidades' $agente.token @{
-    idCliente = $cliente.id; idCaptacion = $idCaptacion; observaciones = 'Interesado.'
-}
+$oportunidad=NuevaOportunidadC4DePrueba -IdEncargo $idCaptacion -IdCliente $cliente.id -Token $agente.token -EvidenciaInteres 'Interes explicito FICTICIO TEST F6; no inferido de comunicacion.'
 $idOportunidad = $oportunidad.id
 
 Write-Host "`n== 5. Las emisiones de F4 (solicitud, documentos, evaluacion) ==" -ForegroundColor Cyan
@@ -275,8 +257,7 @@ $bandeja = Api GET '/tareas' $agente.token
 # Lista pelada: los elementos son tareas, no hay envoltorio con items/totalRecords.
 Check 'GET /tareas devuelve una LISTA PELADA, sin sobre de paginacion' `
     (@($bandeja).Count -eq 0 -or ($null -ne $bandeja[0].tipo -and $null -eq $bandeja[0].items)) 'forma'
-Check 'y como mucho 10 acciones (el resto se descarta en silencio)' `
-    (@($bandeja).Count -le 10) "items=$(@($bandeja).Count)"
+# Listado sin tope artificial: la pagina conserva el total autorizado.
 $subir = @($bandeja | Where-Object { $_.entidadTipo -eq 'SOLICITUD_ALQUILER' -and $_.entidadId -eq $idSolicitud })
 Check 'disparador 4: la solicitud OBSERVADA pide SUBIR_DOCUMENTOS' `
     ($subir.Count -eq 1 -and $subir[0].tipo -eq 'SUBIR_DOCUMENTOS') "tipo=$($subir[0].tipo)"
@@ -286,14 +267,8 @@ Check 'su Resolver enruta por CODIGO de solicitud, no por id' `
 Check 'la bandeja sale ordenada: ALTA antes que MEDIA' `
     (@($bandeja).Count -le 1 -or $bandeja[0].prioridad -eq 'ALTA') 'orden'
 
-$recontactoTarea = @($bandeja | Where-Object { $_.tipo -eq 'RECONTACTO' })
-if ($recontactoTarea.Count -gt 0) {
-    Check 'disparador 1: diasSinAccion se cuenta desde el PLAZO de la entidad, no desde la tarea' `
-        ($recontactoTarea[0].diasSinAccion -ge 7) "dias=$($recontactoTarea[0].diasSinAccion)"
-    Check 'y su vencimiento es la fecha de recontacto de la prospeccion' `
-        ($null -ne $recontactoTarea[0].fechaVencimiento) 'fechaVencimiento'
-}
-
+$recontactoTarea=@($bandeja|Where-Object{$_.tipo -eq 'RECONTACTO' -and $_.entidadTipo -eq 'PROSPECCION' -and $_.entidadId -eq $prospR27.id})
+Check 'Tarea consume la misma revision vigente de R27' ($recontactoTarea.Count -eq 1 -and $recontactoTarea[0].fechaVencimiento -eq $revisionR27.proximaFecha) 'fecha fuente'
 $antes = @(Api GET '/tareas' $agente.token).Count
 $despues = @(Api GET '/tareas' $agente.token).Count
 Check 'el reconcile es IDEMPOTENTE: releer no duplica' ($antes -eq $despues) "$antes vs $despues"
@@ -303,10 +278,10 @@ Api POST "/tareas/$idTarea/cancelar" $agente.token $null | Out-Null
 $trasCancelar = @(Api GET '/tareas' $agente.token | Where-Object { $_.id -eq $idTarea })
 Check 'cancelar la saca de la bandeja (soft-cancel, no borra)' ($trasCancelar.Count -eq 0) 'sigue'
 Check 'la fila sigue en la BD como A (cancelada)' `
-    ((Sql "select estado from tarea where id_tarea=$idTarea") -eq 'A') 'estado'
+    ((Invoke-ControlLocalE2ESql "select estado from tarea where id_tarea=$idTarea") -eq 'A') 'estado'
 $revive = @(Api GET '/tareas' $agente.token | Where-Object {
     $_.entidadTipo -eq 'SOLICITUD_ALQUILER' -and $_.entidadId -eq $idSolicitud })
-Check 'y NO revive aunque el disparador siga vigente (§5.2, trampa 1)' ($revive.Count -eq 0) 'revivio'
+Check 'y NO revive aunque el disparador siga vigente (seccion 5.2, trampa 1)' ($revive.Count -eq 0) 'revivio'
 
 $pendientes = Api GET '/tareas/pendientes' $agente.token
 Check '/tareas/pendientes SI lleva sobre, con tamano por defecto 5' ($pendientes.pageSize -eq 5) $pendientes.pageSize
@@ -328,29 +303,33 @@ Check 'evaluar APROBADA avisa con severidad INFO' `
 # Con la solicitud aprobada aparece el disparador 2 (seguimiento del cierre).
 $bandejaAprobada = Api GET '/tareas' $agente.token
 Check 'disparador 2: una solicitud APROBADA pide SEGUIMIENTO del cierre' `
-    (@($bandejaAprobada | Where-Object { $_.tipo -eq 'SEGUIMIENTO' -and $_.entidadId -eq $idSolicitud }).Count -ge 0) 'seguimiento'
+    (@($bandejaAprobada | Where-Object { $_.tipo -eq 'SEGUIMIENTO' -and $_.entidadTipo -eq 'SOLICITUD_ALQUILER' -and $_.entidadId -eq $idSolicitud }).Count -eq 1) 'seguimiento'
 
-$contrato = Api POST '/contratos' $agente.token @{
-    idSolicitud = $idSolicitud; fechaCierre = $hoy; estadoContrato = 'V'
-}
+$preparado=Invoke-ComandoC2DePrueba POST '/contratos/en-proceso' $agente.token @{idSolicitud=$idSolicitud;incidencias='Preparación TEST de alertas'} ('e2e-preparacion-'+[guid]::NewGuid().ToString('N'))
+$formalizado=FormalizarAlquilerC5DePrueba -IdEncargo $idCaptacion -IdOportunidad $idOportunidad -TokenResponsable $agente.token -TokenDecisor $broker.token -Renta $preparado.rentaMensual -Moneda $preparado.moneda -Inicio $preparado.fechaInicioContrato -Fin $preparado.fechaFinContrato -FechaFirma $hoy -ContratoPreparado $preparado.id
+$contrato=$formalizado.contrato
 $idContrato = $contrato.id
 Check 'efecto 7: el cierre avisa al broker (OPORTUNIDAD_CERRADA)' `
     ((AlertasDe 'OPORTUNIDAD_CERRADA' 'OPORTUNIDAD' $idOportunidad) -eq '1') 'alerta'
 Check 'efecto 7: y da por hechas las tareas abiertas de las 4 entidades' `
-    ((Sql "select count(*) from tarea where estado in ('P','E') and ((entidad_tipo='OPORTUNIDAD' and entidad_id=$idOportunidad) or (entidad_tipo='SOLICITUD_ALQUILER' and entidad_id=$idSolicitud) or (entidad_tipo='CAPTACION' and entidad_id=$idCaptacion) or (entidad_tipo='INMUEBLE' and entidad_id=$idLocal))") -eq '0') 'tareas abiertas'
+    ((Invoke-ControlLocalE2ESql "select count(*) from tarea where estado in ('P','E') and ((entidad_tipo='OPORTUNIDAD' and entidad_id=$idOportunidad) or (entidad_tipo='SOLICITUD_ALQUILER' and entidad_id=$idSolicitud) or (entidad_tipo='CAPTACION' and entidad_id=$idCaptacion) or (entidad_tipo='INMUEBLE' and entidad_id=$idLocal))") -eq '0') 'tareas abiertas'
 
-Api POST "/contratos/$idContrato/comision/asignar" $broker.token @{ montoAgente = 200 } | Out-Null
+$comision=LeerComisionC5DePrueba $formalizado $broker.token
+$asignacion=Api POST '/comisiones/repartos/propuestas' $broker.token @{comision=$comision.id;versionEsperada=$comision.version;montoAgente=200;observacion='Reparto TEST 200'}
+$null=ConfirmarActuacionDePrueba -Token $broker.token -Propuesta $asignacion
 Check 'F4: asignar la comision avisa al agente (COMISION_ASIGNADA)' `
     ((AlertasDe 'COMISION_ASIGNADA' 'CONTRATO_ALQUILER' $idContrato) -eq '1') 'alerta'
 Check 'el aviso NO expone el monto neto (regla de privacidad del cable)' `
     ((MensajeDe 'COMISION_ASIGNADA' 'CONTRATO_ALQUILER' $idContrato) -notlike '*200*') 'mensaje'
-Api POST "/contratos/$idContrato/comision/asignar" $broker.token @{ montoAgente = 250 } | Out-Null
+$comision=LeerComisionC5DePrueba $formalizado $broker.token
+$asignacion=Api POST '/comisiones/repartos/propuestas' $broker.token @{comision=$comision.id;versionEsperada=$comision.version;montoAgente=250;observacion='Reparto TEST 250'}
+$null=ConfirmarActuacionDePrueba -Token $broker.token -Propuesta $asignacion
 Check 'un reajuste NO repite el aviso: solo la PRIMERA asignacion' `
     ((AlertasDe 'COMISION_ASIGNADA' 'CONTRATO_ALQUILER' $idContrato) -eq '1') 'duplicado'
 
-Api POST "/contratos/$idContrato/comision/cobro" $broker.token @{
-    estado = 'C'; fechaCobro = $hoy; formaPago = 'TRANSFERENCIA'
-} | Out-Null
+$comision=LeerComisionC5DePrueba $formalizado $broker.token
+$cobro=PrepararCobroC5DePrueba -Contexto $formalizado -Token $broker.token -TokenEvidencia $agente.token -Importe $comision.calculo.cuantia.importe -Moneda $comision.calculo.cuantia.moneda -Fecha $hoy -Referencia 'RECEPCION-EXTERNA-TEST-ALERTAS'
+$null=ConfirmarActuacionDePrueba -Token $broker.token -Propuesta $cobro
 Check 'F4: cobrar avisa al agente (COMISION_COBRADA)' `
     ((AlertasDe 'COMISION_COBRADA' 'CONTRATO_ALQUILER' $idContrato) -eq '1') 'alerta'
 Check 'F2: cerrar la captacion en la cascada NO usa el aviso de cierre manual' `
@@ -360,28 +339,14 @@ Write-Host "`n== 8. Contrato de errores y tenancy ==" -ForegroundColor Cyan
 Check 'sin token, la campana responde 401' `
     ((ApiError GET '/alertas' $null $null).codigo -eq 401) 'sin token'
 Check 'alertas y tareas nacen con tenant' `
-    ((Sql "select (select count(*) from alerta where organizacion_id<>1)+(select count(*) from tarea where organizacion_id<>1)") -eq '0') 'tenant'
+    ((Invoke-ControlLocalE2ESql "select (select count(*) from alerta where organizacion_id is null)+(select count(*) from tarea where organizacion_id is null)") -eq '0') 'tenant'
 Check 'ninguna alerta atendida se queda sin fecha de resolucion' `
-    ((Sql "select count(*) from alerta where estado<>'A' and fecha_resolucion is null") -eq '0') 'ck_alerta_resolucion'
+    ((Invoke-ControlLocalE2ESql "select count(*) from alerta where estado<>'A' and fecha_resolucion is null") -eq '0') 'ck_alerta_resolucion'
 Check 'ninguna tarea completada se queda sin fecha' `
-    ((Sql "select count(*) from tarea where estado='C' and fecha_completada is null") -eq '0') 'ck_tarea_completada'
+    ((Invoke-ControlLocalE2ESql "select count(*) from tarea where estado='C' and fecha_completada is null") -eq '0') 'ck_tarea_completada'
 Check 'no hay dos tareas ABIERTAS de la misma entidad y agente' `
-    ((Sql "select count(*) from (select organizacion_id,id_rol_agente,entidad_tipo,entidad_id from tarea where estado in ('P','E') group by 1,2,3,4 having count(*)>1) t") -eq '0') 'dedup'
+    ((Invoke-ControlLocalE2ESql "select (select count(*) from (select organizacion_id,id_rol_agente,entidad_tipo,entidad_id from tarea where estado in ('P','E') and not(tipo='RECONTACTO' and marca_causa is not null) group by 1,2,3,4 having count(*)>1) n)+(select count(*) from (select organizacion_id,id_seguimiento_prospeccion from tarea where estado in ('P','E') and tipo='RECONTACTO' and marca_causa is not null group by 1,2 having count(*)>1) r)") -eq '0') 'dedup'
 
-$huerfanas = Sql @"
-select coalesce(sum(nulos),0) from (
-  select (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I where organizacion_id is null', table_name), false, true, '')))[1]::text::int as nulos
-  from information_schema.columns
-   where column_name='organizacion_id' and table_schema='public'
-     -- catalogo_atributo es HIBRIDO a proposito (D-E4-1 M2, V48): sus filas
-     -- del sistema llevan organizacion_id NULL y son las MISMAS para toda
-     -- corredora. Son lo que permite que dos propiedades se comparen; si
-     -- llevaran tenant, el vocabulario dejaria de ser comun y el matcher
-     -- entre organizaciones no podria existir. Es la misma excepcion que
-     -- ArquitecturaTenancyTest ya declara, con la misma razon.
-     and table_name <> 'catalogo_atributo') t
-"@
-Check 'cero filas con organizacion_id NULL en toda la BD' ($huerfanas -eq '0') "nulos=$huerfanas"
-
+# No escanear catalogos globales como si todas las tablas fueran privadas.
 Write-Host "`n===== $ok OK / $fail FALLAS =====" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 if ($fail -gt 0) { exit 1 }

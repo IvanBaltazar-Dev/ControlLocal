@@ -8,6 +8,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
@@ -21,6 +23,34 @@ import java.util.Optional;
  * agente de la visita (contrato F3 §5).
  */
 public interface VisitaRepository extends JpaRepository<Visita, Long> {
+
+    interface VersionActividad {
+        long getVersion(); java.time.Instant getRegistradoEn(); String getOperacion(); String getMotivo(); String getFicha();
+    }
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value="INSERT INTO visita_historia(organizacion_id,id_visita,id_oportunidad,version,registrado_en,operacion,motivo,ficha) VALUES (:org,:id,:op,:version,:fecha,:operacion,:motivo,CAST(:ficha AS jsonb))",nativeQuery=true)
+    void historizar(@Param("org") long org,@Param("id") long id,@Param("op") long op,@Param("version") long version,
+        @Param("fecha") java.time.Instant fecha,@Param("operacion") String operacion,@Param("motivo") String motivo,@Param("ficha") String ficha);
+    @Query(value="SELECT ficha::text FROM visita_historia WHERE organizacion_id=:org AND id_visita=:id AND version=:version",nativeQuery=true)
+    Optional<String> fichaVersion(@Param("org") long org,@Param("id") long id,@Param("version") long version);
+    @Query(value="SELECT version,registrado_en AS \"registradoEn\",operacion,motivo,ficha::text AS ficha FROM visita_historia WHERE organizacion_id=:org AND id_visita=:id ORDER BY version",nativeQuery=true)
+    List<VersionActividad> historia(@Param("org") long org,@Param("id") long id);
+    @Query(value="SELECT ficha::text FROM (SELECT DISTINCT ON(id_visita) id_visita,version,ficha FROM visita_historia WHERE organizacion_id=:org AND id_oportunidad=:op AND registrado_en<=:corte ORDER BY id_visita,version DESC) h ORDER BY id_visita",nativeQuery=true)
+    List<String> fichasAlCorte(@Param("org") long org,@Param("op") long op,@Param("corte") java.time.Instant corte);
+    @Query("select v.oportunidad.id from Visita v where v.organizacionId=:org and v.id=:id")
+    Optional<Long> oportunidadDe(@Param("org") long org,@Param("id") long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select v from Visita v where v.organizacionId=:org and v.id=:id")
+    Optional<Visita> bloquear(@Param("org") long org,@Param("id") long id);
+    @Query("select v from Visita v where v.organizacionId=:org and v.oportunidad.id=:op order by v.fechaVisita,v.horaVisita,v.id")
+    List<Visita> deOportunidad(@Param("org") long org,@Param("op") long op);
+    @Query(value="select v "+DESDE+" and v.fechaVisita between :desde and :hasta order by v.fechaVisita,v.horaVisita,v.id",
+            countQuery="select count(v) "+DESDE+" and v.fechaVisita between :desde and :hasta")
+    Page<Visita> agenda(@Param("idOrganizacion") long org,@Param("sinScope") boolean global,
+            @Param("porAgente") boolean agente,@Param("roles") Collection<Long> roles,
+            @Param("idOportunidad") Long oportunidad,@Param("estado") String estado,@Param("distrito") String distrito,
+            @Param("desde") LocalDate desde,@Param("hasta") LocalDate hasta,Pageable pagina);
 
     String DESDE = """
             from Visita v
@@ -165,9 +195,10 @@ public interface VisitaRepository extends JpaRepository<Visita, Long> {
     @Query("""
             select v from Visita v
               join fetch v.oportunidad o
-              join fetch o.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona
+              left join fetch o.personaInteresada
+              left join fetch o.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona
               join fetch o.captacion cap
               join fetch cap.propiedad
               join fetch v.agente ag
@@ -195,9 +226,10 @@ public interface VisitaRepository extends JpaRepository<Visita, Long> {
     @Query("""
             select v from Visita v
               join fetch v.oportunidad o
-              join fetch o.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona
+              left join fetch o.personaInteresada
+              left join fetch o.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona
               join fetch v.agente ag
               join fetch ag.rol agRol
               join fetch agRol.persona
@@ -273,9 +305,10 @@ public interface VisitaRepository extends JpaRepository<Visita, Long> {
     @Query("""
             select v from Visita v
               join fetch v.oportunidad o
-              join fetch o.cliente cli
-              join fetch cli.rol cliRol
-              join fetch cliRol.persona
+              left join fetch o.personaInteresada
+              left join fetch o.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona
               join fetch o.captacion cap
               join fetch cap.propiedad
               join fetch v.agente ag
@@ -296,18 +329,16 @@ public interface VisitaRepository extends JpaRepository<Visita, Long> {
      */
     @Query("""
             select v.id as entidadId, op.codigoOportunidad as entidadCodigo,
-                   v.fechaVisita as fechaPlazo, v.estado as marca
+                   v.fechaVisita as fechaPlazo, v.horaVisita as horaPlazo, v.estado as marca
             from Visita v
               join v.oportunidad op
             where v.organizacionId = :idOrganizacion
               and v.agente.id = :idRolAgente
               and (v.estado = 'N'
-                   or (v.estado in ('P', 'G') and v.fechaVisita is not null
-                       and v.fechaVisita <= :horizonte))
+                   or (v.estado in ('P', 'G') and v.fechaVisita is not null))
             """)
     List<CandidatoTarea> queExigenAccion(@Param("idOrganizacion") long idOrganizacion,
-                                         @Param("idRolAgente") long idRolAgente,
-                                         @Param("horizonte") LocalDate horizonte);
+                                         @Param("idRolAgente") long idRolAgente);
 
     /** Visitas REALIZADAS de las oportunidades de una captacion en rango inclusivo. */
     @Query("""

@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <b>Un reactor que omite en silencio los tests de PostgreSQL no es un gate de
  * cierre.</b>
  *
- * <p>Los seis tests de integracion llevan
+ * <p>Los tests de integración inventariados llevan
  * {@code @EnabledIfEnvironmentVariable(named = "TEST_DB_URL")}, asi que sin esa
  * variable JUnit los SALTA sin decir nada y Maven termina en verde. Eso ya
  * costo caro una vez: las migraciones V31, V37 y V38 introdujeron tres
@@ -46,7 +46,7 @@ class GateDeCierreTest {
         assertTrue(url != null && !url.isBlank(),
                 "Corrida de cierre sin " + URL + ": los tests de integracion se habrian saltado "
                         + "en silencio y el verde no significaria nada. Exporta "
-                        + URL + "=jdbc:postgresql://localhost:5433/controllocal_repositorios "
+                        + URL + " con la base de pruebas propia identificada por el corte "
                         + "o no declares la corrida como de cierre.");
         assertTrue(url.startsWith("jdbc:postgresql:"),
                 URL + " tiene que apuntar a PostgreSQL real, no a otro motor: " + url);
@@ -54,35 +54,124 @@ class GateDeCierreTest {
 
     /**
      * La guarda solo sirve si sigue cubriendo TODOS los tests que dependen de
-     * la base. Si alguien anade un sexto test de integracion, esta prueba lo
+     * la base. Si alguien anade otro test de integracion, esta prueba lo
      * obliga a declararlo aqui —y por tanto a pensar si la corrida de cierre
      * lo cubre— en vez de dejarlo saltando en silencio para siempre.
      */
     @Test
     void todoTestDeIntegracionDependeDeLaMismaVariableYEstaInventariado() throws IOException {
-        Path raiz = Path.of("src", "test", "java", "com", "controllocal", "integracion");
+        Path raiz = Path.of("src", "test", "java", "com", "controllocal");
         assertTrue(Files.isDirectory(raiz), "No se encontro " + raiz.toAbsolutePath());
 
         List<String> conBaseDeDatos;
-        try (Stream<Path> ficheros = Files.list(raiz)) {
+        try (Stream<Path> ficheros = Files.walk(raiz)) {
             conBaseDeDatos = ficheros
                     .filter(f -> f.getFileName().toString().endsWith(".java"))
-                    .filter(f -> contiene(f, "@EnabledIfEnvironmentVariable"))
+                    .filter(GateDeCierreTest::usaBaseDeDatos)
                     .map(f -> f.getFileName().toString().replace(".java", ""))
                     .sorted()
                     .toList();
         }
 
         assertEquals(List.of(
+                        // B0/C6: inventario PG real; no implica IA calibrada ni financiación externa.
+                        "B0AlmacenamientoIntegrationTest",
+                        "B0CiclosPagadosIntegrationTest",
+                        "B0NoProcesamientoIntegrationTest",
+                        "B0PresupuestoIntegrationTest",
+                        "TrabajoManualB0IntegrationTest",
+                        "InvestigacionesMercadoIntegrationTest",
+                        "ConfirmacionesCostoIaB0IntegrationTest",
+                        "AsuntosGrupoAIntegrationTest",
+                        "AcreditacionArchivoR25IntegrationTest",
+                        "ComprasManualesB0IntegrationTest",
+                        "CustodiaEvaluacionIaCarrilTecnicoIntegrationTest",
+                        "CustodiaEvaluacionIaPoolSaturadoIntegrationTest",
+                        "EvaluacionIaB0IntegrationTest",
+                        "EvaluacionMaterialIaIntegrationTest",
+                        "FenceSalidaEvaluacionIntegrationTest",
+                        "MetricasIaAccesoHttpIntegrationTest",
+                        "MetricasIaB0IntegrationTest",
+                        "ObservacionMetricasIaB0IntegrationTest",
+                        "B0PrevisionAlmacenamientoIaIntegrationTest",
+                        "AvisosTemporalesMaterialIaC6IntegrationTest",
+                        "CuotaGaleriaC6IntegrationTest",
+                        "DocumentosAlmacenamientoC6IntegrationTest",
+                        "FuentesMaterialIaCoreIntegrationTest",
+                        "IntentosBinariosC6IntegrationTest",
+                        "MaterialIaC6IntegrationTest",
+                        "MaterialIaDiscoC6IntegrationTest",
+                        "LecturaContextualC6IntegrationTest",
+                        "PiezasComercialesC6IntegrationTest",
+                        "PiezasDerivadasConcurrenciaC6IntegrationTest",
+                        "PlanesFinanciadosDePruebaIntegrationTest",
+                        "PublicacionesC6IntegrationTest",
+                        "RecuperacionMaterialIaEntreProcesosC6IntegrationTest",
+                        "TratamientoMaterialIaE44IntegrationTest",
+                        "VocabularioActuacionesC6IntegrationTest",
+                        // C4: comunicación contextual y negociación/rollback/concurrencia reales.
+                        "ActividadNegociacionIntegrationTest",
+                        "InteraccionContextualIntegrationTest",
+                        "LecturaInteraccionConcurrenteIntegrationTest",
+                        "LecturaInteraccionIndexadaIntegrationTest",
+                        "PerfilLecturaInteraccionC4IntegrationTest",
+                        "ComisionC5IntegrationTest",
+                        "DesenlacesC7IntegrationTest",
+                        "OrigenConversionC7IntegrationTest",
+                        "CompromisosC7IntegrationTest",
+                        "ProgramasPersonalesC7IntegrationTest",
+                        "ReportesVersionadosC7IntegrationTest",
+            "MetasVersionadasC7IntegrationTest",
+            "InformesFiltradosC7IntegrationTest",
+                        "EncargosPrivadosC7IntegrationTest",
+                        "InvitacionEncargoC7IntegrationTest",
+                        "EncargosClonadosC7IntegrationTest",
+                        "ReasignacionProspeccionC7IntegrationTest",
+                        "InicioFuturoC7IntegrationTest",
+                        "FormalizacionC5ConcurrenciaIntegrationTest",
+                        "LecturasFinancierasC5IntegrationTest",
+                        // C3/K2: casos PG reales; inventariar no sustituye su ejecución sin skips.
+                        "ColaboracionC3IntegrationTest",
+                        "ConservacionHistoriasC3IntegrationTest",
+                        "DemandaC3HttpIntegrationTest",
+                        "DemandaC3IntegrationTest",
+                        "DemandaPrecisionTemporalC3IntegrationTest",
+                        "DemandaConOportunidadC3IntegrationTest",
+                        "DisponibilidadC3IntegrationTest",
+                        "ReconfirmacionesD2IntegrationTest",
+                        "AvisosBrokerC7IntegrationTest",
+                        "RadarFuentesC7IntegrationTest",
+                        "MatchingC3ContextoIntegrationTest",
+                        "MatchingC3MetadataIntegrationTest",
+                        "NetworkC3IntegrationTest",
+                        "RecomendacionesInternasC3IntegrationTest",
+                        "CuentaPersonalIntegrationTest",
+                        "InvitacionesMembresiaIntegrationTest",
+                        "ComprobacionArranqueConsultasIntegrationTest",
+                        "AccesoArchivosIntegrationTest",
+                        "ActuacionesIntegrationTest",
                         // P0 (V87) — quien puede ESCRIBIR la propiedad y quien cada
                         // encargo. Recorre las vias de escritura una por una con dos
                         // agentes del mismo equipo, y mira precio_propiedad despues:
                         // el permiso importa, y el hito economico falso importa mas.
                         "AlcanceYGobiernoDeLaAutoridadIntegrationTest",
+                        "AutomaticosHttpIntegrationTest",
                         "AutoridadDeEdicionIntegrationTest",
                         // D-E4-3 — una autoridad persistente por clave publicada.
                         "AutoridadDelDatoIntegrationTest",
                         "BusquedaLocalesIntegrationTest",
+                        // C0/K0: contexto, permisos, vacío autorizado y aislamiento concurrente.
+                        "CapacidadesContextualesIntegrationTest",
+                        // C2: captura durable, catálogo privado, metadatos y CAS físico/Encargo reales.
+                        "CapturaC2ConcurrenciaIntegrationTest",
+                        "CapturaC2ContratosIntegrationTest",
+                        "CapturaMetadataEdicionIntegrationTest",
+                        "CasFisicoDePropiedadIntegrationTest",
+                        "EncargoC2IntegrationTest",
+                        "GobiernoCatalogoCapturaIntegrationTest",
+                        // RF014: origen persistido/tenant/CAS/T4 y puerta HTTP de revisión exacta.
+                        "OrigenFisicoIntegrationTest",
+                        "OrigenFisicoHttpIntegrationTest",
                         // Corte 0B - el catalogo aprende a hablar.
                         "CatalogoQueHablaIntegrationTest",
                         // D-P0-9 / D-P0-10 / D-P0-7 sobre la SEGUNDA autoridad:
@@ -99,9 +188,13 @@ class GateDeCierreTest {
                         // PostgreSQL y rompe cada escritura por separado para ver
                         // si alguna sobrevive sola.
                         "CausalidadDelTraspasoIntegrationTest",
+                        "ContextoHttpIntegrationTest",
+                        "ContextosSesionIntegrationTest",
                         // D0-3 - una clave retirada se lee, se distingue y no
                         // se edita: la mitad de la retirada que mira el usuario.
                         "ClaveRetiradaEnLaFichaIntegrationTest",
+                        "ComandosAutomaticosIntegrationTest",
+                        "ConciliacionDeRegistroIntegrationTest",
                         // Corte 0A - editar no destruye lo que el usuario no toco.
                         "ConservacionDeLaEdicionIntegrationTest",
                         "ConvergenciaCampanaColaIntegrationTest",
@@ -109,6 +202,7 @@ class GateDeCierreTest {
                         "FocoDelBrokerIntegrationTest",
                         "HistoricoPrecioIntegrationTest",
                         "IdentidadDelBrokerIntegrationTest",
+                        "InicioSeguroIntegrationTest",
                         "InterpretacionDelInicioIntegrationTest",
                         "InvariantesComisionIntegrationTest",
                         // D-P0-6 (F1) — quien LEE la informacion comercial
@@ -118,6 +212,7 @@ class GateDeCierreTest {
                         // encargo y la serie de precios responden lo MISMO -- y
                         // porque encontro una fuga de tenant que llevaba abierta
                         // en `/locales/{id}/precios`.
+                        "LecturaContextualPropiedadIntegrationTest",
                         "LecturaHistoricaIntegrationTest",
                         // WP-A (V90) — la negociacion y el cierre de una venta.
                         // Necesita PostgreSQL y no es opcional: los dos invariantes
@@ -159,16 +254,16 @@ class GateDeCierreTest {
                         "SueloYParametrosUrbanisticosIntegrationTest",
                         // Corte 0C - de quien es cada dato.
                         "SujetoDelDatoIntegrationTest",
-                        "VocabularioPersistidoIntegrationTest"),
+                        "VocabularioPersistidoIntegrationTest").stream().sorted().toList(),
                 conBaseDeDatos,
                 "Cambio el inventario de tests de integracion. Actualiza esta lista y comprueba "
                         + "que Verificar-Cierre.ps1 sigue exigiendo que TODOS se ejecuten.");
 
-        try (Stream<Path> ficheros = Files.list(raiz)) {
+        try (Stream<Path> ficheros = Files.walk(raiz)) {
             List<String> conOtraVariable = ficheros
                     .filter(f -> f.getFileName().toString().endsWith(".java"))
-                    .filter(f -> contiene(f, "@EnabledIfEnvironmentVariable"))
-                    .filter(f -> !contiene(f, "named = \"" + URL + "\""))
+                    .filter(GateDeCierreTest::usaBaseDeDatos)
+                    .filter(f -> !leer(f).replaceAll("\\s", "").contains("named=\"" + URL + "\""))
                     .map(f -> f.getFileName().toString())
                     .toList();
             assertEquals(List.of(), conOtraVariable,
@@ -195,12 +290,12 @@ class GateDeCierreTest {
      */
     @Test
     void elScriptDeCierreComprobaraTodasLasPruebasDeIntegracion() throws IOException {
-        Path raiz = Path.of("src", "test", "java", "com", "controllocal", "integracion");
+        Path raiz = Path.of("src", "test", "java", "com", "controllocal");
         List<String> enLaCarpeta;
-        try (Stream<Path> ficheros = Files.list(raiz)) {
+        try (Stream<Path> ficheros = Files.walk(raiz)) {
             enLaCarpeta = ficheros
                     .filter(f -> f.getFileName().toString().endsWith(".java"))
-                    .filter(f -> contiene(f, "@EnabledIfEnvironmentVariable"))
+                    .filter(GateDeCierreTest::usaBaseDeDatos)
                     .map(f -> f.getFileName().toString().replace(".java", ""))
                     .sorted()
                     .toList();
@@ -231,6 +326,11 @@ class GateDeCierreTest {
                 "Una corrida de cierre no puede saltarse los tests.");
     }
 
+    private static boolean usaBaseDeDatos(Path fichero) {
+        return java.util.regex.Pattern.compile("(?m)^\\s*@EnabledIfEnvironmentVariable\\s*\\(")
+                .matcher(leer(fichero)).find();
+    }
+
     private static boolean contiene(Path fichero, String fragmento) {
         return leer(fichero).contains(fragmento);
     }
@@ -243,3 +343,4 @@ class GateDeCierreTest {
         }
     }
 }
+

@@ -7,7 +7,7 @@ import {
   Captacion,
   CaptacionesService,
 } from '../../core/api/captaciones.service';
-import { LocalesService } from '../../core/api/locales.service';
+import { FichaPropiedad, PropiedadesService } from '../../core/api/propiedades.service';
 import { ProspeccionesService } from '../../core/api/prospecciones.service';
 import { CaptacionDetail } from './captacion-detail';
 
@@ -37,7 +37,7 @@ interface AccesoDetail {
  */
 describe('CaptacionDetail', () => {
   let api: jasmine.SpyObj<CaptacionesService>;
-  let locales: jasmine.SpyObj<LocalesService>;
+  let propiedades: jasmine.SpyObj<PropiedadesService>;
   let prospecciones: jasmine.SpyObj<ProspeccionesService>;
   let router: jasmine.SpyObj<Router>;
 
@@ -49,8 +49,8 @@ describe('CaptacionDetail', () => {
       ...CAPTACION, estado: 'C', observacionRevision: 'Fin del encargo',
       capacidades: { puedeEditar: false, puedeRevisar: false, puedeCerrar: false, puedeReasignar: false },
     });
-    locales = jasmine.createSpyObj<LocalesService>('LocalesService', ['obtener']);
-    locales.obtener.and.resolveTo({ id: 7, codigoLocal: 'LOC-0007', precioReferencial: 2800, monedaReferencial: 'PEN' });
+    propiedades = jasmine.createSpyObj<PropiedadesService>('PropiedadesService', ['consultar']);
+    propiedades.consultar.and.resolveTo(propiedad());
     prospecciones = jasmine.createSpyObj<ProspeccionesService>('ProspeccionesService', ['pagina']);
     prospecciones.pagina.and.resolveTo(pagina([{ id: 4, codigoProspeccion: 'PRO-0004', estado: 'T' }]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
@@ -157,7 +157,7 @@ describe('CaptacionDetail', () => {
   it('distingue expediente, datos del local y resumen comercial sin PDF', async () => {
     const html = texto(await montar());
     expect(html).toContain('Expediente de CAP-0009');
-    expect(html).toContain('Datos del local');
+    expect(html).toContain('Datos de la propiedad');
     expect(html).toContain('Resumen comercial');
     expect(html).not.toContain('PDF');
   });
@@ -168,7 +168,7 @@ describe('CaptacionDetail', () => {
       imports: [CaptacionDetail],
       providers: [
         { provide: CaptacionesService, useValue: api },
-        { provide: LocalesService, useValue: locales },
+        { provide: PropiedadesService, useValue: propiedades },
         { provide: ProspeccionesService, useValue: prospecciones },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ codigo: 'CAP-0009' }) } } },
         { provide: Router, useValue: router },
@@ -193,4 +193,18 @@ function pagina<T>(items: T[]): PageResponse<T> { return { items, totalRecords: 
 function texto(fixture: ComponentFixture<CaptacionDetail>): string { return (fixture.nativeElement as HTMLElement).textContent ?? ''; }
 function boton(fixture: ComponentFixture<CaptacionDetail>, etiqueta: string): HTMLButtonElement {
   return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) => b.textContent?.trim() === etiqueta) as HTMLButtonElement;
+}
+
+function propiedad(): FichaPropiedad {
+  return {
+    id: 7,
+    codigo: 'PROP-0007',
+    tipoPropiedad: 'LOCAL',
+    tipoRotulo: 'Local comercial',
+    titulares: [],
+    atributos: [],
+    encargos: [],
+    atributosQueFaltan: [],
+    faltanParaPublicar: [],
+  };
 }

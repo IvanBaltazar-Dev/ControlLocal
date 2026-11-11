@@ -1,352 +1,152 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.auditoria.HistorialEstado;
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.MotivoNoContinuidad;
-import com.controllocal.domain.comercial.OportunidadComercial;
-import com.controllocal.domain.inmueble.Propiedad;
-import com.controllocal.domain.persona.DetalleAgente;
-import com.controllocal.domain.persona.DetalleCliente;
-import com.controllocal.domain.persona.Persona;
-import com.controllocal.domain.persona.PersonaRol;
-import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.repositorio.PlanDeConsulta;
-import com.controllocal.persistence.repositorio.CaptacionRepository;
-import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.DetalleClienteRepository;
-import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
-import com.controllocal.persistence.repositorio.MotivoNoContinuidadRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
-import com.controllocal.service.Actor;
-import com.controllocal.service.OportunidadService.DatosOportunidad;
-import com.controllocal.service.OportunidadService.FichaOportunidad;
-import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
-import com.controllocal.service.excepcion.NoEncontradoException;
-import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.AccesoOportunidad;
-import com.controllocal.service.soporte.Alcances;
-import com.controllocal.service.soporte.Transiciones;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import com.controllocal.domain.comercial.*;
+import com.controllocal.domain.inmueble.Publicacion;
+import com.controllocal.persistence.repositorio.*;
+import com.controllocal.service.*;
+import com.controllocal.service.OportunidadService.*;
+import com.controllocal.service.demanda.InteresadosDeDemanda;
+import com.controllocal.service.excepcion.*;
+import java.time.*;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.springframework.data.domain.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-/**
- * Blinda los mensajes del cable de OportunidadesRest y la maquina A -> N, mas
- * la mejora MEJ-01: el cierre por no continuidad deja fila en historial_estado.
- * Incluye el 400 deliberado de cierre-exitoso, que es cable real.
- */
+/** RF040/042/050: interacción/visita/negociación no fabrican una apertura o no continuidad. */
 class OportunidadServiceImplTest {
-
-    private static final long ORG = 1L;
-
-    private final OportunidadComercialRepository oportunidades = mock(OportunidadComercialRepository.class);
-    private final MotivoNoContinuidadRepository motivos = mock(MotivoNoContinuidadRepository.class);
-    private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final DetalleClienteRepository clientes = mock(DetalleClienteRepository.class);
-    private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
-    private final Alcances alcances = mock(Alcances.class);
-    private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
-
-    /**
-     * El acceso a la oportunidad, extraido a un componente en WP-A. Va REAL y no
-     * mockeado: la regla de alcance -- el agente la suya, el broker por CAPTACION
-     * supervisada -- es justo lo que varias de estas pruebas comprueban, y un
-     * mock permisivo las dejaria verdes el dia que alguien la quitara.
-     */
-    private final AccesoOportunidad acceso =
-            new AccesoOportunidad(oportunidades, alcances);
-
-    /**
-     * La mesa de negociacion (WP-A). Solo la consulta la ficha INDIVIDUAL, para
-     * publicar sus ofertas y las capacidades del actor; ninguna de estas pruebas
-     * mide la mesa, asi que va mockeada y devuelve lo que un mock devuelve.
-     */
-    private final com.controllocal.service.OfertaService ofertas =
-            mock(com.controllocal.service.OfertaService.class);
-
-    private final OportunidadServiceImpl service = new OportunidadServiceImpl(
-            oportunidades, motivos, captaciones, clientes, agentes, alcances, new Transiciones(historial),
-            new PlanDeConsulta(), acceso, ofertas);
-
-    /** vmora: organizacion 1, persona 3, rol operativo 30. */
-    private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
-    /** rsalas: broker que supervisa al rol 30. */
-    private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
-
-    // ------------------------------------------------------------------
-    // Mensajes del contrato (paridad v1)
-    // ------------------------------------------------------------------
-
-    @Test
-    void registrarSinDatosRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(null, agente));
-        assertEquals("Los datos de la oportunidad son obligatorios.", error.getMessage());
+    ActividadDePrueba h;OportunidadServiceImpl servicio;
+    DetalleAgenteRepository agentes;MotivoNoContinuidadRepository motivos;PublicacionRepository publicaciones;
+    InteresadosDeDemanda interesados;RequerimientoService demandas;CoincidenciaService matching;
+    InteraccionService interacciones;VisitaService visitas;OfertaService ofertas;
+    final Map<Long,Map<Long,String>> historia=new HashMap<>();
+    @BeforeEach void montar(){
+        h=new ActividadDePrueba();agentes=mock(DetalleAgenteRepository.class);motivos=mock(MotivoNoContinuidadRepository.class);
+        publicaciones=mock(PublicacionRepository.class);interesados=mock(InteresadosDeDemanda.class);demandas=mock(RequerimientoService.class);
+        matching=mock(CoincidenciaService.class);interacciones=mock(InteraccionService.class);visitas=mock(VisitaService.class);ofertas=mock(OfertaService.class);
+        servicio=new OportunidadServiceImpl(h.oportunidades,motivos,h.captaciones,agentes,h.alcances,h.transiciones,mock(PlanDeConsulta.class),h.acceso,ofertas,
+            h.contextos,interesados,h.encargos,demandas,matching,interacciones,visitas,h.recibosActividad,h.documentos,h.entidades,publicaciones);
+        when(agentes.findById(1L)).thenReturn(Optional.of(h.detalle));
+        when(interesados.validar(any(),any())).thenAnswer(i->i.getArgument(0));
+        when(interesados.resolver(any(),any(),any())).thenReturn(new InteresadosDeDemanda.Interesado(h.interesado,null,"{\"idPersona\":100}"));
+        when(h.oportunidades.siguienteNumero(1)).thenReturn(11L);
+        when(h.oportunidades.existeAbiertaDelInteresado(anyLong(),anyLong(),anyLong())).thenAnswer(i->
+            h.mesas.values().stream().anyMatch(o->o.getCaptacion().getId().equals(i.getArgument(1))&&o.getPersonaInteresada().getId().equals(i.getArgument(2))&&o.estaAbierta()));
+        when(h.oportunidades.saveAndFlush(any())).thenAnswer(i->{var o=i.<OportunidadComercial>getArgument(0);
+            if(o.getId()==null)ActividadDePrueba.id(o,11);else ActividadDePrueba.version(o,o.getVersion()+1);
+            h.mesas.put(o.getId(),o);return o;});
+        doAnswer(i->{historia.computeIfAbsent(i.getArgument(1),k->new TreeMap<>()).put(i.getArgument(2),i.getArgument(6));return null;})
+            .when(h.oportunidades).historizar(anyLong(),anyLong(),anyLong(),any(),anyString(),nullable(String.class),anyString());
+        when(h.oportunidades.fichaVersion(anyLong(),anyLong(),anyLong())).thenAnswer(i->Optional.ofNullable(historia.getOrDefault(i.<Long>getArgument(1),Map.of()).get(i.<Long>getArgument(2))));
     }
-
-    @Test
-    void registrarSinClienteRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosOportunidad(null, null, 7L, null, null), agente));
-        assertEquals("Selecciona un cliente interesado.", error.getMessage());
+    InteresadosDeDemanda.Referencia contacto(){return new InteresadosDeDemanda.Referencia(InteresadosDeDemanda.TipoReferencia.CONTACTO_NUEVO,null,null,null,
+        new InteresadosDeDemanda.DatosContacto(null,null,null,"Interesado TEST",null,null));}
+    DatosOportunidad datos(){return new DatosOportunidad(null,20,0L,contacto(),null,null,null,null,"DIRECTO",null,null,new EvidenciaInteres("Interés declarado TEST",null));}
+    FichaOportunidad abrir(){h.mesas.clear();return servicio.registrar(datos(),h.agente,h.sid,"apertura",h.procedencia);}
+    NoContinuidad noContinua(){return new NoContinuidad(10,0L,"P","Motivo TEST",LocalDate.of(2026,10,30));}
+    @Test void aperturaProgresivaNoFabricaClienteNiExigeEncargoAprobado(){
+        var f=abrir();assertEquals(Captacion.EN_PREPARACION,h.cap.estadoActual());assertNull(f.idCliente());assertEquals(100,f.interesado().idPersona());assertEquals(OportunidadComercial.ABIERTA,f.estado());
+        assertEquals("DIRECTO",f.origen());assertNotNull(f.procedencia());assertEquals(0,f.version());assertEquals(1,h.mesas.size());
     }
-
-    @Test
-    void registrarSinCaptacionRespondeElMensajeV1() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosOportunidad(null, 50L, null, null, null), agente));
-        assertEquals("Selecciona una captacion activa.", error.getMessage());
+    @Test void aperturaSiempreEsExplicitaYLaCoincidenciaNoSeEjecutaPorDefecto(){
+        abrir();verifyNoInteractions(matching);verify(interesados).resolver(any(),eq(h.agente),eq(h.procedencia));
     }
-
-    @Test
-    void unaCaptacionDeOtroAgenteNoSirveParaAbrirOportunidad() {
-        Captacion ajena = captacion(7L, 99L, Captacion.ACTIVA);
-        when(captaciones.buscarFicha(ORG, 7L)).thenReturn(Optional.of(ajena));
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(new DatosOportunidad(null, 50L, 7L, null, null), agente));
-        verifyNoInteractions(historial);
+    @Test void validarNoCreaUnaPersonaNiUnaOportunidad(){
+        servicio.validarApertura(datos(),h.agente);verify(interesados).validar(any(),eq(h.agente));verify(interesados,never()).resolver(any(),any(),any());verify(h.oportunidades,never()).saveAndFlush(any());
     }
-
-    @Test
-    void unaCaptacionInexistenteRespondeIgualQueUnaAjena() {
-        // La v1 solo consulta la lista del agente: no distingue "no existe" de
-        // "no es tuya", y las dos responden 403.
-        when(captaciones.buscarFicha(ORG, 7L)).thenReturn(Optional.empty());
-
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> service.registrar(new DatosOportunidad(null, 50L, 7L, null, null), agente));
+    @Test void idEncargoAusenteNoSeTransformaEnUnaCaptacionFicticia(){
+        var d=datos();assertThrows(ReglaNegocioException.class,()->servicio.validarApertura(new DatosOportunidad(null,0,0L,d.interesado(),null,null,null,null,"DIRECTO",null,null,d.evidenciaInteres()),h.agente));
     }
-
-    @Test
-    void noSePuedeAbrirDosVecesLaMismaOportunidad() {
-        prepararAltaValida();
-        when(oportunidades.existeAbiertaDe(ORG, 50L, 7L)).thenReturn(true);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(new DatosOportunidad(null, 50L, 7L, null, null), agente));
-        assertEquals("Ya existe una oportunidad abierta para el cliente y captacion.", error.getMessage());
+    @Test void versionAusenteNoEsCeroImplicito(){
+        var d=datos();assertThrows(ReglaNegocioException.class,()->servicio.validarApertura(new DatosOportunidad(null,20,null,d.interesado(),null,null,null,null,"DIRECTO",null,null,d.evidenciaInteres()),h.agente));
     }
-
-    @Test
-    void elCierreExitosoSiempreFallaConElMensajeDelCable() {
-        oportunidadAbierta();
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.cierreExitoso(8L, agente));
-        assertEquals("El cierre exitoso se registra desde la solicitud aprobada para crear el "
-                + "contrato de alquiler.", error.getMessage());
+    @Test void evidenciaDelInteresNoSeInventa(){
+        var d=datos();assertThrows(ReglaNegocioException.class,()->servicio.validarApertura(new DatosOportunidad(null,20,0L,d.interesado(),null,null,null,null,"DIRECTO",null,null,null),h.agente));
     }
-
-    @Test
-    void elCierreExitosoValidaElAccesoAntesDeFallar() {
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.empty());
-        assertThrows(NoEncontradoException.class, () -> service.cierreExitoso(8L, agente));
+    @Test void versionActualEsObservadaNoUnDefaultDelServidor(){
+        ActividadDePrueba.version(h.cap,1);assertThrows(ConflictoException.class,()->servicio.validarApertura(datos(),h.agente));
     }
-
-    // ------------------------------------------------------------------
-    // Maquina de estados + auditoria
-    // ------------------------------------------------------------------
-
-    @Test
-    void elAltaAbreEnAConCodigoAutogeneradoYSinAuditar() {
-        prepararAltaValida();
-
-        FichaOportunidad ficha = service.registrar(
-                new DatosOportunidad("  ", 50L, 7L, "Vino por el anuncio", null), agente);
-
-        assertEquals("A", ficha.estado());
-        assertTrue(ficha.codigoOportunidad().startsWith("OP-"), ficha.codigoOportunidad());
-        assertEquals(50L, ficha.idCliente());
-        assertEquals(7L, ficha.idCaptacion());
-        assertEquals(30L, ficha.idAgente());
-        // El estado inicial no es una transicion: la v1 tampoco lo registraba.
-        verifyNoInteractions(historial);
-
-        ArgumentCaptor<OportunidadComercial> guardada =
-                ArgumentCaptor.forClass(OportunidadComercial.class);
-        verify(oportunidades).save(guardada.capture());
-        assertEquals(ORG, guardada.getValue().getOrganizacionId());
+    @Test void niBrokerNiGobiernoSeHacenPasarPorElAgente(){
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.validarApertura(datos(),h.broker));
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.validarApertura(datos(),h.gobierno));
     }
-
-    @Test
-    void elCodigoQueLlegaEnElRequestSeRespeta() {
-        prepararAltaValida();
-
-        FichaOportunidad ficha = service.registrar(
-                new DatosOportunidad(" OP-MANUAL ", 50L, 7L, null, null), agente);
-
-        assertEquals("OP-MANUAL", ficha.codigoOportunidad());
+    @Test void encargoAjenoNoSeApropiaPorConocerSuId(){
+        when(h.encargos.consultar(20,h.agente)).thenReturn(h.fichaEncargo(99));assertThrows(AccesoNoAutorizadoException.class,()->servicio.validarApertura(datos(),h.agente));
     }
-
-    @Test
-    void laNoContinuidadCierraEnNGuardaLaRazonYAudita() {
-        oportunidadAbierta();
-        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
-
-        FichaOportunidad ficha = service.noContinuidad(8L, "P", "Le parecio caro", agente);
-
-        assertEquals("N", ficha.estado());
-        // El cable guarda la DESCRIPCION de la razon, no su codigo.
-        assertEquals("Precio", ficha.motivoCierre());
-
-        ArgumentCaptor<MotivoNoContinuidad> motivo = ArgumentCaptor.forClass(MotivoNoContinuidad.class);
-        verify(motivos).save(motivo.capture());
-        assertEquals("P", motivo.getValue().getRazonPrincipal());
-        assertEquals("Le parecio caro", motivo.getValue().getObservaciones());
-        assertEquals(ORG, motivo.getValue().getOrganizacionId());
-
-        HistorialEstado evento = eventoAuditado();
-        assertEquals("OPORTUNIDAD", evento.getEntidadTipo());
-        assertEquals("A", evento.getEstadoAnterior());
-        assertEquals("N", evento.getEstadoNuevo());
-        assertEquals(3L, evento.getIdActor());
-        assertEquals("AGENTE", evento.getTipoRolActor());
-        assertEquals("Precio", evento.getMotivo());
+    @Test void unaAbiertaDelMismoInteresadoYEncargoNoSeDuplica(){
+        assertThrows(ConflictoException.class,()->servicio.registrar(datos(),h.agente,h.sid,"otra-apertura",h.procedencia));assertEquals(1,h.mesas.size());
     }
-
-    @Test
-    void laNoContinuidadExigeUnaRazonValida() {
-        oportunidadAbierta();
-
-        ReglaNegocioException sinRazon = assertThrows(ReglaNegocioException.class,
-                () -> service.noContinuidad(8L, "  ", null, agente));
-        assertEquals("El motivo de no continuidad es obligatorio.", sinRazon.getMessage());
-
-        ReglaNegocioException invalida = assertThrows(ReglaNegocioException.class,
-                () -> service.noContinuidad(8L, "Z", null, agente));
-        assertEquals("Codigo invalido para MotivoNoContinuidadTipo: Z", invalida.getMessage());
-        verifyNoInteractions(historial);
+    @Test void guardaDeDuplicadoConservaAOriginalSinExtenderAS(){
+        h.transiciones.aplicar(h.mesas.get(10L),10,OportunidadComercial.SOLICITUD_CREADA,h.agente,"Antecedente TEST");
+        assertFalse(h.oportunidades.existeAbiertaDelInteresado(1,20,100));
     }
-
-    @Test
-    void unaOportunidadYaCerradaNoVuelveACerrarse() {
-        OportunidadComercial o = oportunidadAbierta();
-        new Transiciones(mock(HistorialEstadoRepository.class))
-                .aplicar(o, 8L, OportunidadComercial.NO_CONTINUA, null, null);
-
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.noContinuidad(8L, "P", null, agente));
-        assertEquals("La oportunidad comercial debe estar ABIERTA.", error.getMessage());
+    @Test void publicacionDeOtroEncargoNoSeDeclaraComoOrigen(){
+        var p=new Publicacion();p.setIdEncargo(99L);when(publicaciones.findByOrganizacionIdAndId(1,700L)).thenReturn(Optional.of(p));var d=datos();
+        assertThrows(ReglaNegocioException.class,()->servicio.validarApertura(new DatosOportunidad(null,20,0L,d.interesado(),null,700L,null,null,"DIRECTO",null,null,d.evidenciaInteres()),h.agente));
     }
-
-    // ------------------------------------------------------------------
-    // Alcance: el BROKER alcanza por CAPTACION, no por agente (§4)
-    // ------------------------------------------------------------------
-
-    @Test
-    void elBrokerAlcanzaLaOportunidadPorLaCaptacionDeSuEquipo() {
-        oportunidadAbierta();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(30L));
-
-        assertEquals("A", service.obtener(8L, broker).estado());
+    @Test void unaCoincidenciaExplicitaRevalidaElOrigenSinCrearMatchNuevo(){
+        var d=datos();var m=new DatosOportunidad(null,20,0L,d.interesado(),null,null,null,null,"COINCIDENCIA","consulta-test","candidato-test",d.evidenciaInteres());
+        servicio.validarApertura(m,h.agente);verify(matching).verificarSeleccionParaApertura("consulta-test","candidato-test",20,null,null,h.agente);
+        verifyNoMoreInteractions(matching);
     }
-
-    @Test
-    void elBrokerNoAlcanzaLaOportunidadDeUnaCaptacionAjena() {
-        oportunidadAbierta();
-        when(alcances.supervisados(ORG, 20L)).thenReturn(List.of(77L));
-
-        assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(8L, broker));
+    @Test void mismaClaveDevuelveLaAperturaOriginalSinCrearOtraPersona(){
+        var a=abrir();var b=servicio.registrar(datos(),h.agente,h.sid,"apertura",h.procedencia);assertEquals(a,b);
+        verify(interesados,times(1)).resolver(any(),any(),any());assertEquals(1,h.mesas.size());
     }
-
-    @Test
-    void otroAgenteNoAlcanzaLaOportunidad() {
-        oportunidadAbierta();
-        Actor otro = new Actor(ORG, 9L, 31L, "AGENTE");
-
-        assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(8L, otro));
+    @Test void sesionRevocadaNoEntregaReciboNiCreaOtraPersona(){
+        abrir();doThrow(new AccesoNoAutorizadoException()).when(h.sesiones).exigirContexto(anyString(),anyLong(),any());
+        assertThrows(AccesoNoAutorizadoException.class,()->servicio.registrar(datos(),h.agente,h.sid,"apertura",h.procedencia));verify(interesados,times(1)).resolver(any(),any(),any());
     }
-
-    // ------------------------------------------------------------------
-    // Fixtures
-    // ------------------------------------------------------------------
-
-    private void prepararAltaValida() {
-        when(captaciones.buscarFicha(ORG, 7L)).thenReturn(Optional.of(captacion(7L, 30L, Captacion.ACTIVA)));
-        when(clientes.buscarFicha(ORG, 50L)).thenReturn(Optional.of(detalleCliente(50L, "Mariana Delgado")));
-        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
-        when(oportunidades.save(any(OportunidadComercial.class))).thenAnswer(inv -> {
-            OportunidadComercial guardada = inv.getArgument(0);
-            ReflectionTestUtils.setField(guardada, "id", 8L);
-            return guardada;
-        });
+    @Test void mismaClaveOtroContenidoConflicta(){
+        abrir();var d=datos();
+        assertThrows(ConflictoException.class,()->servicio.registrar(new DatosOportunidad("OTRO",20,0L,d.interesado(),null,null,null,null,"DIRECTO",null,null,d.evidenciaInteres()),h.agente,h.sid,"apertura",h.procedencia));
     }
-
-    /** Oportunidad 8, del agente 30, sobre la captacion 7 (tambien del 30). */
-    private OportunidadComercial oportunidadAbierta() {
-        OportunidadComercial o = new OportunidadComercial();
-        o.setOrganizacionId(ORG);
-        o.setCodigoOportunidad("OP-0001");
-        o.setCliente(detalleCliente(50L, "Mariana Delgado"));
-        o.setCaptacion(captacion(7L, 30L, Captacion.ACTIVA));
-        o.setAgente(detalleAgente(30L, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(o, OportunidadComercial.ABIERTA);
-        ReflectionTestUtils.setField(o, "id", 8L);
-        when(oportunidades.buscarFicha(ORG, 8L)).thenReturn(Optional.of(o));
-        when(oportunidades.save(any(OportunidadComercial.class))).thenAnswer(inv -> inv.getArgument(0));
-        return o;
+    @Test void noContinuidadTieneFechaMotivoVersionPropiosYNoTocaOfertas(){
+        var f=servicio.noContinuidad(noContinua(),h.agente,h.sid,"no-continua",h.procedencia);assertEquals(OportunidadComercial.NO_CONTINUA,f.estado());assertEquals(LocalDate.of(2026,10,30),f.fechaNoContinuidad());
+        assertEquals(1,f.version());assertNotNull(f.procedencia());verifyNoInteractions(ofertas,interacciones,visitas);
+        assertEquals(2,historia.get(10L).size());
+        assertEquals(OportunidadComercial.ABIERTA,h.documentos.comoObjeto(historia.get(10L).get(0L),FichaOportunidad.class).estado());
     }
-
-    private static Captacion captacion(long id, long idRolAgente, String estado) {
-        Propiedad propiedad = new Propiedad();
-        propiedad.setOrganizacionId(ORG);
-        propiedad.setDireccion("Av. Larco 123");
-        propiedad.setDistrito("Miraflores");
-        propiedad.setMetraje(new BigDecimal("120.00"));
-        ReflectionTestUtils.setField(propiedad, "id", 9L);
-
-        Captacion captacion = new Captacion();
-        captacion.setOrganizacionId(ORG);
-        captacion.setCodigoCaptacion("CAP-0001");
-        captacion.setPropiedad(propiedad);
-        captacion.setAgente(detalleAgente(idRolAgente, "Valentina Mora"));
-        new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(captacion, estado);
-        ReflectionTestUtils.setField(captacion, "id", id);
-        return captacion;
+    @Test void noContinuidadObsoletaNoModifica(){
+        ActividadDePrueba.version(h.mesas.get(10L),1);assertThrows(ConflictoException.class,()->servicio.validarNoContinuidad(noContinua(),h.agente));
     }
-
-    private static DetalleCliente detalleCliente(long idRol, String nombre) {
-        DetalleCliente cliente = new DetalleCliente();
-        cliente.setOrganizacionId(ORG);
-        cliente.setRol(personaRol(nombre, TipoRol.CLIENTE));
-        ReflectionTestUtils.setField(cliente, "id", idRol);
-        return cliente;
+    @Test void razonNoContinuidadEsGobernada(){
+        assertThrows(ReglaNegocioException.class,()->servicio.validarNoContinuidad(new NoContinuidad(10,0L,"INVENTADA",null,LocalDate.of(2026,10,30)),h.agente));
     }
-
-    private static DetalleAgente detalleAgente(long idRol, String nombre) {
-        DetalleAgente detalle = new DetalleAgente();
-        detalle.setRol(personaRol(nombre, TipoRol.AGENTE));
-        detalle.setCodigoAgente("AGE-001");
-        ReflectionTestUtils.setField(detalle, "id", idRol);
-        return detalle;
+    @Test void motivoDeNoContinuidadNoSeTomaDeUnaVisitaORechazo(){
+        servicio.validarNoContinuidad(noContinua(),h.agente);verifyNoInteractions(visitas,ofertas,interacciones);
     }
-
-    private static PersonaRol personaRol(String nombre, TipoRol tipo) {
-        Persona persona = new Persona();
-        persona.setNombresORazonSocial(nombre);
-        PersonaRol rol = new PersonaRol();
-        rol.setPersona(persona);
-        rol.setTipoRol(tipo);
-        return rol;
+    @Test void consultaResumenNoCargaHistoriasPrivadasDeOtrasSecciones(){
+        var r=servicio.consultar(10,Seccion.RESUMEN,null,h.agente);assertNull(r.antecedentes());assertNull(r.interacciones());assertNull(r.visitas());assertNull(r.acuerdo());assertNull(r.oportunidad().ofertas());
+        verifyNoInteractions(ofertas,interacciones,visitas);
     }
-
-    private HistorialEstado eventoAuditado() {
-        ArgumentCaptor<HistorialEstado> evento = ArgumentCaptor.forClass(HistorialEstado.class);
-        verify(historial).save(evento.capture());
-        return evento.getValue();
+    @Test void cadaSeccionConsumeSuProyeccionPropietariaSinReunionDuplicada(){
+        when(interacciones.porOportunidad(eq(10L),any(),eq(h.agente))).thenReturn(List.of());
+        var r=servicio.consultar(10,Seccion.ACTIVIDAD,null,h.agente);assertNotNull(r.interacciones());assertNull(r.visitas());verifyNoInteractions(visitas,ofertas);
+    }
+    @Test void negociacionIncluyeAcuerdoSoloEnSuSeccion(){
+        when(ofertas.consultarAcuerdoAceptado(eq(10L),any(),eq(h.agente))).thenReturn(Optional.empty());
+        var r=servicio.consultar(10,Seccion.NEGOCIACION,null,h.agente);assertNull(r.acuerdo());verify(ofertas).consultarAcuerdoAceptado(eq(10L),any(),eq(h.agente));
+    }
+    @Test void corteSinHistoriaNoSeReconstruyeDesdeLaFilaActual(){
+        when(h.oportunidades.fichaAlCorte(anyLong(),anyLong(),any())).thenReturn(Optional.empty());
+        assertThrows(NoEncontradoException.class,()->servicio.consultar(10,Seccion.RESUMEN,Instant.parse("2020-01-01T00:00:00Z"),h.agente));
+    }
+    @Test void leerPropuestaNoExigeElCasDeUnaNuevaEscrituraNiCreaPersona(){
+        ActividadDePrueba.version(h.cap,1);assertDoesNotThrow(()->servicio.exigirLecturaApertura(datos(),h.agente));
+        verify(interesados).exigirLectura(any(),isNull(),eq(h.agente));verify(interesados,never()).resolver(any(),any(),any());
+    }
+    @Test void registroFallidoNoPersisteExito(){
+        h.mesas.clear();doThrow(new IllegalStateException("DB TEST")).when(h.oportunidades).saveAndFlush(any());
+        assertThrows(IllegalStateException.class,()->servicio.registrar(datos(),h.agente,h.sid,"fallo",h.procedencia));assertTrue(h.ejecutados.isEmpty());verifyNoInteractions(h.eventos);
+    }
+    @Test void listaCargaFichasEnLoteSinMesaPorCadaFila(){
+        var pagina=new PageImpl<>(List.of(h.mesas.get(10L)),PageRequest.of(0,20),1);
+        when(h.oportunidades.buscar(anyLong(),anyBoolean(),anyBoolean(),anyCollection(),isNull(),isNull(),isNull(),any())).thenReturn(pagina);
+        when(h.oportunidades.buscarFichaPorIds(1,List.of(10L))).thenReturn(List.of(h.mesas.get(10L)));
+        var r=servicio.listar(1,20,null,null,null,null,h.agente);assertEquals(1,r.total());assertEquals(1,r.items().size());assertNull(r.items().getFirst().ofertas());
+        verify(h.oportunidades,times(1)).buscarFichaPorIds(1,List.of(10L));verifyNoInteractions(ofertas);
     }
 }

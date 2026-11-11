@@ -176,8 +176,39 @@ public class LectorPorAutoridad {
     public ValoresGobernados de(long idOrganizacion, Propiedad propiedad) {
         List<AtributoPropiedad> filas =
                 valores.findByIdPropiedadOrderByClaveAsc(propiedad.getId());
-        return armar(propiedad, filas, gobierno.definicionesDe(idOrganizacion,
-                propiedad.getTipoInmueble()), multivaloresDe(filas));
+        return armar(propiedad, filas,
+                definicionesParaArmar(idOrganizacion, propiedad.getTipoInmueble()),
+                multivaloresDe(filas));
+    }
+
+    /**
+     * <b>Lo aplicable MAS las estructurales retiradas</b> (`N3`, WP-C).
+     *
+     * <p>{@link #armar} inyecta el valor de una clave ESTRUCTURAL recorriendo
+     * <b>las definiciones que recibe</b> —no las claves escritas, porque una
+     * estructural no deja fila—. Con el mapa filtrado por {@code activo}, el
+     * dia que se retirara una estructural su valor <b>desaparecia de la
+     * ficha</b> aunque la columna canonica siguiera llena: el lector no la
+     * producia, asi que no entraba en {@code clavesLeidas} y
+     * {@code definicionesParaLeer} llegaba tarde a recuperarla.
+     *
+     * <p>Se anaden {@code putIfAbsent} y nunca pisando: una definicion viva
+     * manda siempre sobre una retirada del mismo nombre. Anadir no puede
+     * degradar ninguna ficha de hoy —solo puede hacer aparecer un valor que ya
+     * estaba guardado—, que es la unica forma segura de arreglar esto.
+     *
+     * <p>Hoy la lista llega <b>vacia</b>: 0 estructurales retiradas medidas el
+     * 2026-09-05 en las dos bases. Se arregla ahora y no el dia que haya una,
+     * porque ese dia el sintoma es «se perdio un dato» y nadie lo relaciona con
+     * un filtro de catalogo.
+     */
+    private Map<String, CatalogoAtributo> definicionesParaArmar(long idOrganizacion,
+                                                                String tipoPropiedad) {
+        Map<String, CatalogoAtributo> definiciones =
+                new LinkedHashMap<>(gobierno.definicionesDe(idOrganizacion, tipoPropiedad));
+        gobierno.estructuralesRetiradas(idOrganizacion)
+                .forEach(definiciones::putIfAbsent);
+        return definiciones;
     }
 
     /**
@@ -198,9 +229,13 @@ public class LectorPorAutoridad {
         Map<String, Map<String, CatalogoAtributo>> definicionesPorTipo = new HashMap<>();
         Map<Long, ValoresGobernados> resultado = new LinkedHashMap<>();
         for (Propiedad propiedad : propiedades) {
+            // Con las estructurales retiradas, igual que la lectura de una sola
+            // (`N3`): un listado que perdiera el metraje de una clave retirada
+            // seria la misma perdida en la superficie mas visible. Se resuelve
+            // una vez por TIPO distinto de la pagina, no una por fila.
             Map<String, CatalogoAtributo> definiciones = definicionesPorTipo.computeIfAbsent(
                     propiedad.getTipoInmueble(),
-                    tipo -> gobierno.definicionesDe(idOrganizacion, tipo));
+                    tipo -> definicionesParaArmar(idOrganizacion, tipo));
             resultado.put(propiedad.getId(), armar(propiedad,
                     porPropiedad.getOrDefault(propiedad.getId(), List.of()), definiciones,
                     multivalores));

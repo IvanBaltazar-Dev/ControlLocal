@@ -2,9 +2,6 @@ package com.controllocal.web.controlador;
 
 import com.controllocal.service.ContratoService;
 import com.controllocal.service.Pagina;
-import com.controllocal.web.dto.ComisionAsignarRequest;
-import com.controllocal.web.dto.ComisionCobroRequest;
-import com.controllocal.web.dto.ComisionMovimientoRequest;
 import com.controllocal.web.dto.ContratoRequest;
 import com.controllocal.web.dto.ContratoResponse;
 import com.controllocal.web.dto.RenovacionContratoRequest;
@@ -26,20 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Contrato CONGELADO del ContratosRest Jakarta: el cierre del trato. El
- * {@code POST} no es un alta mas — dispara la cascada de SIETE efectos (§6) y
- * es lo que cierra la oportunidad como exitosa, por eso
- * {@code POST /oportunidades/{id}/cierre-exitoso} responde 400 para siempre.
- *
- * <p>Dos detalles del cable que se pierden con facilidad:
- * <ul>
- *   <li>el {@code tamano} por defecto de este recurso es <b>100</b>, no 10;</li>
- *   <li>los dos gates de comision son del <b>BROKER supervisor sin ADMIN</b>
- *       (el admin solo lee). El alcance fino —por CAPTACION, no por agente
- *       como en solicitudes— lo impone el service.</li>
- * </ul>
- */
+/** Transporte de consulta y preparacion. Firma y cobros usan la actuacion humana canonica de Core. */
 @RestController
 @RequestMapping("contratos")
 public class ContratosController {
@@ -96,30 +80,17 @@ public class ContratosController {
                 contratos.obtenerPorOportunidad(idOportunidad, SesionActual.actor()));
     }
 
-    @PostMapping
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<ContratoResponse> registrar(
-            @RequestBody(required = false) ContratoRequest dto) {
-        ContratoResponse creado = ContratoResponse.desde(
-                contratos.registrar(dto == null ? null : dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
-    }
-
     @PostMapping("en-proceso")
     @PreAuthorize("hasRole('AGENTE')")
     public ResponseEntity<ContratoResponse> iniciarEnProceso(
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String clave,
+            @org.springframework.web.bind.annotation.RequestHeader(value="X-Origen",required=false) String canal,
             @RequestBody(required = false) ContratoRequest dto) {
         ContratoResponse creado = ContratoResponse.desde(contratos.iniciarEnProceso(
-                dto == null ? null : dto.aDatos(), SesionActual.actor()));
+                dto == null ? null : dto.aDatos(), SesionActual.actor(),
+                com.controllocal.web.seguridad.ContextoDeActuacion.de(SesionActual.sesion()),clave,
+                com.controllocal.service.soporte.Procedencia.deCabecera(canal)));
         return ResponseEntity.status(HttpStatus.CREATED).body(creado);
-    }
-
-    @PostMapping("{idContrato}/firmar")
-    @PreAuthorize("hasRole('AGENTE')")
-    public ContratoResponse firmar(@PathVariable long idContrato,
-                                   @RequestBody(required = false) TransicionContratoRequest dto) {
-        return ContratoResponse.desde(contratos.firmar(idContrato,
-                dto == null ? null : dto.aDatos(), SesionActual.actor()));
     }
 
     @PostMapping("{idContrato}/activar")
@@ -169,9 +140,13 @@ public class ContratosController {
     @PreAuthorize("hasRole('AGENTE')")
     public ResponseEntity<ContratoResponse> renovar(
             @PathVariable long idContrato,
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String clave,
+            @org.springframework.web.bind.annotation.RequestHeader(value="X-Origen",required=false) String canal,
             @RequestBody(required = false) RenovacionContratoRequest dto) {
         ContratoResponse creado = ContratoResponse.desde(contratos.renovar(idContrato,
-                dto == null ? null : dto.aDatos(), SesionActual.actor()));
+                dto == null ? null : dto.aDatos(), SesionActual.actor(),
+                com.controllocal.web.seguridad.ContextoDeActuacion.de(SesionActual.sesion()),clave,
+                com.controllocal.service.soporte.Procedencia.deCabecera(canal)));
         return ResponseEntity.status(HttpStatus.CREATED).body(creado);
     }
 
@@ -192,50 +167,6 @@ public class ContratosController {
         return RevisionDisponibilidadResponse.desde(contratos.revisarDisponibilidad(idContrato,
                 dto == null ? null : dto.resultado(), dto == null ? null : dto.motivo(),
                 SesionActual.actor()));
-    }
-
-    /** Gate de BROKER, sin ADMIN: el monto de la empresa se calcula solo. */
-    @PostMapping("{idContrato}/comision/asignar")
-    @PreAuthorize("hasRole('BROKER')")
-    public ContratoResponse asignarComision(@PathVariable long idContrato,
-                                            @RequestBody(required = false) ComisionAsignarRequest dto) {
-        return ContratoResponse.desde(contratos.asignarComision(idContrato,
-                dto == null ? null : dto.montoAgente(), SesionActual.actor()));
-    }
-
-    /** Gate de BROKER, sin ADMIN: desenlace del cobro (Cobrada o Anulada). */
-    @PostMapping("{idContrato}/comision/cobro")
-    @PreAuthorize("hasRole('BROKER')")
-    public ContratoResponse registrarCobro(@PathVariable long idContrato,
-                                           @RequestBody(required = false) ComisionCobroRequest dto) {
-        return ContratoResponse.desde(contratos.registrarCobroComision(idContrato,
-                dto == null ? null : dto.estado(), dto == null ? null : dto.fechaCobro(),
-                dto == null ? null : dto.formaPago(), SesionActual.actor()));
-    }
-
-    /**
-     * <b>Comando monetario: acepta {@code Idempotency-Key}.</b>
-     *
-     * <p>La cabecera es OPCIONAL mientras el contrato legado siga congelado
-     * —un cliente viejo que no la manda sigue funcionando igual—, pero el SPA
-     * nuevo la envia SIEMPRE: genera un UUID al iniciar la operacion y reenvia
-     * exactamente esa clave en cada reintento de esa misma operacion.
-     *
-     * <p>Misma clave + mismo comando devuelve el resultado original sin crear
-     * otra fila. Misma clave + comando distinto es un 409: la clave identifica
-     * una operacion, no sirve para dos.
-     */
-    @PostMapping("{idContrato}/comision/movimientos")
-    @PreAuthorize("hasRole('BROKER')")
-    public ContratoResponse registrarMovimiento(
-            @PathVariable long idContrato,
-            @RequestHeader(value = "Idempotency-Key", required = false) String claveIdempotencia,
-            @RequestBody(required = false) ComisionMovimientoRequest dto) {
-        return ContratoResponse.desde(contratos.registrarMovimientoComision(idContrato,
-                dto == null ? null : dto.tipo(), dto == null ? null : dto.monto(),
-                dto == null ? null : dto.moneda(), dto == null ? null : dto.fecha(),
-                dto == null ? null : dto.formaPago(), dto == null ? null : dto.observacion(),
-                claveIdempotencia, SesionActual.actor()));
     }
 
     private static PageResponse<ContratoResponse> pagina(

@@ -12,7 +12,8 @@ import java.util.Optional;
 
 /**
  * Evaluaciones del broker. El recurso {@code /evaluaciones} es solo de
- * BROKER/ADMIN: el broker ve las SUYAS (las que el firmo) y el admin todas.
+ * BROKER: ve las SUYAS (las que firmó). El gobierno no recibe este contenido
+ * comercial por administrar (CAT-R19/C1).
  *
  * <p>Cierra la deuda de la v1: alli {@code listar} y {@code obtener} traian
  * {@code listarTodos()} y cortaban en memoria; aqui la paginacion y el filtro
@@ -20,17 +21,19 @@ import java.util.Optional;
  */
 public interface EvaluacionSolicitudRepository extends JpaRepository<EvaluacionSolicitud, Long> {
 
+    /** Frontera de existencia sin cargar contenido comercial ni ampliar su lectura. */
+    boolean existsByOrganizacionIdAndId(long organizacionId, Long id);
+
     String DESDE = """
             from EvaluacionSolicitud e
               join e.broker br
             where e.organizacionId = :idOrganizacion
-              and (:sinScope = true or br.id = :idRolBroker)
+              and br.id = :idRolBroker
             """;
 
     @Query(value = "select e " + DESDE + " order by e.id desc",
             countQuery = "select count(e) " + DESDE)
     Page<EvaluacionSolicitud> buscar(@Param("idOrganizacion") long idOrganizacion,
-                                     @Param("sinScope") boolean sinScope,
                                      @Param("idRolBroker") long idRolBroker,
                                      Pageable pageable);
 
@@ -44,11 +47,10 @@ public interface EvaluacionSolicitudRepository extends JpaRepository<EvaluacionS
 
     @Query(FICHA + """
              where e.organizacionId = :idOrganizacion and e.id = :id
-               and (:sinScope = true or br.id = :idRolBroker)
+               and br.id = :idRolBroker
             """)
     Optional<EvaluacionSolicitud> buscarFicha(@Param("idOrganizacion") long idOrganizacion,
                                               @Param("id") long id,
-                                              @Param("sinScope") boolean sinScope,
                                               @Param("idRolBroker") long idRolBroker);
 
     /** Historial de la solicitud: lo ve tambien el agente dueno (no lleva scope de broker). */

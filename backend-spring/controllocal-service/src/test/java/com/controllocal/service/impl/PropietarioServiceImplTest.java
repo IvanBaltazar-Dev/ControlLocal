@@ -50,7 +50,7 @@ import static org.mockito.Mockito.when;
  *
  * <p>Lo que hay que no perder de vista:
  * <ul>
- *   <li>el catalogo es <b>compartido</b> para ADMIN y AGENTE; el unico rol
+ *   <li>el catalogo es <b>compartido</b> entre AGENTES; el unico rol comercial
  *       acotado es el BROKER, y lo acota por sus PROPIEDADES (no por
  *       oportunidades, como en clientes);</li>
  *   <li>{@code cantidadLocales} es un contador CON ALCANCE: dos actores ven
@@ -62,6 +62,23 @@ import static org.mockito.Mockito.when;
  * </ul>
  */
 class PropietarioServiceImplTest {
+    @Test void laIdentidadParaFiltrarNoHidrataPersonaNiContadores(){
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenReturn(Optional.of(1000L+PROPIETARIO));
+        assertEquals(Optional.of(1000L+PROPIETARIO),service.personaLegible(PROPIETARIO,agente));
+        verify(roles,never()).buscarPropietario(anyLong(),anyLong());verifyNoInteractions(personas,propiedades);
+    }
+    @Test void denegarUnaFilaNoArrojaAlProxyPeroElDetalleMantiene403(){
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenReturn(Optional.of(1000L+PROPIETARIO));
+        when(alcances.de(broker)).thenReturn(new Alcance(ORG,false,List.of(ROL_AGENTE)));
+        when(propiedades.idsPropietarioDelBroker(anyLong(),anyCollection(),anyLong())).thenReturn(List.of());
+        assertTrue(service.personaLegible(PROPIETARIO,broker).isEmpty());
+        assertThrows(AccesoNoAutorizadoException.class,()->service.obtener(PROPIETARIO,broker));
+        verify(roles,never()).buscarPropietario(anyLong(),anyLong());
+    }
+    @Test void falloDeLecturaDeIdentidadNoSeConfundeConInexistencia(){
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenThrow(new IllegalStateException("DB"));
+        assertThrows(IllegalStateException.class,()->service.personaLegible(PROPIETARIO,agente));
+    }
 
     private static final long ORG = 1L;
     private static final long PROPIETARIO = 50L;
@@ -174,17 +191,15 @@ class PropietarioServiceImplTest {
     // ------------------------------------------------------------------
 
     @Test
-    void adminYAgenteVenElCatalogoENTEROSinPasarPorElAlcance() {
-        for (Actor actor : List.of(admin, agente)) {
-            when(alcances.de(actor)).thenReturn(new Alcance(ORG, actor.esTenantAdmin(), List.of(ROL_AGENTE)));
+    void elAgenteVeElCatalogoCompartidoDentroDeSuOrganizacion() {
+            when(alcances.de(agente)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
             when(roles.buscarPropietarios(eq(ORG), anyBoolean(), anyCollection(), isNull(), isNull(), any(Pageable.class)))
                     .thenReturn(paginaCon(propietario(PROPIETARIO, "Ana Ruiz")));
             when(propiedades.contarLocalesEnSeguimiento(anyLong(), anyCollection(), anyBoolean(),
                     anyCollection(), anyLong())).thenReturn(List.of());
 
-            assertEquals(1, service.listar(1, 10, actor).items().size());
+            assertEquals(1, service.listar(1, 10, agente).items().size());
             verify(propiedades, never()).idsPropietarioDelBroker(anyLong(), anyCollection(), anyLong());
-        }
     }
 
     /**
@@ -256,13 +271,13 @@ class PropietarioServiceImplTest {
     void unPropietarioFueraDelAlcanceDelBrokerResponde403NoUn404() {
         // La v1 distingue: si el propietario existe pero no lo alcanza, es
         // prohibido; solo si no existe, no encontrado.
-        when(roles.buscarPropietario(ORG, PROPIETARIO))
-                .thenReturn(Optional.of(propietario(PROPIETARIO, "Ana Ruiz")));
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenReturn(Optional.of(1000L+PROPIETARIO));
         when(alcances.de(broker)).thenReturn(new Alcance(ORG, false, List.of(ROL_AGENTE)));
         when(propiedades.idsPropietarioDelBroker(anyLong(), anyCollection(), anyLong()))
                 .thenReturn(List.of(51L));
 
         assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(PROPIETARIO, broker));
+        verify(roles,never()).buscarPropietario(anyLong(),anyLong());
     }
 
     @Test
@@ -308,18 +323,31 @@ class PropietarioServiceImplTest {
     }
 
     @Test
-    void elAdminCuentaSinFiltroDeRolYElBrokerConSuRolDeRevisor() {
-        when(alcances.de(admin)).thenReturn(new Alcance(ORG, true, List.of()));
-        when(roles.buscarPropietarios(eq(ORG), anyBoolean(), anyCollection(), isNull(), isNull(), any(Pageable.class)))
-                .thenReturn(paginaCon(propietario(PROPIETARIO, "Ana Ruiz")));
-        when(propiedades.contarLocalesEnSeguimiento(anyLong(), anyCollection(), anyBoolean(),
-                anyCollection(), anyLong())).thenReturn(List.of());
+    void gobiernoIdentidadYBandasFuturasNoRecibenCatalogoNiOperanContactosComerciales() {
+        var propietario = mock(PersonaRol.class);
+        when(roles.buscarPropietario(ORG, PROPIETARIO)).thenReturn(Optional.of(propietario));
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenReturn(Optional.of(1000L+PROPIETARIO));
+        var filtros = new PropietarioService.FiltrosPropietario(null, null, 1, 10);
+        var datos = new DatosPropietario(null, null, null, null, null, null, null, null);
+        for (String banda : new String[]{Actor.TENANT_ADMIN, "IDENTIDAD", "BROX_PLATFORM", "FUTURO"}) {
+            Actor actor = new Actor(ORG, 1L, 10L, banda);
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(1, 10, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.listar(filtros, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.resumen(filtros, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.obtener(PROPIETARIO, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.autorizacion(PROPIETARIO, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.registrar(null, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.actualizar(PROPIETARIO, datos, actor));
+            assertThrows(AccesoNoAutorizadoException.class, () -> service.desactivar(PROPIETARIO, actor));
+        }
+        verifyNoInteractions(propietario, personas, propiedades, alcances, autorizaciones);
+    }
 
-        service.listar(1, 10, admin);
-
-        // sinScope=true y rolBroker=-1: el ADMIN no filtra por rol dentro del tenant.
-        verify(propiedades).contarLocalesEnSeguimiento(eq(ORG), anyCollection(), eq(true),
-                eq(List.of(-1L)), eq(-1L));
+    @Test
+    void elDetalleDeOtroTenantSigueSiendoInexistenteParaGobierno() {
+        assertThrows(NoEncontradoException.class, () -> service.obtener(PROPIETARIO, admin));
+        verify(roles).personaDePropietario(ORG,PROPIETARIO);
+        verify(roles,never()).buscarPropietario(anyLong(),anyLong());
     }
 
     // ------------------------------------------------------------------
@@ -432,6 +460,7 @@ class PropietarioServiceImplTest {
     private PersonaRol prepararAcceso() {
         PersonaRol propietario = propietario(PROPIETARIO, "Ana Ruiz");
         when(roles.buscarPropietario(ORG, PROPIETARIO)).thenReturn(Optional.of(propietario));
+        when(roles.personaDePropietario(ORG,PROPIETARIO)).thenReturn(Optional.of(1000L+PROPIETARIO));
         when(personas.save(any(Persona.class))).thenAnswer(inv -> inv.getArgument(0));
         return propietario;
     }

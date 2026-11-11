@@ -43,6 +43,12 @@ public class Organizacion {
     @Column(name = "nombre", nullable = false, length = 150)
     private String nombre;
 
+    /** Modalidad declarada; null conserva que el dato legado no está acreditado. */
+    @Column(name = "modalidad", length = 16)
+    private String modalidad;
+    public String getModalidad() { return modalidad; }
+    public void setModalidad(String valor) { modalidad=valor; }
+
     @Column(name = "estado", nullable = false, length = 1)
     private String estado = ESTADO_ACTIVA;
 

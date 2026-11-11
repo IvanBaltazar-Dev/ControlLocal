@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Contrato CONGELADO: espejo de Dtos.DocumentoSolicitudResponse de la v1.
  * {@code tipoDocumento} viaja como codigo de negocio (I, R, V, P, E, G, D, O)
  * y {@code tipoNombre} como la descripcion del catalogo;
- * {@code rutaArchivo} es la clave del almacen con la que el visor pide el
+ * {@code rutaArchivo} es la referencia UUID Core con la que el visor pide el
  * binario a {@code GET /documentos/contenido}.
  */
 public record DocumentoSolicitudResponse(Long id, Long idSolicitud, String tipoDocumento, String tipoNombre,

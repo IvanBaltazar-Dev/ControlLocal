@@ -9,7 +9,16 @@ import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ComisionLiquidacionRepository;
 import com.controllocal.persistence.repositorio.ComisionMovimientoRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
+import com.controllocal.integracion.soporte.OrigenesDePrueba;
+import com.controllocal.integracion.soporte.ComunicacionesDePrueba;
+import com.controllocal.service.InteraccionService;
+import com.controllocal.service.ClienteService;
+import com.controllocal.service.ContextosService;
+import com.controllocal.service.captura.MotorDeCaptura;
+import com.controllocal.service.actuacion.ComandosAutomaticosService;
+import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import org.springframework.transaction.PlatformTransactionManager;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
@@ -58,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class RepositorioEstadosIntegrationTest {
 
     private static final Pattern CODIGO_SQL = Pattern.compile("'([A-Z])'");
@@ -75,18 +84,25 @@ class RepositorioEstadosIntegrationTest {
     @Autowired ProspeccionRepository prospecciones;
     @Autowired OportunidadComercialRepository oportunidades;
     @Autowired VisitaRepository visitas;
-    @Autowired InteraccionComercialRepository interacciones;
+    @Autowired InteraccionService comunicaciones;
+    @Autowired ClienteService clientes;
+    @Autowired ContextosService contextos;
+    @Autowired MotorDeCaptura captura;
+    @Autowired ComandosAutomaticosService automaticos;
+    @Autowired PlatformTransactionManager gestor;
+    @Autowired org.springframework.context.ApplicationContext aplicacion;
     @Autowired SolicitudAlquilerRepository solicitudes;
     @Autowired ContratoAlquilerRepository contratos;
     @Autowired ComisionLiquidacionRepository comisiones;
     @Autowired ComisionMovimientoRepository movimientos;
     @Autowired AlertaRepository alertas;
+    @Autowired com.controllocal.service.AlertaService campana;
     @Autowired TareaRepository tareas;
     @Autowired PublicacionRepository publicaciones;
     @Autowired RequerimientoClienteRepository requerimientos;
 
     @Test
-    void todasLasColumnasDeEstadoPersistenCodigosUnitarios() {
+    void estadosDeNegocioSonUnitariosYEstadosTecnicosEstanClasificados() {
         List<String> columnasNoUnitarias = jdbc.queryForList("""
                 select table_name || '.' || column_name
                 from information_schema.columns
@@ -95,12 +111,25 @@ class RepositorioEstadosIntegrationTest {
                   and character_maximum_length <> 1
                 order by table_name, column_name
                 """, String.class);
-        assertEquals(List.of(), columnasNoUnitarias);
+        // B0/C6/D6 tienen vocabularios técnicos propios aprobados (V136–V155).
+        // El hecho externo de publicación y el snapshot del outbox tampoco son
+        // estados de negocio unitarios. Clasificar exactamente, sin excluir por
+        // prefijo: una columna nueva, retirada o reclasificada rompe este censo.
+        assertEquals(List.of(
+                "alerta.estado_causa_c7",
+                "b0_archivo_evaluacion.estado", "b0_etapa_operacion_ia.estado",
+                "b0_medicion_tecnica.estado_costo", "b0_operacion_ia.estado",
+                "b0_presencia_objeto_almacenamiento.estado", "b0_reserva_almacenamiento.estado",
+                "custodia_resultado_material_ia.estado", "intento_salida_binaria.estado",
+                "material_ia_evento.estado", "material_ia_operacion.estado",
+                "publicacion.estado_externo", "retirada_derivada_material_ia.estado",
+                "slot_derivada_material_ia.estado", "tarea.estado_causa_c7",
+                "tarea.estado_causa_material_ia_c6").stream().sorted().toList(), columnasNoUnitarias);
 
         List<String> valoresNoUnitarios = jdbc.queryForList("""
                 select tabla_columna from (
                     select 'persona.estado' tabla_columna from persona where length(estado) <> 1
-                    union all select 'credencial_usuario.estado_administrativo' from credencial_usuario where length(estado_administrativo) <> 1
+                    union all select 'cuenta_acceso.estado' from cuenta_acceso where length(estado) <> 1
                     union all select 'detalle_agente.estado_operativo' from detalle_agente where length(estado_operativo) <> 1
                     union all select 'organizacion.estado' from organizacion where length(estado) <> 1
                     union all select 'usuario_organizacion.estado' from usuario_organizacion where length(estado) <> 1
@@ -190,19 +219,18 @@ class RepositorioEstadosIntegrationTest {
         // distintos en cada uno: sin texto va al WHERE, con texto viaja dentro
         // de cada rama del UNION.
         assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
-                org, null, null, 1, 5, 100)).ids());
+                org, List.of(-1L), null, null, 1, 5, 100)).ids());
         assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
-                org, null, "D", 1, 5, 100)).ids());
+                org, List.of(-1L), null, "D", 1, 5, 100)).ids());
         assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
-                org, "zzz", "I", 1, 5, 100)).ids());
+                org, List.of(-1L), "zzz", "I", 1, 5, 100)).ids());
         assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.dePropiedades(
-                org, "zzz", "N", "L", "Miraflores", true, true, 1, 5, 100)).ids());
+                org, List.of(-1L), "zzz", "N", "L", "Miraflores", true, true, 1, 5, 100)).ids());
         assertNotNull(motor.contarPorEstadoLegado(FiltrosDeListadoInmobiliario.deLocales(
-                org, null, null, 1, 1, 100)));
+                org, List.of(-1L), null, null, 1, 1, 100)));
         assertNotNull(motor.contarPorEstadoLegado(FiltrosDeListadoInmobiliario.deLocales(
-                org, "zzz", null, 1, 1, 100)));
-        assertNotNull(propiedades.findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(
-                org, -1L, -1L));
+                org, List.of(-1L), "zzz", null, 1, 1, 100)));
+        assertNotNull(propiedades.candidatosDuplicadosParaLectura(org, -1L, -1L, "{-1}"));
 
         assertNotNull(captaciones.buscar(org, true, sinRoles, "A", null, null, pagina));
         assertNotNull(captaciones.pendientes(org, true, sinRoles, "P", null, null, pagina));
@@ -235,10 +263,9 @@ class RepositorioEstadosIntegrationTest {
                 null, null, null, "larco"));
         assertNotNull(visitas.contarPorEstadoConTexto(org, true, true, rolesArray,
                 null, null, null, "larco"));
-        assertNotNull(interacciones.idsPorTexto(org, true, rolesArray,
-                null, null, null, null, null, null, null, null, "larco", 10, 0));
-        assertNotNull(interacciones.contarPorTexto(org, true, rolesArray,
-                null, null, null, null, null, null, null, null, "larco"));
+        // Interacción dejó de tener el atajo global de repositorio. La consulta textual
+        // se ejercita por Core con datos reales propios y aislamiento antes del conteo.
+        verificarLecturaInteraccionesPorAmbitoYTexto();
         assertNotNull(visitas.listarProximas(org, true, true, sinRoles, LocalDate.now(), pagina));
         assertNotNull(solicitudes.buscar(org, true, sinRoles, null, null, null, null, null, pagina));
         // El cubo PENDIENTES no es un estado: se resuelve como E + O.
@@ -257,10 +284,7 @@ class RepositorioEstadosIntegrationTest {
         assertNotNull(solicitudes.porEstadoDelAgente(org, -1L, "A"));
 
         // Sin texto: el WHERE comun, ya sin el OR cruzado de cuatro tablas.
-        assertNotNull(contratos.resumenCierres(org, true, true, sinRoles, null, null));
-        assertNotNull(contratos.comisionesGeneradas(org, true, true, sinRoles, null, null));
-        assertNotNull(contratos.repartosPorMoneda(org, true, true, sinRoles, null, null));
-        assertNotNull(contratos.movimientosPorMoneda(org, true, true, sinRoles, null, null));
+        assertNotNull(contratos.finanzasDeCierres(org, true, true, rolesArray, null, null));
         assertNotNull(contratos.distritosDeCierres(org, true, true, sinRoles, null, null));
         assertNotNull(contratos.agentesDeCierres(org, true, true, sinRoles, null, null));
 
@@ -277,34 +301,75 @@ class RepositorioEstadosIntegrationTest {
                         .stream().sorted().toList(),
                 contratos.idsPorTextoPorCierre(org, true, true, rolesArray, "a", null, null, 50, 0)
                         .stream().sorted().toList());
-        assertNotNull(contratos.comisionesGeneradasPorTexto(org, true, true, rolesArray,
-                "zzz", null, null));
-        assertNotNull(contratos.repartosPorMonedaPorTexto(org, true, true, rolesArray,
-                "zzz", null, null));
-        assertNotNull(contratos.movimientosPorMonedaPorTexto(org, true, true, rolesArray,
+        assertNotNull(contratos.finanzasDeCierresPorTexto(org, true, true, rolesArray,
                 "zzz", null, null));
         assertNotNull(contratos.distritosDeCierresPorTexto(org, true, true, rolesArray,
                 "zzz", null, null));
         assertNotNull(contratos.agentesDeCierresPorTexto(org, true, true, rolesArray,
                 "zzz", null, null));
-        // resumenCierresPorTexto proyecta alias en camelCase entrecomillados;
+        // El agregado canónico proyecta alias en camelCase entrecomillados;
         // si PostgreSQL los bajara a minusculas, esto devolveria nulls.
-        var resumenTexto = contratos.resumenCierresPorTexto(org, true, true, rolesArray,
-                "zzz", null, null);
-        assertNotNull(resumenTexto);
+        var resumenTexto = contratos.finanzasDeCierresPorTexto(org, true, true, rolesArray,
+                "zzz", null, null).stream().filter(f->"CONTADORES".equals(f.getDimension())).findFirst().orElseThrow();
         assertNotNull(resumenTexto.getCierres());
-        assertNotNull(resumenTexto.getPorLiquidar());
-        assertNotNull(resumenTexto.getSinLiquidacion());
+        assertNotNull(resumenTexto.getConLecturaFinanciera());
+        assertNotNull(resumenTexto.getSinEvaluacion());
+        assertEquals(Boolean.FALSE,resumenTexto.getAnomalia());
         assertNotNull(contratos.conComisionListaParaCobro(org, -1L));
         assertFalse(contratos.existsByOrganizacionIdAndContratoAnteriorId(org, -1L));
 
-        assertNotNull(comisiones.porContratos(org, List.of(-1L)));
+        assertNotNull(comisiones.porContratosEnAlcance(org, List.of(-1L),List.of(-1L)));
         assertNotNull(movimientos.findByOrganizacionIdAndLiquidacionIdIn(org, List.of(-1L)));
-        assertNotNull(alertas.buscarConAgente(org, true, sinRoles, pagina));
-        assertFalse(alertas.existeActivaDe(org, "PRUEBA", -1L, "PRUEBA"));
         assertNotNull(tareas.abiertasDeEntidad(org, "PRUEBA", -1L));
-        assertNotNull(publicaciones.estadosPublicacion(List.of(-1L)));
+        assertNotNull(publicaciones.deEncargos(org,List.of(-1L)));
         assertNotNull(requerimientos.listarActivos(org));
+    }
+
+    @Test
+    void verificarLecturaAlertasAutorizada() {
+        var origenes=new OrigenesDePrueba(jdbc,gestor,captura,contextos);
+        var banco=new com.controllocal.integracion.soporte.FormalizacionesDePrueba(aplicacion);
+        var c=banco.nuevo("ALQUILER",com.controllocal.integracion.soporte.EncargosDePrueba.alquiler(
+                new java.math.BigDecimal("2500"),"PEN",java.math.BigDecimal.ONE,"Propietario TEST","Agencia TEST"));
+        var equipo=c.comercial().equipo();var actor=c.agente();
+        // Proyecta una decisión aprobada por Core; no fabrica un aviso sin productor ni fuente.
+        var autorizada=campana.listar(1,5,actor);
+        var cabeceras=alertas.cabecerasActivas(actor.idOrganizacion(),false,List.of(actor.idRolOperativo()));
+        assertEquals(1,cabeceras.size());long id=cabeceras.getFirst().getId();
+        assertEquals(actor.idRolOperativo(),cabeceras.getFirst().getIdAgente());
+        assertEquals(c.encargo(),cabeceras.getFirst().getEntidadId());
+        assertEquals(1,autorizada.total());assertEquals(List.of(id),autorizada.items().stream().map(com.controllocal.service.AlertaService.FichaAlerta::id).toList());
+        assertEquals("El broker aprobó la petición del Encargo.",autorizada.items().getFirst().mensaje());
+        assertEquals(0,campana.listar(1,5,equipo.colega()).total(),"La proyección no amplía la audiencia al compañero.");
+        var otro=origenes.empresa();
+        assertEquals(0,campana.listar(1,5,otro.agente()).total(),"El conteo no revela avisos de otra organización.");
+        assertTrue(alertas.cabecera(otro.agente().idOrganizacion(),id).isEmpty());
+        org.junit.jupiter.api.Assertions.assertThrows(com.controllocal.service.excepcion.NoEncontradoException.class,
+                ()->campana.atender(id,equipo.colega()));
+        org.junit.jupiter.api.Assertions.assertThrows(com.controllocal.service.excepcion.NoEncontradoException.class,
+                ()->campana.atender(id,otro.agente()));
+        org.junit.jupiter.api.Assertions.assertThrows(AccesoNoAutorizadoException.class,()->campana.listar(1,5,equipo.admin()));
+        assertTrue(campana.atender(id,actor));assertFalse(campana.atender(id,actor));
+    }
+
+    private void verificarLecturaInteraccionesPorAmbitoYTexto() {
+        var origenes=new OrigenesDePrueba(jdbc,gestor,captura,contextos);
+        var equipo=origenes.empresa();var actor=equipo.agente();var sesion=origenes.sesion(actor);
+        String documento=Long.toString(10_000_000L+Math.floorMod(System.nanoTime(),80_000_000L));
+        long cliente=clientes.registrar(new ClienteService.DatosCliente("N","D",documento,"Cliente TEST repositorios",
+                "900000001",null,"Comercio",true,true,null),actor).id();
+        var correlacion=new ComandosAutomaticosService.CorrelacionAutomatico("REPOS-TEST-"+java.util.UUID.randomUUID(),"turno-TEST",null);
+        var original=automaticos.registrarInteraccion(ComunicacionesDePrueba.llamadaSalienteSinRespuesta(cliente,"Llamada TEST por Larco"),
+                actor,sesion,correlacion,Procedencia.deLaPantalla()).resultado();
+        var filtros=new InteraccionService.FiltrosInteraccion(InteraccionService.TipoContexto.CLIENTE,cliente,null,null,null,"larco",1,5);
+        var propia=comunicaciones.listar(filtros,actor);
+        assertEquals(1,propia.total());assertEquals(List.of(original.id()),propia.items().stream().map(InteraccionService.FichaInteraccion::id).toList());
+        assertEquals(0,comunicaciones.listar(new InteraccionService.FiltrosInteraccion(null,null,null,null,null,"texto-inexistente-TEST",1,5),actor).total());
+        var reducida=new InteraccionService.FiltrosInteraccion(null,null,null,null,null,"larco",1,5);
+        assertEquals(0,comunicaciones.listar(reducida,equipo.colega()).total(),"El texto no amplía el ámbito al compañero.");
+        var otraEmpresa=origenes.empresa();
+        assertEquals(0,comunicaciones.listar(reducida,otraEmpresa.agente()).total(),"No filtrar índices/conteos de otra organización.");
+        org.junit.jupiter.api.Assertions.assertThrows(AccesoNoAutorizadoException.class,()->comunicaciones.listar(reducida,equipo.admin()));
     }
 
     private static List<Class<?>> repositoriosConEstado() {
@@ -320,7 +385,7 @@ class RepositorioEstadosIntegrationTest {
     private static List<RestriccionEstado> restriccionesEstado() {
         return List.of(
                 new RestriccionEstado("ck_persona_estado", EstadosDominio.EstadoActivoInactivo.class),
-                new RestriccionEstado("ck_credencial_estado", EstadosDominio.EstadoActivoInactivo.class),
+                new RestriccionEstado("cuenta_acceso_estado_check", EstadosDominio.EstadoActivoInactivo.class),
                 new RestriccionEstado("ck_detalle_agente_estado", EstadosDominio.EstadoOperativoAgente.class),
                 new RestriccionEstado("ck_organizacion_estado", EstadosDominio.EstadoActivoInactivo.class),
                 new RestriccionEstado("ck_usuario_org_estado", EstadosDominio.EstadoActivoInactivo.class),

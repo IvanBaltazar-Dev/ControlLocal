@@ -125,6 +125,24 @@
         La fecha y la hora las pone el servidor al registrar: no se pueden anteponer ni corregir
         después.
       </p>
+      <div class="cl-grid dos">
+        <label class="cl-campo">
+          <span>Rol del interlocutor</span>
+          <input formControlName="contactoTipo" placeholder="Familiar, ocupante, administrador…" />
+        </label>
+        <label class="cl-campo">
+          <span>Nombre del interlocutor</span>
+          <input formControlName="contactoNombre" />
+        </label>
+        <label class="cl-campo">
+          <span>Teléfono del interlocutor</span>
+          <input formControlName="contactoTelefono" type="tel" />
+        </label>
+      </div>
+      <p class="nota">
+        Estos datos son opcionales y describen a quien atendió el contacto; no cambian la
+        titularidad de la propiedad.
+      </p>
     </section>
 
     <section class="cl-seccion">

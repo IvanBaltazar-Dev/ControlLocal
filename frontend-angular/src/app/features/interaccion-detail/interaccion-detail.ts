@@ -10,7 +10,13 @@ import {
   RESULTADO_INTERACCION,
   resultadosDe,
 } from '../../core/api/codigos';
-import { Interaccion, InteraccionesService } from '../../core/api/interacciones.service';
+import {
+  Interaccion,
+  InteraccionesService,
+  nombreDelInterlocutor,
+  telefonoDelInterlocutor,
+  tipoDelInterlocutor,
+} from '../../core/api/interacciones.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { fechaHora, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
@@ -180,8 +186,15 @@ export class InteraccionDetail implements OnInit {
   }
 
   protected persona(): string {
-    const i = this.interaccion();
-    return textoDe(i?.personaNombre || i?.clienteNombre || i?.propietarioNombre);
+    return nombreDelInterlocutor(this.interaccion());
+  }
+
+  protected tipoPersona(): string {
+    return tipoDelInterlocutor(this.interaccion());
+  }
+
+  protected telefonoPersona(): string {
+    return textoDe(telefonoDelInterlocutor(this.interaccion()));
   }
 
   protected referencia(): string {

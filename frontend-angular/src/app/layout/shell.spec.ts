@@ -6,7 +6,7 @@ import { AlertasService } from '../core/api/alertas.service';
 import { PerfilService } from '../core/api/perfil.service';
 import { AuthService } from '../core/auth/auth.service';
 import { RenovacionSesion } from '../core/auth/renovacion-sesion';
-import { Sesion } from '../core/auth/sesion.model';
+import { RolSesion, Sesion } from '../core/auth/sesion.model';
 import { NavegacionLegado } from '../core/navegacion-legado';
 import { Shell } from './shell';
 
@@ -27,6 +27,8 @@ import { Shell } from './shell';
  */
 describe('Shell — el cajón del menú', () => {
   const SESION: Sesion = {
+      idCuenta: 901, idOrganizacion: 1, revisionContexto: 1, contextoRequerido: false, contextos: [],
+      modalidad: 'EMPRESARIAL', referenciaSesion: 'sesion-fixture', contextoRef: 'contexto-fixture',
     token: 't',
     expiraEnSegundos: 3600,
     rol: 'AGENTE',
@@ -38,10 +40,11 @@ describe('Shell — el cajón del menú', () => {
   };
 
   let fixture: ComponentFixture<Shell>;
+  let alertas: jasmine.SpyObj<AlertasService>;
 
-  async function montar(): Promise<Shell> {
+  async function montar(rol: RolSesion = 'AGENTE'): Promise<Shell> {
     TestBed.resetTestingModule();
-    const alertas = jasmine.createSpyObj<AlertasService>('AlertasService', ['pagina', 'atender']);
+    alertas = jasmine.createSpyObj<AlertasService>('AlertasService', ['pagina', 'atender']);
     alertas.pagina.and.resolveTo({ items: [], totalRecords: 0, page: 1, pageSize: 20 });
     const navegacion = jasmine.createSpyObj<NavegacionLegado>('NavegacionLegado', [
       'abrir',
@@ -53,7 +56,7 @@ describe('Shell — el cajón del menú', () => {
       imports: [Shell],
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { sesion: signal<Sesion | null>(SESION), salir: () => Promise.resolve() } },
+        { provide: AuthService, useValue: { sesion: signal<Sesion | null>({...SESION, rol}), salir: () => Promise.resolve() } },
         {
           provide: PerfilService,
           useValue: {
@@ -178,6 +181,25 @@ describe('Shell — el cajón del menú', () => {
     // Las dos uniones de D-E3-1 §4: ninguna de las dos es una entrada de menú.
     expect(rotulos).not.toContain('Interacciones');
     expect(rotulos).not.toContain('Avance por propiedad');
+  });
+
+  it('gobierno ve sus cinco entradas y no crea el consumidor de avisos comerciales', async () => {
+    await montar('TENANT_ADMIN');
+
+    const rotulos = Array.from(raiz().querySelectorAll('#navegacion-brox nav a')).map((a) =>
+      a.textContent?.trim(),
+    );
+    expect(rotulos).toEqual(['Reasignaciones', 'Agentes', 'Brokers', 'Asignaciones', 'Seguridad y accesos']);
+    expect(raiz().querySelector('cl-campana')).toBeNull();
+    expect(alertas.pagina).not.toHaveBeenCalled();
+  });
+
+  it('conserva la campana comercial de agente y broker', async () => {
+    for (const rol of ['AGENTE', 'BROKER'] as const) {
+      await montar(rol);
+      expect(raiz().querySelector('cl-campana')).not.toBeNull();
+      expect(alertas.pagina).toHaveBeenCalled();
+    }
   });
 
   /**

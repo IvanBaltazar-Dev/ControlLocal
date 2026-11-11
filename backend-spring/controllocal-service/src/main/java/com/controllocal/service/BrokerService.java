@@ -8,10 +8,7 @@ import java.util.List;
  */
 public interface BrokerService {
 
-    record DatosBroker(String nombre, String tipoPersona, String tipoDocumento,
-                       String numeroDocumento, String telefono, String correo,
-                       String usuario, String contrasena, String zona,
-                       String codigoBroker, String estado, Boolean esAdministrador) {
+    record DatosBroker(String nombre, String telefono, String correoLaboral, String zona) {
     }
 
     record FichaBroker(Long id, String codigoBroker, String nombre,
@@ -27,8 +24,6 @@ public interface BrokerService {
     FichaBroker obtener(long id, Actor actor);
 
     List<AgenteService.FichaAgente> agentes(long id, Actor actor);
-
-    FichaBroker registrar(DatosBroker datos, Actor actor);
 
     FichaBroker actualizar(long id, DatosBroker datos, Actor actor);
 }
